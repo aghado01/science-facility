@@ -23,11 +23,24 @@ Per capability, the decision is one of: **transfer to v3** · **LTS-only conveni
 | Binary/content filter | `Test-IsBinaryFile`, `Get-FilteredFiles`, `Filter-Content` (has the `-ExpandProperty Count -gt 0` bug) | `file-read` NUL guard; `Invoke-IgnoreFilter` size/ext blacklist | v3 forward; decide whether content-pattern filtering (`Filter-Content`) survives at all or retires. |
 | Preview/byte offsets | `New-ContentAndPreview`, `Get-EntryByteOffsets` (UTF-8 byte-accurate — the seek contract) | none yet | **Transfer to v3** with the sharding writer; the byte-offset contract is load-bearing for the MCP fetch API. |
 | Tree/TOC rendering | `Build-DirectoryTree`, `Build-AsciiTree`, `Build-TreeDiagramCompact`, `Build-TocTree`, `Import-TocTemplateEngine` | `rs.core.template.ps1` (handlebars-lite, TOC models) | Overlapping; verify whether LTS already loads rs.core.template (Import-TocTemplateEngine) and consolidate renderers in v3. |
-| Sharding/output | `Shard-SnapshotFile`, `Get-ShardedRepoSnapshot` (.txt shards + `*_tree.md`, escaped rows) | `rs.core.sharding` (older 3.1 gen: JSONL/piped + toc + manifest) | **Format decision pending** (TODO: make json monolith optional; runstamped subdir convention). LTS's txt+tree format is the agent-proven one; v3 module likely needs rewrite-to-format, not transfer. |
+| Sharding/output | `Shard-SnapshotFile`, `Get-ShardedRepoSnapshot` (.txt shards + `*_tree.md`, escaped rows) | `rs.core.sharding` (older 3.1 gen: JSONL/piped + toc + manifest) | **Format decision pending** (TODO: make json monolith optional; runstamped subdir convention). LTS's txt+tree format is the agent-proven one for the CODE track. Re-disposition 2026-07-22: the module's JSONL machinery is NOT vestigial — it's the substrate for the thread-corpus track (`issues/thread-corpus-container.md`); don't retire. |
 | Orchestration | inline sequential + serialized-function parallel runspaces | `rs.core.colonel.v2` (ISS plan compile, chain executor, worker budget) | Colonel forward; LTS path retires when v3 pipeline is whole. |
 | Path utilities | `Resolve-RelPath`, `Norm-Path`, `Get-SnapshotPathParts`, `Get-SnapshotSiblingPath`, `Get-SnapshotArtifactPaths` | crawler `ToNodePath`; sharding `Get-NormalizedPath`, `ConvertTo-RelativePath` | Consolidate into one v3 home (internals?); currently three dialects of path normalization. |
 
 ## Known cross-cutting items
+
+- **Monolith → IR distillation (the LTS spine).** LTS still runs artifact-first: it
+  emits the JSON monolith beside the shard directories (see the two ~256–273KB `.json`
+  files under `.snapshot/`), then shards from it — because the monolith was the spine
+  of the original code. History: reposnapshot originally emitted a single large JSON
+  file, which failed on model-side ingestion — preview/context truncation horizons are
+  model-dependent and uncontrollable — and that failure is the origin of sharding
+  itself. v3 direction: the monolith is unnecessary *as an artifact*; its role becomes
+  the **in-memory IR** assembled during ingestion (crawl → ignore → ingest → entries),
+  which then feeds either or both writers (JSONL store / custom-format view). Artifact
+  emission becomes an optional output, not a pipeline stage — which also makes row
+  encoding a first-class writer decision instead of a serialization byproduct
+  (shard-format-notes: selective encoding).
 
 - Instruction template drift: sharded instructions still say "seek to row_offset in the
   .json file" for .txt shards (visible in selfie tree.md).

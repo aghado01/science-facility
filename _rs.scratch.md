@@ -22,7 +22,8 @@ $ignoreDirectories = @("tests", "schemas", ".snapshot", ".threadparser", ".threa
 $ignoreFiles = @("*.in","*.md","*.txt", "*.json", "*.jsonl","*.yml","*.ini","*.csproj","*.gitignore","*.copilotignore", "*.pyc","*.scratch.md", "*snapignore.txt")
 $ignores = $ignoreDirectories + $ignoreFiles
 # $shardOutputDir = Join-Path $target ".snapshot"
-Get-ShardedRepoSnapshot $target -MaxShardSpanBytes $shardsize -GroupingStrategy $groupingStrategy -PackingStrategy $packingStrategy -ExtraExcludePatterns $ignores -StripComments $stripComments -IncludeFileContent $includeFileContent -ExcludeShardMetadata $True -ExcludeAttributes $True
+Get-ShardedRepoSnapshot $target -MaxShardSpanBytes $shardsize -GroupingStrategy $groupingStrategy -PackingStrategy $packingStrategy -ExtraExcludePatterns $ignores -StripComments $stripComments -IncludeFileContent $includeFileContent
+# -ExcludeShardMetadata $True -ExcludeAttributes $True
 
 
 # Selections workflow
