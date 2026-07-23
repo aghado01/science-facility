@@ -1,6 +1,6 @@
 # LTS StripComments corrupts string literals containing comment-like sequences
 
-**Status:** fixed 2026-07-22 (tests green; commit pending — no git repo present) · **Severity:** critical (silent data corruption in snapshot output) · **Filed:** 2026-07-22 by review session
+**Status:** fixed 2026-07-22, in repo since interim init (f92b686) · **Severity:** critical (silent data corruption in snapshot output) · **Filed:** 2026-07-22 by review session
 
 ## Problem
 
