@@ -1,0 +1,301 @@
+<#
+.SYNOPSIS
+    Regex-based C# comment-stripping post-processor.
+
+.DESCRIPTION
+    Classifies C# comment tokens into six kinds and strips the requested kinds
+    based on the Config.Operations array.
+
+    Unlike rs-psstrip.ps1, this processor is regex-only — no native C# AST is
+    available from PowerShell.  Known limitation: // and /* tokens that appear
+    inside string literals (including verbatim @"..." strings) may be incorrectly
+    treated as comments.  This is acceptable for token-reduction use cases where
+    output is consumed by an LLM rather than compiled.
+
+    ISS-load-safe:
+      - no #Requires directives
+      - no outer function wrapper
+      - param contract is positional (Item, Config)
+
+        Processor self-documentation only (no runtime enforcement in this file):
+            - Intended Colonel IssPreset floor: Core
+            - Supported RunMode usage: ApplyAll, KeyMatch
+            - Required IssModules: none
+
+.COMMENT KINDS
+    BlockComment      /* ... */ on own line(s), no surrounding code            (default: strip)
+    InteriorComment   /* ... */ between non-comment chars on a code line       (default: keep)
+    DocString         /// triple-slash XML doc comment line                    (default: strip)
+    CommentBlock      Contiguous run of 2+ standalone // lines                (default: strip)
+    LineComment       Standalone // line (no code preceding it on that line)  (default: strip)
+    InlineComment     // trailing on a code line (code precedes on same line) (default: keep)
+
+.PARAMETER Item
+    String, hashtable, or pscustomobject.  Recognised keys: Text, Path, Id.
+
+.PARAMETER Config
+    Hashtable with optional keys:
+      Operations  [string[]] opt-in strip list; default: all four structural kinds (interior + inline kept)
+                  Valid values: 'block-comments','interior-comments','doc-strings','comment-blocks','line-comments','inline-comments'
+      IncludeMeta [bool] default $true  — when $false, returns bare string
+#>
+param(
+    [Parameter(Position = 0)]
+    [object]$Item,
+
+    [Parameter(Position = 1)]
+    [hashtable]$Config = @{}
+)
+
+# ---------------------------------------------------------------------------
+# Config resolution
+# ---------------------------------------------------------------------------
+$ops = if ($Config.ContainsKey('Operations')) { @($Config['Operations']) } else { @('block-comments', 'doc-strings', 'comment-blocks', 'line-comments') }
+$includeMeta = if ($null -ne $Config['IncludeMeta']) { [bool]$Config['IncludeMeta'] } else { $true }
+
+# ---------------------------------------------------------------------------
+# Item unpacking
+# ---------------------------------------------------------------------------
+$text = $null
+$path = $null
+$id = $null
+
+if ($Item -is [string])
+{
+    $text = $Item
+}
+elseif ($Item -is [hashtable] -or $Item -is [pscustomobject])
+{
+    if ($null -ne $Item.PSObject.Properties['Text']) { $text = [string]$Item.Text }
+    if ($null -ne $Item.PSObject.Properties['Path']) { $path = [string]$Item.Path }
+    if ($null -ne $Item.PSObject.Properties['Id']) { $id = [string]$Item.Id }
+}
+
+if ([string]::IsNullOrEmpty($text))
+{
+    if (-not $includeMeta) { return '' }
+    return [pscustomobject]@{
+        Id         = $id
+        Path       = $path
+        Text       = ''
+        Operations = @($ops)
+        Processor  = 'rs-csstrip'
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Normalize line endings (CRLF/CR -> LF)
+# ---------------------------------------------------------------------------
+$text = $text -replace "`r`n", "`n" -replace "`r", "`n"
+
+# ---------------------------------------------------------------------------
+# Build strip spans via regex
+# ---------------------------------------------------------------------------
+$spansToStrip = [System.Collections.Generic.List[pscustomobject]]::new()
+
+$stripBlock    = 'block-comments'    -in $ops
+$stripInterior = 'interior-comments' -in $ops
+$stripDoc         = 'doc-strings'           -in $ops
+$stripCB          = 'comment-blocks'        -in $ops
+$stripLine        = 'line-comments'         -in $ops
+$stripInline      = 'inline-comments'       -in $ops
+
+# ---------------------------------------------------------------------------
+# Block comments  /* ... */
+# One regex pass classifies each match as standalone or inline-block, then
+# routes to the appropriate op.
+#
+#   Standalone     — only whitespace precedes /* on its first line AND
+#                    only whitespace follows */ on its last line.
+#                    Span expanded to consume leading indent + trailing newline.
+#   InlineBlock    — code precedes /* OR code follows */ on the same line.
+#                    Short, informative placeholders (e.g. empty catch bodies).
+#                    Span covers the /* */ token only; surrounding code is kept.
+# ---------------------------------------------------------------------------
+if ($stripBlock -or $stripInterior)
+{
+    $rx = [regex]::new('(?s)/\*.*?\*/', 'None')
+    foreach ($m in $rx.Matches($text))
+    {
+        $s = $m.Index
+        $e = $m.Index + $m.Length
+
+        # Code-before check: walk back from /* over whitespace
+        $ls = $s
+        while ($ls -gt 0 -and ($text[$ls - 1] -eq ' ' -or $text[$ls - 1] -eq "`t")) { $ls-- }
+        $standaloneStart = ($ls -eq 0 -or $text[$ls - 1] -eq "`n")
+
+        # Code-after check: scan from */ to end of line
+        $lineEnd = $text.IndexOf("`n", $e)
+        if ($lineEnd -eq -1) { $lineEnd = $text.Length }
+        $standaloneEnd = ($text.Substring($e, $lineEnd - $e) -notmatch '\S')
+
+        if ($standaloneStart -and $standaloneEnd)
+        {
+            if (-not $stripBlock) { continue }
+            # Expand span: consume leading indent and trailing newline
+            $s = $ls
+            if ($e -lt $text.Length -and $text[$e] -eq "`n") { $e++ }
+        }
+        else
+        {
+            if (-not $stripInterior) { continue }
+            # Strip only the /* */ token; surrounding code is kept intact
+        }
+
+        $spansToStrip.Add([pscustomobject]@{ Start = $s; End = $e })
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Doc strings  ///  (triple-slash XML doc comments)
+# Matched before the generic // pass; (?!/) guard on // patterns below ensures
+# no double-matching regardless of operation combination.
+# ---------------------------------------------------------------------------
+if ($stripDoc)
+{
+    $rxDoc = [regex]::new('(?m)^([^\S\n]*)///[^\n]*(\n)?', 'None')
+    foreach ($m in $rxDoc.Matches($text))
+    {
+        $spansToStrip.Add([pscustomobject]@{ Start = $m.Index; End = $m.Index + $m.Length })
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Standalone // lines — collect, then classify into LineComment / CommentBlock
+# (?!/) guard prevents matching /// lines (doc-string or not).
+# ---------------------------------------------------------------------------
+if ($stripCB -or $stripLine)
+{
+    $rxLine = [regex]::new('(?m)^([^\S\n]*)//(?!/)[^\n]*(\n)?', 'None')
+
+    $standaloneMatches = [System.Collections.Generic.List[pscustomobject]]::new()
+
+    foreach ($m in $rxLine.Matches($text))
+    {
+        # Verify no code precedes // on this line
+        $slashIdx = $m.Index + $m.Groups[1].Length
+        $before = $text.Substring($m.Index, $slashIdx - $m.Index)
+        if ($before -match '\S') { continue }   # code before // → InlineComment, handled below
+
+        $lineNum = ($text.Substring(0, $m.Index) -split "`n").Count
+
+        $standaloneMatches.Add([pscustomobject]@{
+                LineNum = $lineNum
+                Start   = $m.Index
+                End     = $m.Index + $m.Length
+            })
+    }
+
+    # Reclassify runs of 2+ consecutive lines as CommentBlock
+    $runStartI = -1
+    $runEndI = -1
+    $cbFlags = @($false) * $standaloneMatches.Count
+
+    for ($i = 0; $i -lt $standaloneMatches.Count; $i++)
+    {
+        $cur = $standaloneMatches[$i]
+        if ($runStartI -eq -1)
+        {
+            $runStartI = $i; $runEndI = $i
+        }
+        elseif ($cur.LineNum -eq $standaloneMatches[$runEndI].LineNum + 1)
+        {
+            $runEndI = $i
+        }
+        else
+        {
+            if ($runEndI -gt $runStartI) { for ($j = $runStartI; $j -le $runEndI; $j++) { $cbFlags[$j] = $true } }
+            $runStartI = $i; $runEndI = $i
+        }
+    }
+    if ($runStartI -ne -1 -and $runEndI -gt $runStartI) { for ($j = $runStartI; $j -le $runEndI; $j++) { $cbFlags[$j] = $true } }
+
+    for ($i = 0; $i -lt $standaloneMatches.Count; $i++)
+    {
+        $shouldStrip = if ($cbFlags[$i]) { $stripCB } else { $stripLine }
+        if (-not $shouldStrip) { continue }
+        $sm = $standaloneMatches[$i]
+        $ls2 = $sm.Start
+        while ($ls2 -gt 0 -and ($text[$ls2 - 1] -eq ' ' -or $text[$ls2 - 1] -eq "`t")) { $ls2-- }
+        $s2 = if ($ls2 -eq 0 -or $text[$ls2 - 1] -eq "`n") { $ls2 } else { $sm.Start }
+        $spansToStrip.Add([pscustomobject]@{ Start = $s2; End = $sm.End })
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Inline comments — // after code on the same line
+# (?!/) guard avoids matching /// (rare mid-line case, but consistent).
+# ---------------------------------------------------------------------------
+if ($stripInline)
+{
+    $rxInline = [regex]::new('[ \t]*//(?!/)[^\n]*', 'None')
+    foreach ($m in $rxInline.Matches($text))
+    {
+        $lineStart = $text.LastIndexOf("`n", $m.Index)
+        $lineStart = if ($lineStart -eq -1) { 0 } else { $lineStart + 1 }
+        $before = $text.Substring($lineStart, $m.Index - $lineStart)
+        if ($before -notmatch '\S') { continue }
+        $spansToStrip.Add([pscustomobject]@{ Start = $m.Index; End = $m.Index + $m.Length })
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Merge overlapping / adjacent spans
+# ---------------------------------------------------------------------------
+$merged = [System.Collections.Generic.List[pscustomobject]]::new()
+
+if ($spansToStrip.Count -gt 0)
+{
+    $sorted = @($spansToStrip | Sort-Object { $_.Start })
+    $cur = [pscustomobject]@{ Start = $sorted[0].Start; End = $sorted[0].End }
+
+    for ($i = 1; $i -lt $sorted.Count; $i++)
+    {
+        $nxt = $sorted[$i]
+        if ($nxt.Start -le $cur.End)
+        {
+            if ($nxt.End -gt $cur.End) { $cur = [pscustomobject]@{ Start = $cur.Start; End = $nxt.End } }
+        }
+        else
+        {
+            $merged.Add($cur)
+            $cur = [pscustomobject]@{ Start = $nxt.Start; End = $nxt.End }
+        }
+    }
+    $merged.Add($cur)
+}
+
+# ---------------------------------------------------------------------------
+# Reconstruct text from the non-stripped spans
+# ---------------------------------------------------------------------------
+$sb = [System.Text.StringBuilder]::new($text.Length)
+$pos = 0
+
+foreach ($span in $merged)
+{
+    if ($span.Start -gt $pos)
+    {
+        $null = $sb.Append($text.Substring($pos, $span.Start - $pos))
+    }
+    $pos = $span.End
+}
+if ($pos -lt $text.Length)
+{
+    $null = $sb.Append($text.Substring($pos))
+}
+
+$result = $sb.ToString()
+
+# ---------------------------------------------------------------------------
+# Return
+# ---------------------------------------------------------------------------
+if (-not $includeMeta) { return $result }
+
+return [pscustomobject]@{
+    Id         = $id
+    Path       = $path
+    Text       = $result
+    Operations = @($ops)
+    Processor  = 'rs-csstrip'
+}

@@ -1,0 +1,552 @@
+<#
+.SYNOPSIS
+    AST-based PowerShell comment-stripping post-processor.
+
+.DESCRIPTION
+    Parses PowerShell source text with the native PS parser, classifies every comment
+    token into one of five kinds, and strips the requested kinds based on the Config.Operations array.
+
+    ISS-load-safe:
+      - no #Requires directives
+      - no outer function wrapper
+      - param contract is positional (Item, Config)
+
+        Processor self-documentation only (no runtime enforcement in this file):
+            - Intended Colonel IssPreset floor: Core
+            - Supported RunMode usage: ApplyAll, KeyMatch
+            - Required IssModules: none
+
+.NOTES
+        Host guidance for Colonel fluent setup:
+            - Use SetIssPreset([IssPreset]::Core) or Full.
+            - Bare is not recommended for this processor because it uses
+                pipeline cmdlets such as ForEach-Object, Where-Object, and Sort-Object.
+            - Config shape:
+                    Operations: string[] (opt-in strip list; default strips all structural kinds, keeps inline)
+                    IncludeMeta: bool (default true)
+
+.COMMENT KINDS
+    BlockComment   angle-hash block  outside function/class body          (default: strip)
+    DocString      angle-hash block  inside  function/class body          (default: strip)
+    CommentBlock   Contiguous run of 2+ standalone # lines               (default: strip)
+    LineComment    Standalone # line (no code preceding it on that line) (default: strip)
+    InlineComment  # token with preceding code on the same line          (default: keep)
+
+.PARAMETER Item
+    String, hashtable, or pscustomobject.  Recognised keys: Text, Path, Id.
+
+.PARAMETER Config
+    Hashtable with optional keys:
+      Operations  [string[]] opt-in strip list; default: all four structural kinds (inline kept)
+                  Valid values: 'block-comments','doc-strings','comment-blocks','line-comments','inline-comments'
+      IncludeMeta [bool] default $true  — when $false, returns bare string
+      MaskHereStrings    [bool] default $true — fallback route only: here-strings are code
+                  payload, not comments; they are sentinel-masked before the pseudo-AST
+                  regexes run and restored afterward. A broken opener masks through a
+                  lenient (indented) closer, else to EOF. Set $false to override and let
+                  the fallback regexes process here-string interiors.
+      ForceRegexFallback [bool] default $false — force the pseudo-AST regex route.
+
+.ROUTING
+    Tolerance-first: the token walk runs even when parse errors exist (the PS tokenizer
+    is error-recovering; ParseErrors are reported on the envelope either way). The regex
+    pseudo-AST fallback engages only on missing-string-terminator breakage (broken /
+    unterminated here-string swallowing the tail) or via ForceRegexFallback.
+    FallbackMode='regex' appears on the envelope only when the fallback actually ran.
+#>
+param(
+    [Parameter(Position = 0)]
+    [object]$Item,
+
+    [Parameter(Position = 1)]
+    [hashtable]$Config = @{}
+)
+
+# ---------------------------------------------------------------------------
+# Config resolution
+# ---------------------------------------------------------------------------
+$ops = if ($Config.ContainsKey('Operations')) { @($Config['Operations']) } else { @('block-comments', 'doc-strings', 'comment-blocks', 'line-comments') }
+$includeMeta = if ($null -ne $Config['IncludeMeta']) { [bool]$Config['IncludeMeta'] } else { $true }
+
+# ---------------------------------------------------------------------------
+# Item unpacking
+# ---------------------------------------------------------------------------
+$text = $null
+$path = $null
+$id = $null
+
+if ($Item -is [string])
+{
+    $text = $Item
+}
+elseif ($Item -is [hashtable] -or $Item -is [pscustomobject])
+{
+    if ($null -ne $Item.PSObject.Properties['Text']) { $text = [string]$Item.Text }
+    if ($null -ne $Item.PSObject.Properties['Path']) { $path = [string]$Item.Path }
+    if ($null -ne $Item.PSObject.Properties['Id']) { $id = [string]$Item.Id }
+}
+
+if ([string]::IsNullOrEmpty($text))
+{
+    if (-not $includeMeta) { return '' }
+    return [pscustomobject]@{
+        Id         = $id
+        Path       = $path
+        Text       = ''
+        Operations = @($ops)
+        Processor  = 'rs-psstrip'
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Parse
+# ---------------------------------------------------------------------------
+$tokensRef = [ref]$null
+$errorsRef = [ref]$null
+$ast = [System.Management.Automation.Language.Parser]::ParseInput($text, $tokensRef, $errorsRef)
+$tokens = @($tokensRef.Value)
+$errors = @($errorsRef.Value)
+
+$parseErrors = $null
+if ($errors.Count -gt 0)
+{
+    $parseErrors = @($errors | ForEach-Object { $_.Message })
+}
+
+# ---------------------------------------------------------------------------
+# Route selection — tolerance-first: the tokenizer is error-recovering, so the
+# token walk runs even when parse errors exist (broken code must still strip;
+# ParseErrors are reported either way). The regex pseudo-AST fallback engages
+# only when:
+#   - a missing string terminator broke tokenization (a broken/unterminated
+#     here-string swallows the file tail as one string token; the pseudo-AST
+#     route can recover stripping beyond the breakage), or
+#   - Config.ForceRegexFallback is set (explicit override / testing).
+# ---------------------------------------------------------------------------
+$useFallback = $false
+if ([bool]$Config['ForceRegexFallback']) { $useFallback = $true }
+elseif ($errors.Count -gt 0)
+{
+    # TerminatorExpectedAtEndOfString  — unterminated string/here-string (no closer)
+    # WhitespaceBeforeHereStringFooter — broken here-string (indented closer)
+    # Both swallow the file tail into one string token; the masked pseudo-AST
+    # route recovers stripping beyond the breakage.
+    foreach ($e in $errors)
+    {
+        if ($e.ErrorId -in @('TerminatorExpectedAtEndOfString', 'WhitespaceBeforeHereStringFooter'))
+        {
+            $useFallback = $true
+            break
+        }
+    }
+}
+
+$hsStore = [System.Collections.Generic.List[string]]::new()
+$HS_OPEN = [char]0xE000
+$HS_CLOSE = [char]0xE001
+
+if ($useFallback)
+{
+    # ---------------------------------------------------------------------------
+    # Regex pseudo-AST fallback — structural regex identifies comment spans
+    # directly.  DocStrings cannot be distinguished from BlockComments without
+    # scope extents, so both are treated as BlockComment (stripped when
+    # 'block-comments' OR 'doc-strings' op is active).
+    # CommentBlock heuristic: 2+ consecutive standalone-# lines.
+    # InlineComment heuristic: # preceded by non-whitespace on the same line.
+    # ---------------------------------------------------------------------------
+
+    # Here-string masking (Config.MaskHereStrings, default $true): here-strings
+    # are code payload, not comments — interiors must pass through the fallback
+    # regexes untouched. Terminated here-strings mask exactly; a broken opener
+    # masks through a lenient (indented) closer when one exists, else to EOF —
+    # recovering the file's intent rather than its accidental tokenization.
+    $maskHereStrings = if ($null -ne $Config['MaskHereStrings']) { [bool]$Config['MaskHereStrings'] } else { $true }
+    if ($maskHereStrings)
+    {
+        $rxHs = [regex]::new('(?s)@([''"])[ \t]*\r?\n.*?\n\1@')
+        $text = $rxHs.Replace($text, {
+                param($m)
+                $hsIdx = $hsStore.Count
+                $hsStore.Add($m.Value)
+                "$HS_OPEN$hsIdx$HS_CLOSE"
+            })
+
+        $hsGuard = 0
+        while ($hsGuard++ -lt 100)
+        {
+            $mOpen = [regex]::Match($text, '@([''"])[ \t]*\r?\n')
+            if (-not $mOpen.Success) { break }
+            $q = $mOpen.Groups[1].Value
+            $rest = $text.Substring($mOpen.Index)
+            $mClose = [regex]::Match($rest, ('(?m)^[ \t]*' + $q + '@'))
+            $hsEnd = if ($mClose.Success) { $mOpen.Index + $mClose.Index + $mClose.Length } else { $text.Length }
+            $hsIdx = $hsStore.Count
+            $hsStore.Add($text.Substring($mOpen.Index, $hsEnd - $mOpen.Index))
+            $text = $text.Substring(0, $mOpen.Index) + "$HS_OPEN$hsIdx$HS_CLOSE" + $text.Substring($hsEnd)
+        }
+    }
+
+    $spansToStrip = [System.Collections.Generic.List[pscustomobject]]::new()
+    $stripBlock = ('block-comments' -in $ops) -or ('doc-strings' -in $ops)
+    $stripCB = 'comment-blocks' -in $ops
+    $stripLine = 'line-comments' -in $ops
+    $stripInline = 'inline-comments' -in $ops
+
+    # Block comments <# ... #>  (DocString / BlockComment unified)
+    if ($stripBlock)
+    {
+        $rx = [regex]::new('(?s)<#.*?#>', 'None')
+        foreach ($m in $rx.Matches($text))
+        {
+            $s = $m.Index
+            $e = $m.Index + $m.Length
+            # consume leading indent and trailing newline (same as AST path)
+            $ls = $s
+            while ($ls -gt 0 -and ($text[$ls - 1] -eq ' ' -or $text[$ls - 1] -eq "`t")) { $ls-- }
+            if ($ls -eq 0 -or $text[$ls - 1] -eq "`n" -or $text[$ls - 1] -eq "`r") { $s = $ls }
+            if ($e -lt $text.Length)
+            {
+                if ($text[$e] -eq "`r") { $e++; if ($e -lt $text.Length -and $text[$e] -eq "`n") { $e++ } }
+                elseif ($text[$e] -eq "`n") { $e++ }
+            }
+            $spansToStrip.Add([pscustomobject]@{ Start = $s; End = $e })
+        }
+    }
+
+    # Standalone # lines — collect all, then apply CommentBlock / LineComment logic
+    if ($stripCB -or $stripLine)
+    {
+        # Match: optional leading whitespace, # not followed by requires, rest of line + newline
+        $rxLine = [regex]::new('(?m)^([^\S\r\n]*)#(?!(?i:requires)\b)[^\r\n]*(\r?\n)?', 'None')
+        # Exclude matches that are part of a <# #> block already captured above
+        # (they won't overlap in well-structured PS; regex is heuristic anyway)
+
+        # Build list of: (lineNum 1-indexed, matchIndex, matchEnd, hasCodeBefore)
+        $standaloneMatches = [System.Collections.Generic.List[pscustomobject]]::new()
+        $textLines = $text -split "`n"
+        foreach ($m in $rxLine.Matches($text))
+        {
+            # Determine if there is code before the # on this line
+            $lineStart = $m.Index
+            $hashIdx = $m.Index + $m.Groups[1].Length   # position of the # character
+            $before = $text.Substring($lineStart, $hashIdx - $lineStart)
+            if ($before -match '\S') { continue }   # has code before # → InlineComment, handled below
+            if ($m.Index -eq 0 -and $m.Value.StartsWith('#!')) { continue }   # line-1 shebang frontmatter
+
+            # Compute 1-indexed line number
+            $lineNum = ($text.Substring(0, $m.Index) -split "`n").Count
+
+            $standaloneMatches.Add([pscustomobject]@{
+                    LineNum = $lineNum
+                    Start   = $m.Index
+                    End     = $m.Index + $m.Length
+                })
+        }
+
+        # Reclassify runs of 2+ consecutive lines as CommentBlock (same logic as AST path)
+        $runStartI = -1
+        $runEndI = -1
+        $cbFlags = @($false) * $standaloneMatches.Count
+
+        for ($i = 0; $i -lt $standaloneMatches.Count; $i++)
+        {
+            $cur2 = $standaloneMatches[$i]
+            if ($runStartI -eq -1)
+            {
+                $runStartI = $i; $runEndI = $i
+            }
+            elseif ($cur2.LineNum -eq $standaloneMatches[$runEndI].LineNum + 1)
+            {
+                $runEndI = $i
+            }
+            else
+            {
+                if ($runEndI -gt $runStartI) { for ($j = $runStartI; $j -le $runEndI; $j++) { $cbFlags[$j] = $true } }
+                $runStartI = $i; $runEndI = $i
+            }
+        }
+        if ($runStartI -ne -1 -and $runEndI -gt $runStartI) { for ($j = $runStartI; $j -le $runEndI; $j++) { $cbFlags[$j] = $true } }
+
+        for ($i = 0; $i -lt $standaloneMatches.Count; $i++)
+        {
+            $shouldStrip2 = if ($cbFlags[$i]) { $stripCB } else { $stripLine }
+            if (-not $shouldStrip2) { continue }
+            $sm = $standaloneMatches[$i]
+            $ls2 = $sm.Start
+            while ($ls2 -gt 0 -and ($text[$ls2 - 1] -eq ' ' -or $text[$ls2 - 1] -eq "`t")) { $ls2-- }
+            $s2 = if ($ls2 -eq 0 -or $text[$ls2 - 1] -eq "`n" -or $text[$ls2 - 1] -eq "`r") { $ls2 } else { $sm.Start }
+            $spansToStrip.Add([pscustomobject]@{ Start = $s2; End = $sm.End })
+        }
+    }
+
+    # Inline comments — # preceded by code on the same line
+    if ($stripInline)
+    {
+        $rxInline = [regex]::new('(?m)[ \t]*#(?!(?i:requires)\b)[^\r\n]*', 'None')
+        foreach ($m in $rxInline.Matches($text))
+        {
+            # Verify there is non-whitespace before this match on the same line
+            $lineStart = $text.LastIndexOf("`n", $m.Index)
+            $lineStart = if ($lineStart -eq -1) { 0 } else { $lineStart + 1 }
+            $before2 = $text.Substring($lineStart, $m.Index - $lineStart)
+            if ($before2 -notmatch '\S') { continue }
+            $spansToStrip.Add([pscustomobject]@{ Start = $m.Index; End = $m.Index + $m.Length })
+        }
+    }
+}
+else
+{
+    # ---------------------------------------------------------------------------
+    # Collect function / class body extents for DocString detection
+    # A BlockComment is a DocString when its character span falls inside the
+    # extent of any FunctionDefinitionAst or TypeDefinitionAst.
+    # ---------------------------------------------------------------------------
+    $bodyExtents = [System.Collections.Generic.List[System.Management.Automation.Language.IScriptExtent]]::new()
+
+    $ast.FindAll(
+        {
+            param($node)
+            $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -or
+            $node -is [System.Management.Automation.Language.TypeDefinitionAst]
+        },
+        $true
+    ) | ForEach-Object { $bodyExtents.Add($_.Extent) }
+
+    # ---------------------------------------------------------------------------
+    # Select and first-pass classify comment tokens
+    # ---------------------------------------------------------------------------
+    $commentKind = [System.Management.Automation.Language.TokenKind]::Comment
+
+    # LF-split for inline detection; token line/col numbers are 1-indexed
+    $lines = $text -split "`n"
+
+    # FrontMatter exclusion (protection by partition, per script-surface Invoke-Parser):
+    # #Requires directives and a line-1 shebang lex as Comment tokens but are semantic
+    # frontmatter — remove them from the comment population so no downstream
+    # classification can strip them.
+    $commentTokens = @(
+        $tokens |
+        Where-Object {
+            $_.Kind -eq $commentKind -and
+            $_.Text -notmatch '^#requires\b' -and
+            -not ($_.Extent.StartOffset -eq 0 -and $_.Text.StartsWith('#!'))
+        } |
+        Sort-Object { $_.Extent.StartOffset }
+    )
+
+    $classified = [System.Collections.Generic.List[pscustomobject]]::new()
+
+    foreach ($tok in $commentTokens)
+    {
+        $so = $tok.Extent.StartOffset
+        $eo = $tok.Extent.EndOffset
+        $line = $tok.Extent.StartLineNumber    # 1-indexed
+        $col = $tok.Extent.StartColumnNumber  # 1-indexed
+
+        if ($tok.Text -match '^<#')
+        {
+            # BlockComment or DocString — inlined extent check (no nested function: ISS-load-safe contract)
+            $isInBody = $false
+            foreach ($ext in $bodyExtents)
+            {
+                if ($so -ge $ext.StartOffset -and $eo -le $ext.EndOffset) { $isInBody = $true; break }
+            }
+            $kind = if ($isInBody) { 'DocString' } else { 'BlockComment' }
+        }
+        else
+        {
+            # LineComment or InlineComment — check for preceding code on the same line
+            $kind = 'LineComment'
+            $lineIdx = $line - 1
+            if ($lineIdx -ge 0 -and $lineIdx -lt $lines.Count)
+            {
+                $lineText = $lines[$lineIdx]
+                $beforeLen = [Math]::Min($col - 1, $lineText.Length)
+                if ($beforeLen -gt 0 -and $lineText.Substring(0, $beforeLen) -match '\S')
+                {
+                    $kind = 'InlineComment'
+                }
+            }
+        }
+
+        $classified.Add([pscustomobject]@{
+                Token    = $tok
+                Kind     = $kind
+                StartOff = $so
+                EndOff   = $eo
+                LineNum  = $line
+            })
+    }
+
+    # ---------------------------------------------------------------------------
+    # Second pass: reclassify contiguous LineComment runs (2+ adjacent lines)
+    # as CommentBlock.  Single isolated LineComment tokens are left as-is.
+    # ---------------------------------------------------------------------------
+    $runStartI = -1
+    $runEndI = -1
+
+    for ($i = 0; $i -lt $classified.Count; $i++)
+    {
+        $c = $classified[$i]
+        if ($c.Kind -ne 'LineComment') { continue }
+
+        if ($runStartI -eq -1)
+        {
+            $runStartI = $i
+            $runEndI = $i
+        }
+        elseif ($c.LineNum -eq $classified[$runEndI].LineNum + 1)
+        {
+            $runEndI = $i
+        }
+        else
+        {
+            if ($runEndI -gt $runStartI)
+            {
+                for ($j = $runStartI; $j -le $runEndI; $j++) { $classified[$j].Kind = 'CommentBlock' }
+            }
+            $runStartI = $i
+            $runEndI = $i
+        }
+    }
+    # Flush the final run
+    if ($runStartI -ne -1 -and $runEndI -gt $runStartI)
+    {
+        for ($j = $runStartI; $j -le $runEndI; $j++) { $classified[$j].Kind = 'CommentBlock' }
+    }
+
+    # ---------------------------------------------------------------------------
+    # Build character-offset strip spans
+    # ---------------------------------------------------------------------------
+    $spansToStrip = [System.Collections.Generic.List[pscustomobject]]::new()
+
+    foreach ($c in $classified)
+    {
+        $shouldStrip = switch ($c.Kind)
+        {
+            'BlockComment' { 'block-comments' -in $ops }
+            'DocString' { 'doc-strings' -in $ops }
+            'CommentBlock' { 'comment-blocks' -in $ops }
+            'LineComment' { 'line-comments' -in $ops }
+            'InlineComment' { 'inline-comments' -in $ops }
+            default { $false }
+        }
+        if (-not $shouldStrip) { continue }
+
+        $spanStart = $c.StartOff
+        $spanEnd = $c.EndOff
+
+        if ($c.Kind -eq 'InlineComment')
+        {
+            # Pull the span start back past any whitespace between code and comment
+            $ws = $spanStart
+            while ($ws -gt 0 -and ($text[$ws - 1] -eq ' ' -or $text[$ws - 1] -eq "`t")) { $ws-- }
+            $spanStart = $ws
+        }
+        else
+        {
+            # Pull span start back to the beginning of the line, consuming leading
+            # whitespace/indentation, so that stripping does not leave an orphaned
+            # blank line fragment when the comment is indented inside a function body.
+            $ls = $spanStart
+            while ($ls -gt 0 -and ($text[$ls - 1] -eq ' ' -or $text[$ls - 1] -eq "`t")) { $ls-- }
+            if ($ls -eq 0 -or $text[$ls - 1] -eq "`n" -or $text[$ls - 1] -eq "`r")
+            {
+                $spanStart = $ls
+            }
+
+            # Consume the trailing newline so the stripped line does not leave a blank gap
+            if ($spanEnd -lt $text.Length)
+            {
+                if ($text[$spanEnd] -eq "`r")
+                {
+                    $spanEnd++
+                    if ($spanEnd -lt $text.Length -and $text[$spanEnd] -eq "`n") { $spanEnd++ }
+                }
+                elseif ($text[$spanEnd] -eq "`n")
+                {
+                    $spanEnd++
+                }
+            }
+        }
+
+        $spansToStrip.Add([pscustomobject]@{ Start = $spanStart; End = $spanEnd })
+    }
+
+} # end else (AST path)
+
+# ---------------------------------------------------------------------------
+# Merge overlapping / adjacent spans
+# ---------------------------------------------------------------------------
+$merged = [System.Collections.Generic.List[pscustomobject]]::new()
+
+if ($spansToStrip.Count -gt 0)
+{
+    $sorted = @($spansToStrip | Sort-Object { $_.Start })
+    $cur = [pscustomobject]@{ Start = $sorted[0].Start; End = $sorted[0].End }
+
+    for ($i = 1; $i -lt $sorted.Count; $i++)
+    {
+        $nxt = $sorted[$i]
+        if ($nxt.Start -le $cur.End)
+        {
+            if ($nxt.End -gt $cur.End) { $cur = [pscustomobject]@{ Start = $cur.Start; End = $nxt.End } }
+        }
+        else
+        {
+            $merged.Add($cur)
+            $cur = [pscustomobject]@{ Start = $nxt.Start; End = $nxt.End }
+        }
+    }
+    $merged.Add($cur)
+}
+
+# ---------------------------------------------------------------------------
+# Reconstruct text from the non-stripped spans
+# ---------------------------------------------------------------------------
+$sb = [System.Text.StringBuilder]::new($text.Length)
+$pos = 0
+
+foreach ($span in $merged)
+{
+    if ($span.Start -gt $pos)
+    {
+        $null = $sb.Append($text.Substring($pos, $span.Start - $pos))
+    }
+    $pos = $span.End
+}
+if ($pos -lt $text.Length)
+{
+    $null = $sb.Append($text.Substring($pos))
+}
+
+$result = $sb.ToString()
+
+# Restore masked here-strings (fallback route only)
+if ($hsStore.Count -gt 0)
+{
+    $result = [regex]::Replace($result, "$HS_OPEN(\d+)$HS_CLOSE", { param($m) $hsStore[[int]$m.Groups[1].Value] })
+}
+
+# ---------------------------------------------------------------------------
+# Return
+# ---------------------------------------------------------------------------
+if (-not $includeMeta) { return $result }
+
+$envelope = [ordered]@{
+    Id         = $id
+    Path       = $path
+    Text       = $result
+    Operations = @($ops)
+    Processor  = 'rs-psstrip'
+}
+if ($null -ne $parseErrors)
+{
+    $envelope['ParseErrors'] = $parseErrors
+}
+if ($useFallback)
+{
+    $envelope['FallbackMode'] = 'regex'
+}
+return [pscustomobject]$envelope

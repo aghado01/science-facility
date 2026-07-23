@@ -1,0 +1,20 @@
+# Default: text files with auto line-ending normalization
+* text=auto
+
+# Enforce LF for code (avoids CRLF noise across OSes)
+*.txt  text eol=lf
+*.ts   text eol=lf
+*.tsx  text eol=lf
+*.js   text eol=lf
+*.json text eol=lf
+*.ps1  text eol=lf
+*.psm1 text eol=lf
+
+# Be strict about whitespace errors in source files
+*.ts   whitespace=trailing-space,blank-at-eol,blank-at-eof
+*.tsx  whitespace=trailing-space,blank-at-eol,blank-at-eof
+*.js   whitespace=trailing-space,blank-at-eol,blank-at-eof
+
+# Ignore whitespace checks in generated/minified output, if any
+*.min.js -whitespace
+dist/**  -whitespace
