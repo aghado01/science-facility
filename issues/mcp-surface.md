@@ -76,4 +76,19 @@ avails to its human users** — for agent users:
 
 ## Work log
 
+- 2026-07-23 — **Validated use case (user observation), donated by the
+  codex-scientiae chip** (models-removed trace of opendataloader-pdf + MinerU): a
+  two-repo cross-examination the MCP would have served directly — scoped
+  `create_snapshot` (selection patterns over the relevant subtrees) → manifest-first
+  orientation → targeted address seeks. The chip hand-rolled the equivalent: Sol's
+  commit-pinned pointers as manifest substitute, context-mode indexing as the search
+  layer, direct reads only for judgment. Requirements donated: (a) **multi-root /
+  cross-repo snapshot** as one investigation artifact; (b) **provenance stamping**
+  (commit hash) in the manifest so `path:line` citations in reports anchor to a
+  frozen artifact — verification receipts stop drifting and "re-locate, don't trust"
+  caveats become unnecessary (the chip had to verify commit alignment manually);
+  (c) temp-dir ephemerality fit the per-investigation pattern exactly; (d) ensemble
+  currency — the same snapshot could have been handed to other models for parallel
+  takes.
+
 _(append)_
