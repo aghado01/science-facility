@@ -1,4 +1,4 @@
-# claude-jso-review.ps1 — Worker input renderer + worker helpers for the
+# claude-jso-units.ps1 — Worker input renderer + worker helpers for the
 # parallel summarization phase of the chat-review skill.
 #
 # Standalone — no dependencies on claude-jso-markdown-v2.ps1. Reads the
