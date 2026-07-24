@@ -11,14 +11,19 @@
 #                        anchor inside raw JSONL content without full scanning.
 #                        Returns array of 0-based match positions. Empty = no match.
 #
-#   Get-ContentHash      Rabin-Karp whole-content fingerprint (Int64).
+#   Get-ContentFingerprint
+#                        Rabin-Karp whole-content fingerprint (Int64).
 #                        Use for turn deduplication keys (Phase 2).
+#                        Deliberately NOT named Get-ContentHash — that name is
+#                        taken by reposnapshot's rs.core.numerics (SHA256 hex),
+#                        and no alias shim is provided: an alias would outrank
+#                        the reposnapshot function and reintroduce the collision.
 #
 # CLASSES (available after dot-sourcing)
 # ----------------------------------------
 #   RabinKarpHash        Rolling hash engine. Base=257, Mod=1000000007.
 #                        AddChar / RemoveChar / RollWindow / Reset.
-#                        Used internally by Find-StringPattern and Get-ContentHash.
+#                        Used internally by Find-StringPattern and Get-ContentFingerprint.
 #
 # DEPENDENCY
 # ----------
@@ -75,7 +80,7 @@ class RabinKarpHash
     [void] Reset() { $this.Hash = 0 }
 }
 
-function Get-ContentHash
+function Get-ContentFingerprint
 {
     <#
     .SYNOPSIS

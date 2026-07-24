@@ -1573,18 +1573,18 @@ function Select-JsonlPath
 #   Magic    : "JSHA" (4 bytes ASCII)
 #   Version  : int32 = 1
 #   Count    : int32 = number of records
-#   Hashes   : count × int64 (Get-ContentHash output, one per record line)
+#   Hashes   : count × int64 (Get-ContentFingerprint output, one per record line)
 #
-# Depends on Get-ContentHash from jso-hash.ps1 — caller must dot-source
+# Depends on Get-ContentFingerprint from jso-hash.ps1 — caller must dot-source
 # both files. Functions throw a descriptive error if the hash primitive
 # is unavailable.
 # =============================================================================
 
 function _Assert-HashAvailable
 {
-    if (-not (Get-Command Get-ContentHash -CommandType Function -ErrorAction SilentlyContinue))
+    if (-not (Get-Command Get-ContentFingerprint -CommandType Function -ErrorAction SilentlyContinue))
     {
-        throw "Get-ContentHash not available — dot-source jso-hash.ps1 before using hash-sidecar functions."
+        throw "Get-ContentFingerprint not available — dot-source jso-hash.ps1 before using hash-sidecar functions."
     }
 }
 
@@ -1597,7 +1597,7 @@ function New-JsonlHashIndex
         per record line.
 
     .DESCRIPTION
-        Streams the file and applies Get-ContentHash to each non-blank line,
+        Streams the file and applies Get-ContentFingerprint to each non-blank line,
         writing the result as a JSHA-magic binary sidecar. Used by
         Compare-JsonlByHash (in jso-debug) for O(load) diff against another
         sidecar instead of O(re-parse) record-by-record comparison.
@@ -1629,7 +1629,7 @@ function New-JsonlHashIndex
     {
         while ($null -ne ($line = $sr.ReadLine()))
         {
-            $hashes.Add([long](Get-ContentHash -Content $line))
+            $hashes.Add([long](Get-ContentFingerprint -Content $line))
         }
     }
     finally { $sr.Dispose() }
@@ -1727,7 +1727,7 @@ function Test-JsonlHashIndex
         while ($null -ne ($line = $sr.ReadLine()))
         {
             if ($i -ge $count) { return $false }
-            $h = [long](Get-ContentHash -Content $line)
+            $h = [long](Get-ContentFingerprint -Content $line)
             if ($h -ne $stored[$i]) { return $false }
             $i++
         }
@@ -1746,7 +1746,7 @@ function Get-ExchangeContentHash
 
     .DESCRIPTION
         Extracts text from `prompt` and `response` records, trims each, joins
-        with a stable separator, and hashes via Get-ContentHash. The result
+        with a stable separator, and hashes via Get-ContentFingerprint. The result
         is a deterministic dedup key suitable for cross-source comparison
         (claude-jso vs perplexity-side envelopes whose `records[]` contain
         the same prompt+response pair will produce the same hash).
@@ -1795,7 +1795,7 @@ function Get-ExchangeContentHash
 
         $canonical = $parts -join "`n---`n"
         if ([string]::IsNullOrEmpty($canonical)) { return 0L }
-        return [long](Get-ContentHash -Content $canonical)
+        return [long](Get-ContentFingerprint -Content $canonical)
     }
 }
 

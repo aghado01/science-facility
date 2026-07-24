@@ -7,7 +7,7 @@
 #
 # DEPENDENCIES (must be dot-sourced separately, in any order):
 #   jso-jackson.ps1   — primitives (read-side, schema, preview, classes)
-#   jso-hash.ps1      — hashing primitives (Find-StringPattern, Get-ContentHash)
+#   jso-hash.ps1      — hashing primitives (Find-StringPattern, Get-ContentFingerprint)
 #                       used by content-substring search and hash-sidecar diffs.
 #
 # CONVENTIONS
