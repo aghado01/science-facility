@@ -74,9 +74,55 @@ thread-corpus-container.md ("flag off or bind Hashish").
    polynomial) vs rs.core `Get-ContentHash` (SHA256 hex) — same name, different
    algorithm and return type. Rename one before the two ever share a session.
 
-## Not ported (known gap)
+## ~~Not ported (known gap)~~ — corrected by Part 2
 
-No fuzzy/near-dup layer survives anywhere: SimHash/MinHash/CTPH/TLSH are dead
-in the ancestor and have no descendant. Matches the corpus-container plan to
-consolidate near-dup hashing from mathdig `hashlib-new.ps1` masked-uint64
-patterns instead.
+Original claim "no fuzzy/near-dup layer survives anywhere" was wrong: the
+corrected fuzzy layer lives in mathdig `hashlib-new.ps1` (see Part 2, verified
+working). The corpus-container plan to consolidate from its masked-uint64
+patterns is exactly right.
+
+---
+
+# Part 2 — Descendant map (composite snapshot audit, 2026-07-23)
+
+Source: `D:\aghado01\project-snapshots\jso-jsonl-hashing\json-jsonl_20260424_022119_*`
+(snapshot dated 2026-04-24). Files extracted by shard byte offsets
+(`row_content_end` is **inclusive** — off-by-one truncates the final closer)
+and JSON-unescaped, then run through the same empirical battery as Part 1.
+
+## Generations, verified
+
+| Generation | Members | Battery result |
+|---|---|---|
+| **G1 broken numerics** | `mathdig.hashish.psm1`, `mathdig.measurement.psm1` ≙ rs.core.hash/lsh/measures | Fails **byte-for-byte identically** to rs.core (same FNV overflow, Pearson byte-return, 1-arg GetRollContext, Levenshtein comma-index, Hamming sign-bit hang — reproduced under a 3 s guard). Same generation, not fixes. measurement is a superset sibling: adds Get-CoocurrenceMatrix / PMI / ContextualEntropy / ConditionalProbability. |
+| **G2 RabinKarp architecture** | `tooldig.readwrite.psm1`, `context-guardian/storage.psm1` | Right skeleton (uint32 fields, base 257 / mod 1e9+7; AddChar whole-content path correct — `Get-ContentHash('hello')` = 418513571 = jso, and = rs.core `PolynomialHash::Compute`). But **RollWindow is the composed `RemoveChar(); AddChar()`** — empirically `MISMATCH at first roll` (tooldig; storage has the identical composed body, capture too corrupted to execute). tooldig `Find-StringPattern` dangles on missing `hashing-primitives.psm1` (`[Polynomial]` type not found) — exactly what jso-hash's header says it replaced. |
+| **G3 corrected — exact/rolling** | `jso-hash.ps1` (jso-jackson) | All green (Part 1). The roll fix (single composed formula, BasePower = base^m, explicit `[long]` casts) first *verifiably* exists here: jso-hash's SOURCE note credits storage.psm1 as "canonical bug-fixed", but the 4/24 snapshot's storage.psm1 still has the broken composed roll — either the fix landed in jso-hash itself or in a post-snapshot storage revision. |
+| **G3 corrected — fuzzy/LSH** | `mathdig/hashlib-new.ps1` | **All green.** SimHash `cef7991c1475e5ce`; discrimination real (Hamming 6 for near-identical texts vs 29 for unrelated); CTPH emits proper two-scale ssdeep signature; MinHash + EstimateJaccard work; TLSH emits valid `T1…`. |
+| **Reference ports** | `spcx-hashish/*.cs` (simhash, minhash, ctph, tlsh, bm25-stats) | Not executed; C# native unchecked arithmetic sidesteps the PS traps. Study material per corpus-container note. |
+| **JSONL/bloom parent** | `jso-utils/Jso-Utils.Core.psm1` | Parses clean; bloom system + JSONL core are jso-jackson's direct parent (accompanying `RepoSnapshot-Jso-utils.core.md` review describes the same hybrid bloom pattern + `script:Get-BloomFilterHashes` placement jso-jackson has). |
+| **Corrupted captures** | `context-guardian/hashlib.psm1` (5 parse errors — class header mangled into `function`), `context-guardian/storage.psm1` (1) | Snapshot-time strip corruption; unusable as code, legible as reference. |
+
+## hashlib-new's masked-uint64 idiom (the pattern to consolidate on)
+
+- 64-bit FNV-1a: `[ulong]([System.UInt128]$hash * [System.UInt128]$prime)` —
+  widen through UInt128, truncate back; exact wraparound semantics.
+- 32-bit seeded FNV: `($hash * $prime) -band 0xFFFFFFFFul` on `[uint64]`.
+- Pearson: byte-domain masked `((h -bxor c) * 31) -band 0xFF`, typed `[byte]`
+  end-to-end (fixes the G1 byte-return throw).
+- Precomputed `[ulong[]] $Masks` instead of per-bit `1L -shl $i`.
+- Plus upgrades beyond bugfix: BM25/IDF-weighted SimHash features, compiled
+  NonBacktracking `\p{L}\p{Nd}_` tokenizer.
+
+## Consolidation implications
+
+1. Near-dup/fuzzy for the thread corpus: lift from `hashlib-new.ps1`, not
+   rs.core.lsh, not mathdig.hashish (both G1-broken). It runs as-is today.
+2. A future measures port should take mathdig.measurement as the *surface*
+   spec (it's the richest: + PMI/entropy family) but re-implement the three
+   trap sites: parenthesize 2D indices, popcount without `x -band (x-1)` on
+   signed longs (mask into `[uint64]` or `-shr` loop), `[AllowEmptyCollection()]`.
+3. jso-hash's SOURCE header overstates storage.psm1 — worth a one-line
+   amendment so the fix provenance isn't mis-attributed later.
+4. Snapshot ingest note (reposnapshot): `row_content_end` inclusive; and the
+   context-guardian captures show live strip-corruption (class → `function`
+   mangling) worth a colonel test case.
