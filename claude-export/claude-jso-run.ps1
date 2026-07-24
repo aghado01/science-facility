@@ -2,7 +2,7 @@
 #
 # Dot-source this file to get all pipeline functions:
 #
-#   . "$env:CLAUDE_CONFIG_DIR\tools\claude-jso-run.ps1"
+#   . "D:\aghado01\utils\jso-jackson\claude-export\claude-jso-run.ps1"
 #   Invoke-ClaudeThreadExport -SourceDir $path
 #   Invoke-ClaudeThreadExportBatch -SourceDir $path -MarkdownDir $outDir
 #

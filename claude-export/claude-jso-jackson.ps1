@@ -4,7 +4,7 @@
 #
 # Dot-source this file to get the Claude-specific layer on top of jso-jackson.ps1:
 #
-#   . "$env:CLAUDE_CONFIG_DIR\tools\claude-jso-jackson.ps1"
+#   . "D:\aghado01\utils\jso-jackson\claude-export\claude-jso-jackson.ps1"
 #
 # This file dot-sources jso-jackson.ps1 automatically.
 #
@@ -61,7 +61,7 @@
 $ErrorActionPreference = 'Stop'
 
 # --- Dot-source base engine ---
-. "$PSScriptRoot\jso-jackson.ps1"
+. "$PSScriptRoot\..\jso-jackson.ps1"
 
 #region --- ClaudeSessionManifest ---
 

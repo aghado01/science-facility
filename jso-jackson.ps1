@@ -2,7 +2,7 @@
 #
 # Dot-source this file to get the base JSONL primitives:
 #
-#   . "$env:CLAUDE_CONFIG_DIR\tools\jso-jackson.ps1"
+#   . "D:\aghado01\utils\jso-jackson\jso-jackson.ps1"
 #
 # CLASSES
 # ------

@@ -2,7 +2,7 @@
 #
 # Dot-source this file to get the Phase 1 hashing surface:
 #
-#   . "$env:USERPROFILE\.claude\tools\jso-hash.ps1"
+#   . "D:\aghado01\utils\jso-jackson\jso-hash.ps1"
 #
 # FUNCTIONS
 # ---------
