@@ -1,5 +1,36 @@
 # Changelog — rs.core - formerly threadparser/v2-new
 
+## 2026-07-23 — rs.core.numerics consolidation
+
+### rs.core.numerics.psm1 — new module, replaces rs.core.hash / rs.core.lsh / rs.core.measures
+
+- **The three G1 placeholder modules are deleted.** They were empirically non-functional
+  (FNV/Pearson overflow throws, dead rolling-hash surface via the class default-param trap,
+  Levenshtein 2D comma-index throw, Hamming sign-bit infinite loop) — full defect inventory
+  in `issues/v3/rs-core-numerics-cross-exam-20260723.md`, design in
+  `issues/v3/rs.core.numerics-design.md`.
+- **Demand-driven surface** (sharding + near-term thread-corpus): identity (`Get-PathHash`,
+  `Get-ContentHash`, `Get-StreamHash` — SHA256 hex), signatures (`Get-SimHash` BM25-saturated
+  with optional IDF corpus weighting via `Get-DocStats`, `Get-MinHashSignature`,
+  `Get-JaccardEstimate`), measures (`Get-HammingDistance/-Similarity` — chunked, any-width
+  sigs, BitOperations popcount; `Get-JaccardSimilarity/-Distance` — empty-set safe, J(∅,∅)=1;
+  `Get-LevenshteinDistance/-Similarity` — two-row DP, explicit `-CaseInsensitive`;
+  `Get-CosineSimilarity`).
+- **Provenance**: SimHash/MinHash ported from mathdig `hashlib-new.ps1` (masked-uint64
+  generation, composite snapshot `json-jsonl_20260424_022119`); pinned lineage vectors in
+  tests guarantee bit-identical outputs. Classes are internal — function-only surface, no
+  `using module` needed by consumers.
+- **Masked-arithmetic law** documented in the module header (5 rules distilled from the
+  cross-exam); `processors/tests/rs-numerics.tests.ps1` keeps the four G1 traps as
+  permanent regressions (sign-bit Hamming runs under a 3 s hang guard).
+- **rs.core.sharding.psm1**: two imports (hash + lsh) replaced by one (numerics); call
+  sites unchanged (`Get-PathHash`, `Get-ContentHash -Content`, `Get-SimHash -Text`).
+  SimHash values in shard metadata change generation — no compat burden, the G1 SimHash
+  always threw so no metadata ever carried one.
+- **Excluded by design** (stay in the snapshot inventory until demand exists): CTPH, TLSH,
+  CDC/rolling-window chunking, Compare-WithMetric dispatcher, Manhattan/Chebyshev/Angular/
+  Dice/PrimeFactor, Mahalanobis/KL/JS, PMI/co-occurrence/entropy family.
+
 ## 2026-04-22 — Crawler / ignore compiler decoupling (continued)
 
 ### rs.core.ignore.psm1 — IgnoreDefaults, sentinel aggregate, empty-sentinel short-circuit

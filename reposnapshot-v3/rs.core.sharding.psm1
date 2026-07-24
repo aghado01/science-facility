@@ -24,10 +24,9 @@ Set-StrictMode -Version Latest
 # MODULE DEPENDENCIES
 # ═══════════════════════════════════════════════════════════════════════════
 
-# Math core helpers
+# Numeric core (identity hashing + simhash) — replaces rs.core.hash/lsh
 
-Import-Module (Join-Path $PSScriptRoot 'rs.core.hash.psm1') -ErrorAction Stop
-Import-Module (Join-Path $PSScriptRoot 'rs.core.lsh.psm1')  -ErrorAction Stop
+Import-Module (Join-Path $PSScriptRoot 'rs.core.numerics.psm1') -ErrorAction Stop
 
 
 # ═══════════════════════════════════════════════════════════════════════════

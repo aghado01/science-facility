@@ -255,14 +255,16 @@ synthesis — sampling without coverage accountability; fluency masks the gaps.
 - `reposnapshot-v3/rs.core.sharding.psm1` — **re-dispositioned**: the v3.1 JSONL/piped
   generation (Write/Read-JSONLShard with offset+count, Build-ShardMetadata TOC,
   manifest, Get-FileFromShard) is the natural substrate for THIS track, not vestigial
-  code-track machinery. (Caveat: Build-ShardMetadata calls SimHash/broken LSH — flag
-  off or bind Hashish.)
+  code-track machinery. (Resolved 2026-07-23: Build-ShardMetadata now binds
+  `rs.core.numerics` — working SimHash from the hashlib-new lineage.)
 - `RepoSnapshotLts.psm1` `Get-EntryByteOffsets` — byte-accurate row addressing to port.
 - Hashing for dedup / near-dup thread detection: consolidate the corrected
   **PowerShell equivalents** (mathdig `hashlib-new.ps1` masked-uint64 patterns) —
   this is not a C# project; the hashish/.cs successors are study/reference material
-  for the eventual centralization, not a binding. Do not use rs.core.hash/lsh as-is
-  (broken numerics).
+  for the eventual centralization, not a binding. ~~Do not use rs.core.hash/lsh as-is
+  (broken numerics).~~ Landed 2026-07-23 as `rs.core.numerics.psm1` (G3 pull:
+  hashlib-new SimHash/MinHash + SHA256 identity + fixed Hamming/Levenshtein;
+  see issues/v3/rs.core.numerics-design.md and the cross-exam doc).
 - Prior art in PowerShellCore: `rs.core/threadparser` (.legacy Markdig parser),
   NDPSON doc-ingestion discussions under `rs.core/.discussion/sharding/`.
 
