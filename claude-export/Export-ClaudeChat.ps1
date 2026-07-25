@@ -20,12 +20,20 @@
     `Invoke-ClaudeThreadExport` from claude-jso-run.ps1, which exposes the lot.
     See README.md.
 
-    LIMITATION — a conversation can span several session files. A thread that is
-    continued leaves a `.jsonl.idx` sentinel and gets reassembled automatically.
-    But switching to another chat and back within a running Claude app mints a
-    new session id with no sentinel and no back-link, so the earlier portion is
-    a separate file this export will not include. If an export appears to begin
-    mid-conversation, that is why. See issues/brief-redundant-session-ids.md §8.
+    SESSION ROTATION — one conversation, several session files.
+    Claude Code periodically mints a new session id mid-conversation and writes
+    a FULL cumulative copy of the thread so far into the new file. Successive
+    files are snapshots, not segments: every one opens with the same first user
+    prompt, and each contains all of its predecessor plus what followed.
+
+    Consequence for this script: exporting the LIVE session id — the default —
+    yields the complete conversation. Nothing is truncated.
+
+    The caveat applies to OLDER ids only. An id from an earlier rotation exports
+    the conversation as it stood at that moment, not its final state. To export
+    a finished thread in full, use the NEWEST session id belonging to it;
+    `Get-ClaudeThreadPlan -SessionId <any id from it>` lists the candidates.
+    See issues/brief-redundant-session-ids.md §8.
 
 .PARAMETER SessionId
     The thread to export. Defaults to $env:CLAUDE_CODE_SESSION_ID — the session

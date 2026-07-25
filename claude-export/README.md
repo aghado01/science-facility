@@ -76,19 +76,24 @@ No silent fallbacks anywhere in the resolution path. Each of these throws with t
 | `Ambiguous session id … N transcripts found` | Should be impossible. Report it verbatim. |
 | `Cannot validate argument … -Exclude` | A record class was misspelled; the message lists the valid set. |
 
-### One limitation worth knowing
+### Session rotation — why one conversation has several session files
 
-A conversation can be spread across more than one session file, and this export covers one.
+Claude Code periodically mints a new session id partway through a conversation and writes a **full
+cumulative copy** of the thread so far into the new file. Successive files are *snapshots, not
+segments*: each opens with the same first user prompt and contains everything its predecessor did,
+plus what came after.
 
-- A thread that grows very long gets **continued**, leaving a `.jsonl.idx` sentinel next to the
-  older file. The sentinel walk finds those automatically and merges them into one export. Nothing
-  to do.
-- But switching away to another chat and back **within a running Claude app mints a new session
-  id**, with no sentinel and no back-link to the earlier file. That earlier portion will not be in
-  the export.
+**For you this is a non-issue.** The live session id is the newest snapshot, so exporting it gets
+the complete conversation. Nothing is truncated and there is nothing to reassemble.
 
-So if an exported thread looks like it starts mid-conversation, this is why — it is not a bug in
-the renderer. Details and current thinking: [`../issues/brief-redundant-session-ids.md`](../issues/brief-redundant-session-ids.md) §8.
+It matters only when exporting an **older** id: that yields the conversation as it stood at that
+rotation, not its final state. To export a finished thread in full, use the newest session id
+belonging to it — `Get-ClaudeThreadPlan -SessionId <any id from that thread>` lists what is in the
+project directory.
+
+Measured on this machine: 219 transcript files hold 87 distinct conversations; 58% of the bytes
+under `~/.claude/projects` are redundant copies. Details:
+[`../issues/brief-redundant-session-ids.md`](../issues/brief-redundant-session-ids.md) §8.
 
 ---
 
