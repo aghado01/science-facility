@@ -491,3 +491,125 @@ directories were left intact.
   or one shared hub-root variable covering both — would reduce that to a single settings edit.
 - **`JSO_EXPORT_DIR` value** — plumbing is in, value not chosen; entangled with the rename.
 - Retiring `.claude/tools/jso-jackson`, and minting the `chat-export` skill.
+
+---
+
+## 11. Follow-up: `-SourceDir` optional on every entry point
+
+**Completed 2026-07-25.** The user reported that specifying `-SourceDir` still seemed necessary.
+Two distinct causes — one a documentation defect, one a real gap. **This revisits D4.**
+
+### 11a. The documentation defect (the actual trigger)
+
+`Invoke-ClaudeThreadExport -SessionId` has needed no `-SourceDir` since §8 — reconfirmed by
+binding and running the call with nothing else supplied. But the usage block at the top of
+`claude-jso-run.ps1` still read:
+
+```
+#   Invoke-ClaudeThreadExport -SourceDir $path
+#   Invoke-ClaudeThreadExportBatch -SourceDir $path -MarkdownDir $outDir
+```
+
+§8 added a `SESSION-ID ENTRY POINT` section and updated the FUNCTIONS list, but left the usage
+example — the first thing a reader sees — advertising only the old signature. Rewritten to lead
+with the session-id forms and show the directory forms second. Worth recording as a process
+point: the feature was complete and verified, and still read as missing.
+
+### 11b. The real gap — `Get-ClaudeThreadPlan` and `Invoke-ClaudeThreadExportBatch`
+
+Both still had a mandatory `-SourceDir`. D4 kept it load-bearing there because they "genuinely
+enumerate a directory" — true, but it does not follow that the caller must *name* that directory.
+A session id identifies its project dir exactly as well, and §1's invariant-location argument
+applies unchanged.
+
+Both now carry a `BySessionId` parameter set alongside the default `BySourceDir` — the same
+parameter name used by `Invoke-ClaudeThreadExport`. See §11f: this shipped briefly as
+`-ProjectOfSession` and was corrected.
+
+**Why one name across all three is right.** Resolving a session id is a *single* act that yields
+two facts, because the project slug is a path component of the transcript it finds:
+`{configRoot}/projects/{slug}/{sessionId}.jsonl`. There is therefore no separate project to
+specify — the caller supplies an id and the directory comes with it. A parameter named after the
+project would name something that never needs naming.
+
+What differs between the three entry points is the *verb*, not the input. `Get-ClaudeThreadPlan`
+returns chains; `Invoke-ClaudeThreadExportBatch` exports all of them; `Invoke-ClaudeThreadExport`
+exports the one thread. PowerShell users read the cmdlet name first, and it already carries the
+scope — encoding it a second time in the parameter is redundant with the function name.
+
+`Get-ClaudeThreadPlan` needed no other change; the batch runner resolves before planning and logs
+`Resolved session {id} → project {name}`.
+
+Also simplified: the §8 resolve block in `Invoke-ClaudeThreadExport` built a splatted hashtable to
+conditionally pass `-ConfigRoot`. Unnecessary — an empty `-ConfigRoot` already falls through to
+discovery inside `Get-ClaudeConfigRoot`, so it forwards unconditionally. One line instead of four,
+and the same form now appears at all three call sites.
+
+### 11c. Verification
+
+Parse-clean. No entry point requires `-SourceDir` any more:
+
+All three now expose the identical pair of sets:
+
+| Function | Sets | Mandatory |
+|---|---|---|
+| `Invoke-ClaudeThreadExport` | `BySourceDir` (default) / `BySessionId` | `SourceDir` / `SessionId` |
+| `Get-ClaudeThreadPlan` | `BySourceDir` (default) / `BySessionId` | `SourceDir` / `SessionId` |
+| `Invoke-ClaudeThreadExportBatch` | `BySourceDir` (default) / `BySessionId` | `SourceDir` / `SessionId` |
+
+| Test | Result |
+|---|---|
+| `Get-ClaudeThreadPlan -SessionId` | 107 chains, `D--aghado01-codex-scientiae` |
+| same dir via `-SourceDir` | 107 chains — identical |
+| `Invoke-ClaudeThreadExportBatch -SessionId` | resolved and ran the reposnapshot project |
+| both sets supplied together, plan and batch | PowerShell rejects at binding |
+| malformed id through `-SessionId` | throws on validation |
+| `ProjectOfSession` references remaining in tree | 0 |
+| end-to-end `-SessionId` after touching the resolve block | still byte-identical to the §8b baseline — 267 lines, sole diff `exported_at` |
+
+Test artifacts removed; `~/.claude/tmp/claude-jso-run/` back to its pre-test 55 directories.
+
+### 11d. Amendment to D4
+
+D4 called the resolver "added *in front of* the single-thread entry point, not a module-wide
+signature change." Right scope for §8, now superseded: session-id resolution fronts all three
+entry points. What D4 got right is the underlying distinction — plan and batch really do operate
+on a directory, and that is precisely why they take `-ProjectOfSession` rather than `-SessionId`.
+The distinction survived; only its reach changed.
+
+### 11f. Correction — `-ProjectOfSession` was wrong
+
+The first cut of §11b named the new parameter `-ProjectOfSession` on plan and batch, reasoning
+that one parameter name carrying different scopes on sibling functions was a trap. The user
+rejected it, correctly:
+
+> the project slug is *in the jsonl file's system path*, so when sessionid is specified, project
+> doesn't need to be specified either, and given the structural invariant, it's kind of
+> superfluous to need to do so anyway
+
+The error was conflating **what the caller supplies** with **what the function does**. The input
+is a session id in all three cases — identical. The scope difference belongs to the verb, and the
+cmdlet name already states it. `-ProjectOfSession` also implied a "project" the caller must think
+about, when the whole point of the structural invariant is that resolving the id hands you the
+directory for free. Renamed to `-SessionId`, parameter set `ByProjectOfSession` → `BySessionId`,
+shipped in commit `74d4c5a` and corrected immediately after.
+
+**Known consequence, not fixed:** `Invoke-ClaudeThreadExport` now carries both `-SessionId`
+(singular, `BySessionId`) and `-SessionIds` (plural, the `BySourceDir` discovery filter), so the
+abbreviation `-Session` is ambiguous and throws at binding:
+
+```
+Parameter cannot be processed because the parameter name 'Session' is ambiguous.
+Possible matches include: -SessionIds -SessionId.
+```
+
+Loud, precise, and caught at bind time rather than silently mis-bound, which meets the D2
+standard. Renaming `-SessionIds` to something like `-OnlySessions` would clear it, at the cost of
+a signature change to a parameter `Invoke-ClaudeThreadExportBatch` splats internally. Left for the
+§7 discussion.
+
+### 11e. Note on this file's location
+
+Between §10 and §11 the user moved this brief from `claude-export/` to `issues/` (and added
+`claude-export/TEMPLATE.md`). §11 was written to the new path. The move itself is unstaged and
+left for the user to commit with the rest of that reorganization.
