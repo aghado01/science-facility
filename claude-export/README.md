@@ -5,38 +5,64 @@ Turns a Claude Code session transcript (`.jsonl`) into readable markdown.
 There are two audiences and two entry points. If you are an agent asked to export the
 conversation you are in, you only need §1.
 
-```powershell
-. "D:\aghado01\utils\jso-jackson\claude-export\claude-jso-run.ps1"
-```
-
-Dot-sourcing that one file loads everything.
-
 ---
 
 ## 1. Agent: export this conversation
 
+Call the script directly. Do **not** dot-source anything first — it loads what it needs:
+
 ```powershell
-Export-ClaudeChat -OutputDir 'D:\aghado01\.discussion'
+& "D:\aghado01\utils\jso-jackson\claude-export\Export-ClaudeChat.ps1" `
+    -SessionId $env:CLAUDE_CODE_SESSION_ID
 ```
 
-That is the whole call. It exports the thread you are currently running inside and returns
-`{ MarkdownPath, SessionId, ProjectName, ThreadId }`. **Report the path. Do not read the file
-back** — it is the conversation you just had, and pulling it into your context is the one thing
-this tool exists to avoid.
+That is the whole call. It returns `{ MarkdownPath, SessionId, ProjectName, ThreadId }`.
+**Report the path. Do not read the file back** — it is the conversation you just had, and pulling
+it into your context is the one thing this tool exists to avoid.
 
-**You do not need to know, look up, or pass:** the session id (taken from
-`$env:CLAUDE_CODE_SESSION_ID`), the transcript's location, the project directory, its slug
-encoding, the rendering format, or a working directory. All of it is either discovered or fixed.
+**You never need to look up or pass:** the transcript's location, the project directory, or its
+slug encoding. The session id resolves to its own `.jsonl` path and the project directory is a
+component of that path, so supplying either would be redundant.
 
-`-OutputDir` may be omitted if `$env:JSO_EXPORT_DIR` is set. If neither is set the call throws —
-it will not bury a deliverable in a temp directory. To export a *different* thread, pass
-`-SessionId`. To change the filename stem from `chat`, pass `-OutputPrefix`.
+### Defaults, and when to override them
 
-### What you get
+All three parameters have everyday defaults. Override one only when the user's request calls for
+it — otherwise pass just `-SessionId`.
 
-The prose conversation: user turns and assistant replies. Thinking blocks, tool calls, tool
-results, subagent transcripts, synthetic records, timestamps, and session/exchange markers are all
-excluded. If you need any of those, this is the wrong function — use §2.
+| Parameter | Default | Override when |
+|---|---|---|
+| `-SessionId` | `$env:CLAUDE_CODE_SESSION_ID` — the thread you are in | the user names a *different* thread |
+| `-MarkdownDir` | `$env:JSO_EXPORT_DIR` if set, else `D:\aghado01\.discussion` | the user names a destination |
+| `-Exclude` | the reading profile below | the user asks to keep something |
+| `-OutputPrefix` | `chat` → `chat-{threadId}.md` | the user wants a different filename stem |
+
+The default `-Exclude` keeps the prose conversation and nothing else — user turns and assistant
+replies:
+
+```powershell
+@('thinking','synthetic','timestamps','session-markers',
+  'exchange-markers','tool-calls','tool-results','subagents')
+```
+
+To keep something, name a *shorter* list — you are listing what to leave out, not what to keep:
+
+```powershell
+# "include the tool calls"  → stop excluding them
+& .\Export-ClaudeChat.ps1 -SessionId $id -Exclude thinking,synthetic,timestamps,session-markers,exchange-markers,subagents
+
+# "include everything"
+& .\Export-ClaudeChat.ps1 -SessionId $id -Exclude @()
+
+# "put it in my notes folder"
+& .\Export-ClaudeChat.ps1 -SessionId $id -MarkdownDir 'D:\aghado01\notes'
+```
+
+Valid `-Exclude` values are `thinking`, `tool-calls`, `tool-results`, `subagents`, `synthetic`,
+`timestamps`, `session-markers`, `exchange-markers`. A typo fails at parameter binding and lists
+the valid set, so you do not have to remember them.
+
+For anything beyond these four knobs — a different `-Format`, an exact output filename, stopping
+at an intermediate stage — this script is the wrong tool. Use §2.
 
 ### When it fails, it fails loudly
 
@@ -48,7 +74,7 @@ No silent fallbacks anywhere in the resolution path. Each of these throws with t
 | `No transcript found for session {id}` | The id is well-formed but no file exists. Same conclusion. |
 | `Malformed session id` | Not a UUID. |
 | `Ambiguous session id … N transcripts found` | Should be impossible. Report it verbatim. |
-| `No output directory` | Pass `-OutputDir` or set `$env:JSO_EXPORT_DIR`. |
+| `Cannot validate argument … -Exclude` | A record class was misspelled; the message lists the valid set. |
 
 ### One limitation worth knowing
 
@@ -67,6 +93,12 @@ the renderer. Details and current thinking: [`../issues/brief-redundant-session-
 ---
 
 ## 2. Human: everything else
+
+Everything below is a function, so dot-source once:
+
+```powershell
+. "D:\aghado01\utils\jso-jackson\claude-export\claude-jso-run.ps1"
+```
 
 `Invoke-ClaudeThreadExport` is the full single-thread pipeline with every knob exposed. It takes
 either a session id or a directory:
