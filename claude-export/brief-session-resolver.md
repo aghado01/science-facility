@@ -385,3 +385,109 @@ verification: `claude-jso-run\20260725_040957` (UTC) beside
 under the same `tmp/` root therefore sort inconsistently and can appear to be from different
 days. Pre-existing, unrelated to `CLAUDE_CONFIG_DIR`, and a one-word fix — but it changes
 directory names, so it is left for the §7 discussion alongside the `-MarkdownDir` default.
+
+_Resolved in §10._
+
+---
+
+## 10. Follow-up: shared run stamp, `CLAUDE_HOME`, deliverable destination
+
+**Completed 2026-07-25**, closing the §9e timestamp finding and wiring the `CLAUDE_HOME` variable
+the user added to `settings.json`.
+
+### 10a. `Get-JobTimestamp` — one definition of a run stamp
+
+The audit found **three** directory-stamp sites, not two:
+
+| Site | Was |
+|---|---|
+| `jso-jackson.ps1` — `New-JobWorkingDir` | `[datetime]::UtcNow` |
+| `claude-jso-run.ps1` — batch working dir | `[DateTime]::Now` (local) |
+| `claude-jso-units.ps1` — `ConvertTo-ClaudeReviewWorkerInputs -RunStamp` | `[DateTime]::Now` (local) |
+
+`Get-JobTimestamp [-At]` now lives in the base layer beside `New-JobWorkingDir` and is the single
+definition. **UTC**, matching the site that already used it. Local time was the wrong choice
+independently of consistency: it repeats an hour at a DST boundary, so run-directory names there
+are non-monotonic and can collide. The offset is not academic — measured live during verification,
+`20260725_052453` (UTC) against `20260724_222453` (local) for the same instant: a five-hour gap
+that lands on the previous day.
+
+`-At` exists for the "same chain of code" case: a caller mints one instant and stamps a set of
+related directories with it, rather than each minting its own. Non-UTC input is normalized via
+`ToUniversalTime()`, so a coordinated stamp is UTC no matter what the caller passes.
+
+**One site duplicates rather than calls.** `claude-jso-units.ps1` declares itself standalone in
+its header (no dot-sources at all, loaded on its own for the review-worker phase). Pulling in the
+2,600-line base file for one timestamp would break that documented property, so it keeps a local
+`[datetime]::UtcNow.ToString('yyyyMMdd_HHmmss')` with a comment naming `Get-JobTimestamp` as
+canonical. Its orchestrator passes `-RunStamp` explicitly anyway, so the default rarely fires.
+The formats now agree, which is what makes the directories comparable.
+
+Zero `[DateTime]::Now`-based directory stamps remain. Content timestamps (`exported_at`, record
+`at` fields) were already UTC ISO-8601 and were left alone — different concern.
+
+### 10b. `CLAUDE_HOME` wired into discovery
+
+The user added `CLAUDE_HOME=C:/Users/azrie/.claude` to `settings.json`'s `env` block; confirmed
+live in the agent shell, while `CLAUDE_CONFIG_DIR` remains empty. Resolution order is now:
+
+1. `-ConfigRoot`
+2. `$env:CLAUDE_CONFIG_DIR` — Claude Code's own variable
+3. `$env:CLAUDE_HOME` — this environment's pin
+4. probed conventional roots
+
+All three explicit sources stay authoritative: set-but-invalid throws rather than falling through
+to a probe. Return values are now `GetFullPath`-normalized whichever source wins, because
+`CLAUDE_HOME` is written with forward slashes and would otherwise produce mixed-separator artifact
+paths like `C:/Users/azrie/.claude\tmp\...`.
+
+**The probe is not redundant and was not removed.** Variables declared in `settings.json` exist
+only inside Claude Code sessions. A cron job, a bare `pwsh`, or another agent runtime sees none of
+them. `CLAUDE_HOME` makes resolution deterministic where it is present; discovery is what makes
+the tool work where it is not.
+
+### 10c. `JSO_EXPORT_DIR` — deliverable destination
+
+New precedence for single-thread markdown: `-MarkdownPath` → `-MarkdownDir` →
+`$env:JSO_EXPORT_DIR` → `{WorkingDir}/output/`. Inert until the variable is set, so nothing
+changes for existing callers.
+
+Rationale for an env var rather than a code default: unlike the working dir, the deliverable
+location is a *preference*, not something discoverable — there is no correct value to compute.
+The name is `JSO_`-prefixed rather than `CLAUDE_` to stay out of Anthropic's namespace, and
+because it is tied to the tool name rather than to a path it survives the pending
+`aghado01/utils` rename.
+
+**The batch runner deliberately ignores it** and keeps its own `{configRoot}/tmp/markdown`
+default. A standing deliverable directory is for the one export the user asked for; pointing a
+106-thread batch at it would bury that.
+
+### 10d. Verification
+
+Parse-clean across all four edited files.
+
+| Test | Result |
+|---|---|
+| `Get-JobTimestamp` vs UTC clock | match; local clock differs by 5h / one calendar day |
+| `-At` with an explicit instant | `20260102_030405` |
+| `-At` with local-kind input | normalized to UTC |
+| `[DateTime]::Now` directory stamps remaining in tree | 0 |
+| `CLAUDE_HOME` set and valid, `CLAUDE_CONFIG_DIR` empty | resolves, normalized to `C:\Users\azrie\.claude` |
+| `CLAUDE_HOME` set but nonexistent | throws, no silent probe fallback |
+| `CLAUDE_HOME` unset | falls through to probe, resolves |
+| `JSO_EXPORT_DIR` set, no `-MarkdownDir` | deliverable written there |
+| `-MarkdownDir` with `JSO_EXPORT_DIR` also set | parameter wins |
+| End-to-end `-SessionId`, no `-WorkingDir` | still byte-identical to the §8b baseline — 267 lines, sole diff `exported_at` |
+
+Test artifacts under `~/.claude/tmp/claude-jso-run/` were removed; the 55 pre-existing run
+directories were left intact.
+
+### 10e. Still open for the §7 discussion
+
+- **Tool-root variable.** The forthcoming skill must dot-source
+  `{tools}/claude-export/claude-jso-run.ps1` by absolute path. `settings.json` already hardcodes
+  `D:/aghado01/utils/context-mode-core/...` in four hook commands, so the pending rename of
+  `aghado01/utils` is already a live breakage risk wider than this tool. A `JSO_JACKSON_HOME` —
+  or one shared hub-root variable covering both — would reduce that to a single settings edit.
+- **`JSO_EXPORT_DIR` value** — plumbing is in, value not chosen; entangled with the rename.
+- Retiring `.claude/tools/jso-jackson`, and minting the `chat-export` skill.

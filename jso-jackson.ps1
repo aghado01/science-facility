@@ -2460,13 +2460,19 @@ function Get-ClaudeConfigRoot
         Discovery replaces that assumption, in strict order:
 
             1. -ConfigRoot                (explicit caller override)
-            2. $env:CLAUDE_CONFIG_DIR     (honoured when set, never required)
-            3. probed conventional roots  (Get-ClaudeConfigRootCandidate)
+            2. $env:CLAUDE_CONFIG_DIR     (Claude Code's own variable)
+            3. $env:CLAUDE_HOME           (this environment's pin)
+            4. probed conventional roots  (Get-ClaudeConfigRootCandidate)
 
-        Sources 1 and 2 are authoritative: when one is supplied it is meant to be
+        Sources 1-3 are authoritative: when one is supplied it is meant to be
         correct, so a bad value throws rather than falling through to a probe.
         Quietly ignoring an explicit root would hide the very misconfiguration
         the caller was trying to state.
+
+        The env vars are an accelerator, never a requirement. Variables declared
+        in Claude Code's settings.json exist only inside Claude Code sessions —
+        a cron job, a bare pwsh shell, or another agent runtime sees none of
+        them, which is exactly why the probe stays.
 
         Every candidate must prove itself on disk before it is returned — with
         -RequireProjects, by actually containing projects/. A guess that cannot
@@ -2503,13 +2509,17 @@ function Get-ClaudeConfigRoot
         return [System.IO.Directory]::Exists($probe)
     }
 
-    # --- 1 & 2: authoritative sources — correct or fatal, never skipped ---
+    # --- 1-3: authoritative sources — correct or fatal, never skipped ---
     foreach ($explicit in @(
             @{ Value = $ConfigRoot;            Source = '-ConfigRoot' },
-            @{ Value = $env:CLAUDE_CONFIG_DIR; Source = '$env:CLAUDE_CONFIG_DIR' }))
+            @{ Value = $env:CLAUDE_CONFIG_DIR; Source = '$env:CLAUDE_CONFIG_DIR' },
+            @{ Value = $env:CLAUDE_HOME;       Source = '$env:CLAUDE_HOME' }))
     {
         if ([string]::IsNullOrWhiteSpace($explicit.Value)) { continue }
-        if (& $qualifies $explicit.Value $proof) { return $explicit.Value }
+        # Normalized like the probed candidates, so every derived artifact path
+        # looks the same regardless of which source won. CLAUDE_HOME is commonly
+        # written with forward slashes.
+        if (& $qualifies $explicit.Value $proof) { return [System.IO.Path]::GetFullPath($explicit.Value) }
         throw "$($explicit.Source) = '$($explicit.Value)' is not a usable Claude config root (expected $need)."
     }
 
@@ -2529,7 +2539,7 @@ function Get-ClaudeConfigRoot
     if ($RequireProjects)
     {
         throw ("Cannot locate a Claude config root containing $need. " +
-            "Pass -ConfigRoot or set `$env:CLAUDE_CONFIG_DIR. Probed:`n  " +
+            "Pass -ConfigRoot or set `$env:CLAUDE_HOME. Probed:`n  " +
             ($candidates -join "`n  "))
     }
 
@@ -2564,6 +2574,38 @@ function Get-ClaudeProjectsRoot
 
 #region --- New-JobWorkingDir ---
 
+function Get-JobTimestamp
+{
+    <#
+    .SYNOPSIS
+        The single source of run-directory timestamps.
+    .DESCRIPTION
+        Every artifact directory this toolkit mints — job working dirs, batch
+        roots, worker dispatch runs — takes its name stamp from here, so sibling
+        directories under a shared root are directly comparable and sort in
+        creation order.
+
+        UTC, not local. Call sites were previously split between
+        [datetime]::UtcNow and [DateTime]::Now, so two directories created in the
+        same second could differ by the UTC offset and appear to be from
+        different days. UTC also keeps names monotonic across a DST boundary,
+        where local time repeats an hour and would collide.
+    .PARAMETER At
+        Instant to format. Defaults to now. Pass one explicit value to stamp a
+        set of related directories with a single coordinated instant rather than
+        letting each mint its own.
+    .OUTPUTS
+        [string] yyyyMMdd_HHmmss (UTC)
+    #>
+    [CmdletBinding()]
+    param(
+        [datetime]$At = [datetime]::UtcNow
+    )
+
+    return $At.ToUniversalTime().ToString('yyyyMMdd_HHmmss')
+}
+
+
 function New-JobWorkingDir
 {
     <#
@@ -2572,7 +2614,8 @@ function New-JobWorkingDir
     .DESCRIPTION
         Creates $Root/$Prefix/yyyyMMdd_HHmmss/ and returns the full path.
         The root and prefix segments are parameterized so the convention
-        can be changed later without touching internals.
+        can be changed later without touching internals. The stamp comes from
+        Get-JobTimestamp (UTC) — see there for why.
     .PARAMETER Root
         Base directory. Defaults to `{claudeConfigRoot}/tmp`, discovered via
         Get-ClaudeConfigRoot.
@@ -2594,7 +2637,7 @@ function New-JobWorkingDir
         $Root = [System.IO.Path]::Combine((Get-ClaudeConfigRoot), 'tmp')
     }
 
-    $timestamp = [datetime]::UtcNow.ToString('yyyyMMdd_HHmmss')
+    $timestamp = Get-JobTimestamp
     $dirPath = [System.IO.Path]::Combine($Root, $Prefix, $timestamp)
 
     [void][System.IO.Directory]::CreateDirectory($dirPath)

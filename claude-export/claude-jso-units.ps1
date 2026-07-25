@@ -94,8 +94,9 @@ function ConvertTo-ClaudeReviewWorkerInputs
         Pipeline working directory. WorkerInputs/ and WorkerOutputs/ are
         created as siblings of exchanges/ under this path.
     .PARAMETER RunStamp
-        Runstamp used to scope this dispatch. Defaults to current local
-        time as yyyyMMdd_HHmmss.
+        Runstamp used to scope this dispatch. Defaults to the current UTC time
+        as yyyyMMdd_HHmmss, matching Get-JobTimestamp so run directories sort
+        alongside those minted elsewhere in the toolkit.
     .PARAMETER Instructions
         Instructions block prepended to every input.md. Defaults to
         $script:DefaultReviewInstructions.
@@ -146,7 +147,11 @@ function ConvertTo-ClaudeReviewWorkerInputs
 
     if (-not $RunStamp)
     {
-        $RunStamp = [DateTime]::Now.ToString('yyyyMMdd_HHmmss')
+        # Must match Get-JobTimestamp (jso-jackson.ps1), which is the canonical
+        # definition of a run stamp: UTC, yyyyMMdd_HHmmss. Duplicated rather
+        # than called because this file is deliberately standalone (see header)
+        # and the orchestrator normally passes -RunStamp explicitly anyway.
+        $RunStamp = [datetime]::UtcNow.ToString('yyyyMMdd_HHmmss')
     }
 
     $inputsDir  = [System.IO.Path]::Combine($WorkingDir, 'WorkerInputs',  $RunStamp)

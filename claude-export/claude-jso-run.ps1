@@ -37,9 +37,11 @@
 #   artifacts self-identify when collected across directories.
 #
 # MARKDOWN OUTPUT RESOLUTION (in precedence order)
-#   -MarkdownPath    exact output file path (single-thread only)
-#   -MarkdownDir     write {OutputPrefix}-{threadId}.md flat into this directory
-#   (neither)        write {OutputPrefix}-{threadId}.md into {WorkingDir}/output/
+#   -MarkdownPath        exact output file path (single-thread only)
+#   -MarkdownDir         write {OutputPrefix}-{threadId}.md flat into this directory
+#   $env:JSO_EXPORT_DIR  standing deliverable destination; single-thread only,
+#                        the batch runner ignores it (see below)
+#   (none)               write {OutputPrefix}-{threadId}.md into {WorkingDir}/output/
 #
 # CLAUDE CONFIG ROOT
 #   Both the transcript source ({root}/projects) and the artifact roots
@@ -345,6 +347,15 @@ function Invoke-ClaudeThreadExport
     {
         [System.IO.Path]::Combine($MarkdownDir, "$OutputPrefix-$threadId.md")
     }
+    elseif ($env:JSO_EXPORT_DIR)
+    {
+        # Standing destination for single-thread deliverables. Unlike the working
+        # dir, this is a preference and not discoverable, so declaring it in the
+        # environment is the only way to have a default at all. A per-call
+        # -MarkdownDir still wins. Deliberately NOT consulted by the batch runner,
+        # which would dump a hundred files into it.
+        [System.IO.Path]::Combine($env:JSO_EXPORT_DIR, "$OutputPrefix-$threadId.md")
+    }
     else
     {
         [System.IO.Path]::Combine($WorkingDir, 'output', "$OutputPrefix-$threadId.md")
@@ -576,7 +587,7 @@ function Invoke-ClaudeThreadExportBatch
     # --- Resolve batch working dir root ---
     if (-not $WorkingDir)
     {
-        $stamp = [DateTime]::Now.ToString('yyyyMMdd_HHmmss')
+        $stamp = Get-JobTimestamp
         $WorkingDir = [System.IO.Path]::Combine(
             (Get-ClaudeConfigRoot), 'tmp', $sourceLeafFolder, $stamp)
     }
