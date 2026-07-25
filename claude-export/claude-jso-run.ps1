@@ -4,6 +4,9 @@
 #
 #   . "D:\aghado01\utils\jso-jackson\claude-export\claude-jso-run.ps1"
 #
+#   # AGENT: export the thread you are running inside. See README.md.
+#   Export-ClaudeChat -OutputDir 'D:\aghado01\.discussion'
+#
 #   # by session id — nothing else needed; the transcript locates itself, and
 #   # the project slug is a component of the path it resolves to
 #   Invoke-ClaudeThreadExport      -SessionId $env:CLAUDE_CODE_SESSION_ID
@@ -16,6 +19,7 @@
 #
 # FUNCTIONS
 # ---------
+#   Export-ClaudeChat             Agent-facing: export this thread. One knob-free call.
 #   Resolve-ClaudeThreadPath      Locate a transcript from its session id alone.
 #   Get-ClaudeThreadPlan          Discover and group threads in a directory.
 #   Invoke-ClaudeThreadExport     Full or partial pipeline: merged → exchanges → markdown.
@@ -97,6 +101,100 @@ $ErrorActionPreference = 'Stop'
 
 . "$PSScriptRoot\claude-jso-jackson.ps1"
 . "$PSScriptRoot\claude-jso-markdown-v2.ps1"
+
+function Export-ClaudeChat
+{
+    <#
+    .SYNOPSIS
+        Export the current chat thread to markdown. The agent-facing entry point.
+    .DESCRIPTION
+        One call, one thread, one file. This is the entry point for an agent
+        exporting the conversation it is running inside; everything an agent
+        cannot meaningfully choose is decided here rather than exposed.
+
+        Not exposed, deliberately:
+          SourceDir      — the session id resolves to its own transcript path,
+                           and the project slug is a component of that path.
+          project slug   — never needs naming; see above.
+          Format/Exclude — fixed to the reading profile below.
+          WorkingDir     — intermediate JSONL staging is an implementation
+                           detail; it lands under the Claude config root.
+
+        The rendering profile is Structural with thinking, tool calls, tool
+        results, subagents, synthetic records, timestamps, and session/exchange
+        markers all excluded — i.e. the prose conversation and nothing else.
+        Anything outside that profile is a job for Invoke-ClaudeThreadExport,
+        which exposes every knob.
+
+        Returns the output path. It never reads transcript content back to the
+        caller: the point is to produce a file, not to pull a conversation into
+        the context window of the agent exporting it.
+
+        LIMITATION — a conversation can span several session files.
+        A long thread that gets continued leaves a `.jsonl.idx` sentinel, and
+        the sentinel walk reassembles those into one export automatically. But
+        switching away to another chat and back within a running Claude app
+        mints a NEW session id with no sentinel and no structural back-link, so
+        the earlier portion lives in a separate file this export will not
+        include. See issues/brief-redundant-session-ids.md §8. When a thread
+        looks truncated at the front, that is why.
+    .PARAMETER SessionId
+        The thread to export. Defaults to $env:CLAUDE_CODE_SESSION_ID, which is
+        the session the calling agent is running inside. Throws if that is
+        empty rather than guessing — note $env:CLAUDE_CODE_HOST_SESSION_ID is a
+        different id and is NOT the transcript key.
+    .PARAMETER OutputDir
+        Directory to write `{OutputPrefix}-{threadId}.md` into. Defaults to
+        $env:JSO_EXPORT_DIR. Throws if neither is set, rather than burying a
+        deliverable in a temp directory.
+    .PARAMETER OutputPrefix
+        Filename stem. Default 'chat'.
+    .OUTPUTS
+        PSCustomObject { MarkdownPath, SessionId, ProjectName, ThreadId }
+    .EXAMPLE
+        Export-ClaudeChat -OutputDir 'D:\aghado01\.discussion'
+        # exports the conversation this agent is in
+    #>
+    [CmdletBinding()]
+    param(
+        [string]$SessionId = $env:CLAUDE_CODE_SESSION_ID,
+
+        [string]$OutputDir,
+
+        [string]$OutputPrefix = 'chat'
+    )
+
+    if ([string]::IsNullOrWhiteSpace($SessionId))
+    {
+        throw ('No session id. $env:CLAUDE_CODE_SESSION_ID is empty and -SessionId was not ' +
+            'supplied. This is not a condition to work around: without it there is no way to ' +
+            'know which thread to export, and guessing would export the wrong one.')
+    }
+
+    if ([string]::IsNullOrWhiteSpace($OutputDir)) { $OutputDir = $env:JSO_EXPORT_DIR }
+    if ([string]::IsNullOrWhiteSpace($OutputDir))
+    {
+        throw 'No output directory. Pass -OutputDir, or set $env:JSO_EXPORT_DIR to a standing destination.'
+    }
+
+    $resolved = Resolve-ClaudeThreadPath -SessionId $SessionId
+
+    $result = Invoke-ClaudeThreadExport `
+        -SessionId    $SessionId `
+        -MarkdownDir  $OutputDir `
+        -OutputPrefix $OutputPrefix `
+        -Format       'Structural' `
+        -Exclude      @('thinking', 'tool-calls', 'tool-results', 'subagents',
+                        'synthetic', 'timestamps', 'session-markers', 'exchange-markers')
+
+    return [PSCustomObject]@{
+        MarkdownPath = $result.MarkdownPath
+        SessionId    = $SessionId
+        ProjectName  = $resolved.ProjectName
+        ThreadId     = $result.ThreadId
+    }
+}
+
 
 function Resolve-ClaudeThreadPath
 {
