@@ -4,10 +4,11 @@
 #
 #   . "D:\aghado01\utils\jso-jackson\claude-export\claude-jso-run.ps1"
 #
-#   # by session id — nothing else needed; the transcript locates itself
+#   # by session id — nothing else needed; the transcript locates itself, and
+#   # the project slug is a component of the path it resolves to
 #   Invoke-ClaudeThreadExport      -SessionId $env:CLAUDE_CODE_SESSION_ID
-#   Get-ClaudeThreadPlan           -ProjectOfSession $id
-#   Invoke-ClaudeThreadExportBatch -ProjectOfSession $id -MarkdownDir $outDir
+#   Get-ClaudeThreadPlan           -SessionId $id
+#   Invoke-ClaudeThreadExportBatch -SessionId $id -MarkdownDir $outDir
 #
 #   # by directory — when you are pointing at a project dir yourself
 #   Invoke-ClaudeThreadExport      -SourceDir $path
@@ -25,7 +26,13 @@
 #   and session UUIDs are unique across project dirs. Resolve-ClaudeThreadPath
 #   probes each project dir for `{sessionId}.jsonl` (one level, no recursion) so a
 #   caller holding only $env:CLAUDE_CODE_SESSION_ID can export without knowing the
-#   project-dir encoding. Resolution is fail-loud: malformed id, zero hits, or
+#   project-dir encoding.
+#
+#   One lookup yields two facts: the transcript file, and — because the project
+#   slug is a component of the path it was found at — the project directory. So
+#   every entry point takes -SessionId and nothing else. There is no separate
+#   project to name; what differs between them is the verb, not the input.
+#   Resolution is fail-loud: malformed id, zero hits, or
 #   multiple hits all throw — there is deliberately NO newest-mtime fallback and
 #   no content search, because a silent fallback would turn a system fault into a
 #   quiet wrong-thread export.
@@ -407,16 +414,16 @@ function Get-ClaudeThreadPlan
         prior sessions in the chain via New-ClaudeThreadManifest -SessionIds.
     .PARAMETER SourceDir
         Directory containing the UUID-named .jsonl session files.
-    .PARAMETER ProjectOfSession
-        A session UUID. Plans the project directory that CONTAINS that session,
-        located via Resolve-ClaudeThreadPath, so the caller supplies an id
-        instead of knowing the project-dir encoding.
+    .PARAMETER SessionId
+        Any session UUID belonging to the directory you want planned. Resolving
+        the id yields its transcript path, and the project slug is a component
+        of that path — so one lookup produces both the file and its directory,
+        and there is nothing further to specify.
 
-        Note the widening: this names a project by one of its members, it does
-        not select a single thread — the result covers every chain in that
-        directory. Named `-ProjectOfSession` rather than `-SessionId` so the
-        call site says so, since `Invoke-ClaudeThreadExport -SessionId` means
-        the opposite.
+        This function plans a directory, so that is what it does with the
+        resolved location. The scope lives in the function's name, not in the
+        parameter's: `Get-ClaudeThreadPlan` returns chains, `Invoke-ClaudeThreadExport`
+        exports the one thread. Same input, different verb.
     .PARAMETER ConfigRoot
         Optional override for the Claude config root. See Get-ClaudeConfigRoot.
     .OUTPUTS
@@ -429,16 +436,16 @@ function Get-ClaudeThreadPlan
         [Parameter(Mandatory, ParameterSetName = 'BySourceDir')]
         [string]$SourceDir,
 
-        [Parameter(Mandatory, ParameterSetName = 'ByProjectOfSession')]
-        [string]$ProjectOfSession,
+        [Parameter(Mandatory, ParameterSetName = 'BySessionId')]
+        [string]$SessionId,
 
-        [Parameter(ParameterSetName = 'ByProjectOfSession')]
+        [Parameter(ParameterSetName = 'BySessionId')]
         [string]$ConfigRoot
     )
 
-    if ($PSCmdlet.ParameterSetName -eq 'ByProjectOfSession')
+    if ($PSCmdlet.ParameterSetName -eq 'BySessionId')
     {
-        $SourceDir = (Resolve-ClaudeThreadPath -SessionId $ProjectOfSession -ConfigRoot $ConfigRoot).SourceDir
+        $SourceDir = (Resolve-ClaudeThreadPath -SessionId $SessionId -ConfigRoot $ConfigRoot).SourceDir
     }
 
     if (-not [System.IO.Directory]::Exists($SourceDir))
@@ -531,14 +538,14 @@ function Invoke-ClaudeThreadExportBatch
         accumulates all markdown files flat, one per thread.
     .PARAMETER SourceDir
         Directory containing the UUID-named .jsonl session files.
-    .PARAMETER ProjectOfSession
-        A session UUID. Batches the project directory that CONTAINS that
-        session, located via Resolve-ClaudeThreadPath.
+    .PARAMETER SessionId
+        Any session UUID belonging to the directory you want batched. Resolving
+        the id yields its transcript path, and the project slug is a component
+        of that path, so the directory comes with it — nothing else to specify.
 
-        Note the widening: one id in, every thread in its project out — for
-        this project dir that is 100+ exports. Named `-ProjectOfSession`
-        rather than `-SessionId` precisely so that is visible at the call
-        site; `Invoke-ClaudeThreadExport -SessionId` exports one thread.
+        Being a batch runner, this exports every chain in that directory, which
+        for a busy project is 100+ threads. The verb is the warning; the thread
+        count is echoed before any work starts.
     .PARAMETER ConfigRoot
         Optional override for the Claude config root. See Get-ClaudeConfigRoot.
     .PARAMETER WorkingDir
@@ -571,10 +578,10 @@ function Invoke-ClaudeThreadExportBatch
         [Parameter(Mandatory, ParameterSetName = 'BySourceDir')]
         [string]$SourceDir,
 
-        [Parameter(Mandatory, ParameterSetName = 'ByProjectOfSession')]
-        [string]$ProjectOfSession,
+        [Parameter(Mandatory, ParameterSetName = 'BySessionId')]
+        [string]$SessionId,
 
-        [Parameter(ParameterSetName = 'ByProjectOfSession')]
+        [Parameter(ParameterSetName = 'BySessionId')]
         [string]$ConfigRoot,
 
         [string]$WorkingDir,
@@ -600,11 +607,11 @@ function Invoke-ClaudeThreadExportBatch
 
     $batchTimer = [System.Diagnostics.Stopwatch]::StartNew()
 
-    if ($PSCmdlet.ParameterSetName -eq 'ByProjectOfSession')
+    if ($PSCmdlet.ParameterSetName -eq 'BySessionId')
     {
-        $resolved = Resolve-ClaudeThreadPath -SessionId $ProjectOfSession -ConfigRoot $ConfigRoot
+        $resolved = Resolve-ClaudeThreadPath -SessionId $SessionId -ConfigRoot $ConfigRoot
         $SourceDir = $resolved.SourceDir
-        Write-Host "Resolved session $ProjectOfSession → project $($resolved.ProjectName)" -ForegroundColor Gray
+        Write-Host "Resolved session $SessionId → project $($resolved.ProjectName)" -ForegroundColor Gray
     }
 
     # --- Discover and group threads ---
