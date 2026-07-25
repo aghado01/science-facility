@@ -8,9 +8,20 @@
 #
 # FUNCTIONS
 # ---------
+#   Resolve-ClaudeThreadPath      Locate a transcript from its session id alone.
 #   Get-ClaudeThreadPlan          Discover and group threads in a directory.
 #   Invoke-ClaudeThreadExport     Full or partial pipeline: merged → exchanges → markdown.
 #   Invoke-ClaudeThreadExportBatch  Batch: plan all threads, dispatch one export per leaf.
+#
+# SESSION-ID ENTRY POINT
+#   Transcripts live at {configRoot}/projects/{encodedProjectDir}/{sessionId}.jsonl,
+#   and session UUIDs are unique across project dirs. Resolve-ClaudeThreadPath
+#   probes each project dir for `{sessionId}.jsonl` (one level, no recursion) so a
+#   caller holding only $env:CLAUDE_CODE_SESSION_ID can export without knowing the
+#   project-dir encoding. Resolution is fail-loud: malformed id, zero hits, or
+#   multiple hits all throw — there is deliberately NO newest-mtime fallback and
+#   no content search, because a silent fallback would turn a system fault into a
+#   quiet wrong-thread export.
 #
 # PIPELINE STAGES
 # ---------------
@@ -63,6 +74,116 @@ $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot\claude-jso-jackson.ps1"
 . "$PSScriptRoot\claude-jso-markdown-v2.ps1"
 
+function Resolve-ClaudeThreadPath
+{
+    <#
+    .SYNOPSIS
+        Locate a Claude Code transcript from its session id alone.
+    .DESCRIPTION
+        Transcripts are stored at {configRoot}/projects/{encodedProjectDir}/{sessionId}.jsonl.
+        Session UUIDs are unique across project dirs, so the id alone is a
+        sufficient key. This function probes every project dir for a file named
+        `{sessionId}.jsonl` — one level deep, filename-only, no recursion.
+
+        Deriving the project dir from the current working directory is
+        deliberately NOT done: that would re-implement an undocumented encoding
+        convention, and it would be wrong when exporting a thread that ran under
+        a different cwd. Probing by UUID is exact in both cases.
+
+        Resolution is fail-loud by design. A malformed id, zero hits, or more
+        than one hit all throw. There is no newest-mtime fallback and no content
+        search: an unresolvable session id signals a system fault, and a silent
+        fallback would downgrade that fault into a quiet wrong-thread export.
+
+        Nested non-UUID .jsonl strays exist below some project dirs; the
+        one-level probe excludes them by construction.
+    .PARAMETER SessionId
+        The session UUID (transcript basename), e.g. from $env:CLAUDE_CODE_SESSION_ID.
+        Note that $env:CLAUDE_CODE_HOST_SESSION_ID is a different id and is NOT
+        the transcript key.
+    .PARAMETER ConfigRoot
+        Optional override for the Claude config root. When omitted, resolves to
+        $env:CLAUDE_CONFIG_DIR if non-empty, else {USERPROFILE}\.claude.
+        CLAUDE_CONFIG_DIR is frequently empty in agent shells — do not assume it.
+    .OUTPUTS
+        PSCustomObject { SessionId, JsonlPath, SourceDir, ProjectName, ConfigRoot }
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$SessionId,
+
+        [string]$ConfigRoot
+    )
+
+    # --- Resolve config root: explicit → env (if non-empty) → USERPROFILE ---
+    if (-not $ConfigRoot)
+    {
+        if ($env:CLAUDE_CONFIG_DIR)
+        {
+            $ConfigRoot = $env:CLAUDE_CONFIG_DIR
+        }
+        elseif ($env:USERPROFILE)
+        {
+            $ConfigRoot = [System.IO.Path]::Combine($env:USERPROFILE, '.claude')
+        }
+        else
+        {
+            throw "Cannot resolve Claude config root: -ConfigRoot not supplied and both `$env:CLAUDE_CONFIG_DIR and `$env:USERPROFILE are empty."
+        }
+    }
+
+    $projectsRoot = [System.IO.Path]::Combine($ConfigRoot, 'projects')
+    if (-not [System.IO.Directory]::Exists($projectsRoot))
+    {
+        throw "Claude projects root not found: $projectsRoot"
+    }
+
+    # --- Validate before probing: reject malformed ids rather than search for them ---
+    $uuidPattern = '^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$'
+    $regexOpts = [System.Text.RegularExpressions.RegexOptions]::IgnoreCase -bor
+                 [System.Text.RegularExpressions.RegexOptions]::CultureInvariant
+    if (-not [System.Text.RegularExpressions.Regex]::IsMatch($SessionId, $uuidPattern, $regexOpts))
+    {
+        throw "Malformed session id: '$SessionId'. Expected a UUID of the form 8-4-4-4-12 hex digits."
+    }
+
+    # --- Probe each project dir for {sessionId}.jsonl (one level, no recursion) ---
+    $fileName = "$SessionId.jsonl"
+    $hits = [System.Collections.Generic.List[string]]::new()
+
+    foreach ($dir in [System.IO.Directory]::EnumerateDirectories($projectsRoot))
+    {
+        $candidate = [System.IO.Path]::Combine($dir, $fileName)
+        if ([System.IO.File]::Exists($candidate)) { $hits.Add($candidate) }
+    }
+
+    if ($hits.Count -eq 0)
+    {
+        throw "No transcript found for session $SessionId under $projectsRoot"
+    }
+
+    if ($hits.Count -gt 1)
+    {
+        # Empirically impossible (UUIDs are unique across project dirs); if it
+        # ever happens it is exactly the anomaly class this resolver must scream about.
+        throw ("Ambiguous session id $SessionId — $($hits.Count) transcripts found:`n  " +
+            ($hits -join "`n  "))
+    }
+
+    $jsonlPath = $hits[0]
+    $sourceDir = [System.IO.Path]::GetDirectoryName($jsonlPath)
+
+    return [PSCustomObject]@{
+        SessionId   = $SessionId
+        JsonlPath   = $jsonlPath
+        SourceDir   = $sourceDir
+        ProjectName = [System.IO.Path]::GetFileName($sourceDir)
+        ConfigRoot  = $ConfigRoot
+    }
+}
+
+
 function Invoke-ClaudeThreadExport
 {
     <#
@@ -72,10 +193,27 @@ function Invoke-ClaudeThreadExport
         Orchestrates Export-ClaudeThread → Get/Export-ClaudeExchanges →
         ConvertTo-ClaudeMarkdownV2 in sequence. Use -RunThrough to stop after
         any stage. All directory creation is delegated to the stage functions.
+
+        Two entry points:
+          BySourceDir (default)  -SourceDir [-SessionIds]  — original behaviour.
+          BySessionId            -SessionId [-ConfigRoot]   — Resolve-ClaudeThreadPath
+                                 locates the transcript, supplying SourceDir and
+                                 pinning SessionIds to the one id. Downstream
+                                 stages are unchanged: the chain walk in
+                                 New-ClaudeThreadManifest still operates within
+                                 the resolved SourceDir and picks up prior
+                                 sessions in the chain.
     .PARAMETER SourceDir
         Directory containing the UUID-named .jsonl session files.
     .PARAMETER SessionIds
         Optional. Limit discovery to specific session UUIDs.
+    .PARAMETER SessionId
+        A single session UUID (e.g. $env:CLAUDE_CODE_SESSION_ID). The transcript
+        directory is resolved via Resolve-ClaudeThreadPath; throws if the id is
+        malformed or does not resolve to exactly one transcript.
+    .PARAMETER ConfigRoot
+        Optional override for the Claude config root when using -SessionId.
+        See Resolve-ClaudeThreadPath.
     .PARAMETER WorkingDir
         Root for all JSONL pipeline artifacts (raw/, merged/, exchanges/).
         Defaults to a timestamped directory under ~/.claude/tmp/claude-jso-run/.
@@ -103,12 +241,19 @@ function Invoke-ClaudeThreadExport
         PSCustomObject { ThreadId, WorkingDir, MergedPath, ExchangesPath, MarkdownPath, Stats }
         Paths for stages not reached are $null.
     #>
-    [CmdletBinding()]
+    [CmdletBinding(DefaultParameterSetName = 'BySourceDir')]
     param(
-        [Parameter(Mandatory)]
+        [Parameter(Mandatory, ParameterSetName = 'BySourceDir')]
         [string]$SourceDir,
 
+        [Parameter(ParameterSetName = 'BySourceDir')]
         [string[]]$SessionIds,
+
+        [Parameter(Mandatory, ParameterSetName = 'BySessionId')]
+        [string]$SessionId,
+
+        [Parameter(ParameterSetName = 'BySessionId')]
+        [string]$ConfigRoot,
 
         [string]$WorkingDir,
 
@@ -135,6 +280,19 @@ function Invoke-ClaudeThreadExport
     )
 
     $timer = [System.Diagnostics.Stopwatch]::StartNew()
+
+    # --- Resolve transcript location from the session id, if that is the entry point ---
+    if ($PSCmdlet.ParameterSetName -eq 'BySessionId')
+    {
+        $resolveArgs = @{ SessionId = $SessionId }
+        if ($ConfigRoot) { $resolveArgs.ConfigRoot = $ConfigRoot }
+
+        $resolved = Resolve-ClaudeThreadPath @resolveArgs
+        $SourceDir  = $resolved.SourceDir
+        $SessionIds = [string[]]@($SessionId)
+
+        Write-Host "Resolved session $SessionId → $($resolved.ProjectName)" -ForegroundColor Gray
+    }
 
     # --- Resolve working directory ---
     if (-not $WorkingDir)
