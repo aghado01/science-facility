@@ -2388,6 +2388,180 @@ function New-JsonlSnapshot
 
 #endregion
 
+#region --- Claude Config Root ---
+
+function Get-ClaudeConfigRootCandidate
+{
+    <#
+    .SYNOPSIS
+        Conventional Claude Code config root locations, most likely first.
+    .DESCRIPTION
+        Built at call time from the OS-reported user home. Holds no absolute
+        path literal: only the directory NAMES that are Claude Code's own
+        storage convention, joined onto a home the operating system reports.
+        That is the difference between a convention and a hard-coded path — this
+        list is identical on every machine and every user account.
+
+        Order is by likelihood, not preference: Claude Code's default location
+        first, XDG-style installs after.
+    .OUTPUTS
+        [string[]] candidate paths. Empty if no home directory can be determined.
+    #>
+    [CmdletBinding()]
+    param()
+
+    $candidates = [System.Collections.Generic.List[string]]::new()
+
+    # Ask the OS, not the environment. $env:USERPROFILE / $env:HOME are
+    # backstops for hosts where GetFolderPath returns empty.
+    $userHome = [System.Environment]::GetFolderPath('UserProfile')
+    if (-not $userHome) { $userHome = $env:USERPROFILE }
+    if (-not $userHome) { $userHome = $env:HOME }
+
+    if ($userHome)
+    {
+        $candidates.Add([System.IO.Path]::Combine($userHome, '.claude'))
+    }
+
+    if ($env:XDG_CONFIG_HOME)
+    {
+        $candidates.Add([System.IO.Path]::Combine($env:XDG_CONFIG_HOME, 'claude'))
+    }
+
+    if ($userHome)
+    {
+        $candidates.Add([System.IO.Path]::Combine($userHome, '.config', 'claude'))
+    }
+
+    # Normalize separators — XDG_CONFIG_HOME is commonly written with forward
+    # slashes, and these paths surface verbatim in "probed:" error messages.
+    for ($i = 0; $i -lt $candidates.Count; $i++)
+    {
+        $candidates[$i] = [System.IO.Path]::GetFullPath($candidates[$i])
+    }
+
+    return $candidates.ToArray()
+}
+
+
+function Get-ClaudeConfigRoot
+{
+    <#
+    .SYNOPSIS
+        Discover Claude Code's config root without depending on an env var.
+    .DESCRIPTION
+        Everything this toolkit reads (transcripts under projects/) and writes
+        (run artifacts under tmp/) hangs off a single root directory. That root
+        used to be read straight from $env:CLAUDE_CONFIG_DIR — which is empty in
+        most agent shells, and [Path]::Combine('', 'tmp') returns the RELATIVE
+        path 'tmp', so working directories silently materialised under whatever
+        the current directory happened to be.
+
+        Discovery replaces that assumption, in strict order:
+
+            1. -ConfigRoot                (explicit caller override)
+            2. $env:CLAUDE_CONFIG_DIR     (honoured when set, never required)
+            3. probed conventional roots  (Get-ClaudeConfigRootCandidate)
+
+        Sources 1 and 2 are authoritative: when one is supplied it is meant to be
+        correct, so a bad value throws rather than falling through to a probe.
+        Quietly ignoring an explicit root would hide the very misconfiguration
+        the caller was trying to state.
+
+        Every candidate must prove itself on disk before it is returned — with
+        -RequireProjects, by actually containing projects/. A guess that cannot
+        be corroborated is rejected, never returned. No result is cached: the
+        probe is a handful of directory-existence checks, and staleness would
+        cost more than it saves.
+    .PARAMETER ConfigRoot
+        Explicit root. Skips discovery entirely; throws if it does not qualify.
+    .PARAMETER RequireProjects
+        Demand a root that actually holds transcripts — one containing a
+        projects/ subdirectory — and throw if no candidate does. Read paths want
+        this. Write paths (scratch and output roots) do not: they need only a
+        real base directory, and fall back to the conventional location so that
+        a first run on a fresh machine still creates an absolute, predictable
+        directory instead of a relative one.
+    .OUTPUTS
+        [string] absolute path to the Claude config root.
+    #>
+    [CmdletBinding()]
+    param(
+        [string]$ConfigRoot,
+        [switch]$RequireProjects
+    )
+
+    # Subdirectory a candidate must contain to qualify; '' means the candidate
+    # itself need only exist.
+    $proof = if ($RequireProjects) { 'projects' } else { '' }
+    $need  = if ($RequireProjects) { "a 'projects' subdirectory" } else { 'an existing directory' }
+
+    $qualifies = {
+        param([string]$Candidate, [string]$Proof)
+        if ([string]::IsNullOrWhiteSpace($Candidate)) { return $false }
+        $probe = if ($Proof) { [System.IO.Path]::Combine($Candidate, $Proof) } else { $Candidate }
+        return [System.IO.Directory]::Exists($probe)
+    }
+
+    # --- 1 & 2: authoritative sources — correct or fatal, never skipped ---
+    foreach ($explicit in @(
+            @{ Value = $ConfigRoot;            Source = '-ConfigRoot' },
+            @{ Value = $env:CLAUDE_CONFIG_DIR; Source = '$env:CLAUDE_CONFIG_DIR' }))
+    {
+        if ([string]::IsNullOrWhiteSpace($explicit.Value)) { continue }
+        if (& $qualifies $explicit.Value $proof) { return $explicit.Value }
+        throw "$($explicit.Source) = '$($explicit.Value)' is not a usable Claude config root (expected $need)."
+    }
+
+    # --- 3: probe conventional locations ---
+    $candidates = Get-ClaudeConfigRootCandidate
+
+    foreach ($candidate in $candidates)
+    {
+        if (& $qualifies $candidate $proof) { return $candidate }
+    }
+
+    if ($candidates.Count -eq 0)
+    {
+        throw 'Cannot determine the user home directory; pass -ConfigRoot explicitly.'
+    }
+
+    if ($RequireProjects)
+    {
+        throw ("Cannot locate a Claude config root containing $need. " +
+            "Pass -ConfigRoot or set `$env:CLAUDE_CONFIG_DIR. Probed:`n  " +
+            ($candidates -join "`n  "))
+    }
+
+    return $candidates[0]
+}
+
+
+function Get-ClaudeProjectsRoot
+{
+    <#
+    .SYNOPSIS
+        Path to Claude Code's per-project transcript store.
+    .DESCRIPTION
+        `{configRoot}/projects`, with the root discovered by Get-ClaudeConfigRoot
+        and required to actually contain the directory — so this either returns a
+        path that exists or throws.
+    .PARAMETER ConfigRoot
+        Optional explicit config root. See Get-ClaudeConfigRoot.
+    .OUTPUTS
+        [string] absolute path to the projects root.
+    #>
+    [CmdletBinding()]
+    param(
+        [string]$ConfigRoot
+    )
+
+    $root = Get-ClaudeConfigRoot -ConfigRoot $ConfigRoot -RequireProjects
+    return [System.IO.Path]::Combine($root, 'projects')
+}
+
+#endregion
+
 #region --- New-JobWorkingDir ---
 
 function New-JobWorkingDir
@@ -2400,7 +2574,8 @@ function New-JobWorkingDir
         The root and prefix segments are parameterized so the convention
         can be changed later without touching internals.
     .PARAMETER Root
-        Base directory. Defaults to ~/.claude/tmp.
+        Base directory. Defaults to `{claudeConfigRoot}/tmp`, discovered via
+        Get-ClaudeConfigRoot.
     .PARAMETER Prefix
         Grouping segment under root (e.g. project name, session ID).
     #>
@@ -2413,7 +2588,10 @@ function New-JobWorkingDir
 
     if (-not $Root)
     {
-        $Root = [System.IO.Path]::Combine($env:CLAUDE_CONFIG_DIR, 'tmp')
+        # Discovered, not $env:CLAUDE_CONFIG_DIR: that variable is empty in most
+        # agent shells, and Combine('', 'tmp') yields the relative path 'tmp',
+        # which scattered run artifacts under the caller's current directory.
+        $Root = [System.IO.Path]::Combine((Get-ClaudeConfigRoot), 'tmp')
     }
 
     $timestamp = [datetime]::UtcNow.ToString('yyyyMMdd_HHmmss')

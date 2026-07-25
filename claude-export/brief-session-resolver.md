@@ -268,3 +268,120 @@ attempt — no latent breakage, so the equivalence result is unambiguous.
 **Minor, no action:** the projects root now holds 16 project dirs (4 of them empty of top-level
 `.jsonl`) against §3.3's 14. Consistent with normal growth; §3.3's uniqueness conclusion was not
 re-derived, per instruction.
+
+---
+
+## 9. Follow-up: removing the `CLAUDE_CONFIG_DIR` dependency
+
+**Completed 2026-07-25**, on the user's instruction to refactor so the code works without
+depending on `$env:CLAUDE_CONFIG_DIR` *and* without hard-coding a filesystem path. This closes
+the §8c finding.
+
+### 9a. What the audit found
+
+Four sites read the empty variable, and they were conflating **two different roots**:
+
+| # | Site | Root wanted | Symptom with the var empty |
+|---|---|---|---|
+| 1 | `jso-jackson.ps1` — `New-JobWorkingDir` default `$Root` | write: `{root}/tmp` | `Combine('','tmp')` → relative `tmp` under cwd |
+| 2 | `claude-jso-run.ps1` — batch `WorkingDir` default | write: `{root}/tmp` | same |
+| 3 | `claude-jso-run.ps1` — batch `MarkdownDir` default | write: `{root}/tmp` | same |
+| 4 | `claude-jso-jackson.ps1` — `Get-ClaudeCurrentSessionFile -ProjectsRoot` default | read: `{root}/projects` | resolved to relative `projects`, then threw |
+
+The **read** root is not ours to choose — it is wherever Claude Code writes transcripts, and must
+be *discovered*. The **write** root only needs a real, absolute base directory. Collapsing both
+onto one env var is why a single empty string broke all four.
+
+Dependency graph (established, not assumed):
+`claude-jso-run.ps1` → `claude-jso-jackson.ps1` → `../jso-jackson.ps1`. The base layer already
+carried the Claude coupling (site 1), so that is where discovery belongs — one function knows
+Claude's layout, four sites consume it.
+
+### 9b. What was added — `jso-jackson.ps1`, new `Claude Config Root` region
+
+- **`Get-ClaudeConfigRootCandidate`** — builds conventional locations at call time from
+  `[Environment]::GetFolderPath('UserProfile')` (the OS API, with `USERPROFILE`/`HOME` as
+  backstops), plus `XDG_CONFIG_HOME`. Returns `{home}/.claude`, `{XDG}/claude`,
+  `{home}/.config/claude`, separator-normalized via `GetFullPath`.
+
+  *This is the crux of "no hard-coded path".* The list contains no absolute path literal — only
+  directory **names** that are Claude Code's own storage convention, joined onto a home the
+  operating system reports. `C:\Users\azrie\.claude` is a hard-coded path; `.claude` under the
+  OS-reported home is a convention, identical on every machine and account.
+
+- **`Get-ClaudeConfigRoot [-ConfigRoot] [-RequireProjects]`** — resolution in strict order:
+  1. `-ConfigRoot` (explicit caller override)
+  2. `$env:CLAUDE_CONFIG_DIR` — **honoured when set, never required**
+  3. probed candidates
+
+  Sources 1 and 2 are authoritative: a supplied-but-invalid root **throws** rather than falling
+  through to a probe, because silently ignoring an explicit root would hide the exact
+  misconfiguration the caller was trying to state. This is D2's fail-loud doctrine applied to
+  configuration. Every candidate must prove itself on disk before being returned — under
+  `-RequireProjects`, by actually containing `projects/`. A guess that cannot be corroborated is
+  rejected, never returned.
+
+  `-RequireProjects` is what separates the two roots: read paths demand a root that really holds
+  transcripts and throw otherwise; write paths accept the conventional location so a first run on
+  a fresh machine still creates an absolute, predictable directory.
+
+- **`Get-ClaudeProjectsRoot [-ConfigRoot]`** — `{discoveredRoot}/projects`, required to exist.
+
+**Not added:** no result caching (the probe is a few `Directory.Exists` calls; staleness would
+cost more than it saves) and no module-global `Set-ClaudeConfigRoot`. Every call site already has
+an explicit override parameter — `-ConfigRoot`, `-Root`, `-WorkingDir`, `-MarkdownDir`,
+`-ProjectsRoot` — so a fourth injection channel would add hidden order-dependent state for
+nothing.
+
+### 9c. Call sites rewired
+
+1. `New-JobWorkingDir` → `Combine((Get-ClaudeConfigRoot), 'tmp')`
+2. batch `WorkingDir` → `Combine((Get-ClaudeConfigRoot), 'tmp', $slug, $stamp)`
+3. batch `MarkdownDir` → `Combine((Get-ClaudeConfigRoot), 'tmp', 'markdown')`
+4. `Get-ClaudeCurrentSessionFile` → `$ProjectsRoot` default moved out of the param block into the
+   body (`if (-not $ProjectsRoot) { $ProjectsRoot = Get-ClaudeProjectsRoot }`) so a discovery
+   failure surfaces as its own error instead of parameter-binding noise
+5. `Resolve-ClaudeThreadPath` → its bespoke root logic from §8a replaced by
+   `Get-ClaudeConfigRoot -RequireProjects` + `Get-ClaudeProjectsRoot`
+
+Doc comments claiming `~/.claude/tmp/...` were restated as `{configRoot}/tmp/...`.
+
+**Exactly one live read of `$env:CLAUDE_CONFIG_DIR` remains in the whole tree** — the
+authoritative-source branch inside `Get-ClaudeConfigRoot`. The other eight occurrences are
+docstrings, comments, and one error-message string.
+
+### 9d. Verification
+
+Parse check: 0 errors across all three edited files.
+
+| Test | Result |
+|---|---|
+| `CLAUDE_CONFIG_DIR` empty / unset / whitespace | all resolve to `C:\Users\azrie\.claude` |
+| set and valid | honoured (returned verbatim) |
+| set but nonexistent | **throws**, does not fall through to probe |
+| set, exists, but no `projects/` | passes bare, **throws** under `-RequireProjects` |
+| `-ConfigRoot` bogus, with a *valid* env var present | **throws** — explicit input wins and is not rescued |
+| **`New-JobWorkingDir` with no `-Root`, cwd = repo root** | `C:\Users\azrie\.claude\tmp\…` — rooted, **no `./tmp` in cwd** |
+| **batch with no `-WorkingDir`/`-MarkdownDir`** | `~/.claude/tmp/{slug}/{stamp}` and `~/.claude/tmp/markdown` |
+| `Get-ClaudeCurrentSessionFile`, default root, env empty | found this session's own transcript |
+| … explicit root / bad root / no history | matches / throws / returns `$null` as documented |
+| Resolver guards from §8b (malformed, nonexistent, explicit root, bad root) | unchanged |
+| `Get-ClaudeThreadPlan` on the 106-file dir | 106 chains, unchanged |
+| **End-to-end `-SessionId` with no `-WorkingDir`** (the skill invocation shape) | markdown byte-identical to the §8b baseline — 30,997 bytes, 267 lines, sole diff the `exported_at` stamp |
+
+Corroboration that `~/.claude/tmp` was always the intended target, not a new invention:
+`~/.claude/tmp/` already contained a `claude-jso-run/` directory (2026-07-23) and `markdown/`
+(2026-05-25) from earlier runs made when the variable *was* populated. The fix restores the
+documented behaviour rather than relocating anything. All test artifacts created under
+`~/.claude/tmp` during verification were removed; pre-existing directories were left intact.
+
+### 9e. Discovered, not fixed
+
+**Timestamp-format inconsistency between the two working-dir defaults.**
+`New-JobWorkingDir` stamps with `[datetime]::UtcNow`, while the batch default in
+`Invoke-ClaudeThreadExportBatch` uses `[DateTime]::Now` (local). Observed side by side during
+verification: `claude-jso-run\20260725_040957` (UTC) beside
+`D--aghado01-utils-reposnapshot\20260724_211043` (local, same moment). Sibling run directories
+under the same `tmp/` root therefore sort inconsistently and can appear to be from different
+days. Pre-existing, unrelated to `CLAUDE_CONFIG_DIR`, and a one-word fix — but it changes
+directory names, so it is left for the §7 discussion alongside the `-MarkdownDir` default.

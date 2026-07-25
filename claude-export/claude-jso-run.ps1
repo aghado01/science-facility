@@ -41,19 +41,27 @@
 #   -MarkdownDir     write {OutputPrefix}-{threadId}.md flat into this directory
 #   (neither)        write {OutputPrefix}-{threadId}.md into {WorkingDir}/output/
 #
+# CLAUDE CONFIG ROOT
+#   Both the transcript source ({root}/projects) and the artifact roots
+#   ({root}/tmp) hang off one directory, discovered by Get-ClaudeConfigRoot.
+#   It honours $env:CLAUDE_CONFIG_DIR when set but never requires it — that
+#   variable is empty in most agent shells, and the old
+#   `[Path]::Combine($env:CLAUDE_CONFIG_DIR, 'tmp')` therefore produced the
+#   RELATIVE path `tmp`, scattering artifacts under the caller's cwd.
+#
 # WORKING DIRECTORY — single thread
-#   Defaults to ~/.claude/tmp/claude-jso-run/{timestamp}/ via New-JobWorkingDir.
+#   Defaults to {configRoot}/tmp/claude-jso-run/{timestamp}/ via New-JobWorkingDir.
 #   Pass -WorkingDir to override. Directory creation for all pipeline stages
 #   is handled by each stage function — this script does none of it.
 #
 # WORKING DIRECTORY — batch
-#   Defaults to ~/.claude/tmp/{projectSlug}/{YYYYMMDD_HHmmss}/, where
+#   Defaults to {configRoot}/tmp/{projectSlug}/{YYYYMMDD_HHmmss}/, where
 #   {projectSlug} is the full slug of the source dir's leaf name
 #   (e.g. `C--Users-azrie--claude-tools`). Per-thread artifacts
 #   land in {BatchRoot}/{leafUuid}/. Pass -WorkingDir to override.
 #
 # MARKDOWN DIRECTORY — batch default
-#   Defaults to ~/.claude/tmp/markdown/ (flat, project-agnostic). Files are
+#   Defaults to {configRoot}/tmp/markdown/ (flat, project-agnostic). Files are
 #   named `{projectLeaf}-{threadId}.md` so different projects coexist without
 #   collision; same-thread re-exports overwrite in place ("current state"
 #   mirror, separate from the per-run JSONL archive under {projectLeaf}/{ts}/).
@@ -102,9 +110,9 @@ function Resolve-ClaudeThreadPath
         Note that $env:CLAUDE_CODE_HOST_SESSION_ID is a different id and is NOT
         the transcript key.
     .PARAMETER ConfigRoot
-        Optional override for the Claude config root. When omitted, resolves to
-        $env:CLAUDE_CONFIG_DIR if non-empty, else {USERPROFILE}\.claude.
-        CLAUDE_CONFIG_DIR is frequently empty in agent shells — do not assume it.
+        Optional override for the Claude config root. When omitted the root is
+        discovered by Get-ClaudeConfigRoot, which honours $env:CLAUDE_CONFIG_DIR
+        when set but never requires it — it is empty in most agent shells.
     .OUTPUTS
         PSCustomObject { SessionId, JsonlPath, SourceDir, ProjectName, ConfigRoot }
     #>
@@ -116,28 +124,9 @@ function Resolve-ClaudeThreadPath
         [string]$ConfigRoot
     )
 
-    # --- Resolve config root: explicit → env (if non-empty) → USERPROFILE ---
-    if (-not $ConfigRoot)
-    {
-        if ($env:CLAUDE_CONFIG_DIR)
-        {
-            $ConfigRoot = $env:CLAUDE_CONFIG_DIR
-        }
-        elseif ($env:USERPROFILE)
-        {
-            $ConfigRoot = [System.IO.Path]::Combine($env:USERPROFILE, '.claude')
-        }
-        else
-        {
-            throw "Cannot resolve Claude config root: -ConfigRoot not supplied and both `$env:CLAUDE_CONFIG_DIR and `$env:USERPROFILE are empty."
-        }
-    }
-
-    $projectsRoot = [System.IO.Path]::Combine($ConfigRoot, 'projects')
-    if (-not [System.IO.Directory]::Exists($projectsRoot))
-    {
-        throw "Claude projects root not found: $projectsRoot"
-    }
+    # --- Resolve the config root (throws if none holds a projects/ directory) ---
+    $ConfigRoot = Get-ClaudeConfigRoot -ConfigRoot $ConfigRoot -RequireProjects
+    $projectsRoot = Get-ClaudeProjectsRoot -ConfigRoot $ConfigRoot
 
     # --- Validate before probing: reject malformed ids rather than search for them ---
     $uuidPattern = '^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$'
@@ -216,7 +205,8 @@ function Invoke-ClaudeThreadExport
         See Resolve-ClaudeThreadPath.
     .PARAMETER WorkingDir
         Root for all JSONL pipeline artifacts (raw/, merged/, exchanges/).
-        Defaults to a timestamped directory under ~/.claude/tmp/claude-jso-run/.
+        Defaults to a timestamped directory under {configRoot}/tmp/claude-jso-run/,
+        where the root is discovered by Get-ClaudeConfigRoot.
     .PARAMETER RunThrough
         How far to run the pipeline. Merged | Exchanges | Markdown (default).
     .PARAMETER MarkdownPath
@@ -504,7 +494,7 @@ function Invoke-ClaudeThreadExportBatch
     .PARAMETER WorkingDir
         Batch root for all pipeline artifacts. Per-thread subdirs are created
         under it as {WorkingDir}/{leafUuid}/. When omitted, defaults to
-        `~/.claude/tmp/{projectSlug}/{YYYYMMDD_HHmmss}/`, where `{projectSlug}`
+        `{configRoot}/tmp/{projectSlug}/{YYYYMMDD_HHmmss}/`, where `{projectSlug}`
         is the source directory's full leaf folder name
         (e.g. `C--Users-azrie--claude-tools`). Filenames inside still use
         the shorter `{projectLeaf}` (e.g. `tools-{threadId}.jsonl`).
@@ -512,7 +502,7 @@ function Invoke-ClaudeThreadExportBatch
         Flat output directory for all thread markdown files. Files are named
         `{projectLeaf}-{threadId}.md` (overwrite-in-place — same threadId
         across runs replaces the prior export, giving a "current state" view).
-        Defaults to `~/.claude/tmp/markdown/`. Created if absent.
+        Defaults to `{configRoot}/tmp/markdown/`. Created if absent.
     .PARAMETER RunThrough
         How far to run each thread pipeline. Merged | Exchanges | Markdown (default).
     .PARAMETER UserLabel
@@ -588,7 +578,7 @@ function Invoke-ClaudeThreadExportBatch
     {
         $stamp = [DateTime]::Now.ToString('yyyyMMdd_HHmmss')
         $WorkingDir = [System.IO.Path]::Combine(
-            $env:CLAUDE_CONFIG_DIR, 'tmp', $sourceLeafFolder, $stamp)
+            (Get-ClaudeConfigRoot), 'tmp', $sourceLeafFolder, $stamp)
     }
     $batchRoot = $WorkingDir
 
@@ -596,7 +586,7 @@ function Invoke-ClaudeThreadExportBatch
     if (-not $MarkdownDir)
     {
         $MarkdownDir = [System.IO.Path]::Combine(
-            $env:CLAUDE_CONFIG_DIR, 'tmp', 'markdown')
+            (Get-ClaudeConfigRoot), 'tmp', 'markdown')
     }
 
     Write-Host "  projectLeaf: $projectLeaf" -ForegroundColor Gray

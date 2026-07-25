@@ -400,8 +400,9 @@ function Get-ClaudeCurrentSessionFile
     .PARAMETER Cwd
         Working directory to translate into a project slug. Defaults to $PWD.Path.
     .PARAMETER ProjectsRoot
-        Root of Claude Code's per-project storage. Defaults to
-        `$env:CLAUDE_CONFIG_DIR/projects`.
+        Root of Claude Code's per-project storage. When omitted, discovered via
+        Get-ClaudeProjectsRoot rather than assumed from $env:CLAUDE_CONFIG_DIR,
+        which is empty in most agent shells.
     .OUTPUTS
         PSCustomObject {
             ProjectSlug, ProjectDir, SessionUuid, SessionPath, LastWriteTimeUtc
@@ -412,8 +413,12 @@ function Get-ClaudeCurrentSessionFile
     param(
         [string]$Cwd = $PWD.Path,
 
-        [string]$ProjectsRoot = (Join-Path $env:CLAUDE_CONFIG_DIR 'projects')
+        [string]$ProjectsRoot
     )
+
+    # Resolved in the body, not as a parameter default, so a discovery failure
+    # surfaces as its own error rather than as parameter binding noise.
+    if (-not $ProjectsRoot) { $ProjectsRoot = Get-ClaudeProjectsRoot }
 
     if (-not [System.IO.Directory]::Exists($ProjectsRoot))
     {
