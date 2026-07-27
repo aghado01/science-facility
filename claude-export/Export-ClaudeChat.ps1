@@ -9,35 +9,12 @@
         & "D:\aghado01\utils\jso-jackson\claude-export\Export-ClaudeChat.ps1" `
             -SessionId $env:CLAUDE_CODE_SESSION_ID
 
-    Everything has an everyday default, and every default can be overridden when
-    the user asks for something different. What is NOT a parameter is the
-    transcript's location: a session id resolves to its own `.jsonl` path, and
-    the project directory is a component of that path, so neither the source
-    directory nor the project slug is ever something the caller supplies.
-
-    For anything outside the three knobs below — a different `-Format`, an exact
-    output filename, stopping at an intermediate pipeline stage — use
-    `Invoke-ClaudeThreadExport` from claude-jso-run.ps1, which exposes the lot.
-    See README.md.
-
-    SESSION ROTATION — one conversation, several session files.
-    Claude Code periodically mints a new session id mid-conversation and writes
-    a FULL cumulative copy of the thread so far into the new file. Successive
-    files are snapshots, not segments: every one opens with the same first user
-    prompt, and each contains all of its predecessor plus what followed.
-
-    Consequence for this script: exporting the LIVE session id — the default —
-    yields the complete conversation. Nothing is truncated.
-
-    The caveat applies to OLDER ids only. An id from an earlier rotation exports
-    the conversation as it stood at that moment, not its final state. To export
-    a finished thread in full, use the NEWEST session id belonging to it;
-    `Get-ClaudeThreadPlan -SessionId <any id from it>` lists the candidates.
-    See issues/brief-redundant-session-ids.md §8.
+    This script exposes arguments that can be adjusted from their defaults based on user request.
 
 .PARAMETER SessionId
-    The thread to export. Defaults to $env:CLAUDE_CODE_SESSION_ID — the session
-    the calling agent is running inside. Throws if that is also empty rather
+    The identifier that links the thread to export.
+    By default, inferred automatically from $env:CLAUDE_CODE_SESSION_ID within Claude's native shell environment
+    Throws if that is also empty rather
     than guessing. Note $env:CLAUDE_CODE_HOST_SESSION_ID is a different id and
     is NOT the transcript key.
 
@@ -47,33 +24,22 @@
     location.
 
 .PARAMETER Exclude
-    Record classes to leave out. Defaults to the everyday reading profile: the
-    prose conversation and nothing else. Override when the user asks to keep
-    something — e.g. `-Exclude thinking,synthetic` keeps tool calls and results,
-    and `-Exclude @()` keeps everything.
+    Exclusion list of chat log attributes for the export.
 
     Valid values: thinking, tool-calls, tool-results, subagents, synthetic,
     timestamps, session-markers, exchange-markers.
 
+    1. The user may request specific override of default settings — e.g. `-Exclude thinking,synthetic` keeps tool calls and results,
+    2. `-Exclude @()` keeps everything.
+
 .PARAMETER OutputPrefix
-    Filename stem; the file is {OutputPrefix}-{threadId}.md. Default 'chat'.
+    Output filename prefix - the file is {OutputPrefix}-{threadId}.md. Default value is'Claude'.
 
 .OUTPUTS
     PSCustomObject { MarkdownPath, SessionId, ProjectName, ThreadId }
     Report the path. Do not read the file back — it is the conversation you just
     had, and pulling it into context is what this tool exists to avoid.
 
-.EXAMPLE
-    & .\Export-ClaudeChat.ps1 -SessionId $env:CLAUDE_CODE_SESSION_ID
-    # everyday defaults
-
-.EXAMPLE
-    & .\Export-ClaudeChat.ps1 -SessionId $id -MarkdownDir 'D:\aghado01\notes'
-    # user named a destination
-
-.EXAMPLE
-    & .\Export-ClaudeChat.ps1 -SessionId $id -Exclude thinking,synthetic
-    # user asked to keep tool calls and results
 #>
 [CmdletBinding()]
 param(
@@ -86,7 +52,7 @@ param(
     [string[]]$Exclude = @('thinking', 'synthetic', 'timestamps', 'session-markers',
         'exchange-markers', 'tool-calls', 'tool-results', 'subagents'),
 
-    [string]$OutputPrefix = 'chat'
+    [string]$OutputPrefix = 'Claude'
 )
 
 $ErrorActionPreference = 'Stop'
