@@ -157,6 +157,87 @@ Config surface (naming TBD): `Mode` · Ignore-mode: `SentinelFileNames`,
 `IgnoreOverrides`, `RescuePatterns`) · Selection-mode: selection globs (name
 TBD: `SelectionPatterns` vs unified `Patterns` interpreted per mode).
 
+## Reconciliation with the current implementation (2026-07-28)
+
+### Structural fact the design exploits
+
+The five-stage pipeline in `rs.core.ignore.psm1` is **already
+semantics-neutral**: Normalize→Coalesce→Walk→Reduce→CompileRegex transforms
+(pattern sources per node) into (per-node `{Positives, Exceptions}` regex
+pairs) with no knowledge of what matching *means*. Mode-awareness today exists
+only at the rim (`IsOverrideMode` → `RunOverrideBypass()`) and at test time
+(`TestPath` branching on the two-slot state). Design v2 therefore reshapes the
+rim and touches none of the intricate middle.
+
+### Internal architecture — mode-aware rim, neutral core
+
+- **Core (untouched):** all five stage methods, NormalizeGlob/TranslateGlob/
+  CompileGlobs/GlobSubsumes/GetParentPath, the signature regex cache, the
+  sentinel scan body, eligibility filters, empty-leaf prune. ~90% of the
+  engine survives verbatim.
+- **Compile rim (ONE mode decision — source assembly + prune policy):**
+  - *Ignore mode:* sources = sentinel entries + virtual root entry
+    (IgnoreDefaults + IgnorePatterns), as today → five stages → Prune →
+    override globs compiled separately (NormalizeGlob + annihilation +
+    CompileGlobs → one broadcast regex; same utilities, no five-stage needed
+    for a root-level broadcast set).
+  - *Selection mode:* sources = virtual root entry (selection globs) only;
+    sentinel scan **not invoked** (no I/O) → same five stages (Walk/Reduce run
+    unchanged — root-only sources make them trivially cheap, zero branches,
+    and future-proof per-node local selection sources) → Prune skipped.
+- **State shape:** two slots collapse to one regime-stamped state:
+  `CompiledState = { Regime; Positives; Exceptions; Override }`
+  (Override non-null only in Ignore mode). `RunOverrideBypass()` and
+  `IsOverrideMode` are deleted.
+- **Test rim (the single semantic authority):** `TestPath` evaluates the dual
+  truth table on `Regime`, with the override rescue folded in for Ignore
+  states (`excluded = ignoreVerdict ∧ ¬Override.IsMatch`). No caller ever
+  branches on mode; `Invoke-IgnoreFilter`'s inline `.Where()` semantics
+  duplication collapses to a `TestPath` call.
+
+Complexity accounting: mode branches total **two** — one at compile rim
+(source assembly + prune policy), one inside TestPath (truth table). Stages:
+zero. Net code volume shrinks (bypass method + duplicated filter logic
+deleted).
+
+### Prune × override resolution (was open)
+
+Greedy crawl changes the calculus: pruning runs on an already-walked graph, so
+it is a **CPU optimization only** (saves per-file regex tests), never I/O.
+Resolution: **when override globs are present, skip directory-branch pruning**;
+per-file TestPath (with rescue folded in) + the existing empty-leaf prune
+produce the correct result. File-targeted overrides (`*.py`) therefore rescue
+correctly even inside gitignored branches, with no glob-prefix reachability
+analysis. A subsumption-based branch-rescue optimization (prune unless an
+override glob could match under the branch) remains available later if the
+regex-test cost ever matters.
+
+### Config surface (proposal)
+
+- `-Mode 'Ignore' | 'Selection'` — explicit, ValidateSet, default `'Ignore'`.
+  Mode is run config; when admiral's declarative run-config exists this is its
+  `mode:` field. Never inferred from which pattern lists are non-empty.
+- Ignore mode: `-SentinelFileNames`, `-IgnoreDefaults`, `-IgnorePatterns`
+  (all as today) + `-OverridePatterns` (the rescue; replaces
+  `ExecutiveOverrides` naming and semantics).
+- Selection mode: `-SelectionPatterns`.
+- **Coherence validation via binding-awareness:** explicitly *bound*
+  cross-mode params throw (`$PSBoundParameters` check — e.g. Selection mode +
+  `-OverridePatterns` is a user error); defaulted-but-unused params are
+  silently not consulted (IgnoreDefaults has defaults and cannot be
+  throw-worthy by mere presence). Fail-fast additionally on empty/annihilated
+  selection or override sets. (PowerShell parameter sets could make cross-mode
+  binding unrepresentable at the interactive surface; runtime validation is
+  the canonical layer since config will arrive declaratively via admiral.)
+
+### Touch list
+
+Changed: ctor signature, `Invoke()`, `TestPath`, `EmitOutput`,
+`New-IgnoreCompiler` params + sentinel-scan gating, `Invoke-IgnoreFilter`
+filter block + docstring contracts. Untouched: everything listed under Core.
+Sequencing: composes freely with the RelativePath de-stamping edit (both touch
+`Invoke-IgnoreFilter`; can land as one ignore-engine pass or separately).
+
 ## Cautions — do NOT import these from the C# side
 
 - **Dead regex cache (C# defect):** in `GatherScatter`, `cache` is never
@@ -221,3 +302,11 @@ in either order.
   canonical glob semantics through the shared compile machinery. "Override"
   name migrates to the rescue feature; bypass behavior maps to Selection mode.
   New open item: override interaction with directory pruning.
+- 2026-07-28 — **Reconciliation recorded**: five-stage core confirmed
+  semantics-neutral (mode-awareness was always rim-only); architecture =
+  mode-aware rim / neutral core, two total mode branches; state collapses to
+  regime-stamped `CompiledState`; prune×override resolved (greedy crawl makes
+  prune CPU-only → skip branch pruning when overrides present); config surface
+  proposed (`-Mode` + per-mode named params + binding-aware coherence
+  validation); touch list drawn. Remaining before code: naming adjudication
+  (Mode values, OverridePatterns/SelectionPatterns), shim vs clean break.
