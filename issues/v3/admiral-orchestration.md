@@ -3,7 +3,7 @@
 **Status:** scoping · **Filed:** 2026-07-28
 
 Codename: **admiral**, the orchestrator above `colonel`. The glue layer over v3's
-discrete stages (crawler → ignore → ingest/colonel+processors → IR assembly →
+discrete stages (crawler → ignore/selection → colonel chains → IR assembly →
 writers). It does not exist yet — LTS never needed one because the monolith fused
 stages inherently as it grew; v3 needs one *by design*.
 
@@ -79,6 +79,22 @@ with admiral.
   colonel's surface).
 - Optional artifact emissions (JSON monolith becomes an opt-in output, not a
   pipeline stage — transfer-audit "Monolith → IR distillation").
+
+## Ingest reframe — not a stage (user, 2026-07-28)
+
+"Ingest" is not a discrete pipeline stage. Conceptually it is the reading-in of
+files identified after the ignore/selection engine runs — and **file reading is
+colonel's first processor** (`file-read.ps1`). Everything between the end of
+ignore-compiler output and colonel's execution of that first processor —
+descriptor hand-off, ingestion manifest, configuration, plan compilation,
+dispatch — **is implicitly the purview of the implicit admiral**.
+
+Consequence: `rs.core.ingest.psm1` (plan compile + dispatch mediation via
+reflected forwarding) is **proto-admiral tissue**, not a stage module — the
+first fragment of admiral already written. Its docstring addressing its output
+contract "to admiral / caller" is admiral talking to itself. Disposition open:
+absorbed into admiral vs kept as a named admiral submodule; either way the
+ItemDescriptor seam fix lands in admiral-owned code, not in a stage.
 
 ## Wrapper mechanism — reflection-forwarded params (user, 2026-07-28)
 
@@ -185,8 +201,9 @@ contract checks. Recorded as a candidate only — not a decision.
 
 - `issues/v3/lts-v3-transfer-audit.md` — work log 2026-07-28: processor-span
   disposition (what belongs in the chain vs assembly vs writers).
-- `reposnapshot-v3/rs.core.ingest.psm1` — the contract/envelope pattern admiral
-  generalizes.
+- `reposnapshot-v3/rs.core.ingest.psm1` — proto-admiral (see Ingest reframe);
+  its `{Results; Skipped; Errors; Warnings}` envelope and reflected forwarding
+  are the patterns admiral generalizes.
 - `issues/thread-corpus-container.md` — open decision 6 (colonel
   helper-function fix) gates the perplexity chain admiral will eventually drive.
 

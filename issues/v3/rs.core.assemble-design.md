@@ -3,9 +3,12 @@
 **Status:** scoping · **Filed:** 2026-07-28 · **Name:** working title (user:
 "`rs.core.assemble` or somesuch")
 
-The next pipeline stage after ingest/colonel: collates per-item processed
-results into the in-memory IR — the successor of the LTS JSON monolith *as data
-structure*, never as artifact (transfer-audit "Monolith → IR distillation").
+The next pipeline stage after colonel's chain execution: collates per-item
+processed results into the in-memory IR — the successor of the LTS JSON
+monolith *as data structure*, never as artifact (transfer-audit "Monolith → IR
+distillation"). Note the ingest reframe (admiral brief, 2026-07-28): "ingest"
+is not a stage — file reading is colonel's first processor, and
+`rs.core.ingest.psm1` is proto-admiral tissue mediating dispatch.
 
 ## Separation of concerns vs the absent admiral (user, 2026-07-28)
 
@@ -60,8 +63,10 @@ The unit that flows discovery → ingest → colonel → processors → results:
 
 ### Assemble inputs (what the absent admiral provides)
 
-- `IngestOutput` — `{ Results; Skipped; Errors; Warnings; Budget; Timing }`
-  (ingest's existing envelope, index-aligned Results).
+- `DispatchOutput` — `{ Results; Skipped; Errors; Warnings; Budget; Timing }`
+  (the envelope currently produced by `Invoke-Ingest`, index-aligned Results;
+  per the ingest reframe this is admiral's pickup of colonel's processed
+  outputs, not a stage output — envelope shape unchanged).
 - `RunContext` — run-level header material: root, timestamp, config echo,
   generator/version, run timing. Assemble stamps it in; computing it is
   admiral's job.

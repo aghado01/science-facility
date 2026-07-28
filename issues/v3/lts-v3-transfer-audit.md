@@ -107,3 +107,20 @@ Per capability, the decision is one of: **transfer to v3** · **LTS-only conveni
      serializers involved.
   4. *Explicitly deferred:* preview processor, Filter-Content retire decision,
      crawler diagnostics split, tree model home, all writers, admiral itself.
+
+- 2026-07-28 — **Ingest reframe** (user): "ingest" is not a discrete stage — file
+  reading is colonel's first processor; everything between ignore-compiler output
+  and colonel's execution of it is the implicit admiral's purview.
+  `rs.core.ingest.psm1` recognized as proto-admiral tissue (admiral brief updated;
+  seam fix now understood as admiral-owned code repair). **Ignore-engine
+  selection-inversion design elaborated** (user; extends TODO's "antisemantics"
+  item): make selection semantics first-class as an *inversion* of ignore
+  semantics — a `selection` vs `ignore` mode switch that inverts pattern
+  semantics symmetrically, reusing the same glob→regex compilation machinery with
+  an inverted-semantics mechanism, replacing today's gitignore-compiler +
+  executive-override-for-keeps shape. **Solved reference implementation:**
+  ThermoMapper's repo-audit machinery — originally adapted to C# from v3's
+  crawler/ignore, then rearchitected with exactly this symmetric mode switch;
+  port the architecture back. Adjudication: non-blocking for the ItemDescriptor
+  seam work (de-stamping stays trivial); schedule as its own refactor when the
+  ignore engine is next opened beyond de-stamping.
