@@ -100,55 +100,62 @@ sentinel inheritance machinery, anchor-prefixing of node-local patterns, depth
 precedence, exception subsumption, per-node compiled states with the signature
 cache. Under the bypass, none of these exist for selection.
 
-## Proposed design — population-scoped semantics (2026-07-28, pending adjudication)
+## Design v2 — mode dichotomy + override disentanglement (user, 2026-07-28)
 
-The untangling move (from the user's operational framing): **the semantic
-orientation switch attaches to the user pattern population, not to the
-engine.** Repo-audit inverts the whole engine — affordable in its contained
-charter, wrong for RS where sentinel files carry non-negotiable intent.
+Supersedes the v1 population-scoped composition below in one respect: the
+`Selection.Keeps ∧ ¬Ignore.Ignores` filter-time composition is **rejected as
+the selection semantics** — it lets the existence of an include list
+implicitly collide with ignore lists, which is exactly the tension that
+motivated the original override concept. The disentanglement (user):
+**overriding gitignored files by request is a different feature than a
+selection mode.** What survives from v1: sentinels never invert; shared
+five-stage machinery; explicit config over data-shape inference.
 
-Two pattern populations with different semantic ownership:
+Three semantic devices, two run modes:
 
-- **Sentinel population** — repo-native ignore files (`SentinelFileNames`
-  discovery, as today). Constitutionally ignore-semantic; **never inverted**.
-- **User population** — caller-supplied globs, with a declared orientation:
-  - `Ignore` orientation (default): merged into the sentinel regime as the
-    virtual root ignore file, **exactly as today** — inheritance,
-    annihilation, anchor-prefixing preserved; one regime; zero behavior
-    change to the canonical workflow.
-  - `Selection` orientation: the user set compiles as a **separate selection
-    regime** through the *same* five-stage machinery; negations become
-    un-keep exceptions ("select `*.ps1` except `tests/`" is one pattern set).
+1. **Ignore regime** (Ignore mode — canonical, default): sentinel scan + user
+   ignore globs merged as the virtual root ignore file — today's nested
+   inheritance/annihilation semantics, byte-for-byte unchanged.
+2. **Selective override** (a *nuanced feature of Ignore mode*, not a mode):
+   user-requested globs that **rescue matching paths from ignore verdicts** —
+   "ingest per the ignore rules, but force-include these even if gitignored."
+   Composition within Ignore mode:
+   `keep(path) = ¬Ignore.Ignores(path) ∨ Override.Matches(path)`.
+   Distinct from gitignore `!` negations, which are in-file intent
+   participating in nested semantics; the override is an executive-level
+   rescue layered after the ignore verdict. Compiled by the same glob→regex
+   machinery (broadcast regex, as the current override already is — but
+   *composing with* the pipeline instead of *replacing* it).
+3. **Selection regime** (Selection mode): the run is expressly about
+   *ingesting what we want*. **Sentinel files are not consulted** (scan
+   skipped entirely — no I/O); user selection globs compile as a selection
+   regime through the same five-stage machinery; negations are un-keep
+   exceptions ("select `*.ps1` except `tests/`");
+   `keep(path) = Selection.Keeps(path)`. Period — no ignore composition.
 
-Filter-time composition when a selection regime is present:
+The **mode switch** (`Ignore` | `Selection`) is explicit run config declaring
+the run's intent — never inferred from which pattern lists happen to be
+non-empty. Both modes express patterns in the same canonical glob semantics
+and compile through the same NormalizeGlob/TranslateGlob/CompileGlobs path;
+`TestPath`'s dual truth table remains the shared per-regime authority.
 
-```
-keep(path) = Selection.Keeps(path) AND NOT Ignore.Ignores(path)
-```
+Carried over from v1 unchanged: prune guard (no directory pruning under
+selection; ignore-mode pruning as today; empty-leaf prune cleans up),
+fail-fast on empty/self-annihilated selection or override sets, and the
+two-slot state shape (`CompiledIgnore`/`ExecutiveOverride`) collapsing into
+orientation-stamped compiled state.
 
-- Selection restricts within the not-ignored universe — "all `*.cs` that
-  aren't gitignored" — the composition the old bypass could not express.
-- Pure selection (old ExecutiveOverride behavior) = Selection orientation +
-  `SentinelFileNames @()`; now with negation support and full machinery.
-- **Pruning stays ignore-side only**: gitignored branches still prune (better
-  than repo-audit's all-or-nothing Include-mode prune skip); selection never
-  prunes directories; the existing post-filter empty-leaf prune cleans up.
-- **Fail-fast preserved**: empty/self-annihilated selection set throws (RS
-  behavior), never silently excludes all (C# behavior).
-- Because the regimes are separate, exotic workflows (inverting sentinel
-  intent, complement-of-ignore-file) remain *expressible later* without
-  redesign — but are deliberately not designed for now.
+Naming/migration notes: the *word* "override" migrates to the rescue feature
+(its true meaning); the current `RunOverrideBypass()` behavior is really
+proto-Selection-mode and maps there. The rejected ∧-composition ("selection
+within the not-ignored universe") remains expressible later as an explicit
+third arrangement if a use case ever demands it — not a feature now, and
+never an implicit collision.
 
-Mechanism reuse from the C# concept: compiled state stamped with its
-orientation; `TestPath` as the single dual-truth-table authority evaluated per
-regime; `Invoke-IgnoreFilter`'s inline `.Where()` branching collapses into
-TestPath calls, retiring the two-slot `CompiledIgnore`/`ExecutiveOverride`
-state shape and `RunOverrideBypass()`. `ExecutiveOverrides` retires with a
-migration shim (≈ Selection orientation + sentinels off).
-
-Config surface (naming TBD): `SentinelFileNames` (unchanged) · user patterns ·
-orientation switch for the user set. Code/config separation: orientation is
-run config, never inferred from data shape.
+Config surface (naming TBD): `Mode` · Ignore-mode: `SentinelFileNames`,
+`IgnoreDefaults`, `IgnorePatterns`, override globs (name TBD — candidates:
+`IgnoreOverrides`, `RescuePatterns`) · Selection-mode: selection globs (name
+TBD: `SelectionPatterns` vs unified `Patterns` interpreted per mode).
 
 ## Cautions — do NOT import these from the C# side
 
@@ -177,10 +184,14 @@ semantics in Include mode, which would read a .gitignore as keep rules; its
 callers presumably dodge this by passing empty sentinel names. Population
 scoping dissolves the problem instead of patching it.
 
-Remaining open (smaller): orientation parameter naming; whether the Selection
-regime participates in per-node sentinel-style *local* selection sources
-(currently: no — user population is root-injected only, though the machinery
-would permit it); shim vs clean break for `ExecutiveOverrides`.
+Remaining open (smaller): mode/override/selection parameter naming (see Design
+v2 config surface); whether the Selection regime participates in per-node
+sentinel-style *local* selection sources (currently: no — user population is
+root-injected only, though the machinery would permit it); shim vs clean break
+for `ExecutiveOverrides`; whether the override rescue should also rescue
+directory branches from pruning (a gitignored dir containing an
+override-matched file must not be pruned before the rescue can apply —
+implementation detail to resolve during the refactor).
 
 ## Sequencing
 
@@ -201,3 +212,12 @@ in either order.
   `Selection.Keeps ∧ ¬Ignore.Ignores`; ignore-side pruning retained. Prior
   sentinel open decision resolved by the reframe. GatherScatter dead-cache gap
   in repo-audit acknowledged by user (was unknown).
+- 2026-07-28 — **Design v2** (user): the ∧-composition rejected as selection
+  semantics — implicit include/ignore collision is the original tension, not
+  its resolution. Disentanglement: **selective override** (rescue gitignored
+  paths by request — a nuanced feature *of* Ignore mode,
+  `¬Ignores ∨ Override.Matches`) vs **Selection mode** (explicit mode switch;
+  sentinels not consulted; pure `Selection.Keeps`). Both expressed in
+  canonical glob semantics through the shared compile machinery. "Override"
+  name migrates to the rescue feature; bypass behavior maps to Selection mode.
+  New open item: override interaction with directory pruning.
