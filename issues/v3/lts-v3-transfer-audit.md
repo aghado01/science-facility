@@ -51,4 +51,39 @@ Per capability, the decision is one of: **transfer to v3** · **LTS-only conveni
 
 ## Work log
 
-_(append findings/results here)_
+- 2026-07-28 — **Processor-span disposition** (design session). Inventory of LTS work
+  between content normalization and row rendering, classified:
+  - **Chain (processor) candidates:** `rs-attributes.ps1` — entry metrics
+    (char/word/punct counts, unique chars, entropy, compression ratio, whitespace
+    ratio, line stats) + binary flag; contractually a **tail step** — LTS computes
+    metrics on *post-normalization* content, so it must run after all content
+    transforms in the profile. **Preview generation** (`New-ContentAndPreview`
+    head/tail + `<...omitted...>` marker) — own processor or a config surface of
+    rs-attributes. **`Filter-Content` line filtering** — processor only if it
+    survives its retire decision (inventory row above); its `-ExpandProperty Count`
+    bug dies with the monolith either way.
+  - **Compute-vs-emit doctrine confirmed** (user): attributes/preview are computed in
+    the chain by default; omission (`ExcludeAttributes` / `ExcludeShardBlocks`,
+    `OmitEmptyPreview`, `IncludeFileContent`) is a **writer** knob, applied
+    end-to-end (schema row and data rows agree). Improves an LTS quirk: LTS zeroes
+    the metrics when content emission is off; v3 metrics describe the real processed
+    content regardless of emission. Waste guard (attributes never emitted anywhere →
+    chain profile compiled without rs-attributes) is an admiral config-projection
+    mapping, not stage knowledge.
+  - **Not processor work:** `last_write` capture → **crawler** (it already constructs
+    FileInfo for SizeBytes; no v3 source exists today). **Entry-vs-skipped policy**
+    for binary/oversized files — LTS keeps them as content-less entries, visible in
+    tree and rows; v3 currently `_ChainHalt`s (file-read) or Skips (ignore size cap);
+    the boundary is an IR-assembly contract decision. **Corpus ordering + global
+    idx** → IR assembly (processors stay order-blind; thread track uses semantic
+    order instead of path sort). Header assembly, tree model, row
+    escaping/lengths/offsets → admiral and writers (deferred — serializers are not
+    being written yet; pipeline is built one stage at a time).
+  - **Colonel helper-function fix scoped:** `ReadProcessorScript`'s regex rejects
+    interior helpers (tp-perplexity `_MaskByRegex`). Replace with an AST check that
+    rejects only a single wrapping FunctionDefinitionAst / missing top-level param
+    block, allowing interior helper functions.
+  - **Crawler↔ignore residues named**; resolution architecture and the greedy-crawl
+    decision recorded in `issues/v3/admiral-orchestration.md` (new brief, same
+    session): information through-line via admiral, no lateral stage fusing,
+    RelativePath-stamping/mutation-ownership/diagnostics-split cleanups.
