@@ -6,6 +6,30 @@ using namespace System.Security
 
 
 <#
+.SYNOPSIS
+    RepoSnapshot V3 crawler — greedy BFS walk producing the file-system graph.
+
+.DESCRIPTION
+    Output contract — each graph node carries a Files array of ItemDescriptor
+    identity records (see issues/v3/rs.core.assemble-design.md):
+
+        @{ AbsolutePath; RelativePath; NodePath; SizeBytes; LastWriteUtc }
+
+    Path doctrine (store vs view, applied to paths):
+      - AbsolutePath exists for unambiguous ingestion-side reads — it never
+        appears in rendered snapshot artifacts.
+      - RelativePath is the artifact-facing identity: root-anchored, forward
+        slashes, no leading slash. The snapshot is anchored to a root; the
+        hierarchy is represented flatly and the nested structure is encoded
+        in RelativePath alone — minimal tokens for an LLM reader that needs
+        repository structure, not system locations.
+      - NodePath (directory portion, trailing '/'; root = '') is the graph
+        key, duplicated onto file entries so descriptors remain self-standing
+        after the graph is flattened for dispatch.
+    All identity fields are stamped here, at walk time, from data the walk
+    already holds — downstream stages filter and enrich but never re-derive
+    identity (ignore is a pure filter; processors copy-on-enrich).
+
 .TODO
     - Crawler should probably be split into multiple classes — one for the BFS walk and graph - maybe.
     - Crawler should have a separate method for getting diagnostics, rather than including that in the graph or as sidecar properties on the nodes. This keeps the graph clean and focused on representing the file system structure and metadata, while diagnostics can be a separate feed for logging, reporting, or sidecar output.
@@ -127,22 +151,34 @@ class FileSystemCrawler
                     }
                     else
                     {
-                        # FILE — isolated size read
+                        # FILE — isolated stat read (size + last-write from one FileInfo)
                         $len = $null
-                        try { $len = ([FileInfo]::new($entry)).Length }
+                        $lastWriteUtc = [datetime]::MinValue
+                        try
+                        {
+                            $fi = [FileInfo]::new($entry)
+                            $len = $fi.Length
+                            $lastWriteUtc = $fi.LastWriteTimeUtc
+                        }
                         catch
                         {
                             $this.Skipped.Add([PSCustomObject]@{
                                     Path   = $entry
-                                    Reason = 'FileSizeReadFailed'
+                                    Reason = 'FileStatReadFailed'
                                     Error  = $_.Exception.GetType().Name
                                 })
                             continue
                         }
 
+                        # Identity fields stamped at walk time — see path doctrine
+                        # in the module docstring. RelativePath = NodePath + name:
+                        # zero extra derivation, root-anchored by construction.
                         $this.Graph[$nodePath].Files.Add([PSCustomObject]@{
                                 AbsolutePath = $entry
+                                RelativePath = $nodePath + [Path]::GetFileName($entry)
+                                NodePath     = $nodePath
                                 SizeBytes    = $len
+                                LastWriteUtc = $lastWriteUtc
                             })
                         $this.FileCount++
                     }

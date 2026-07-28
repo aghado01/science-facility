@@ -111,3 +111,14 @@ copy-on-enrich (waits for admiral state design) · subaddressing.
 ## Work log
 
 - 2026-07-28 — Filed; Phase 0 applied.
+- 2026-07-28 — **Phase 1, crawler step landed** (item 2): file entries now
+  stamp the full identity contract `{AbsolutePath; RelativePath; NodePath;
+  SizeBytes; LastWriteUtc}` at walk time — `RelativePath = NodePath + name`
+  (zero extra derivation), one FileInfo for size + last-write, skip reason
+  renamed `FileStatReadFailed` (no consumers). Path doctrine recorded in the
+  crawler docstring + assemble-design (user: absolute = ingestion reads only;
+  relative = artifact-facing, root-anchored, structure encoded flatly for
+  LLM-reader token economy). New `tests/crawler.tests.ps1` (house harness
+  style, 27 asserts) green; real-repo smoke green (108 files, 0 skipped).
+  Next: ignore de-stamp (item 3) → ingest descriptor hand-off (item 1) →
+  pipeline smoke (item 8).

@@ -49,7 +49,23 @@ The unit that flows discovery → ingest → colonel → processors → results:
 - **Produced by crawler** during the greedy walk (RelativePath and LastWriteUtc
   are new — both free at collection time: root is known, FileInfo already
   constructed for SizeBytes). Resolves residue #1: ignore stops stamping
-  RelativePath and becomes a pure filter.
+  RelativePath and becomes a pure filter. **Landed 2026-07-28** (crawler side:
+  identity fields stamped at walk time; `RelativePath = NodePath + name`;
+  `LastWriteUtc` as [datetime] — writers format; tests in
+  `tests/crawler.tests.ps1`).
+- **Path doctrine (user, 2026-07-28** — full statement in the crawler module
+  docstring**):** AbsolutePath exists for unambiguous ingestion-side reads and
+  never appears in rendered artifacts; RelativePath is the artifact-facing
+  identity — the snapshot anchors to a root, hierarchy is represented flatly,
+  and nested structure is encoded in the root-anchored relative path alone.
+  Minimal-duplication design for the LLM consumer: repository structure
+  without system-path prefix tokens (see the `*_tree.md` selfies + shard row
+  paths for the doctrine in practice). In-memory descriptors may carry
+  redundant convenience fields (NodePath is the derivable directory portion
+  of RelativePath); what the *payload* carries is a writer decision —
+  store-vs-view applied to paths. Multi-root snapshots ("root directories")
+  stay accommodated: paths remain root-anchored; a root identifier field can
+  join the descriptor later without reshaping it.
 - **Ignore** prunes/filters descriptors; enriches nothing.
 - **Ingest passes descriptors — not paths — as colonel Items.** Finding
   (2026-07-28): `Invoke-Ingest` currently flattens to AbsolutePath *strings*
