@@ -21,6 +21,24 @@ internals — the glue is admiral's job, and admiral's alone.
 produced an entangled mess from crawler to ignore — stages depending directly on
 each other when they shouldn't. Residues of that mistake remain (see below).
 
+## Thinness doctrine (user, 2026-07-28)
+
+Admiral's implementation is not fully resolved, but the intention is to keep it
+**as thin as possible** — what is included should make its unique
+responsibilities and their implementations very **legible, inspectable, and
+maintainable**. Necessity and sufficiency — but thoughtfully engineered so as
+not to be over-simplified by immediate needs (avoid tunnel vision): engineered
+well to do its job now, and extensible/well-posed for later development,
+philosophically.
+
+## Code/config separation (v3 philosophy, user, 2026-07-28)
+
+One of the design philosophies behind v3 is a better separation of code from
+config — something that snowballed badly during original LTS development and is
+fairly apparent in its code. Admiral, as the config-projection point of the
+pipeline, is where this discipline is most load-bearing: run configuration is
+data admiral routes, not behavior stages hardcode.
+
 ## Crawler ↔ ignore: greedy-crawl decision (user, 2026-07-28)
 
 Ignore configuration originally lived inside the crawler — partly because no
@@ -98,6 +116,12 @@ Known implications the design accepts (record, don't relitigate):
   defaults live in the wrapper's param block or the `Defaults` table, not in
   reflected metadata.
 
+**Documentation requirement (user, 2026-07-28):** because the mechanism is
+unconventional, it must be **concisely but carefully documented in docstrings,
+and flagged at every use site** — where it is being used and how. A reader
+encountering a reflected wrapper should never have to reverse-engineer the
+mechanism to understand the call.
+
 ## Known residues to clean (identified 2026-07-28)
 
 1. **Ignore stamps `RelativePath` onto crawler file objects** during its join
@@ -110,6 +134,23 @@ Known implications the design accepts (record, don't relitigate):
    ownership transfer or copy-on-enrich.
 3. **Crawler mixes diagnostics into its graph result** — its own TODO already
    calls for a separate diagnostics feed.
+
+## Control flow — unresolved (user, 2026-07-28)
+
+In pseudocode, admiral calls each stage sequentially, mediating config and
+state ingress/egress logistics, with perhaps some post-processing of one
+stage's outputs to ensure proper inputs to the next (**contracts enforcement**).
+Beyond that, the architecture is open:
+
+- Exact implementation — what are admiral's classes?
+- How is the implicit **DAG** represented and implemented?
+- Other things — deliberately unenumerated; the shape is not yet adjudicated.
+
+_Candidate direction (agent inference, unadjudicated):_ the stage sequence
+expressed as data (a stage-spec table admiral walks) rather than code would
+align with the code/config separation philosophy; `Register-StageWrapper`'s
+Pre/PostProcess hooks are a natural seam for state injection/harvest and
+contract checks. Recorded as a candidate only — not a decision.
 
 ## Open questions
 
@@ -124,6 +165,9 @@ Known implications the design accepts (record, don't relitigate):
    later stages, and what "selectively used downline" looks like concretely
    (e.g. crawler's SizeBytes/last_write consumed by IR assembly without passing
    through processors).
+5. Control-flow implementation (section above): admiral's class structure, DAG
+   representation, and where contract enforcement lives (per-boundary
+   post-processing vs declared stage contracts).
 
 ## Cross-references
 
