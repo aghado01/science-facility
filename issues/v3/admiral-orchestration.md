@@ -134,6 +134,18 @@ mechanism to understand the call.
    ownership transfer or copy-on-enrich.
 3. **Crawler mixes diagnostics into its graph result** — its own TODO already
    calls for a separate diagnostics feed.
+4. **Ingest→processor Items seam** (found 2026-07-28) — ingest flattens the
+   graph to AbsolutePath strings; processors expect descriptor objects. The
+   canonical example of an unowned contract at an admiral boundary; fix via the
+   ItemDescriptor contract (`rs.core.assemble-design.md`).
+
+## Build-against-absent-admiral rule (user, 2026-07-28)
+
+Admiral need not be written yet, but everything written next must carry
+**clearly delimited contracts for what to expect from the currently absent
+admiral** — stage inputs that admiral will eventually provide (RunContext,
+policy, retained state) are declared and documented now, and satisfied by
+test harnesses playing admiral until it exists.
 
 ## Control flow — unresolved (user, 2026-07-28)
 

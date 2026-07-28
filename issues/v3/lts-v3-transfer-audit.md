@@ -87,3 +87,23 @@ Per capability, the decision is one of: **transfer to v3** · **LTS-only conveni
     decision recorded in `issues/v3/admiral-orchestration.md` (new brief, same
     session): information through-line via admiral, no lateral stage fusing,
     RelativePath-stamping/mutation-ownership/diagnostics-split cleanups.
+
+- 2026-07-28 — **Ingest→processor seam broken (finding)** + **forward plan**.
+  `Invoke-Ingest` passes colonel Items as AbsolutePath *strings*; `file-read.ps1`
+  expects the descriptor object (`.AbsolutePath/.SizeBytes/.RelativePath/.NodePath`)
+  — every chained item would `_ChainHalt` with ReadError. Root cause is the
+  admiral-shaped hole: no owned item-identity contract at the seam. Resolution:
+  **ItemDescriptor contract** (crawler stamps `AbsolutePath, RelativePath, NodePath,
+  SizeBytes, LastWriteUtc`; ignore becomes pure filter; ingest passes descriptors;
+  processors copy-on-enrich preserving identity fields) — spec in
+  `issues/v3/rs.core.assemble-design.md`. **Plan (present vs deferred):**
+  1. *Now (blocking):* crawler enrichment (RelativePath + LastWriteUtc) → remove
+     ignore's stamping → ingest passes descriptor objects → end-to-end smoke test
+     (crawl→ignore→ingest→file-read over this repo).
+  2. *Now-adjacent (independent):* `rs-attributes.ps1` + tests; colonel AST
+     validation fix + tests.
+  3. *Next stage:* `rs.core.assemble` (name pending) per design seed — golden
+     data-to-data validation of the IR against a fresh LTS monolith JSON, no
+     serializers involved.
+  4. *Explicitly deferred:* preview processor, Filter-Content retire decision,
+     crawler diagnostics split, tree model home, all writers, admiral itself.
