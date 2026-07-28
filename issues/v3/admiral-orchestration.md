@@ -7,6 +7,9 @@ discrete stages (crawler → ignore → ingest/colonel+processors → IR assembl
 writers). It does not exist yet — LTS never needed one because the monolith fused
 stages inherently as it grew; v3 needs one *by design*.
 
+**Mission (user, 2026-07-28):** coordinate the stages, hold pipeline state, and
+handle routing decisions about data and control flow.
+
 ## Architecture principle (user, 2026-07-28)
 
 Stages are developed **independently and modularly**, with defining contracts
@@ -58,6 +61,42 @@ with admiral.
   colonel's surface).
 - Optional artifact emissions (JSON monolith becomes an opt-in output, not a
   pipeline stage — transfer-audit "Monolith → IR distillation").
+
+## Wrapper mechanism — reflection-forwarded params (user, 2026-07-28)
+
+Admiral's needs are already anticipated in `rs.core.internals.psm1`: helpers that
+expose the bound-parameter surfaces of pipeline components' functions/classes so
+admiral can wrap imported stage functions **without writing out their parameter
+lists**. Unconventional, but deliberately chosen for maintainability: stage
+function signatures can change without updating the exact parameter calls in
+admiral's wrappers.
+
+The three primitives:
+
+- `New-ForwardedParamDictionary` — reflects a target command's params into a
+  DynamicParam dictionary (attributes preserved; common params excluded).
+- `Split-ForwardedParams` — partitions the wrapper's `$PSBoundParameters` into a
+  splat by excluding the wrapper's own param names.
+- `Register-StageWrapper` — the decorator equivalent: registers a named wrapper
+  in the `Function:` drive with full reflected surface, caller-loses-nothing
+  defaults injection, and optional PreProcess (mutate splat) / PostProcess
+  (transform result) hooks. This is the fullest expression of the mechanism —
+  ingest only uses the first two inline.
+
+Working proof: `Invoke-Ingest` declares only the one param it uniquely owns
+(`FilteredFsGraph`) and reflects/merges the surfaces of both `Compile-Plan` and
+`Invoke-Plan`, routing bound params to the right callee at call time.
+
+Known implications the design accepts (record, don't relitigate):
+
+- **Load-order dependency** — reflection requires the target command loaded
+  before the wrapper's DynamicParam resolves; module load order is admiral's
+  responsibility (already stated in ingest's NOTES).
+- **Collision policy** — a wrapper fronting multiple targets needs a name-merge
+  rule; ingest's precedent is priority order (Compile-Plan wins).
+- **DefaultValue reflection is best-effort** (module's own note) — canonical
+  defaults live in the wrapper's param block or the `Defaults` table, not in
+  reflected metadata.
 
 ## Known residues to clean (identified 2026-07-28)
 
