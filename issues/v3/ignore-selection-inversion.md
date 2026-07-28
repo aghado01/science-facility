@@ -6,6 +6,41 @@
 Extends TODO's "antisemantics" item; supersedes LTS `SelectionOverrides` and v3
 `ExecutiveOverrides` as the selection mechanism.
 
+## Scope of "backport" (user, 2026-07-28)
+
+**Backport means incorporating the symmetric-inversion *concept* that emerged
+in repo-audit's adaptation — NOT replacing reposnapshot's ignore engine with a
+transliteration of repo-audit's machinery.** The two applications share
+overlapping needs met by this lineage, but their use cases differ: repo-audit's
+needs are less complicated and more contained; reposnapshot's charter is more
+general. Design for reposnapshot specifically, without letting repo-audit's
+missteps or simplifications corrupt the intricate work in reposnapshot's
+engine.
+
+## Operational context — what the RS ignore engine actually is (user, 2026-07-28)
+
+- RS was originally written to ingest a repository with *fluency*: detect and
+  respect the repo's own ignore files — gitignore, dockerignore, and kin — so
+  the snapshot captures essential code material, not low-signal or irrelevant
+  files. v3 codifies this as the `SentinelFileNames` convention (bound param,
+  sensible defaults) — respected *if detected* by the crawler.
+- **Selection semantics don't naturally touch sentinel files**: (a) there are
+  no "gitselect" files in the wild; (b) ignore files carry ignore *intent*,
+  not just globs available for reinterpretation.
+- **User-supplied globs are operationally a virtual ignore file**: RS merges
+  the user's include/exclude lists into the engine as an additional
+  root-level gitignore-like source, so they participate in the nested
+  gitignore semantics — inheritance, annihilation, anchor-prefixing. This
+  integration is the intricate work to preserve.
+- The tension: the elegant shared mechanism with a switch vs the operational
+  reality of what ignore files mean. Theoretical workflows like "ingest the
+  complement of an ignore file" are explicitly **out of the weeds we're
+  entering** — not designed for now.
+- Essential requirement: the canonical ignore-file-driven workflow stays
+  as-is; the user gains the ability to supply globs *for selection*; the
+  underlying semantic processing machinery is shared, switched by semantic
+  orientation.
+
 ## Lineage correspondence (confirmed)
 
 The C# engine is the PowerShell engine, stage for stage — Normalize (separator
@@ -65,24 +100,55 @@ sentinel inheritance machinery, anchor-prefixing of node-local patterns, depth
 precedence, exception subsumption, per-node compiled states with the signature
 cache. Under the bypass, none of these exist for selection.
 
-## Backport sketch (rs.core.ignore.psm1)
+## Proposed design — population-scoped semantics (2026-07-28, pending adjudication)
 
-1. Add a `Semantics` mode switch (`'Ignore'` | `'Selection'`, ValidateSet or PS
-   enum) to `New-IgnoreCompiler` — explicit config, replacing the data-driven
-   override inference. Code/config separation: the mode is run config.
-2. Delete `RunOverrideBypass()`; both modes run all five stages.
-3. Stamp `Semantics` on compiled node state; rewrite `[IgnoreCompiler]::TestPath`
-   as the dual truth table (single authority).
-4. Guard `Prune()` on Ignore mode. Selection mode relies on
-   `Invoke-IgnoreFilter`'s existing post-filter empty-leaf prune for cleanup —
-   the PS side already has the piece C# lacks here; the mapping is clean.
-5. Collapse `Invoke-IgnoreFilter`'s inline `.Where()` semantics branching into a
-   `TestPath` call — retires the duplication and the two-slot state shape
-   (`CompiledIgnore` + `ExecutiveOverride` → one `CompiledState` with
-   `Semantics`).
-6. Retire `ExecutiveOverrides` (breaking-change note or thin migration shim:
-   `-ExecutiveOverrides $x` ≈ `-Semantics Selection -Patterns $x` minus the
-   negation/inheritance upgrades).
+The untangling move (from the user's operational framing): **the semantic
+orientation switch attaches to the user pattern population, not to the
+engine.** Repo-audit inverts the whole engine — affordable in its contained
+charter, wrong for RS where sentinel files carry non-negotiable intent.
+
+Two pattern populations with different semantic ownership:
+
+- **Sentinel population** — repo-native ignore files (`SentinelFileNames`
+  discovery, as today). Constitutionally ignore-semantic; **never inverted**.
+- **User population** — caller-supplied globs, with a declared orientation:
+  - `Ignore` orientation (default): merged into the sentinel regime as the
+    virtual root ignore file, **exactly as today** — inheritance,
+    annihilation, anchor-prefixing preserved; one regime; zero behavior
+    change to the canonical workflow.
+  - `Selection` orientation: the user set compiles as a **separate selection
+    regime** through the *same* five-stage machinery; negations become
+    un-keep exceptions ("select `*.ps1` except `tests/`" is one pattern set).
+
+Filter-time composition when a selection regime is present:
+
+```
+keep(path) = Selection.Keeps(path) AND NOT Ignore.Ignores(path)
+```
+
+- Selection restricts within the not-ignored universe — "all `*.cs` that
+  aren't gitignored" — the composition the old bypass could not express.
+- Pure selection (old ExecutiveOverride behavior) = Selection orientation +
+  `SentinelFileNames @()`; now with negation support and full machinery.
+- **Pruning stays ignore-side only**: gitignored branches still prune (better
+  than repo-audit's all-or-nothing Include-mode prune skip); selection never
+  prunes directories; the existing post-filter empty-leaf prune cleans up.
+- **Fail-fast preserved**: empty/self-annihilated selection set throws (RS
+  behavior), never silently excludes all (C# behavior).
+- Because the regimes are separate, exotic workflows (inverting sentinel
+  intent, complement-of-ignore-file) remain *expressible later* without
+  redesign — but are deliberately not designed for now.
+
+Mechanism reuse from the C# concept: compiled state stamped with its
+orientation; `TestPath` as the single dual-truth-table authority evaluated per
+regime; `Invoke-IgnoreFilter`'s inline `.Where()` branching collapses into
+TestPath calls, retiring the two-slot `CompiledIgnore`/`ExecutiveOverride`
+state shape and `RunOverrideBypass()`. `ExecutiveOverrides` retires with a
+migration shim (≈ Selection orientation + sentinels off).
+
+Config surface (naming TBD): `SentinelFileNames` (unchanged) · user patterns ·
+orientation switch for the user set. Code/config separation: orientation is
+run config, never inferred from data shape.
 
 ## Cautions — do NOT import these from the C# side
 
@@ -100,22 +166,21 @@ cache. Under the bypass, none of these exist for selection.
   selection set. Keep PS's fail-fast — an empty selection is a user error, not
   a valid request for nothing.
 
-## Open design decision — sentinels under Selection semantics
+## ~~Open design decision — sentinels under Selection semantics~~ (resolved)
 
-The one place the symmetric design needs a decision the C# code dodges: in
-Include mode, repo-audit compiles sentinel (.gitignore) patterns under the same
-inverted semantics — a .gitignore's contents would be read as *keep* rules,
-which is semantically wrong (gitignore files are inherently ignore-semantic;
-the C# caller presumably passes empty sentinel names in Include mode). Options
-for v3:
+Resolved 2026-07-28 by population-scoping (design above): sentinels are
+constitutionally ignore-semantic and never invert; the orientation switch
+applies only to the user population. The earlier framing (engine-global mode
+with sentinel handling as a problem to patch) inherited repo-audit's
+simplification — the C# design compiles sentinel patterns under inverted
+semantics in Include mode, which would read a .gitignore as keep rules; its
+callers presumably dodge this by passing empty sentinel names. Population
+scoping dissolves the problem instead of patching it.
 
-1. **Selection mode disables sentinel scan by default** (explicit opt-in to
-   the C# behavior) — simplest, matches the old override-bypass expectation.
-2. **Dual-regime compile** — caller patterns compile under Selection semantics,
-   sentinel patterns stay Ignore-semantic; keep = matches selection AND not
-   gitignored. Strictly more useful ("all *.cs that aren't build artifacts")
-   but two state sets per node — real scope growth. Defer unless a use case
-   demands it; record as the principled end state.
+Remaining open (smaller): orientation parameter naming; whether the Selection
+regime participates in per-node sentinel-style *local* selection sources
+(currently: no — user population is root-injected only, though the machinery
+would permit it); shim vs clean break for `ExecutiveOverrides`.
 
 ## Sequencing
 
@@ -127,4 +192,12 @@ in either order.
 
 ## Work log
 
-_(append findings/results here)_
+- 2026-07-28 — Backport scope clarified (user): concept, not transliteration;
+  repo-audit charter is narrower — guard RS's engine from its simplifications.
+  Operational context recorded (sentinels as intent; user globs as virtual
+  ignore file participating in inheritance/annihilation). Design reframed from
+  engine-global mode to **population-scoped semantics**: orientation attaches
+  to the user pattern set; sentinels never invert; filter-time composition
+  `Selection.Keeps ∧ ¬Ignore.Ignores`; ignore-side pruning retained. Prior
+  sentinel open decision resolved by the reframe. GatherScatter dead-cache gap
+  in repo-audit acknowledged by user (was unknown).
