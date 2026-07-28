@@ -185,8 +185,9 @@ contract checks. Recorded as a candidate only — not a decision.
 1. Hand-off form: does admiral project per-stage inputs (hand ignore only what
    it needs) or pass whole stage outputs and let contracts name what's consumed?
    (user: unresolved)
-2. Where RelativePath/NodePath enrichment lands: crawler output contract vs
-   admiral join step (either removes it from ignore).
+2. ~~Where RelativePath/NodePath enrichment lands~~ — resolved 2026-07-28:
+   crawler output contract (ItemDescriptor — `rs.core.assemble-design.md`);
+   ignore becomes a pure filter.
 3. Mutation ownership: copy-on-enrich vs explicit ownership transfer at each
    boundary.
 4. Shape of admiral's carried state: named stage-output slots addressable by

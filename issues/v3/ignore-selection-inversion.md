@@ -102,7 +102,8 @@ cache. Under the bypass, none of these exist for selection.
 
 ## Design v2 — mode dichotomy + override disentanglement (user, 2026-07-28)
 
-Supersedes the v1 population-scoped composition below in one respect: the
+Supersedes design v1 (the population-scoped composition — retired from this
+doc; see work log 2026-07-28 for its record) in one respect: the
 `Selection.Keeps ∧ ¬Ignore.Ignores` filter-time composition is **rejected as
 the selection semantics** — it lets the existence of an include list
 implicitly collide with ignore lists, which is exactly the tension that

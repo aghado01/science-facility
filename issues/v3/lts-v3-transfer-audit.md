@@ -19,7 +19,7 @@ Per capability, the decision is one of: **transfer to v3** · **LTS-only conveni
 |---|---|---|---|
 | Comment stripping | `Normalize-FileContent` stage 4 — token walk (2026-07-22 fix); cs/py/js combined alternation scan | `rs-psstrip` (kind ops + masking + auto-route, ahead of LTS as of 2026-07-22), `rs-csstrip` | **Resolved both sides.** End state: LTS dispatches to processors (comment-ontology). rs-csstrip should adopt LTS's combined-alternation technique (superior to span regexes for cs/js) — evaluate. |
 | Whitespace/normalize | `Normalize-FileContent` stages 1–3 | `format-ws` (richer op vocabulary) | v3 forward; check stages 1–3 for behaviors format-ws lacks (NBSP→space, region markers → `region-markers` kind). |
-| Ignore/selection | `Get-GitIgnoredPaths`, `Read-GitIgnoreRules`, `Convert-GitIgnoreGlobToRegex`, `Build-GitIgnoreMatcher`, `Find-ExternalIgnoreRules`, `Normalize-PatternArray`, `New-PathInclusionTester` | `rs.core.ignore` (IgnoreCompiler: inheritance walk, exception domination, override bypass, regex cache) | v3 is the design forward. Audit LTS for semantics v3 lacks: external ignore rules, `SelectionOverrides` behavior; TODO's "antisemantics" toggle redesign lands here. |
+| Ignore/selection | `Get-GitIgnoredPaths`, `Read-GitIgnoreRules`, `Convert-GitIgnoreGlobToRegex`, `Build-GitIgnoreMatcher`, `Find-ExternalIgnoreRules`, `Normalize-PatternArray`, `New-PathInclusionTester` | `rs.core.ignore` (IgnoreCompiler: inheritance walk, exception domination, override bypass, regex cache) | v3 is the design forward. Audit LTS for semantics v3 lacks: external ignore rules, `SelectionOverrides` behavior. Redesign complete 2026-07-28: `issues/v3/ignore-selection-inversion.md` (Design v2 — mode dichotomy + override rescue + reconciliation); implementation pending. |
 | Binary/content filter | `Test-IsBinaryFile`, `Get-FilteredFiles`, `Filter-Content` (has the `-ExpandProperty Count -gt 0` bug) | `file-read` NUL guard; `Invoke-IgnoreFilter` size/ext blacklist | v3 forward; decide whether content-pattern filtering (`Filter-Content`) survives at all or retires. |
 | Preview/byte offsets | `New-ContentAndPreview`, `Get-EntryByteOffsets` (UTF-8 byte-accurate — the seek contract) | none yet | **Transfer to v3** with the sharding writer; the byte-offset contract is load-bearing for the MCP fetch API. |
 | Tree/TOC rendering | `Build-DirectoryTree`, `Build-AsciiTree`, `Build-TreeDiagramCompact`, `Build-TocTree`, `Import-TocTemplateEngine` | `rs.core.template.ps1` (handlebars-lite, TOC models) | Overlapping; verify whether LTS already loads rs.core.template (Import-TocTemplateEngine) and consolidate renderers in v3. |
@@ -48,6 +48,10 @@ Per capability, the decision is one of: **transfer to v3** · **LTS-only conveni
 - Subaddressing (extent linearization → composite chunks) will sit on the v3 side and
   is a *new* capability, not a transfer — but the shard-row/tree conventions it extends
   are currently defined by LTS output. Format decision above gates it.
+
+> **Canonical sequenced plan as of 2026-07-28:** `issues/v3/v3-consolidation-plan.md`
+> (consolidation-first doctrine; supersedes the inline plan sequencing in the
+> work-log entries below, which remain as session record).
 
 ## Work log
 
