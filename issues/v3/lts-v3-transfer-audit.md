@@ -123,4 +123,8 @@ Per capability, the decision is one of: **transfer to v3** · **LTS-only conveni
   crawler/ignore, then rearchitected with exactly this symmetric mode switch;
   port the architecture back. Adjudication: non-blocking for the ItemDescriptor
   seam work (de-stamping stays trivial); schedule as its own refactor when the
-  ignore engine is next opened beyond de-stamping.
+  ignore engine is next opened beyond de-stamping. Full comparison + backport
+  sketch (same session): `issues/v3/ignore-selection-inversion.md` — semantics
+  as interpretation (enum + state stamp + dual TestPath truth table + Include-
+  mode prune guard); C# dead-cache defect flagged do-not-import; sentinel
+  semantics under Selection mode identified as the open design decision.
