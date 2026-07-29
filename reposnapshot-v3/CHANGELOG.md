@@ -86,6 +86,38 @@ Plan: `issues/v3/v3-consolidation-plan.md` · contracts: `issues/v3/rs.core.asse
   no-Content/empty-content contracts, copy-on-enrich, colonel dispatch
   (GZipStream confirmed resolving in worker runspaces).
 
+### processors/* — docstring audit & modernization (fleet-wide)
+
+- **v1 colonel API remnants purged**: "Host guidance for Colonel fluent
+  setup: SetIssPreset(...)" (v1 fluent API — v2 is `Compile-Plan
+  -IssPreset`) and "Supported RunMode usage: ApplyAll, KeyMatch" (RunMode
+  died with v1; v2 dispatch is plan-driven) removed from format-ws,
+  rs-indent, rs-csstrip, rs-psstrip, tp-perplexity — and rs-attributes,
+  which had inherited the RunMode line from the stale template on creation.
+- **Standardized self-documentation block**: `Item contract` / `Position
+  class` / `IssPreset floor` / `Required IssModules`. Item contracts now
+  DECLARED per processor (the 6d fault line made visible): descriptor
+  (file-read, rs-attributes) · tp-era Text envelope with 6d pointer
+  (format-ws, rs-indent, rs-csstrip, rs-psstrip — noting intra-era chains
+  work; the break is cross-era only) · dual-key input → envelope output
+  (tp-perplexity, verified in code: Text preferred, Content fallback).
+  Position classes (reader / content mutator / enrich-only tail /
+  segmenting parser) seed the operation-order doctrine's future
+  precedence-class mechanical ordering.
+- **"No outer function wrapper" wording updated** to the post-AST-fix
+  contract (top-level param block; interior helpers legitimate — rs-psstrip
+  and tp-perplexity name theirs). chain-executor's stale
+  `RunspaceScripts/` path header fixed (`processors/`). rs-indent's "when
+  colonel chaining is available" contingency resolved (it is; the tp-era
+  stack works today, gated only by 6d for descriptor chains); stale
+  `format(lf)` key reference → format-ws. rs-csstrip gains its CRLF
+  side-effect note and the pending combined-alternation evaluation pointer
+  (transfer-audit inventory). format-ws documented as the named precedent
+  of the operation-order doctrine.
+- Docstring-only changes; verified by the touched-suite battery
+  (314 asserts green incl. rs-indent 39/39 and recompilation of every
+  processor through colonel validation).
+
 ### rs.core.assemble.psm1 — new stage: the IR (Phase 5)
 
 - **`Invoke-Assemble`**: collates the colonel dispatch envelope into the

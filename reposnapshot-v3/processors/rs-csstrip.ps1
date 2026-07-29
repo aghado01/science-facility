@@ -11,16 +11,24 @@
     inside string literals (including verbatim @"..." strings) may be incorrectly
     treated as comments.  This is acceptable for token-reduction use cases where
     output is consumed by an LLM rather than compiled.
+    Pending evaluation (lts-v3-transfer-audit inventory): adopt LTS
+    Normalize-FileContent's combined string-or-comment alternation scan, which
+    closes the string-literal false-positive class in one pattern.
 
-    ISS-load-safe:
-      - no #Requires directives
-      - no outer function wrapper
-      - param contract is positional (Item, Config)
+    Behavior note: line endings are normalized CRLF/CR → LF as a side effect
+    before span analysis (offsets require a stable newline basis).
 
-        Processor self-documentation only (no runtime enforcement in this file):
-            - Intended Colonel IssPreset floor: Core
-            - Supported RunMode usage: ApplyAll, KeyMatch
-            - Required IssModules: none
+    ISS-load-safe: no #Requires, top-level param contract (interior helpers
+    permitted per colonel AST validation).
+
+    Processor self-documentation (no runtime enforcement in this file):
+        - Item contract:  tp-era Text envelope (unpacks Id/Path/Text and
+          REPLACES the bag with its own envelope). Incompatible with
+          code-track descriptor chains — consolidation item 6d. Chains fine
+          with other tp-era processors.
+        - Position class: content mutator
+        - Intended Colonel IssPreset floor: Core
+        - Required IssModules: none
 
 .COMMENT KINDS
     BlockComment      /* ... */ on own line(s), no surrounding code            (default: strip)

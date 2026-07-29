@@ -31,15 +31,18 @@
         7. Restore code blocks and (by default) inline cite clusters; emit
            envelopes
 
-    ISS-load-safe:
-      - no #Requires directives
-      - no Set-StrictMode
-      - no outer function wrapper
-      - param contract is positional (Item, Config)
+    ISS-load-safe: no #Requires, no Set-StrictMode, top-level param contract.
+    Carries the interior helper _MaskByRegex — permitted per colonel's AST
+    validation (top-level param block is the contract; interior helpers are
+    legitimate).
 
-    Processor self-documentation only (no runtime enforcement in this file):
+    Processor self-documentation (no runtime enforcement in this file):
+        - Item contract:  dual-key input (Text | Content accepted) →
+          ENVELOPE OUTPUT by design ({ Id; Path; Exchanges[]; Processor }) —
+          the thread track's 1 → N adapter input (assemble's Thread adapter
+          explodes Exchanges into entries). Not a code-track enricher.
+        - Position class: segmenting parser (thread track)
         - Intended Colonel IssPreset floor: Core
-        - Supported RunMode usage: ApplyAll, KeyMatch
         - Required IssModules: none
 
 .NOTES

@@ -4,24 +4,32 @@
 
 .DESCRIPTION
     This file is loaded as a function body through SessionStateFunctionEntry.
-    Keep it ISS-load-safe:
-      - no #Requires directives
-      - no outer function wrapper
-      - param contract must be positional (Item, Config)
+    ISS-load-safe: no #Requires, top-level param contract (interior helpers
+    permitted per colonel AST validation).
 
-        Processor self-documentation only (no runtime enforcement in this file):
-            - Intended Colonel IssPreset floor: Core
-            - Supported RunMode usage: ApplyAll, KeyMatch
-            - Required IssModules: none
+    Operations is a SET the caller subsets; the implementation applies
+    selected ops in a fixed internal order (lf first … eof-eot last) because
+    application order is a correctness invariant, not a preference. This
+    processor is the named precedent for the operation-order doctrine
+    ("config selects members, implementation owns sequence" —
+    issues/v3/rs.core.assemble-design.md).
+
+    Processor self-documentation (no runtime enforcement in this file):
+        - Item contract:  tp-era Text envelope (unpacks Id/Path/Text and
+          REPLACES the bag with its own envelope). Incompatible with
+          code-track descriptor chains (Content; copy-on-enrich) — identity
+          fields would be lost. Harmonization pending: consolidation item 6d
+          (issues/v3/v3-consolidation-plan.md). Chains fine with other
+          tp-era processors.
+        - Position class: content mutator
+        - Intended Colonel IssPreset floor: Core (uses pipeline cmdlets;
+          Bare is insufficient)
+        - Required IssModules: none
 
 .NOTES
-        Host guidance for Colonel fluent setup:
-            - Use SetIssPreset([IssPreset]::Core) or Full.
-            - Bare is not recommended for this processor because it uses
-                pipeline cmdlets such as ForEach-Object.
-            - Config shape:
-                    Operations: string[] (opt-in operation list)
-                    IncludeMeta: bool (default true)
+        Config shape:
+            Operations: string[] (opt-in operation list)
+            IncludeMeta: bool (default true)
 
         Pipeline suitability per op:
             Op               TP-safe   RS opt-in   Notes

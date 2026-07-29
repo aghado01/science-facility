@@ -6,20 +6,20 @@
     Normalizes leading-whitespace indentation in source code files via a small
     set of independently selectable ops applied in a fixed internal order.
 
-    ISS-load-safe:
-      - no #Requires directives
-      - no outer function wrapper
-      - param contract is positional (Item, Config)
+    ISS-load-safe: no #Requires, top-level param contract (interior helpers
+    permitted per colonel AST validation).
 
-        Processor self-documentation only (no runtime enforcement in this file):
-            - Intended Colonel IssPreset floor: Core
-            - Supported RunMode usage: ApplyAll, KeyMatch
-            - Required IssModules: none
+    Processor self-documentation (no runtime enforcement in this file):
+        - Item contract:  tp-era Text envelope (unpacks Id/Path/Text and
+          REPLACES the bag with its own envelope). Incompatible with
+          code-track descriptor chains — consolidation item 6d. Chains fine
+          with other tp-era processors.
+        - Position class: content mutator
+        - Intended Colonel IssPreset floor: Core
+        - Required IssModules: none
 
 .NOTES
-        Host guidance for Colonel fluent setup:
-            - Use SetIssPreset([IssPreset]::Core) or Full.
-            - Config shape:
+        Config shape:
                     Operations: string[]  no defaults; processor is wholesale opt-in
                     IncludeMeta: bool     default true
                     TargetUnit:  int      spaces per indent level; default 2
@@ -73,8 +73,11 @@
         # FUTURE: strip-common on mixed or pure-tab files requires detab to have
         # run first for accurate common-indent measurement. Currently strip-common
         # measures leading spaces only; the common-tab case is a no-op.
-        # When colonel chaining is available, the cleaner RS stack would be:
-        #   format(lf) → rs-indent(detab) → rs-indent(strip-common, min-indent-2)
+        # Colonel chaining IS available (v2, plan-driven); the cleaner stack —
+        #   format-ws(lf) → rs-indent(detab) → rs-indent(strip-common, min-indent-2)
+        # — works today as a tp-era chain (same Text-envelope contract on all
+        # three); its use inside code-track descriptor chains is gated by the
+        # contract harmonization (consolidation item 6d).
         # For now, specifying detab + strip-common in one call is safe but
         # strip-common will only see already-expanded depths from lines ending
         # in non-tab leading whitespace (the tab expansion from detab within

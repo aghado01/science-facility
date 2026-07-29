@@ -52,12 +52,13 @@
 # $ms.ToArray() (documented-valid after close) and emits the real ratio.
 # Golden comparison must treat compression_ratio as a known delta.
 #
-# ISS-load-safe: no #Requires, no Set-StrictMode, no outer function wrapper,
-# param contract positional (Item, Config).
+# ISS-load-safe: no #Requires, no Set-StrictMode, top-level param contract
+# (interior helpers permitted per colonel AST validation).
 #
 # Processor self-documentation (no runtime enforcement in this file):
+#     - Item contract:  descriptor (Content; open-bag copy-on-enrich)
+#     - Position class: enrich-only tail (after ALL content mutators)
 #     - Intended Colonel IssPreset floor: Core
-#     - Supported RunMode usage: ApplyAll, KeyMatch
 #     - Required IssModules: none
 #
 # Config: reserved; no keys honored yet. Candidates (unimplemented): metric

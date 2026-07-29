@@ -1,6 +1,6 @@
 # chain-executor.ps1
 # =============================================================================
-# ISS INFRASTRUCTURE — RunspaceScripts/chain-executor.ps1
+# ISS INFRASTRUCTURE — processors/chain-executor.ps1
 # =============================================================================
 # RUNSPACE BOUNDARY: Always executes inside a runspace, serial or parallel.
 #   - Serial branch:   single dedicated runspace opened from $this.Iss

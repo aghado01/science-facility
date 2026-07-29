@@ -134,6 +134,17 @@ copy-on-enrich (waits for admiral state design) · subaddressing.
 > contract in format-ws/rs-psstrip — filed). Remaining horizon: writers →
 > admiral → thread track (+ 6d before strip/ws joins code-track chains).
 
+> **2026-07-29: processor docstring audit complete** (user-requested).
+> v1 API remnants (SetIssPreset fluent, RunMode) purged fleet-wide incl.
+> rs-attributes' inherited copy; standardized self-doc block (Item contract /
+> Position class / IssPreset floor / IssModules) — item contracts now
+> declared per processor, making the 6d fault line visible in the docs;
+> tp-perplexity's dual-key input verified in code; chain-executor stale path
+> and rs-indent's resolved chaining contingency fixed; rs-csstrip side-effect
+> + evaluation pointers added. Docstring-only; 314 asserts green across the
+> touched suites (rs-indent harness note: its summary format is
+> "Results: N/N passed", not the house pattern — cosmetic).
+
 - **Phase 0 — doc alignment.** Done this pass (see audit above).
 - **Phase 1 — identity seam unit** (items 1–3; optional rider 6).
   Crawler stamps `RelativePath` + `LastWriteUtc` → ignore de-stamps →

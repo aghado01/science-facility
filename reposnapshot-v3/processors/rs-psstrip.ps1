@@ -15,24 +15,25 @@
     with zero frontmatter text predicates; FrontMatter joins the classified list as a
     named kind (reportable, run-splitting, never stripped).
 
-    ISS-load-safe:
-      - no #Requires directives
-      - no outer function wrapper
-      - param contract is positional (Item, Config)
+    ISS-load-safe: no #Requires, top-level param contract. Carries the
+    interior helper _SplitCommentPopulation — permitted per colonel's AST
+    validation (top-level param block is the contract; interior helpers are
+    legitimate).
 
-        Processor self-documentation only (no runtime enforcement in this file):
-            - Intended Colonel IssPreset floor: Core
-            - Supported RunMode usage: ApplyAll, KeyMatch
-            - Required IssModules: none
+    Processor self-documentation (no runtime enforcement in this file):
+        - Item contract:  tp-era Text envelope (unpacks Id/Path/Text and
+          REPLACES the bag with its own envelope). Incompatible with
+          code-track descriptor chains — consolidation item 6d. Chains fine
+          with other tp-era processors.
+        - Position class: content mutator
+        - Intended Colonel IssPreset floor: Core (uses pipeline cmdlets;
+          Bare is insufficient)
+        - Required IssModules: none
 
 .NOTES
-        Host guidance for Colonel fluent setup:
-            - Use SetIssPreset([IssPreset]::Core) or Full.
-            - Bare is not recommended for this processor because it uses
-                pipeline cmdlets such as ForEach-Object, Where-Object, and Sort-Object.
-            - Config shape:
-                    Operations: string[] (opt-in strip list; default strips all structural kinds, keeps inline)
-                    IncludeMeta: bool (default true)
+        Config shape:
+            Operations: string[] (opt-in strip list; default strips all structural kinds, keeps inline)
+            IncludeMeta: bool (default true)
 
 .COMMENT KINDS
     FrontMatter    #Requires directive, line-1 shebang — Derived kind     (NEVER strippable; no op exists)
