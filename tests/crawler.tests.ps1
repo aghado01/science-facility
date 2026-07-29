@@ -26,7 +26,7 @@ Set-StrictMode -Version Latest
 $crawlerPath = Join-Path $PSScriptRoot '..\reposnapshot-v3\rs.core.crawler.psm1'
 
 # ---------------------------------------------------------------------------
-# Minimal assertion framework (house pattern — see colonel.tests.ps1)
+# Minimal assertion framework (house pattern — see colonel-dispatch.tests.ps1)
 # ---------------------------------------------------------------------------
 $script:Passed = 0
 $script:Failed = 0

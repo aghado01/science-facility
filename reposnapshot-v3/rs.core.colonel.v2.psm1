@@ -374,7 +374,10 @@ function Resolve-WorkerBudget
 function Invoke-Plan
 {
     param(
-        [Parameter(Mandatory)] [object[]]       $Items,
+        # AllowEmptyCollection: Mandatory alone rejects @() at binding time,
+        # which made the intentional count-0 early-return below unreachable
+        # for direct callers (ingest short-circuits earlier, harnesses don't).
+        [Parameter(Mandatory)] [AllowEmptyCollection()] [object[]] $Items,
         [Parameter(Mandatory)] [pscustomobject] $Plan,
         [nullable[int]]                         $MaxWorkers = $null,
         [int]                                   $ReservedCores = 2,

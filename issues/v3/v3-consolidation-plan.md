@@ -238,3 +238,16 @@ copy-on-enrich (waits for admiral state design) · subaddressing.
   admiral brief: config-driven execution will not displace direct
   bound-param invocation. **All consolidation phases complete (0–4, 6b
   pending, 6c done) — Phase 5 (rs.core.assemble) is unblocked.**
+- 2026-07-28 — **Item 6b COMPLETE**: stale v1 harness `tests/colonel.tests.ps1`
+  retired (its ApplyAll/KeyMatch/ResultMode API no longer exists); dispatch
+  mechanics rebuilt against v2 as `tests/colonel-dispatch.tests.ps1` (20
+  asserts: compile validation, index-stable ordering, Config delivery,
+  serial≡parallel equivalence, _ChainHalt item-scoped skip, per-item error
+  capture returning pre-step state, empty-Items envelope). Latent find #5:
+  `Invoke-Plan -Items` Mandatory binding rejected `@()`, making the
+  intentional count-0 early-return dead code — fixed with
+  `[AllowEmptyCollection()]`. House-pattern comment pointers updated to the
+  new suite. Observed, not acted: `tests/colonel-bench.ps1` is also v1-era
+  stale (references removed processors/format.ps1) — refresh when perf work
+  matters. **Consolidation plan fully executed: Phases 0–4, 6b, 6c all
+  landed. Phase 5 (rs.core.assemble) is the sole next item.**

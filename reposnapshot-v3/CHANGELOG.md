@@ -153,6 +153,18 @@ Plan: `issues/v3/v3-consolidation-plan.md` · contracts: `issues/v3/rs.core.asse
   `processors/tests/rs-attributes.tests.ps1` (34).
 - `processors/tests/rs-psstrip.tests.ps1` extended 68 → 79 (FrontMatter
   partition semantics, section 13).
+- **Legacy v1 harness retired** (consolidation 6b): `tests/colonel.tests.ps1`
+  (targeted the removed rs.core.colonel.psm1 ApplyAll/KeyMatch/ResultMode
+  API) deleted; dispatch-mechanics coverage rebuilt against v2 as
+  `tests/colonel-dispatch.tests.ps1` (20 asserts: compile validation,
+  index-stable ordering, Config delivery, serial≡parallel, _ChainHalt
+  skip-for-item-only, per-item error capture with pre-step state, empty
+  Items). Fix along the way: `Invoke-Plan -Items` gains
+  `[AllowEmptyCollection()]` — Mandatory alone rejected `@()` at binding,
+  making the intentional count-0 early-return unreachable for direct
+  callers. `tests/colonel-bench.ps1` flagged stale (v1-era, references
+  removed processors/format.ps1) — refresh deferred until perf work
+  matters.
 - Known-stale: legacy `tests/colonel.tests.ps1` targets the retired
   `rs.core.colonel.psm1` (v1) path — refresh pending (consolidation plan).
 

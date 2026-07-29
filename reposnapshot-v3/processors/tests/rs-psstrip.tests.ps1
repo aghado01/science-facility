@@ -35,7 +35,7 @@ Set-StrictMode -Version Latest
 $processorPath = Join-Path $PSScriptRoot '..\rs-psstrip.ps1'
 
 # ---------------------------------------------------------------------------
-# Assertion framework (shared pattern with colonel.tests.ps1)
+# Assertion framework (shared pattern with colonel-dispatch.tests.ps1)
 # ---------------------------------------------------------------------------
 $script:Passed = 0
 $script:Failed = 0
