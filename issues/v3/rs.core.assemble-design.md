@@ -139,7 +139,7 @@ practice; `git_history` empty (never requested).
 | `root` | `RunContext.Root` — absolute; **whether it appears in payloads is a writer decision** (path doctrine: system paths are ingestion-side; flagged) |
 | `file_count` | assemble-computed `EntryCount` |
 | `ps_version`, `parallel_processing`, `max_parallelism` | Environment echo — RunContext + colonel's real `Budget` object (richer than LTS's booleans) |
-| `max_preview_chars` | ConfigEcho (preview processor config, when it exists) |
+| `max_preview_chars` | **vestige — retire** (belongs to the retired head/tail preview; see Open element model) |
 | `version` ("2.7.1") | `RunContext.GeneratorVersion` (v3 generator identity) |
 | `execution_time_ms` | admiral `Timing` (per-stage; colonel Timing folds in) |
 | `json_depth` | writer knob — contributed at emission, not IR |
@@ -159,7 +159,7 @@ practice; `git_history` empty (never requested).
 | `attributes.binary` | **retired from entries** — lean payload: binary/failed reads route to diagnostics sidecar |
 | `attributes.size_bytes` (on-disk) | **replaced** by `Attributes.SpanBytes` (byte-semantics correction) |
 | `attributes.char_count … line_stats` | rs-attributes (compression_ratio corrected — known golden delta) |
-| `preview` | deferred preview processor; `OmitEmptyPreview` behavior = writer-side property omission |
+| `preview` | **retired as a concept** (user, 2026-07-28): the head/tail first-N…last-M preview was perfunctory and is useless — `preview`, `max_preview_chars`, `include_file_previews`, `OmitEmptyPreview` are all vestiges of it. Future previews are a NEW element family — language/doc-type-specific triage signals (e.g. word clouds) — deliberately **not committed now**; the Open element model below is how they arrive later without assemble changes |
 | `content` | `Content` |
 
 ### Write-time mechanics — writer phase, NOT assemble
@@ -171,6 +171,51 @@ contract — offsets are inherently emission-coupled, as the transfer audit
 already noted); TOC assembly → `Build-TocTree` → template-engine `_tree.md`;
 `OmitEmptyPreview`. Assemble's obligation to all of this is only: ordered
 entries with Content + SpanBytes.
+
+## Open element model + config/code separation (user, 2026-07-28)
+
+Two requirements, one architecture:
+
+**Requirement 1 — fluid extensibility without present commitment.** Future
+enrichments (doc/language-specific previews, word clouds, whatever earns its
+place as a triage signal) must be incorporable later with zero assemble
+edits. Therefore:
+
+- **Entries are self-describing property bags**, not fixed schemas. The
+  guaranteed core is identity + Content (per track adapter); every other
+  element is whatever the chain's processors attached. Generic
+  copy-on-enrich already guarantees chain-side flow-through; assemble's
+  matching obligation is to **never project results down to a known column
+  set** — it collates what arrives.
+- **Assemble declares, writers consult.** The Header carries an `Elements`
+  declaration — per-element presence counts computed from the observed
+  entries (e.g. `Attributes: 20/20`, `WordCloud: 3/20`). This is the shard
+  format's configurability doctrine ("readers parse exactly what the header
+  declares — never a fixed column set") transposed to the IR: the payload's
+  self-description starts at assembly, and doubles as coverage diagnostics.
+  A new enrichment arrives as: new processor in the profile → its element
+  appears in entries → appears in declarations → writers render it (or not)
+  per their own config. No assemble change at any step.
+- Assemble has **no per-element code branches** — it does not know what
+  "Attributes" means. Element semantics live in processors (production) and
+  writers (rendering); assemble is neutral collation.
+
+**Requirement 2 — configuration separated from code, on the
+`rs.core.template` precedent.** The template engine's structure is the
+model: a neutral engine (`Expand-Template` — knows nothing about content) ·
+thin model builders (project runtime facts into flat models) · the variable
+parts as declarative data (the template string, the instruction sets).
+Assemble mirrors it:
+
+| template engine | assemble |
+|---|---|
+| `Expand-Template` (neutral) | collation core (neutral — property bags in, IR out) |
+| model builders (`New-*TocModel`) | track adapters (code: 1 item → 1 entry; thread: envelope → N exchange entries) |
+| template + instruction sets (data) | `AssemblyPolicy` + RunContext (declarative inputs); element declarations (derived data) |
+
+Changing what a payload carries or how it is ordered is a data change
+(policy/profile), never an assemble code change — same as changing the tree
+manifest's wording is a template edit, never an engine edit.
 
 ### IR schema draft (concrete)
 
@@ -187,9 +232,15 @@ IR = @{
     ProfileEcho       @{ Steps }   # compiled chain profile
     FilterDiagnostics @{ IngestMode; SentinelIgnoreFiles summary; skip counts }
     GitHistory        [object[]]   # optional
+    Elements          @{ <name> = @{ Count; Total } }   # observed-element
+                                  # declaration (open element model) —
+                                  # payload self-description + coverage
   }
   Entries  = ordered @( @{ RelativePath; NodePath; LastWriteUtc; Content;
-                           Attributes = @{ SpanBytes; CharCount; ... } } )
+                           <any processor-attached elements, e.g.
+                            Attributes = @{ SpanBytes; CharCount; ... }> } )
+             # OPEN property bags — guaranteed core + whatever the chain
+             # attached; assemble never projects to a fixed column set
   Skipped / Diagnostics             # lean-payload sidecar feed
 }
 ```
