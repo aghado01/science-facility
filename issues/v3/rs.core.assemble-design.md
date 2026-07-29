@@ -277,6 +277,28 @@ The principle transfers to assembly at three levels:
    content. Header/manifest block layout in emitted artifacts is the
    writer template's job; assemble guarantees block *content* only.
 
+## Ownership map — what lives in the implementation vs elsewhere (2026-07-28)
+
+Assemble is a **stage** (`rs.core.*` module convention), not a chain
+processor (`rs-*.ps1`): collation is cross-item, needing all results + run
+context no item carries. Conceptually it relates to the stage sequence as
+rs-attributes relates to the chain — a read-only tail that mutates nothing
+and adds no row-level information. Six sources of truth; only the first two
+live in the implementation:
+
+| # | truth | lives | notes |
+|---|---|---|---|
+| 1 | **Macro-structure** (Header/Entries/Skipped/Diagnostics exist; phase sequence; Header carries declarations) | assemble, as code | the LTS monolith's *implicit* schema (shape-of-literals residue) made an explicit, documented contract — data-independent convention, format-ws-style |
+| 2 | **Derived facts** (EntryCount, Elements declaration) | assemble, computed | the only information assemble creates; all observational |
+| 3 | **Row-level truth** (bag contents + accumulation, content form, row order) | the chain (manifest + Steps + ingested order) | assemble inherits, never re-decides |
+| 4 | **Run-level truth** (RunStamp, Root, GeneratorVersion, ConfigEcho, Timing) | RunContext — admiral/harness | assemble stamps, never computes |
+| 5 | **Policy** (routing default, adapter selection) | AssemblyPolicy (data) | two slots |
+| 6 | **View concerns** (artifact block layout, wire naming, arrangement knobs, idx) | writers/arrangement layer | absent from the IR |
+
+Two-tier schema statement: **macro-schema = convention-in-code (assemble
+owns); element-schema = open + derived (chain produces, assemble declares,
+per run)**. Nothing implicit remains.
+
 ### IR schema draft (concrete)
 
 ```
