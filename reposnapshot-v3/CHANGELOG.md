@@ -162,9 +162,22 @@ Plan: `issues/v3/v3-consolidation-plan.md` · contracts: `issues/v3/rs.core.asse
   Items). Fix along the way: `Invoke-Plan -Items` gains
   `[AllowEmptyCollection()]` — Mandatory alone rejected `@()` at binding,
   making the intentional count-0 early-return unreachable for direct
-  callers. `tests/colonel-bench.ps1` flagged stale (v1-era, references
-  removed processors/format.ps1) — refresh deferred until perf work
-  matters.
+  callers. `tests/colonel-bench.ps1` flagged stale (v1-era paths) — refresh
+  deferred until perf work matters.
+- **Broken-reference sweep (TODO item 1) executed.** Correction to the note
+  above: `format.ps1` was never *removed* — it never existed in this repo
+  (git: no commit ever touched it, nor `rs.core.colonel.psm1`). Both are
+  PowerShellCore-era names; the processor arrived renamed as
+  `format-ws.ps1` in the initial commit (it still self-identifies as
+  `Processor = 'format'`), and the v1-era harnesses carried the old paths
+  across the copy. Sweep findings: `processors/tests/format.tests.ps1`
+  retargeted `..\format.ps1` → `..\format-ws.ps1` — fully API-compatible,
+  **29/29 green on first run** (the suite was dormant since the copy-over);
+  `colonel-bench.ps1` remains the only file with stale live references
+  (v1 module path, format.ps1 default, hardcoded PowerShellCore corpus
+  path). All other hits are benign: numerics lineage docs, tp-perplexity's
+  `threadparser-perplexity` identity string, and `tests/test-cases/*` which
+  are stripping fixtures, not executed code.
 - Known-stale: legacy `tests/colonel.tests.ps1` targets the retired
   `rs.core.colonel.psm1` (v1) path — refresh pending (consolidation plan).
 

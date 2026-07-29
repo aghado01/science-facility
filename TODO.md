@@ -1,4 +1,4 @@
-Audit all imports and dot-sourcing paths for broken references due to coping code over from powershellcore
+Audit all imports and dot-sourcing paths for broken references due to coping code over from powershellcore (executed 2026-07-28 — sweep in CHANGELOG: format.tests.ps1 retargeted to format-ws.ps1 (29/29); colonel.tests.ps1 retired/replaced; colonel-bench.ps1 is the sole remaining v1-era file, deferred until perf work)
 
 write user convenience script to replace `_rs.scratch.ps1`
 

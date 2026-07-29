@@ -3,7 +3,9 @@ Set-StrictMode -Version Latest
 
 <#
 .SYNOPSIS
-    Unit tests for processors/format.ps1.
+    Unit tests for processors/format-ws.ps1.
+    (PowerShellCore-era name: format.ps1 / tp-generic — renamed in the v3
+    copy-over; the processor still self-identifies as Processor = 'format'.)
 
 .DESCRIPTION
     Tests the processor directly (dot-invoked, not via colonel).
@@ -29,7 +31,7 @@ Set-StrictMode -Version Latest
         & "$PSScriptRoot\format.tests.ps1"
 #>
 
-$processorPath = Join-Path $PSScriptRoot '..\format.ps1'
+$processorPath = Join-Path $PSScriptRoot '..\format-ws.ps1'
 
 # ---------------------------------------------------------------------------
 # Assertion framework
@@ -69,7 +71,7 @@ function Invoke-Processor ([object]$Item, [hashtable]$Config = @{})
 }
 
 Write-Host '============================================================' -ForegroundColor Yellow
-Write-Host ' tp-generic.tests.ps1' -ForegroundColor Yellow
+Write-Host ' format.tests.ps1 (format-ws)' -ForegroundColor Yellow
 Write-Host '============================================================' -ForegroundColor Yellow
 
 # ============================================================

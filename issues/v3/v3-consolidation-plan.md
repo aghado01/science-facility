@@ -251,3 +251,14 @@ copy-on-enrich (waits for admiral state design) · subaddressing.
   stale (references removed processors/format.ps1) — refresh when perf work
   matters. **Consolidation plan fully executed: Phases 0–4, 6b, 6c all
   landed. Phase 5 (rs.core.assemble) is the sole next item.**
+- 2026-07-28 — **TODO item 1 (broken-reference audit) executed**, prompted by
+  the user questioning "why was format.ps1 removed": it never was — never
+  existed here (git-verified); `format.ps1`/`rs.core.colonel.psm1` are
+  PowerShellCore-era names; the processor arrived renamed `format-ws.ps1` at
+  the initial commit (still stamps `Processor = 'format'`). Sweep across all
+  ps1/psm1: `format.tests.ps1` retargeted to format-ws — API-identical,
+  29/29 green on first run (dormant since copy-over); `colonel-bench.ps1` is
+  the sole remaining v1-era file (deferred); all other hits benign (lineage
+  docs, identity strings, stripping fixtures). CHANGELOG wording corrected
+  ("removed" → "never copied/renamed"). Battery now seven suites, 254
+  asserts.
