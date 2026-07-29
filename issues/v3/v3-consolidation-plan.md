@@ -251,6 +251,19 @@ copy-on-enrich (waits for admiral state design) · subaddressing.
   stale (references removed processors/format.ps1) — refresh when perf work
   matters. **Consolidation plan fully executed: Phases 0–4, 6b, 6c all
   landed. Phase 5 (rs.core.assemble) is the sole next item.**
+- 2026-07-28 — **Phase 5 scoping: LTS monolith inventory complete**
+  (assemble-design §"LTS monolith inventory & v3 disposition"). Full read of
+  Get-RepoSnapshot's assembly+serialization span + selfie ground truth (both
+  monoliths: header+files only; flag-gated members absent; preview omitted;
+  params/flags present; git_history never exercised). Key scoping facts:
+  LTS sorts entries at SERIALIZATION (v3: AssemblyPolicy owns order);
+  byte-offset TOC + tree.md are emission-coupled writer products
+  (Get-EntryByteOffsets against live stream positions); header params block
+  = ConfigEcho's ancestor; tree_diagram embeds a view in the store (removed
+  from IR). Concrete IR schema drafted; entry deltas locked (binary flag
+  retired to diagnostics, size_bytes → SpanBytes). New opens: flags
+  retire-or-keep, Header.Root emission posture. Assemble implementation can
+  begin against this inventory.
 - 2026-07-28 — **TODO item 1 (broken-reference audit) executed**, prompted by
   the user questioning "why was format.ps1 removed": it never was — never
   existed here (git-verified); `format.ps1`/`rs.core.colonel.psm1` are

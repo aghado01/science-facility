@@ -113,6 +113,91 @@ rs-attributes does.
   `{Id, Path, Exchanges[]}` → **N** exchange entries (row = ExchangeBlock;
   forces thread-corpus open decision 1: row schema / thread-metadata home).
 
+## LTS monolith inventory & v3 disposition (scoped 2026-07-28)
+
+Sources: `Get-RepoSnapshot` assembly+serialization (`RepoSnapshotLts.psm1`
+~1935–2165) and selfie ground truth (`.snapshot/reposnapshot_20260722_195015.json`,
+`_20260723_035834.json`). Selfies confirm: top level is `header` + `files`
+only — the flag-gated members (`DirectoryStructure`, `AsciiTree`, `paths`)
+default off and are absent; entries carry no `preview` property
+(`OmitEmptyPreview` + previews off); `params`/`flags` are present in
+practice; `git_history` empty (never requested).
+
+### Top level
+
+| LTS element | v3 disposition |
+|---|---|
+| `header` | `IR.Header` — assemble stamps RunContext + computes assembly stats |
+| `files` | `IR.Entries` — **note: LTS sorts by path at SERIALIZATION time**; v3 moves ordering into AssemblyPolicy (the IR is ordered; writers preserve) |
+| `DirectoryStructure` / `AsciiTree` / `paths` (flag-gated, default off) | writer-side view options, not IR members; tree-model construction (`Build-DirectoryTree`) is writer-phase, consuming IR entries + SpanBytes |
+
+### Header elements
+
+| LTS field | v3 owner / successor |
+|---|---|
+| `export_date` | `RunContext.RunStamp` [datetime] — writers format `'o'` |
+| `root` | `RunContext.Root` — absolute; **whether it appears in payloads is a writer decision** (path doctrine: system paths are ingestion-side; flagged) |
+| `file_count` | assemble-computed `EntryCount` |
+| `ps_version`, `parallel_processing`, `max_parallelism` | Environment echo — RunContext + colonel's real `Budget` object (richer than LTS's booleans) |
+| `max_preview_chars` | ConfigEcho (preview processor config, when it exists) |
+| `version` ("2.7.1") | `RunContext.GeneratorVersion` (v3 generator identity) |
+| `execution_time_ms` | admiral `Timing` (per-stage; colonel Timing folds in) |
+| `json_depth` | writer knob — contributed at emission, not IR |
+| `git_history` (optional git-log array) | optional RunContext enrichment (admiral-side external call); keep as optional block |
+| `tree_diagram` (compact tree STRING in header) | **removed from IR** — LTS embeds a view inside the store; v3 store/view separation makes it a writer emission option |
+| `filters{...}` | splits by provenance: pattern echo → ConfigEcho (IngestMode-world names); `derived_directory_exclusions` **retires** (no directory-first derivation in v3); `external_ignore_rule_count`/`git_ignored_count` → superseded by v3 ignore diagnostics (sentinel aggregate, skip counts, IngestMode) |
+| `processing{...}` (3 booleans) | `ProfileEcho` — the compiled chain Steps/ops (strictly richer) |
+| `params` (full invocation echo) | `RunContext.ConfigEcho` verbatim — the declarative run config object IS this, natively (invocation-surface duality noted in admiral Q6) |
+| `flags` (derived quick-scan booleans) | **candidate retire** — derived redundancy over ConfigEcho; keep only if reader-orientation value is shown (open) |
+
+### Entry elements
+
+| LTS field | v3 owner / successor |
+|---|---|
+| `path` | `RelativePath` (crawler identity) |
+| `last_write` (ISO string) | `LastWriteUtc` [datetime] (crawler); `'o'` formatting at write |
+| `attributes.binary` | **retired from entries** — lean payload: binary/failed reads route to diagnostics sidecar |
+| `attributes.size_bytes` (on-disk) | **replaced** by `Attributes.SpanBytes` (byte-semantics correction) |
+| `attributes.char_count … line_stats` | rs-attributes (compression_ratio corrected — known golden delta) |
+| `preview` | deferred preview processor; `OmitEmptyPreview` behavior = writer-side property omission |
+| `content` | `Content` |
+
+### Write-time mechanics — writer phase, NOT assemble
+
+LTS couples these to monolith serialization; they transfer with the writers:
+streaming envelope-then-entries emission; per-entry compact JSON;
+`Get-EntryByteOffsets` against live `FileStream` positions (the seek
+contract — offsets are inherently emission-coupled, as the transfer audit
+already noted); TOC assembly → `Build-TocTree` → template-engine `_tree.md`;
+`OmitEmptyPreview`. Assemble's obligation to all of this is only: ordered
+entries with Content + SpanBytes.
+
+### IR schema draft (concrete)
+
+```
+IR = @{
+  Header = @{
+    RunStamp          [datetime]   # RunContext
+    Root              [string]     # RunContext (payload emission = writer call)
+    GeneratorVersion  [string]     # RunContext
+    EntryCount        [int]        # assemble
+    Environment       @{ PSVersion; Budget }      # RunContext + colonel
+    Timing            @{ per-stage ms }           # admiral
+    ConfigEcho        [object]     # run config verbatim (params successor)
+    ProfileEcho       @{ Steps }   # compiled chain profile
+    FilterDiagnostics @{ IngestMode; SentinelIgnoreFiles summary; skip counts }
+    GitHistory        [object[]]   # optional
+  }
+  Entries  = ordered @( @{ RelativePath; NodePath; LastWriteUtc; Content;
+                           Attributes = @{ SpanBytes; CharCount; ... } } )
+  Skipped / Diagnostics             # lean-payload sidecar feed
+}
+```
+
+PascalCase in memory; snake_case wire naming is a writer rendering decision
+(narrows open decision 2: the in-memory convention is settled by doctrine,
+wire naming belongs to writers).
+
 ## Payload doctrine (user, 2026-07-28)
 
 **Byte semantics — three layers, never conflated:**
@@ -165,12 +250,18 @@ ratio via ToArray — correctness over parity).
    (above) answers the code track cheaply; whether assemble *also* consumes an
    admiral-retained discovery index (for data processors shouldn't carry) is
    admiral open question 4.
-2. Entry shape finalization: field naming (LTS snake_case JSON vs v3 PascalCase
-   objects), where NodePath lives on entries, whether ReadError entries carry
-   their reason into attributes.
+2. ~~Entry shape field naming~~ — narrowed 2026-07-28: PascalCase in-memory is
+   settled by doctrine; snake_case wire naming is a writer rendering decision.
+   Remaining: whether ReadError reasons surface anywhere beyond Diagnostics.
 3. Global idx semantics for the thread track (corpus-wide reading order across
    threads vs per-thread).
 4. Module name.
+5. Header `flags` block: retire (derived redundancy over ConfigEcho) vs keep
+   (reader quick-orientation value) — from the monolith inventory.
+6. `Header.Root` in emitted payloads: absolute system path vs path doctrine —
+   writer decision, but the default posture needs a call.
+7. `git_history`: keep as optional RunContext enrichment (admiral-side git
+   call) — assumed yes, unexercised in practice (empty in both selfies).
 
 ## Work log
 
