@@ -66,16 +66,19 @@ The unit that flows discovery → ingest → colonel → processors → results:
   store-vs-view applied to paths. Multi-root snapshots ("root directories")
   stay accommodated: paths remain root-anchored; a root identifier field can
   join the descriptor later without reshaping it.
-- **Ignore** prunes/filters descriptors; enriches nothing.
+- **Ignore** prunes/filters descriptors; enriches nothing. **Landed
+  2026-07-28**: de-stamped (RelativePath comes from crawler), vestigial
+  `RootPath` param removed, fail-fast guard on pre-contract input.
 - **Ingest passes descriptors — not paths — as colonel Items.** Finding
-  (2026-07-28): `Invoke-Ingest` currently flattens to AbsolutePath *strings*
-  while `file-read.ps1` expects the descriptor object — the code-track chain is
-  broken end-to-end at this seam (`$Item.AbsolutePath` on a string is $null →
-  every item _ChainHalts with ReadError). Colonel tests miss it because they
-  call Invoke-Plan directly with objects.
+  (2026-07-28): `Invoke-Ingest` flattened to AbsolutePath *strings* while
+  `file-read.ps1` expects the descriptor object — the code-track chain was
+  broken end-to-end at this seam. Colonel tests missed it because they call
+  Invoke-Plan directly with objects. **Fixed 2026-07-28**; proven by
+  `tests/pipeline.smoke.tests.ps1` (23 asserts, harness-as-admiral).
 - **Processors preserve identity fields on enrichment** (contract clause).
-  file-read's shallow-copy-then-Add-Member is the pattern: copy-on-enrich,
-  never mutate the input reference.
+  file-read now clones ALL input properties (copy-on-enrich, never mutating
+  the input reference) — descriptor evolution (e.g. a future multi-root id
+  field) flows through without touching processors.
 
 ### Assemble inputs (what the absent admiral provides)
 

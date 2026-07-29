@@ -140,20 +140,21 @@ mechanism to understand the call.
 
 ## Known residues to clean (identified 2026-07-28)
 
-1. **Ignore stamps `RelativePath` onto crawler file objects** during its join
-   (`rs.core.ignore.psm1` join docs) — and `file-read.ps1`'s contract expects
-   `$Item.RelativePath`/`NodePath`. Hidden dependency: a raw crawl cannot feed
-   ingest even with zero ignore rules. Enrichment belongs in the crawler's
-   output contract or an admiral-owned join step.
+1. ~~**Ignore stamps `RelativePath` onto crawler file objects**~~ — resolved
+   2026-07-28: crawler stamps the full ItemDescriptor identity at walk time;
+   ignore de-stamped (pure filter, fails fast on pre-contract input;
+   vestigial `RootPath` param removed).
 2. **Shared mutable objects across the boundary** — ignore mutates crawler's
    node/file objects in place (stamping, pruning). Contracts must state
    ownership transfer or copy-on-enrich.
 3. **Crawler mixes diagnostics into its graph result** — its own TODO already
    calls for a separate diagnostics feed.
-4. **Ingest→processor Items seam** (found 2026-07-28) — ingest flattens the
-   graph to AbsolutePath strings; processors expect descriptor objects. The
-   canonical example of an unowned contract at an admiral boundary; fix via the
-   ItemDescriptor contract (`rs.core.assemble-design.md`).
+4. ~~**Ingest→processor Items seam**~~ — resolved 2026-07-28: ingest
+   dispatches ItemDescriptor objects verbatim; file-read copy-on-enriches ALL
+   input properties (descriptor-evolution-proof); proven by
+   `tests/pipeline.smoke.tests.ps1` (harness-as-admiral, first end-to-end run
+   of the v3 pipeline — which also flushed out a latent Prune infinite loop
+   in the ignore engine, see consolidation plan work log).
 
 ## Build-against-absent-admiral rule (user, 2026-07-28)
 

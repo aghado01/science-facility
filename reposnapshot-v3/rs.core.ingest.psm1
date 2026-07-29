@@ -33,7 +33,10 @@ Import-Module "$PSScriptRoot/rs.core.internals.psm1" -Force
     Input contract (from Invoke-IgnoreFilter):
       FilteredFsGraph — [PSCustomObject] @{ Graph; Skipped } or plain
       Dictionary[NodePath, PSCustomObject] / flat array for back-compat.
-      Each node in Graph carries a Files array of @{ AbsolutePath; SizeBytes; RelativePath }.
+      Each node in Graph carries a Files array of ItemDescriptor identity
+      records (crawler-stamped): @{ AbsolutePath; RelativePath; NodePath;
+      SizeBytes; LastWriteUtc }. The descriptors are dispatched to colonel
+      as Items verbatim — processors receive them as $Item.
 
     Output contract (to admiral / caller):
       @{ Results; Skipped; Errors; Warnings; Budget; Timing }
@@ -63,7 +66,9 @@ function Invoke-Ingest
     .PARAMETER FilteredFsGraph
         Output from Invoke-IgnoreFilter — [PSCustomObject] @{ Graph; Skipped } or a plain
         Dictionary[NodePath, PSCustomObject] / flat array for back-compat.
-        Each node in Graph must carry a Files property: @{ AbsolutePath; SizeBytes; RelativePath }.
+        Each node in Graph must carry a Files property of ItemDescriptor identity
+        records: @{ AbsolutePath; RelativePath; NodePath; SizeBytes; LastWriteUtc }.
+        Descriptors are dispatched to colonel as Items verbatim.
         Skipped entries from ignore (FileTooLarge, ExtensionBlacklisted) are merged into
         ingest's Skipped output.
 
@@ -127,12 +132,16 @@ function Invoke-Ingest
         $graphNodes = if ($graphData -is [System.Collections.IDictionary])
         { $graphData.Values } else { $graphData }
 
-        # ── Collect eligible file paths ───────────────────────────────────────
-        $eligible = [List[string]]::new()
+        # ── Collect eligible file descriptors ────────────────────────────────
+        # Items are the full ItemDescriptor objects — NOT bare path strings.
+        # Processors receive the descriptor as $Item and copy-on-enrich; the
+        # node context is gone after this flattening, so the descriptor is the
+        # item's whole world (identity contract: rs.core.assemble-design.md).
+        $eligible = [List[object]]::new()
         foreach ($node in $graphNodes)
         {
             if (-not $node.Files) { continue }
-            foreach ($f in $node.Files) { $eligible.Add($f.AbsolutePath) }
+            foreach ($f in $node.Files) { $eligible.Add($f) }
         }
 
         if ($eligible.Count -eq 0)

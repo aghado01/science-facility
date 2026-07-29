@@ -122,3 +122,19 @@ copy-on-enrich (waits for admiral state design) · subaddressing.
   style, 27 asserts) green; real-repo smoke green (108 files, 0 skipped).
   Next: ignore de-stamp (item 3) → ingest descriptor hand-off (item 1) →
   pipeline smoke (item 8).
+- 2026-07-28 — **Phase 1 COMPLETE** (items 1, 3, 8 + a bonus bug). Ignore
+  de-stamped (pure filter; vestigial `RootPath` param removed — no external
+  callers; fail-fast guard on pre-contract graphs). Ingest dispatches
+  ItemDescriptor objects verbatim; file-read copy-on-enrich now clones ALL
+  input properties (descriptor-evolution-proof). New
+  `tests/pipeline.smoke.tests.ps1` (harness-as-admiral, 23 asserts) green —
+  **first-ever end-to-end run of the v3 pipeline** (crawl → ignore → ingest →
+  colonel → file-read). First contact flushed out a latent bug beyond the
+  seam: `IgnoreCompiler.GetParentPath` declared `[string]` coerced its
+  `return $null` to `''`, making Prune's ancestor walk an infinite loop —
+  fixed as `[object]` return with the null-contract documented (C# lineage
+  returns `string?`; the PS transliteration's typed return swallowed it).
+  Also normalized an accidental operator line-split in the empty-leaf prune
+  predicate. Phase 1 exit criterion met. Next: Phase 2 (ignore engine pass —
+  needs naming adjudication) or Phase 3 (colonel AST fix) — Phase 3 has no
+  open decisions and can proceed immediately.

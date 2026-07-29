@@ -1,13 +1,16 @@
 # file-read.ps1 — ISS-loadable processor body
 # Contract: param($Item, $Config)  →  enriched $Item
+# $Item is an ItemDescriptor (crawler-stamped identity: AbsolutePath,
+# RelativePath, NodePath, SizeBytes, LastWriteUtc — rs.core.assemble-design.md).
 param($Item, $Config)
 
-# shallow copy to avoid mutating reference object
-$result = [PSCustomObject]@{
-    AbsolutePath = $Item.AbsolutePath
-    SizeBytes    = $Item.SizeBytes
-    RelativePath = $Item.RelativePath
-    NodePath     = $Item.NodePath
+# Copy-on-enrich: clone ALL input properties so identity fields — including
+# ones added to the descriptor after this processor was written — survive the
+# chain without mutation of the caller's reference object.
+$result = [PSCustomObject]@{}
+foreach ($p in $Item.PSObject.Properties)
+{
+    $result | Add-Member -NotePropertyName $p.Name -NotePropertyValue $p.Value
 }
 
 
