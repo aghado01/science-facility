@@ -23,9 +23,13 @@ using namespace System.Text.RegularExpressions
          single regex broadcast to every node. Match = KEEP (inverted semantics).
       2. Full ignore pipeline — all five stages + directory branch pruning.
 
-    Input contract (from crawler Graph):
+    Input contract (from crawler Graph — ItemDescriptor identity stamped at
+    walk time by rs.core.crawler; this stage is a pure filter and enriches
+    nothing):
       @( @{ NodePath = 'src/lib/'; AbsolutePath = 'C:/repo/src/lib/'; NodeDepth = 2;
-             Files = @( @{ AbsolutePath = 'C:/repo/src/lib/.gitignore'; SizeBytes = 42 } ) } )
+             Files = @( @{ AbsolutePath = 'C:/repo/src/lib/.gitignore';
+                           RelativePath = 'src/lib/.gitignore'; NodePath = 'src/lib/';
+                           SizeBytes = 42; LastWriteUtc = [datetime] } ) } )
       IgnoreFiles is built internally from Files via sentinel scan (New-IgnoreCompiler).
       IgnorePatterns and ExecutiveOverrides are passed separately to New-IgnoreCompiler.
 
@@ -686,7 +690,12 @@ class IgnoreCompiler
     }
 
     # ── Parent path derivation ────────────────────────────────────────────
-    hidden [string] GetParentPath([string]$nodePath)
+    # Return type is [object], NOT [string]: the null-vs-'' distinction is
+    # load-bearing ('' = parent is root; $null = root has no parent — the
+    # ancestor-walk terminator in Walk/Prune). A [string] return coerces
+    # $null to '', which made Prune's ancestor loop infinite. The C# lineage
+    # (repo-audit GetParentPath) returns string? for exactly this reason.
+    hidden [object] GetParentPath([string]$nodePath)
     {
         if ([string]::IsNullOrEmpty($nodePath) -or $nodePath -eq '/') { return $null }
 
@@ -887,14 +896,14 @@ function Invoke-IgnoreFilter
 {
     <#
     .SYNOPSIS
-        Joins compiled ignore nodes with the crawler graph, stamps RelativePath,
-        pre-filters by size and extension, and applies ignore rules in a single pass.
+        Joins compiled ignore nodes with the crawler graph, pre-filters by size
+        and extension, and applies ignore rules in a single pass. Pure filter —
+        consumes the crawler-stamped identity contract, enriches nothing.
 
     .DESCRIPTION
         Two-phase operation:
           1. Join + metadata pre-filter — for each surviving compiled node, look up
-             the crawler's original node by NodePath, stamp RelativePath on every
-             FileEntry via [Path]::GetRelativePath(), and apply the optional
+             the crawler's original node by NodePath and apply the optional
              MaxSizeBytes ceiling and extension blacklist. Both filters operate
              on crawler metadata (SizeBytes, file extension) — no I/O required.
              Rejected files are collected in Skipped with a typed Reason.
@@ -903,8 +912,9 @@ function Invoke-IgnoreFilter
              inverted semantics (match = KEEP); normal pipeline ignores on
              Positives match unless rescued by Exceptions match.
 
-        RelativePath is computed once during the join and consumed by both
-        filtering and downstream serialization — zero redundant computation.
+        RelativePath arrives on every file entry from the crawler (ItemDescriptor
+        identity is stamped once, at walk time — see rs.core.crawler path
+        doctrine); this stage fails fast if fed a pre-contract graph.
         Both metadata filters (size, extension) belong here because this stage
         already holds per-file metadata and operates before any I/O — eliminating
         unwanted files at the earliest possible point, before ignore regex passes
@@ -916,11 +926,8 @@ function Invoke-IgnoreFilter
 
     .PARAMETER CrawlerGraph
         The full crawler graph dictionary (NodePath → node), or flat array.
-        Each node must carry a Files property (array of @{ AbsolutePath; SizeBytes }).
-
-    .PARAMETER RootPath
-        Absolute path to the snapshot root. Used to compute RelativePath.
-        Forward-slash normalized, trailing '/' expected.
+        Each node must carry a Files property of ItemDescriptor identity records:
+        @{ AbsolutePath; RelativePath; NodePath; SizeBytes; LastWriteUtc }.
 
     .PARAMETER MaxSizeBytes
         Optional size ceiling in bytes. Files with SizeBytes exceeding this value
@@ -938,7 +945,7 @@ function Invoke-IgnoreFilter
             Skipped = [PSCustomObject[]]  — @{ Path; Reason; ... } (FileTooLarge or ExtensionBlacklisted)
         }
         Graph values: @{ NodePath; AbsolutePath; NodeDepth; Files; CompiledIgnore; ExecutiveOverride }
-        Files arrays contain only surviving files with RelativePath stamped.
+        Files arrays contain only surviving files (identity fields untouched).
     #>
     [CmdletBinding()]
     param(
@@ -947,9 +954,6 @@ function Invoke-IgnoreFilter
 
         [Parameter(Mandatory)]
         [object]$CrawlerGraph,
-
-        [Parameter(Mandatory)]
-        [string]$RootPath,
 
         [long]$MaxSizeBytes = 0,
         [string[]]$ExtensionBlacklist = $null
@@ -986,12 +990,17 @@ function Invoke-IgnoreFilter
         $source = $graphLookup[$np]
         if ($null -eq $source) { continue }
 
-        # Stamp RelativePath and apply metadata pre-filters (size + extension) in one pass.
+        # Apply metadata pre-filters (size + extension) in one pass.
         # No I/O — all decisions are based on crawler-supplied metadata.
+        # Identity (incl. RelativePath) is crawler-stamped; fail fast on a
+        # pre-contract graph rather than silently matching against $null.
         $preFiltered = [List[object]]::new()
         foreach ($f in $source.Files)
         {
-            $f | Add-Member -NotePropertyName 'RelativePath' -NotePropertyValue ([Path]::GetRelativePath($RootPath, $f.AbsolutePath) -replace '\\', '/') -Force
+            if ($null -eq $f.PSObject.Properties['RelativePath'])
+            {
+                throw "Invoke-IgnoreFilter: file entry '$($f.AbsolutePath)' lacks RelativePath — input must be a crawler graph carrying the ItemDescriptor identity contract (rs.core.crawler stamps identity at walk time)."
+            }
             if ($MaxSizeBytes -gt 0 -and $f.SizeBytes -gt $MaxSizeBytes)
             {
                 $skipped.Add([PSCustomObject]@{ Path = $f.AbsolutePath; Reason = 'FileTooLarge'; SizeBytes = $f.SizeBytes })
@@ -1036,8 +1045,8 @@ function Invoke-IgnoreFilter
     $emptyLeaves = @($result.Keys).Where({
             $n = $result[$_]
             $n.Files.Count -eq 0 -and
-            -not @($result.Keys).Where({ $_
-                    -ne $n.NodePath -and $_.StartsWith($n.NodePath, [System.StringComparison]::Ordinal)
+            -not @($result.Keys).Where({
+                    $_ -ne $n.NodePath -and $_.StartsWith($n.NodePath, [System.StringComparison]::Ordinal)
                 }, 'First').Count
         })
     foreach ($leaf in $emptyLeaves) { $result.Remove($leaf) }
