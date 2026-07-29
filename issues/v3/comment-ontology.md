@@ -110,11 +110,26 @@ directives; PS `using` statements.
    - *Adaptation constraint*: rs-psstrip is a body-only ISS processor
      (Required IssModules: none) — the partition lives as an interior helper
      function, which colonel's validation permits as of the 2026-07-28 AST
-     fix (it was regex-rejected before). Alternative (open choice): promote
-     ast-primitives into an rs.core module loaded via IssModules — single
-     source of truth, but adds a module dependency to the processor contract
-     and crosses the PowerShellCore↔utils repo boundary. Interior helper is
-     the default until centralization is adjudicated.
+     fix (it was regex-rejected before). ~~Alternative (open choice): promote
+     ast-primitives into an rs.core module~~ — **adjudicated (user,
+     2026-07-28): self-contained interior helper.** PowerShell's prominence
+     in reposnapshot processing is contingent (much was authored in PS during
+     RS's development), and the general script-surface work doesn't matter
+     for much else right now; the partition is lifted as a special-case
+     handling of PowerShell's #Requires/comment-syntax collision, not as a
+     shared-library dependency.
+
+   **Language-expansion doctrine (user, 2026-07-28) — the AST/regex-fallback
+   hierarchy is a PowerShell-route fact, not a pipeline template.** As
+   language support expands, with limited processing needs per language and
+   no PS-style directive/comment collision, the default is **purpose-built
+   language-specific processors with thoughtful regex** (the pseudo-AST of
+   the ground rule above), escalating to implementing or importing a
+   language's native AST parser only when more sophisticated needs motivate
+   it. "It's a fluid enterprise" — per-language pragmatism, demand-driven,
+   consistent with the "whatever machinery fits" ground rule. Within
+   rs-psstrip the AST-primary/regex-fallback hierarchy stays firm; it is not
+   a mandate on future language processors.
    Behavioral nuance to test: a `#Requires` between comment lines currently bridges a
    CommentBlock run; exclusion splits the run. The Derived token's typed metadata is
    also the ready-made basis for canonical frontmatter re-emission (item 3).

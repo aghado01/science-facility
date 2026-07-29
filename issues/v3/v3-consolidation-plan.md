@@ -69,8 +69,12 @@ cross-referenced docs. Update phase status here as work lands.
    `$ast.ScriptRequirements` metadata; classification consumes the Native
    stream with zero text predicates. Implemented as an interior helper
    (permitted since the Phase 3 colonel AST fix — the sequence unblocked its
-   own next item); ast-primitives-as-rs.core-module centralization is an
-   open choice, deferred.
+   own next item); centralization **adjudicated 2026-07-28: self-contained**
+   (no rs.core ast-primitives module — PS prominence in RS processing is
+   contingent; script-surface generality not needed now; see the
+   comment-ontology language-expansion doctrine: thoughtful-regex processors
+   are the default for new languages, native AST on demand). 6c has zero
+   open decisions.
 
 ### C. Capability gaps (LTS parity, pre-assemble)
 
