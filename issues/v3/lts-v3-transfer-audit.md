@@ -21,15 +21,19 @@ Per capability, the decision is one of: **transfer to v3** · **LTS-only conveni
 | Whitespace/normalize | `Normalize-FileContent` stages 1–3 | `format-ws` (richer op vocabulary) | v3 forward; check stages 1–3 for behaviors format-ws lacks (NBSP→space, region markers → `region-markers` kind). |
 | Ignore/selection | `Get-GitIgnoredPaths`, `Read-GitIgnoreRules`, `Convert-GitIgnoreGlobToRegex`, `Build-GitIgnoreMatcher`, `Find-ExternalIgnoreRules`, `Normalize-PatternArray`, `New-PathInclusionTester` | `rs.core.ignore` (IgnoreCompiler: inheritance walk, exception domination, override bypass, regex cache) | v3 is the design forward. Audit LTS for semantics v3 lacks: external ignore rules, `SelectionOverrides` behavior. Redesign complete 2026-07-28: `issues/v3/ignore-selection-inversion.md` (Design v2 — mode dichotomy + override rescue + reconciliation); implementation pending. |
 | Binary/content filter | `Test-IsBinaryFile`, `Get-FilteredFiles`, `Filter-Content` (has the `-ExpandProperty Count -gt 0` bug) | `file-read` NUL guard; `Invoke-IgnoreFilter` size/ext blacklist | v3 forward; decide whether content-pattern filtering (`Filter-Content`) survives at all or retires. |
-| Preview/byte offsets | `New-ContentAndPreview`, `Get-EntryByteOffsets` (UTF-8 byte-accurate — the seek contract) | none yet | **Transfer to v3** with the sharding writer; the byte-offset contract is load-bearing for the MCP fetch API. |
+| Preview/byte offsets | `New-ContentAndPreview`, `Get-EntryByteOffsets` (UTF-8 byte-accurate — the seek contract) | none yet | Split 2026-07-28: **preview RETIRED as a concept** (perfunctory head/tail; future previews = new element family, uncommitted — assemble-design). **Byte offsets still transfer** with the writers; the seek contract remains load-bearing for the MCP fetch API. |
 | Tree/TOC rendering | `Build-DirectoryTree`, `Build-AsciiTree`, `Build-TreeDiagramCompact`, `Build-TocTree`, `Import-TocTemplateEngine` | `rs.core.template.ps1` (handlebars-lite, TOC models) | Overlapping; verify whether LTS already loads rs.core.template (Import-TocTemplateEngine) and consolidate renderers in v3. |
 | Sharding/output | `Shard-SnapshotFile`, `Get-ShardedRepoSnapshot` (.txt shards + `*_tree.md`, escaped rows) | `rs.core.sharding` (older 3.1 gen: JSONL/piped + toc + manifest) | **Format decision pending** (TODO: make json monolith optional; runstamped subdir convention). LTS's txt+tree format is the agent-proven one for the CODE track. Re-disposition 2026-07-22: the module's JSONL machinery is NOT vestigial — it's the substrate for the thread-corpus track (`issues/thread-corpus-container.md`); don't retire. |
-| Orchestration | inline sequential + serialized-function parallel runspaces | `rs.core.colonel.v2` (ISS plan compile, chain executor, worker budget) | Colonel forward; LTS path retires when v3 pipeline is whole. |
+| Orchestration | inline sequential + serialized-function parallel runspaces | `rs.core.colonel.v2` (ISS plan compile, chain executor, worker budget) | Colonel forward. 2026-07-29: v3 pipeline is whole through the IR (crawl → ignore → colonel chains → assemble, golden-validated); LTS retires for the code track when the writers land. |
 | Path utilities | `Resolve-RelPath`, `Norm-Path`, `Get-SnapshotPathParts`, `Get-SnapshotSiblingPath`, `Get-SnapshotArtifactPaths` | crawler `ToNodePath`; sharding `Get-NormalizedPath`, `ConvertTo-RelativePath` | Consolidate into one v3 home (internals?); currently three dialects of path normalization. |
 
 ## Known cross-cutting items
 
-- **Monolith → IR distillation (the LTS spine).** LTS still runs artifact-first: it
+- **✓ DELIVERED 2026-07-29 — Monolith → IR distillation (the LTS spine).**
+  `rs.core.assemble.psm1` produces the IR, golden-validated against a live
+  LTS monolith (tests/assemble.tests.ps1); optional monolith *emission* is
+  writer-phase. Original statement kept below for provenance.
+  LTS still runs artifact-first: it
   emits the JSON monolith beside the shard directories (see the two ~256–273KB `.json`
   files under `.snapshot/`), then shards from it — because the monolith was the spine
   of the original code. History: reposnapshot originally emitted a single large JSON

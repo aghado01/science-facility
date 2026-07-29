@@ -394,7 +394,7 @@ ratio via ToArray — correctness over parity).
    threads vs per-thread) — narrowed 2026-07-28: idx is assigned at the
    arrangement layer over the writer's final order, not in the IR; the
    semantic question remains but is emission-side.
-4. Module name.
+4. ~~Module name~~ — resolved: `rs.core.assemble.psm1` (implemented).
 5. Header `flags` block: retire (derived redundancy over ConfigEcho) vs keep
    (reader quick-orientation value) — from the monolith inventory.
 6. `Header.Root` in emitted payloads: absolute system path vs path doctrine —

@@ -1,6 +1,8 @@
 # Ignore ↔ Selection semantics inversion — repo-audit backport analysis
 
-**Status:** design analysis · **Filed:** 2026-07-28
+**Status:** ~~design analysis~~ **IMPLEMENTED 2026-07-28** (Design v3 —
+`-IngestMode` on `New-IgnoreCompiler`; `tests/ignore.tests.ps1` 27/27; see
+work log) · **Filed:** 2026-07-28
 **Sources compared:** `ThermoMapper/src/repo-audit/{IgnoreEngine.cs, GlobCompiler.cs}`
 (descendant) vs `reposnapshot-v3/rs.core.ignore.psm1` (ancestor).
 Extends TODO's "antisemantics" item; supersedes LTS `SelectionOverrides` and v3
@@ -315,14 +317,14 @@ semantics in Include mode, which would read a .gitignore as keep rules; its
 callers presumably dodge this by passing empty sentinel names. Population
 scoping dissolves the problem instead of patching it.
 
-Remaining open (smaller): mode/override/selection parameter naming (see Design
-v2 config surface); whether the Selection regime participates in per-node
-sentinel-style *local* selection sources (currently: no — user population is
-root-injected only, though the machinery would permit it); shim vs clean break
-for `ExecutiveOverrides`; whether the override rescue should also rescue
-directory branches from pruning (a gitignored dir containing an
-override-matched file must not be pruned before the rescue can apply —
-implementation detail to resolve during the refactor).
+Remaining open after implementation (2026-07-29 refresh): final naming
+(current names adopted provisionally, renameable); whether the Selection
+regime ever gains per-node sentinel-style *local* selection sources
+(currently: no — user population is root-injected only, though the machinery
+would permit it). Resolved en route: ~~shim vs clean break~~ (clean break,
+Design v3); ~~override × directory pruning~~ (superseded by Design v3 —
+overrides are ordinary root-level negations under canonical gitignore
+precedence; the directory-negation recipe is the documented, tested answer).
 
 ## Sequencing
 

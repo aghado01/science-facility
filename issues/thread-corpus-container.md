@@ -344,4 +344,14 @@ said what"), multi-flavor, modestly sized, personally meaningful — ideal dogfo
   = threads / mechanical tier / full-context replicas; raw store = saved
   configurations (re-measure new observables without re-simulation).
 
+- 2026-07-29 — Track prerequisites advanced by the code-track consolidation:
+  colonel accepts interior helpers (decision 6 resolved; tp-perplexity
+  compiles + dispatches — tests/colonel-validation.tests.ps1);
+  tp-perplexity's dual-key input (Text preferred, Content fallback)
+  verified in code and documented (envelope output by design); the assemble
+  stage exists with the Thread adapter contract specified (envelope →
+  N exchange entries; `-Adapter` ValidateSet gains 'Thread' when it lands);
+  global idx narrowed to the emission-side arrangement layer;
+  rs.core.sharding header now states this track's store re-disposition.
+
 _(append findings/results here)_

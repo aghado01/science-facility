@@ -1,6 +1,9 @@
 # v3 consolidation plan — shore up before breaking ground
 
-**Status:** active plan · **Filed:** 2026-07-28
+**Status:** EXECUTED through Phase 5 (2026-07-29) — inventory items carry
+✓ markers; remaining open: **6d** (tp-era contract harmonization), **item 6**
+(crawler diagnostics split, cosmetic), and the horizon (writers → admiral →
+thread track) · **Filed:** 2026-07-28
 
 **Doctrine (user):** shore up the gaps, bugs, and follow-ups in existing
 reposnapshot v3 code *before* breaking new ground. The next-stage work
@@ -28,7 +31,7 @@ cross-referenced docs. Update phase status here as work lands.
 
 ## Open-items inventory
 
-### A. Bugs / live breaks (fix first)
+### A. Bugs / live breaks (fix first) — ✓ ALL FIXED (Phases 1 + 3)
 
 1. **Ingest→processor Items seam** — `Invoke-Ingest` passes AbsolutePath
    strings; processors expect descriptor objects; every chained item
@@ -44,7 +47,7 @@ cross-referenced docs. Update phase status here as work lands.
 
 ### B. Refactors — design settled, code pending
 
-5. **Ignore/selection Design v2** (`ignore-selection-inversion.md`): mode-aware
+5. ✓ DONE (Phase 2) — **Ignore/selection Design v2→v3** (`ignore-selection-inversion.md`): mode-aware
    rim over neutral core; regime-stamped `CompiledState`; override rescue;
    prune policy; config surface with binding-aware coherence validation.
    *Blocked only by naming adjudication (user):* `-Mode` values;
@@ -52,7 +55,7 @@ cross-referenced docs. Update phase status here as work lands.
    clean break.
 6. **Crawler diagnostics split** (crawler's own TODO) — separate diagnostics
    feed from graph result. Optional rider on Phase 1; cosmetic.
-6b. **Legacy `tests/colonel.tests.ps1` is stale** — targets the retired
+6b. ✓ DONE — **Legacy `tests/colonel.tests.ps1` was stale** — targets the retired
    `rs.core.colonel.psm1` (v1) path; refresh against v2 or retire (small).
    Validation coverage now lives in `tests/colonel-validation.tests.ps1`.
 6d. **tp-era item-contract harmonization** (found 2026-07-29 during Phase 5):
@@ -64,7 +67,7 @@ cross-referenced docs. Update phase status here as work lands.
    adapter shim); decide the envelope's fate for the thread track. Blocks
    content-transform parity (strip/ws) in code-track chains and the
    comment-ontology "LTS dispatches to processors" end state.
-6c. **rs-psstrip FrontMatter kind promotion** (design clarified by user
+6c. ✓ DONE — **rs-psstrip FrontMatter kind promotion** (design clarified by user
    2026-07-28, comment-ontology item 1): replace the `^#requires\b`
    population-exclusion text guard in the AST route with classification to a
    named `FrontMatter` kind — lexical objects filtered by kind name; text
@@ -85,7 +88,7 @@ cross-referenced docs. Update phase status here as work lands.
    are the default for new languages, native AST on demand). 6c has zero
    open decisions.
 
-### C. Capability gaps (LTS parity, pre-assemble)
+### C. Capability gaps (LTS parity, pre-assemble) — ✓ ALL DONE (Phases 1 + 4)
 
 7. **rs-attributes.ps1** — tail-step processor: entry metrics + binary flag;
    compute-by-default, emission is a writer knob. (transfer-audit disposition.)
@@ -95,24 +98,34 @@ cross-referenced docs. Update phase status here as work lands.
 
 ### D. New ground (after consolidation)
 
-9. **rs.core.assemble** (name pending) per design seed: DispatchOutput +
+9. ✓ DONE (2026-07-29, golden green) — **rs.core.assemble** (name adopted) per design seed: DispatchOutput +
    RunContext + AssemblyPolicy → IR; code-track adapter; golden data-to-data
    validation vs a fresh LTS monolith JSON.
 
-### E. Explicitly deferred (unchanged)
+### E. Explicitly deferred
 
-Preview processor · Filter-Content retire decision · tree model home · all
-writers/serializers · admiral implementation (brief keeps accruing) · thread
-adapter + corpus first milestone · mutation-ownership doctrine beyond
-copy-on-enrich (waits for admiral state design) · subaddressing.
+~~Preview processor~~ (RETIRED as a concept 2026-07-28 — assemble-design;
+future previews are a new element family, uncommitted) · Filter-Content
+retire decision · tree model home · all writers/serializers · admiral
+implementation (brief keeps accruing) · thread adapter + corpus first
+milestone · mutation-ownership doctrine beyond copy-on-enrich (waits for
+admiral state design) · subaddressing.
 
-### F. Adjudications needed from the user (grouped for one sitting)
+### F. Adjudications needed from the user (refreshed 2026-07-29)
 
-- Ignore engine: mode/param naming; shim vs clean break (unblocks Phase 2).
-- Assemble: module name; entry field naming (LTS snake_case vs PascalCase);
-  thread-track global idx semantics (unblocks Phase 5 design finalization).
-- Admiral (no code blocked): hand-off form; carried-state shape; control-flow
-  classes/DAG representation.
+Resolved this cycle: ignore naming adopted provisionally + implemented
+(IngestMode/IgnorePatterns/IgnoreOverridePatterns/SelectionPatterns —
+renameable later); ExecutiveOverrides clean break; assemble module name
+adopted; entry naming narrowed (PascalCase in-memory; wire = writer);
+thread idx narrowed to the arrangement layer.
+
+Still yours, none blocking current code:
+- Header `flags` block: retire vs keep (assemble-design open decision 5).
+- `Header.Root` emission posture vs path doctrine (open decision 6).
+- 6d harmonization approach: dual-key enrich-in-place vs adapter shim, and
+  the tp-era envelope's fate for the thread track.
+- Admiral: hand-off form; carried-state shape; control-flow classes/DAG;
+  invocation-surface duality (Q1/4/5/6).
 
 ### Out of repo (courtesy)
 
@@ -153,6 +166,21 @@ copy-on-enrich (waits for admiral state design) · subaddressing.
 > and instruction-set synopses differentiated; internals cross-refs the
 > wrapper documentation requirement; crawler's phantom _build.json removed.
 > Docstring-only; 163 stage asserts green.
+
+> **2026-07-29: planning/project-doc sweep** (user-requested once-over).
+> Plan header + inventory now carry executed/✓ statuses; section E preview
+> entry marked retired-as-concept; section F adjudications refreshed
+> (resolved-this-cycle vs still-yours). Transfer audit: IR-distillation
+> bullet marked DELIVERED; preview/byte-offsets row split (preview retired,
+> offsets still transfer); orchestration row updated (pipeline whole through
+> IR). Inversion doc status → IMPLEMENTED; stale opens struck (clean break
+> done; prune×override superseded by Design v3). Assemble open decision 4
+> (module name) resolved. TODO.md annotations refreshed (antisemantics
+> implemented; monolith-optional delivered as IR; mvp gap = writer phase +
+> 6d; language doctrine pointer). Thread-corpus work log gains the
+> prerequisites-advanced entry. `reposnapshot-v3/TODO.md.md` double-extension
+> accident renamed → `TODO.md` (MCP/byte-offset tooling wishlist — content
+> overlaps `issues/mcp-surface.md`; fold-in left to the user).
 
 - **Phase 0 — doc alignment.** Done this pass (see audit above).
 - **Phase 1 — identity seam unit** (items 1–3; optional rider 6).

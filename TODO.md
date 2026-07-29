@@ -4,13 +4,13 @@ write user convenience script to replace `_rs.scratch.ps1`
 
 Update output filewriting convention to create a runstamped subdirectory with shards
 
-make intermediate json monolith optional (subsumed by IR distillation — `issues/v3/lts-v3-transfer-audit.md` + `issues/v3/rs.core.assemble-design.md`)
+make intermediate json monolith optional (DELIVERED 2026-07-29: the IR exists — `rs.core.assemble.psm1`, golden-validated; optional monolith *emission* is a writer-phase knob)
 
-update ignore-compiler's "antisemantics" to be like ThermoMapper's repo-audit's ignore compiler where positive vs negative semantics are toggled as opposed to having positive/selective semantics toggled by executive override (design complete 2026-07-28 — `issues/v3/ignore-selection-inversion.md` Design v2: mode dichotomy + override rescue, concept-only backport; implementation pending naming adjudication)
+update ignore-compiler's "antisemantics" to be like ThermoMapper's repo-audit's ignore compiler where positive vs negative semantics are toggled as opposed to having positive/selective semantics toggled by executive override (IMPLEMENTED 2026-07-28 as Design v3 — `-IngestMode` on `New-IgnoreCompiler`; `issues/v3/ignore-selection-inversion.md`; names provisional/renameable)
 
 finish v3 mvp e.g. fill in gaps between functionality of v3 and LTS
 
-- scoped and sequenced 2026-07-28: `issues/v3/v3-consolidation-plan.md`
+- consolidation plan EXECUTED through the IR (2026-07-29 — `issues/v3/v3-consolidation-plan.md`); remaining LTS-parity gap is the writer phase (rows/offsets/tree/shards) + item 6d
 
 need to design handling and conventions for configuration and documentation files
 
@@ -18,4 +18,4 @@ need to design handling and conventions for configuration and documentation file
 
 incorporate more general markdown processing and specialized segmentaton/sharding mode
 
-incorporate support for more languages, ideally with both regex "pseudoAST" and proper AST support
+incorporate support for more languages, ideally with both regex "pseudoAST" and proper AST support (doctrine recorded 2026-07-28 — comment-ontology language-expansion: thoughtful-regex processors are the default for new languages, native AST on demand; fluid, per-language)
