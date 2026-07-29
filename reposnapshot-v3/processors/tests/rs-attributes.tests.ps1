@@ -67,6 +67,7 @@ Enter-Section '1. Metric parity (LTS formulas)'
 # stddev 1, max 4; ≤100 chars → compression gate closed (1.0).
 $r = Invoke-Attr ([pscustomobject]@{ RelativePath = 'x.txt'; Content = "aaaa`nbb" })
 $a = $r.Attributes
+Assert-True ($a.SpanBytes -eq 7) 'SpanBytes = 7 (ASCII: bytes == chars)' "got $($a.SpanBytes)"
 Assert-True ($a.CharCount -eq 7) 'CharCount = 7' "got $($a.CharCount)"
 Assert-True ($a.WordCount -eq 2) 'WordCount = 2' "got $($a.WordCount)"
 Assert-True ($a.PunctuationCount -eq 0) 'PunctuationCount = 0'
@@ -84,6 +85,10 @@ Assert-True ($r2.Attributes.Entropy -eq 1.0) 'Entropy("aabb") = 1.0 exactly'
 
 $r3 = Invoke-Attr ([pscustomobject]@{ Content = 'a,b.' })
 Assert-True ($r3.Attributes.PunctuationCount -eq 2) 'PunctuationCount("a,b.") = 2'
+
+$rm = Invoke-Attr ([pscustomobject]@{ Content = 'héllo' })
+Assert-True ($rm.Attributes.CharCount -eq 5 -and $rm.Attributes.SpanBytes -eq 6) `
+    'multibyte: CharCount 5 vs SpanBytes 6 (UTF-8 é)' "chars=$($rm.Attributes.CharCount) span=$($rm.Attributes.SpanBytes)"
 
 $big = 'a' * 300
 $r4 = Invoke-Attr ([pscustomobject]@{ Content = $big })
@@ -104,7 +109,7 @@ Enter-Section '3. Empty content'
 $rz = Invoke-Attr ([pscustomobject]@{ RelativePath = 'empty.txt'; Content = '' })
 $az = $rz.Attributes
 Assert-True ($null -ne $az) 'empty string still gets Attributes'
-Assert-True ($az.CharCount -eq 0 -and $az.WordCount -eq 0 -and $az.Entropy -eq 0) 'zeroed count metrics'
+Assert-True ($az.SpanBytes -eq 0 -and $az.CharCount -eq 0 -and $az.WordCount -eq 0 -and $az.Entropy -eq 0) 'zeroed count metrics (incl. SpanBytes)'
 Assert-True ($az.CompressionRatio -eq 1.0 -and $az.WhitespaceRatio -eq 0) 'zeroed ratio metrics'
 Assert-True ($az.LineStats.Mean -eq 0 -and $az.LineStats.Max -eq 0) 'zeroed line stats'
 

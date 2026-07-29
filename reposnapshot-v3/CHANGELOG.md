@@ -62,15 +62,20 @@ Plan: `issues/v3/v3-consolidation-plan.md` · contracts: `issues/v3/rs.core.asse
 
 ### processors/rs-attributes.ps1 — new processor (entry metrics)
 
-- **Enrich-only tail step**: attaches `Attributes` (CharCount, WordCount,
-  PunctuationCount, UniqueChars, Entropy, CompressionRatio, WhitespaceRatio,
-  LineStats{Mean, Median, StdDev, Max}) computed over `$Item.Content` —
+- **Enrich-only tail step**: attaches `Attributes` (SpanBytes, CharCount,
+  WordCount, PunctuationCount, UniqueChars, Entropy, CompressionRatio,
+  WhitespaceRatio, LineStats{Mean, Median, StdDev, Max}) computed over
+  `$Item.Content` —
   language-agnostic **by position** (after ALL content mutators; profile
   invariant, processor is position-ignorant). No-Content items pass through
   unenriched (safe in arbitrary profiles incl. thread envelopes). Provenance
   split: `SizeBytes` = on-disk stat; `Attributes.*` = processed-content
-  stats. Formulas are LTS-parity (guards, 4-decimal rounding, upper-median
-  quirk) with one deliberate exception:
+  stats. **Byte semantics (user)**: attributes deal in `SpanBytes` — the
+  UTF-8 byte span of the processed content (payload-navigation semantics,
+  same family as tree byte spans) — never on-disk size; LTS's
+  `attributes.size_bytes` conflated the two. Formulas are LTS-parity
+  (guards, 4-decimal rounding, upper-median quirk) with one deliberate
+  exception:
 - **LTS `compression_ratio` defect found**: LTS reads `MemoryStream.Length`
   after `GZipStream.Close()` has disposed the stream → `$null` → coerced 0 —
   every >100-char LTS entry emits `compression_ratio = 0` (verified against

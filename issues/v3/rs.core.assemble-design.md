@@ -33,7 +33,7 @@ same contracts — the contracts are written for admiral, exercised by harnesses
 | Read, normalize, metrics per file | colonel processors (file-read, strip/ws, rs-attributes) |
 | Entry collation, ordering, global idx | **assemble** |
 | Header stamping | **assemble** (stamps RunContext handed to it — never computes it) |
-| Entry-vs-skipped policy | **assemble** (policy input; LTS precedent = keep binary/oversized as content-less entries, visible in tree/rows) |
+| Entry-vs-skipped policy | **assemble** (policy input; v3 default = lean payload: failed/empty reads route to the diagnostics sidecar, never rendered — see Payload doctrine below; supersedes LTS's content-less-entries behavior) |
 | Tree models, previews-at-emission, monolith JSON, rows/offsets/shards | writers (deferred — no serializers yet) |
 
 ## Contracts
@@ -91,7 +91,8 @@ The unit that flows discovery → ingest → colonel → processors → results:
   admiral's job.
 - `AssemblyPolicy` — ordering (path-sort for code track; semantic order for
   thread track; processors stay order-blind), entry-vs-skipped policy
-  (default: LTS precedent, keep content-less entries), track adapter selection.
+  (default: lean payload — failed/empty reads to the diagnostics sidecar,
+  see Payload doctrine), track adapter selection.
 
 ### Assemble output — the IR
 
@@ -111,6 +112,40 @@ rs-attributes does.
 - **Thread**: 1 item (thread file) → tp-perplexity envelope
   `{Id, Path, Exchanges[]}` → **N** exchange entries (row = ExchangeBlock;
   forces thread-corpus open decision 1: row schema / thread-metadata home).
+
+## Payload doctrine (user, 2026-07-28)
+
+**Byte semantics — three layers, never conflated:**
+
+1. `SizeBytes` (descriptor identity, crawler-stamped) — filesystem
+   bookkeeping. Sole legitimate consumer: pre-read eligibility (ignore
+   stage's size ceiling). Irrelevant to the reader; never emitted as a
+   payload attribute.
+2. `Attributes.SpanBytes` (rs-attributes) — UTF-8 byte span of the
+   **processed content**: the payload-description number, same semantics
+   family as the tree manifest's byte spans and the precise-span read
+   tooling (fetch pure content without container overhead). Also the
+   natural packing input. (LTS conflated layers 1–2: its
+   `attributes.size_bytes` was the on-disk size.) Naming reconciliation
+   queued for the writer phase: `Partition-Files` currently probes a
+   `ByteSpan` property — align to `SpanBytes`/`Attributes.SpanBytes` when
+   the writers land.
+3. Rendered row `length` field — writer-side span of the **encoded**
+   content, computed at render time (selective encoding changes it). Never
+   a pipeline value.
+
+**Lean payload, diagnostics sidecar:** reposnapshot payloads are as lean as
+possible, with options ensuring high visibility and auditability — through
+the *diagnostics channel*, not payload bloat. Failed ingests (ReadError,
+binary halt) and **empty reads are never rendered into the payload**; they
+route to a diagnostic sidecar/log artifact. The tree manifest is part of
+the payload, so routed items don't appear there either. Distinct reasons
+should survive to the sidecar (at minimum: read-failure kinds vs
+`EmptyFile` vs `EmptiedByProcessing` — a file stripped to nothing is a
+different fact than a file empty on disk). Sidecar form/naming not settled
+("a log file or diagnostic file"); the IR already carries the feed
+(`Skipped` + `Diagnostics`), so the sidecar is a writer concern layered on
+existing streams.
 
 ## Validation without serializers
 

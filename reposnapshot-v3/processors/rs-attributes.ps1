@@ -16,6 +16,15 @@
 #     forward in the pipeline — deliberately NOT the on-disk original.
 #     Provenance split on the descriptor: SizeBytes (crawler identity) is
 #     the on-disk stat; Attributes.* are processed-content stats.
+#   - BYTE SEMANTICS (user, 2026-07-28): attributes deal in SpanBytes — the
+#     UTF-8 byte span of the processed content — never SizeBytes. The
+#     enrichment describes payload contents for strategic reader navigation;
+#     on-disk size is filesystem bookkeeping, irrelevant to the reader (its
+#     one consumer is pre-read eligibility in the ignore stage). Same
+#     semantics family as the tree manifest's byte spans and the precise-
+#     span read tooling. (LTS conflated these: its attributes.size_bytes was
+#     the on-disk size.) The rendered row 'length' field is a third value —
+#     the writer-side span of the ENCODED content — computed at render time.
 #
 # NO-CONTENT CONTRACT: items without a usable Content property pass through
 # unchanged (no Attributes attached). Attributes are optional on IR entries
@@ -143,6 +152,7 @@ if ($content -and $charCount -gt 0)
 }
 
 $result | Add-Member -NotePropertyName Attributes -NotePropertyValue ([PSCustomObject]@{
+        SpanBytes        = if ($content) { [System.Text.Encoding]::UTF8.GetByteCount($content) } else { 0 }
         CharCount        = $charCount
         WordCount        = $wordCount
         PunctuationCount = $punctCount

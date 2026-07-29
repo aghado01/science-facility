@@ -190,3 +190,21 @@ copy-on-enrich (waits for admiral state design) · subaddressing.
   no-Content, empty content, copy-on-enrich, colonel dispatch incl. GZip
   resolution in worker runspaces) green. Next processor item: 6c
   (FrontMatter partition in rs-psstrip).
+- 2026-07-28 — **Payload doctrine recorded** (user; assemble-design §Payload
+  doctrine): (a) **byte semantics, three layers never conflated** —
+  SizeBytes (filesystem bookkeeping; sole consumer = pre-read eligibility) ·
+  Attributes.SpanBytes (UTF-8 span of processed content; reader-navigation +
+  packing semantics; landed in rs-attributes, 36 asserts green incl.
+  multibyte char-vs-byte case) · rendered row `length` (writer-side encoded
+  span). LTS conflated the first two (attributes.size_bytes = on-disk).
+  `Partition-Files` ByteSpan property naming reconciliation queued for the
+  writer phase. (b) **Lean payload, diagnostics sidecar** — failed ingests
+  AND empty reads are never rendered into the payload (tree included); they
+  route to a diagnostic sidecar/log with distinct reasons (read-failure
+  kinds vs EmptyFile vs EmptiedByProcessing). Supersedes the earlier
+  LTS-precedent default (content-less entries). Sidecar form/naming open;
+  IR Skipped/Diagnostics streams are the feed. Historical note (user): the
+  SizeBytes/SpanBytes distinction was a recurring assistant-confusion
+  hotspot during earlier dev — filesystem vs code-analysis vs
+  payload-enrichment concerns, PowerShell ingesting PowerShell; the
+  three-layer doctrine is the standing disambiguation.
