@@ -86,6 +86,42 @@ Plan: `issues/v3/v3-consolidation-plan.md` · contracts: `issues/v3/rs.core.asse
   no-Content/empty-content contracts, copy-on-enrich, colonel dispatch
   (GZipStream confirmed resolving in worker runspaces).
 
+### rs.core.assemble.psm1 — new stage: the IR (Phase 5)
+
+- **`Invoke-Assemble`**: collates the colonel dispatch envelope into the
+  in-memory IR — `{ Header; Entries; Skipped; Diagnostics }` — the LTS JSON
+  monolith's successor as data structure, never as artifact. Fixed phase
+  sequence `adapt → route → derive → stamp`; policy = two parameter slots
+  (`Adapter` 'Code'; `EntryRouting` 'LeanPayload' | 'KeepContentless').
+- **Open element model live**: entries are self-describing property bags
+  (guaranteed core RelativePath/NodePath/LastWriteUtc/Content + whatever the
+  chain attached); `Header.Elements` declares observed per-element presence
+  counts; assemble has zero per-element branches (proven: a fabricated
+  WordCloud element is declared without assemble knowing it exists).
+  Excluded from bags: AbsolutePath/SizeBytes (descriptor bookkeeping),
+  `_ChainHalt` (mechanics); ReadError routed under LeanPayload, retained
+  under KeepContentless. IR order = canonical ingested order.
+- **Lean-payload routing**: read failures (typed by ReadError kind), null
+  results, and empty content route to `Diagnostics.Routed` — `EmptyFile` vs
+  `EmptiedByProcessing` distinguished via SizeBytes.
+- **GOLDEN VALIDATION GREEN** (`tests/assemble.tests.ps1`, 53 asserts): full
+  v3 pipeline (crawl → ignore → ingest[file-read, rs-attributes] → assemble)
+  vs a live LTS `Get-RepoSnapshot` monolith over a normal-form fixture —
+  content byte-exact per path key, every attribute formula-equal
+  (char/word/entropy/whitespace/line-stats), `size_bytes == SpanBytes`,
+  `last_write` tick-equal, and the known deltas asserted as documented
+  (compression_ratio: LTS defect 0 vs v3 real; binary entries: LTS keeps
+  content-less, v3 routes). **LTS is no longer load-bearing for the
+  code-track data model.**
+- **Finding (filed, not fixed — consolidation item 6d)**: `format-ws.ps1`
+  and `rs-psstrip.ps1` speak the tp-era item contract (unpack `$Item.Text`,
+  REPLACE the bag with an Id/Path/Text envelope) — incompatible with the
+  descriptor contract (`Content`, copy-on-enrich): in a code-track chain
+  they would destroy identity fields. Golden fixture sidesteps by using
+  normal-form content (LTS `Normalize-FileContent` stages 1–3 = identity);
+  content-transform parity across normalization awaits the contract
+  harmonization.
+
 ### rs.core.ignore.psm1 — IngestMode: selection/ignore semantics inversion (Design v3)
 
 - **`-IngestMode 'Ignore'|'Selection'`** on `New-IgnoreCompiler` — explicit

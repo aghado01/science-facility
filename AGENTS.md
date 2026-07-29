@@ -47,7 +47,11 @@ Same construct can play different roles per relationship: `#Requires` is
   (Enter-Section / Assert-True), no Pester, `$PSScriptRoot`-relative.
 - `RepoSnapshotLts.psm1` — the legacy monolith. **Not authoritative**
   (see `issues/v3/lts-v3-transfer-audit.md`); it carries known defects
-  (zeroed metrics when content off; compression_ratio always 0).
+  (zeroed metrics when content off; compression_ratio always 0). As of
+  2026-07-29 it is no longer load-bearing for the code-track data model:
+  `rs.core.assemble.psm1` produces the IR, golden-validated against a live
+  LTS monolith (`tests/assemble.tests.ps1`). LTS remains the reference for
+  the writer phase (row format, byte offsets, tree manifest).
 
 ## Standing conventions
 

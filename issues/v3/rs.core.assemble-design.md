@@ -1,7 +1,9 @@
 # rs.core.assemble — IR assembly stage (design seed)
 
-**Status:** scoping · **Filed:** 2026-07-28 · **Name:** working title (user:
-"`rs.core.assemble` or somesuch")
+**Status:** ~~scoping~~ **IMPLEMENTED 2026-07-29** (`rs.core.assemble.psm1`,
+`tests/assemble.tests.ps1` 53/53 incl. golden validation vs live LTS
+monolith — battery 307/307) · **Filed:** 2026-07-28 · **Name:** working
+title adopted (user: "`rs.core.assemble` or somesuch")
 
 The next pipeline stage after colonel's chain execution: collates per-item
 processed results into the in-memory IR — the successor of the LTS JSON

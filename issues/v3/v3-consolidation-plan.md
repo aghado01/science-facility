@@ -55,6 +55,15 @@ cross-referenced docs. Update phase status here as work lands.
 6b. **Legacy `tests/colonel.tests.ps1` is stale** — targets the retired
    `rs.core.colonel.psm1` (v1) path; refresh against v2 or retire (small).
    Validation coverage now lives in `tests/colonel-validation.tests.ps1`.
+6d. **tp-era item-contract harmonization** (found 2026-07-29 during Phase 5):
+   `format-ws.ps1` and `rs-psstrip.ps1` unpack `$Item.Text` and REPLACE the
+   bag with an Id/Path/Text envelope — the tp-era contract, incompatible
+   with the descriptor contract (`Content`, open-bag copy-on-enrich). In a
+   code-track chain they would destroy identity fields. Harmonize: accept
+   Content|Text, enrich-in-place instead of envelope replacement (or an
+   adapter shim); decide the envelope's fate for the thread track. Blocks
+   content-transform parity (strip/ws) in code-track chains and the
+   comment-ontology "LTS dispatches to processors" end state.
 6c. **rs-psstrip FrontMatter kind promotion** (design clarified by user
    2026-07-28, comment-ontology item 1): replace the `^#requires\b`
    population-exclusion text guard in the AST route with classification to a
@@ -112,6 +121,18 @@ copy-on-enrich (waits for admiral state design) · subaddressing.
   session in that repo.
 
 ## Sequenced phases
+
+> **2026-07-29: Phase 5 LANDED** — `rs.core.assemble.psm1` implemented per
+> the design doc (fixed phases, open element model, lean-payload routing,
+> RunContext stamping with reserved-name guard). `tests/assemble.tests.ps1`
+> 53/53 including the **golden validation**: v3 IR vs live LTS monolith,
+> content byte-exact by path key, attributes formula-equal, known deltas
+> asserted as documented. Nine-suite battery **307/307**. LTS is no longer
+> load-bearing for the code-track data model. Two latent finds en route:
+> the if-expression single-element unroll (fixed in assemble's stream
+> pass-through) and item 6d (tp-era Text/envelope contract vs descriptor
+> contract in format-ws/rs-psstrip — filed). Remaining horizon: writers →
+> admiral → thread track (+ 6d before strip/ws joins code-track chains).
 
 - **Phase 0 — doc alignment.** Done this pass (see audit above).
 - **Phase 1 — identity seam unit** (items 1–3; optional rider 6).
