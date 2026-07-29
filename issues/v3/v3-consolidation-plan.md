@@ -173,3 +173,20 @@ copy-on-enrich (waits for admiral state design) · subaddressing.
   1+3. Item 6b filed (legacy colonel.tests.ps1 stale, targets v1 path).
   Remaining before Phase 5: Phase 2 (awaits final naming), Phase 4
   (rs-attributes — unblocked).
+- 2026-07-28 — **Phase 4 COMPLETE** (item 7): `processors/rs-attributes.ps1`
+  landed. Positional doctrine sharpened with user: language-agnostic BY
+  POSITION; the invariant is "after ALL content mutators" (not just
+  language-specific ones) — enrich-only step, placed in the read-only tail;
+  position is a profile invariant (admiral's), processor stays
+  position-ignorant. No-Content contract (pass through unenriched) makes it
+  safely appendable to arbitrary profiles incl. thread envelopes. Provenance
+  split documented: SizeBytes = on-disk; Attributes.* = processed content.
+  **LTS defect found during parity testing**: `compression_ratio` is 0 for
+  every >100-char LTS entry (MemoryStream.Length read after GZipStream.Close
+  disposal → null → 0; verified in the 20260723 selfie monolith).
+  rs-attributes computes the real ratio (`ToArray`) — recorded as a golden-
+  compare known delta in assemble-design. Tests:
+  `processors/tests/rs-attributes.tests.ps1` (34 asserts — parity formulas,
+  no-Content, empty content, copy-on-enrich, colonel dispatch incl. GZip
+  resolution in worker runspaces) green. Next processor item: 6c
+  (FrontMatter partition in rs-psstrip).

@@ -118,7 +118,11 @@ Golden data-to-data comparison: run the v3 pipeline over this repo → IR;
 regenerate an LTS monolith JSON with matching config → parse → compare entry
 sets (paths, content, attributes within rounding). No writers involved. Known
 deltas to tolerate: processor-vs-Normalize differences (rs-psstrip ahead of
-LTS), preview initially absent, LTS zeroed-metrics-when-content-off quirk.
+LTS), preview initially absent, LTS zeroed-metrics-when-content-off quirk,
+**compression_ratio** (LTS defect found 2026-07-28: reads disposed
+MemoryStream.Length after GZipStream.Close → null → 0; every >100-char LTS
+entry emits 0, verified in the 20260723 selfie. rs-attributes emits the real
+ratio via ToArray — correctness over parity).
 
 ## Open decisions
 

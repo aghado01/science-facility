@@ -60,11 +60,33 @@ Plan: `issues/v3/v3-consolidation-plan.md` · contracts: `issues/v3/rs.core.asse
   in dispatched runspaces. New `tests/colonel-validation.tests.ps1`
   (12 asserts). Unblocks the thread-corpus track (its open decision 6).
 
+### processors/rs-attributes.ps1 — new processor (entry metrics)
+
+- **Enrich-only tail step**: attaches `Attributes` (CharCount, WordCount,
+  PunctuationCount, UniqueChars, Entropy, CompressionRatio, WhitespaceRatio,
+  LineStats{Mean, Median, StdDev, Max}) computed over `$Item.Content` —
+  language-agnostic **by position** (after ALL content mutators; profile
+  invariant, processor is position-ignorant). No-Content items pass through
+  unenriched (safe in arbitrary profiles incl. thread envelopes). Provenance
+  split: `SizeBytes` = on-disk stat; `Attributes.*` = processed-content
+  stats. Formulas are LTS-parity (guards, 4-decimal rounding, upper-median
+  quirk) with one deliberate exception:
+- **LTS `compression_ratio` defect found**: LTS reads `MemoryStream.Length`
+  after `GZipStream.Close()` has disposed the stream → `$null` → coerced 0 —
+  every >100-char LTS entry emits `compression_ratio = 0` (verified against
+  the 20260723 selfie monolith). rs-attributes reads `$ms.ToArray().Length`
+  (valid after close) and emits the real ratio. Golden comparison treats
+  compression_ratio as a known delta.
+- `processors/tests/rs-attributes.tests.ps1` (34 asserts) — parity formulas,
+  no-Content/empty-content contracts, copy-on-enrich, colonel dispatch
+  (GZipStream confirmed resolving in worker runspaces).
+
 ### tests
 
 - New: `crawler.tests.ps1` (27) · `pipeline.smoke.tests.ps1` (23 —
   harness-as-admiral, first end-to-end v3 pipeline run) ·
-  `colonel-validation.tests.ps1` (12).
+  `colonel-validation.tests.ps1` (12) ·
+  `processors/tests/rs-attributes.tests.ps1` (34).
 - Known-stale: legacy `tests/colonel.tests.ps1` targets the retired
   `rs.core.colonel.psm1` (v1) path — refresh pending (consolidation plan).
 
