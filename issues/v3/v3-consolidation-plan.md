@@ -55,6 +55,13 @@ cross-referenced docs. Update phase status here as work lands.
 6b. **Legacy `tests/colonel.tests.ps1` is stale** — targets the retired
    `rs.core.colonel.psm1` (v1) path; refresh against v2 or retire (small).
    Validation coverage now lives in `tests/colonel-validation.tests.ps1`.
+6c. **rs-psstrip FrontMatter kind promotion** (design clarified by user
+   2026-07-28, comment-ontology item 1): replace the `^#requires\b`
+   population-exclusion text guard in the AST route with classification to a
+   named `FrontMatter` kind — lexical objects filtered by kind name; text
+   pattern recognition belongs to the regex fallback route only. Includes
+   explicit run-splitting semantics + clean-parse preservation asserts in
+   rs-psstrip.tests.ps1 (68/68 baseline).
 
 ### C. Capability gaps (LTS parity, pre-assemble)
 

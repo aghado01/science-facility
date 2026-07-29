@@ -63,6 +63,18 @@ directives; PS `using` statements.
    appears in the colonel-sanders design notes (old PowerShellCore location) only as a
    conceptual `rs-mdstrip` example — this item is its first real implementation.
 
+   **Design clarification (user, 2026-07-28) — promotion is the requirement,
+   not a nicety:** the AST route implements *lexical tokenization* — the
+   ontology kinds are named objects produced by classification, and all
+   downstream treatment (strip ops, reporting, future canonicalize) filters
+   **by kind name, never by raw text content**. Pattern recognition against
+   text is the *fallback route's* job (regex path, unparseable files only).
+   The current `^#requires\b` population-exclusion guard is therefore a
+   stopgap inside the tokenized route: frontmatter is invisible instead of
+   named. Target state: classify to `Kind = 'FrontMatter'` (partition, per
+   the psdig lineage below), default ops never strip it, run-folding treats
+   it as a run-splitter explicitly. Filed in the consolidation plan.
+
    **Canonical mechanism (source lineage):** `Invoke-Parser` in
    `C:\Users\azrie\PDenv\UserGithub\PowerShellCore\ps.core.psdig\script-surface\src\ast-primitives.psm1`
    protects `#Requires` by **partition, not guard**: post-parse, Comment tokens matching
