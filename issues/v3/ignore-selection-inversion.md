@@ -153,10 +153,18 @@ within the not-ignored universe") remains expressible later as an explicit
 third arrangement if a use case ever demands it — not a feature now, and
 never an implicit collision.
 
-Config surface (naming TBD): `Mode` · Ignore-mode: `SentinelFileNames`,
-`IgnoreDefaults`, `IgnorePatterns`, override globs (name TBD — candidates:
-`IgnoreOverrides`, `RescuePatterns`) · Selection-mode: selection globs (name
-TBD: `SelectionPatterns` vs unified `Patterns` interpreted per mode).
+Config surface — candidate naming (user, 2026-07-28; **not settled**):
+
+- `IngestMode` = `'Ignore'` | `'Selection'` — named from the run's
+  perspective (the mode IS run intent), so the engine param and admiral's
+  future declarative `mode:` field can share the name.
+- Ignore mode: `SentinelFileNames`, `IgnoreDefaults` (unchanged) ·
+  `IgnorePatterns` — user globs *added to* the discovered ignore-file
+  materials (the virtual root ignore file, as today) ·
+  `IgnoreOverridePatterns` — user globs that *countermand* ignore-file
+  materials (the rescue layer). The Ignore-prefix pairing makes the
+  added-to vs countermands relationship legible in the names.
+- Selection mode: `SelectionPatterns`.
 
 ## Reconciliation with the current implementation (2026-07-28)
 
@@ -311,3 +319,6 @@ in either order.
   proposed (`-Mode` + per-mode named params + binding-aware coherence
   validation); touch list drawn. Remaining before code: naming adjudication
   (Mode values, OverridePatterns/SelectionPatterns), shim vs clean break.
+- 2026-07-28 — Candidate naming recorded (user, not settled): `IngestMode`
+  ('Ignore'|'Selection'); `IgnorePatterns` (added to discovered materials) +
+  `IgnoreOverridePatterns` (countermands them); `SelectionPatterns`.

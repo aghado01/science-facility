@@ -1,5 +1,66 @@
 # Changelog — rs.core - formerly threadparser/v2-new
 
+## 2026-07-28 — Phase 1 consolidation: ItemDescriptor identity seam + colonel AST validation
+
+Plan: `issues/v3/v3-consolidation-plan.md` · contracts: `issues/v3/rs.core.assemble-design.md`.
+
+### rs.core.crawler.psm1 — identity stamped at walk time
+
+- **File entries carry the full ItemDescriptor identity contract**:
+  `@{ AbsolutePath; RelativePath; NodePath; SizeBytes; LastWriteUtc }`.
+  `RelativePath = NodePath + name` (root-anchored, forward slashes, zero extra
+  derivation); one `FileInfo` stat supplies size + last-write. Skip reason
+  `FileSizeReadFailed` → `FileStatReadFailed` (no consumers). Path doctrine
+  (absolute = ingestion reads only; relative = artifact-facing structural
+  identity) documented in the module docstring. New `tests/crawler.tests.ps1`
+  (27 asserts).
+
+### rs.core.ignore.psm1 — pure filter + Prune infinite-loop fix
+
+- **De-stamped**: `Invoke-IgnoreFilter` no longer computes RelativePath
+  (crawler owns identity); fails fast on pre-contract graphs. **Breaking**:
+  vestigial `-RootPath` parameter removed (no external callers existed).
+- **`GetParentPath` return type `[string]` → `[object]`** — the `[string]`
+  return coerced `return $null` to `''`, collapsing the null-vs-empty
+  distinction ('' = parent is root; $null = root has no parent) and making
+  Prune's ancestor walk an **infinite loop**. Surfaced on the pipeline's
+  first-ever end-to-end run; C# lineage (repo-audit) returns `string?` for
+  exactly this reason. Also normalized an accidental operator line-split in
+  the empty-leaf prune predicate.
+
+### rs.core.ingest.psm1 — descriptor dispatch (the seam fix)
+
+- **Colonel Items are ItemDescriptor objects, not AbsolutePath strings.** The
+  string flattening broke every chain end-to-end (`$Item.AbsolutePath` on a
+  string is `$null` → every item `_ChainHalt`ed with ReadError); colonel tests
+  missed it by calling `Invoke-Plan` directly with objects. Contract
+  docstrings updated.
+
+### processors/file-read.ps1 — generic copy-on-enrich
+
+- **Clones ALL input properties** (was: four hardcoded fields, silently
+  dropping `LastWriteUtc` and any future descriptor field). Copy-on-enrich
+  without mutating the caller's reference remains the processor contract.
+
+### rs.core.colonel.v2.psm1 — AST processor validation
+
+- **Body-only contract validated via AST, not regex**: requires a top-level
+  `param` block (chain-executor's positional-call contract); rejects
+  non-parsing scripts with the parser message; `#Requires` rejection
+  unchanged. **Interior helper functions are now legitimate** — the old regex
+  rejected any `function` keyword, blocking `tp-perplexity`
+  (`_MaskByRegex`); it now compiles into plans and helpers execute correctly
+  in dispatched runspaces. New `tests/colonel-validation.tests.ps1`
+  (12 asserts). Unblocks the thread-corpus track (its open decision 6).
+
+### tests
+
+- New: `crawler.tests.ps1` (27) · `pipeline.smoke.tests.ps1` (23 —
+  harness-as-admiral, first end-to-end v3 pipeline run) ·
+  `colonel-validation.tests.ps1` (12).
+- Known-stale: legacy `tests/colonel.tests.ps1` targets the retired
+  `rs.core.colonel.psm1` (v1) path — refresh pending (consolidation plan).
+
 ## 2026-07-23 — rs.core.numerics consolidation
 
 ### rs.core.numerics.psm1 — new module, replaces rs.core.hash / rs.core.lsh / rs.core.measures

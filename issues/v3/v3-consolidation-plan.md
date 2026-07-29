@@ -52,6 +52,9 @@ cross-referenced docs. Update phase status here as work lands.
    clean break.
 6. **Crawler diagnostics split** (crawler's own TODO) — separate diagnostics
    feed from graph result. Optional rider on Phase 1; cosmetic.
+6b. **Legacy `tests/colonel.tests.ps1` is stale** — targets the retired
+   `rs.core.colonel.psm1` (v1) path; refresh against v2 or retire (small).
+   Validation coverage now lives in `tests/colonel-validation.tests.ps1`.
 
 ### C. Capability gaps (LTS parity, pre-assemble)
 
@@ -138,3 +141,15 @@ copy-on-enrich (waits for admiral state design) · subaddressing.
   predicate. Phase 1 exit criterion met. Next: Phase 2 (ignore engine pass —
   needs naming adjudication) or Phase 3 (colonel AST fix) — Phase 3 has no
   open decisions and can proceed immediately.
+- 2026-07-28 — **Phase 3 COMPLETE** (item 4). Colonel processor validation is
+  AST-based: top-level param block required (chain-executor's positional
+  contract), parse errors surfaced, #Requires rejection unchanged; interior
+  helper functions legitimate. tp-perplexity compiles into a plan for the
+  first time — thread-corpus open decision 6 resolved. New
+  `tests/colonel-validation.tests.ps1` (12 asserts) green; smoke (23) +
+  crawler (27) re-run green. Ignore-engine candidate naming recorded (user,
+  not settled): `IngestMode` / `IgnorePatterns` + `IgnoreOverridePatterns` /
+  `SelectionPatterns`. CHANGELOG 2026-07-28 section added covering Phases
+  1+3. Item 6b filed (legacy colonel.tests.ps1 stale, targets v1 path).
+  Remaining before Phase 5: Phase 2 (awaits final naming), Phase 4
+  (rs-attributes — unblocked).

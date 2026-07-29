@@ -45,9 +45,25 @@ $script:ReadProcessorScript = {
             $result.Error = 'Processor scripts must not declare #Requires (ISS-load contract).'
             return $result
         }
-        if ($body -match '(?m)^\s*function\s+[A-Za-z0-9_-]+\b')
+
+        # AST validation of the body-only contract. The positive requirement
+        # is a TOP-LEVEL param block (chain-executor calls processors with two
+        # positional args); a file that is just an outer function wrapper has
+        # no top-level param block and fails here. Interior helper functions
+        # (e.g. tp-perplexity's _MaskByRegex) are legitimate — the previous
+        # regex rejected any 'function' keyword and blocked them.
+        $parseErrors = $null
+        $astTokens = $null
+        $ast = [System.Management.Automation.Language.Parser]::ParseInput(
+            $body, [ref]$astTokens, [ref]$parseErrors)
+        if ($parseErrors.Count -gt 0)
         {
-            $result.Error = 'Processor scripts must not contain an outer function declaration — body only, param($Item, $Config) contract.'
+            $result.Error = "Processor script does not parse: $($parseErrors[0].Message)"
+            return $result
+        }
+        if ($null -eq $ast.ParamBlock)
+        {
+            $result.Error = 'Processor scripts must declare a top-level param($Item, $Config) block — body only, no outer function wrapper.'
             return $result
         }
 

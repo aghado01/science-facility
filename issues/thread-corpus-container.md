@@ -279,8 +279,11 @@ synthesis — sampling without coverage accountability; fluency masks the gaps.
    flavor detection vs explicit configuration.
 5. Citation/footnote normalization across flavors.
 6. Orchestration: colonel fits naturally (items = thread files, chain = tp-{flavor});
-   requires the colonel helper-function contract fix (tp-perplexity currently rejected
-   for `function _MaskByRegex`).
+   ~~requires the colonel helper-function contract fix (tp-perplexity currently rejected
+   for `function _MaskByRegex`)~~. **Resolved 2026-07-28**: AST-based validation
+   (top-level param block required; interior helpers legitimate) — tp-perplexity
+   compiles into plans and helpers execute in dispatched runspaces
+   (`tests/colonel-validation.tests.ps1`).
 7. Naming (user's Latin-slug brand; MarkPig envelope relationship).
 8. Verdict/adjudication schema: verdict categories (survived / corrected / abandoned /
    deferred-open), span anchoring (quote vs byte offset), and where adjudication
