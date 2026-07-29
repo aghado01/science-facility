@@ -6,7 +6,13 @@ Import-Module "$PSScriptRoot/rs.core.internals.psm1" -Force
 
 <#
 .SYNOPSIS
-    RepoSnapshot V3 Ingest stage — colonel orchestration.
+    RepoSnapshot V3 ingest mediation — colonel plan compilation + dispatch.
+    PROTO-ADMIRAL TISSUE, not a pipeline stage (ingest reframe, 2026-07-28
+    — issues/v3/admiral-orchestration.md): "ingest" conceptually is the
+    file reading, which is colonel's FIRST PROCESSOR (file-read.ps1);
+    everything this module does — descriptor hand-off, plan compilation,
+    dispatch, envelope merge — is the implicit admiral's purview.
+    Disposition open: absorbed into admiral vs kept as a named submodule.
 
 .DESCRIPTION
     Sits between Invoke-IgnoreFilter and colonel (Compile-Plan / Invoke-Plan).

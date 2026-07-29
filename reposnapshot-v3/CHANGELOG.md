@@ -86,6 +86,34 @@ Plan: `issues/v3/v3-consolidation-plan.md` · contracts: `issues/v3/rs.core.asse
   no-Content/empty-content contracts, copy-on-enrich, colonel dispatch
   (GZipStream confirmed resolving in worker runspaces).
 
+### stage modules — docstring audit (accuracy/tightness/completeness)
+
+- **rs.core.colonel.v2**: gained its missing module-level docstring (the
+  two-call surface, AST validation summary, descriptor Items, _ChainHalt
+  ownership, RunspaceManager's role as convenience holder, and why
+  module-level #Requires is fine when processor-level is forbidden).
+- **rs.core.ingest**: synopsis now carries the ingest reframe — proto-admiral
+  tissue, not a stage; file reading is colonel's first processor;
+  disposition (absorb vs submodule) open.
+- **rs.core.ignore**: last stale ExecutiveOverride sentence in
+  Invoke-IgnoreFilter's description replaced with the TestPath/CompiledState
+  wording.
+- **rs.core.sharding**: header now states the 2026-07-22 re-disposition
+  (JSONL/Piped = thread-corpus store substrate, not vestigial) and the
+  queued writer-phase reconciliations (ByteSpan → SpanBytes naming;
+  IR-entries entry point for ConvertTo-ShardFiles).
+- **rs.core.template**: "integration target" note corrected — integration
+  COMPLETE (LTS consumes via Import-TocTemplateEngine); named as the
+  config/code-separation precedent; the two instruction-set functions'
+  copy-pasted synopses differentiated (monolith vs sharded/virtual-DB
+  guidance block).
+- **rs.core.internals**: documentation requirement for the reflection
+  mechanism cross-referenced (admiral brief) with the accepted implications
+  and current use site (ingest) named.
+- **rs.core.crawler**: phantom `_build.json` reference in the factory
+  example replaced with "diagnostics feed".
+- Docstring-only; six stage suites re-run green (163 asserts).
+
 ### processors/* — docstring audit & modernization (fleet-wide)
 
 - **v1 colonel API remnants purged**: "Host guidance for Colonel fluent

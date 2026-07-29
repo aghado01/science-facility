@@ -21,7 +21,14 @@
 
 .NOTES
     Standalone file — dot-source to use. Not a module.
-    Integration target: replace the two $sb.AppendLine(...) blocks in RepoSnapshot.psm1.
+    Integration COMPLETE: RepoSnapshotLts.psm1 consumes this engine via
+    Import-TocTemplateEngine (Get-RepoSnapshot and Shard-SnapshotFile render
+    tree manifests through Expand-TocTemplate).
+    Named precedent of the config/code-separation architecture (assemble
+    design): neutral engine · thin model builders · the variable parts
+    (template string, instruction sets) as declarative data. The template
+    fixes the artifact's SECTION SEQUENCE; models supply content —
+    operation-order doctrine, writer level.
 #>
 
 # ---------------------------------------------------------------------------
@@ -173,7 +180,7 @@ function Get-MonolithInstructionSet
 {
     <#
     .SYNOPSIS
-        Return the shared generic instruction set for TOC model builders.
+        Instruction set for MONOLITH (.json) snapshot tree manifests.
     #>
     [pscustomobject]@{
         Primary = @(
@@ -187,7 +194,9 @@ function Get-ShardedInstructionSet
 {
     <#
     .SYNOPSIS
-        Return the shared generic instruction set for TOC model builders.
+        Instruction set for SHARDED (.txt) snapshot tree manifests — the
+        virtual-DB guidance block (reader-directed guidance is a first-class
+        payload feature; shard-format-notes doctrine).
     #>
     [pscustomobject]@{
         Primary = @(

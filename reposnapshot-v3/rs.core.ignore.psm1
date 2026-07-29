@@ -929,10 +929,11 @@ function Invoke-IgnoreFilter
              MaxSizeBytes ceiling and extension blacklist. Both filters operate
              on crawler metadata (SizeBytes, file extension) — no I/O required.
              Rejected files are collected in Skipped with a typed Reason.
-          2. Filter — walk the joined dictionary, apply compiled regex state
-             to each file's RelativePath via .Where(). ExecutiveOverride has
-             inverted semantics (match = KEEP); normal pipeline ignores on
-             Positives match unless rescued by Exceptions match.
+          2. Filter — walk the joined dictionary and test each file's
+             RelativePath through [IgnoreCompiler]::TestPath — the single
+             semantic authority (dual truth table on the regime-stamped
+             CompiledState; exceptions undo the primary verdict in both
+             regimes).
 
         RelativePath arrives on every file entry from the crawler (ItemDescriptor
         identity is stamped once, at walk time — see rs.core.crawler path

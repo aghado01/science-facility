@@ -14,6 +14,13 @@
     Callers outside the pipeline (e.g. admiral scripts, test harnesses) may also
     import it freely.
 
+    The reflection-forwarding mechanism is deliberately unconventional
+    (signatures change in stage functions without rippling into wrappers) and
+    carries a documentation requirement: flag every use site (admiral brief,
+    issues/v3/admiral-orchestration.md — wrapper mechanism section, incl.
+    accepted implications: load-order dependency, collision policy,
+    best-effort DefaultValue reflection). Current use site: rs.core.ingest.
+
     Exports:
       New-ForwardedParamDictionary — reflect a command's params into a DynamicParam dict
       Split-ForwardedParams        — partition $PSBoundParameters by a command's declared params

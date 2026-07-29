@@ -250,7 +250,7 @@ function New-FileSystemCrawler
         $result  = (New-FileSystemCrawler -RootPath 'C:\repo').Invoke()
         # $result.Graph          → Dictionary[NodePath, node]; feed to ignore compiler
         # $result.RootPath       → absolute root
-        # $result.DirectoryCount / FileCount / SkippedCount / Skipped → diagnostics / _build.json
+        # $result.DirectoryCount / FileCount / SkippedCount / Skipped → diagnostics feed
     #>
     param(
         [Parameter(Mandatory)]

@@ -7,6 +7,35 @@ using namespace System.Threading
 #Requires -Version 7.6
 Set-StrictMode -Version Latest
 
+<#
+.SYNOPSIS
+    RepoSnapshot V3 colonel — processor-chain compilation and runspace-pool
+    dispatch (v2: plan-driven; the v1 fluent/RunMode API is retired).
+
+.DESCRIPTION
+    Two-call surface:
+      Compile-Plan — validates processor scripts (AST: top-level param block
+        required, interior helpers legitimate, #Requires rejected via
+        $ast.ScriptRequirements), registers bodies + chain-executor into an
+        InitialSessionState, returns a frozen Plan. All name resolution and
+        planning happens here; workers make zero decisions.
+      Invoke-Plan — slices Items round-robin across a worker budget
+        (Resolve-WorkerBudget), executes the chain per item via
+        Invoke-ChainExecutor inside a runspace pool, returns the
+        index-stable envelope @{ Results; Errors; Warnings; Budget; Timing }.
+
+    Items are ItemDescriptor objects dispatched verbatim (rs.core.ingest
+    forwards them); processors receive them as $Item and copy-on-enrich.
+    The _ChainHalt convention is owned by chain-executor (processors only
+    set the property). RunspaceManager/New-RunspaceManager is a thin
+    convenience holder over Invoke-Plan for repeated Run() calls with
+    sticky knobs — the pipeline path (ingest) calls Invoke-Plan directly.
+
+    Module-level #Requires is fine HERE — the prohibition is on processor
+    scripts, whose bodies become ISS-registered functions where the
+    directive is inert (see Compile-Plan validation).
+#>
+
 # =============================================================================
 # ENUMS
 # =============================================================================

@@ -8,7 +8,7 @@ Set-StrictMode -Version Latest
 
 <#
 .SYNOPSIS
-    Comprehensive file sharding module for RepoSnapshot
+    Comprehensive file sharding module for RepoSnapshot (v3.1 generation)
 
 .DESCRIPTION
     Self-contained sharding module with:
@@ -18,6 +18,20 @@ Set-StrictMode -Version Latest
     - Orchestration with proper directory conventions
     - Comprehensive utilities (manifest, validation, reverse lookup)
 
+.NOTES
+    DISPOSITION (re-dispositioned 2026-07-22 — issues/thread-corpus-container.md,
+    lts-v3-transfer-audit inventory): the JSONL/Piped machinery here is NOT
+    vestigial code-track output — it is the store substrate for the
+    thread-corpus track. Partition-Files additionally serves the LTS shard
+    path (grouping/packing) and is part of the emission-side ARRANGEMENT
+    layer (rs.core.assemble-design.md).
+
+    Writer-phase reconciliations queued:
+    - Partition-Files probes a `ByteSpan` property — align to the SpanBytes
+      byte-semantics naming (payload span, never on-disk size).
+    - ConvertTo-ShardFiles consumes the LTS monolith JSON artifact or a
+      Files array; the IR era adds an entries entry point (the monolith is
+      optional output, not pipeline input — "Monolith → IR distillation").
 #>
 
 # ═══════════════════════════════════════════════════════════════════════════

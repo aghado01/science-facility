@@ -145,6 +145,15 @@ copy-on-enrich (waits for admiral state design) · subaddressing.
 > touched suites (rs-indent harness note: its summary format is
 > "Results: N/N passed", not the house pattern — cosmetic).
 
+> **2026-07-29: stage-module docstring audit complete** (companion to the
+> processor pass): colonel gained its missing module header; ingest synopsis
+> carries the proto-admiral reframe; ignore's last ExecutiveOverride sentence
+> replaced; sharding header states its thread-corpus re-disposition + queued
+> writer-phase reconciliations; template's completed-integration note fixed
+> and instruction-set synopses differentiated; internals cross-refs the
+> wrapper documentation requirement; crawler's phantom _build.json removed.
+> Docstring-only; 163 stage asserts green.
+
 - **Phase 0 — doc alignment.** Done this pass (see audit above).
 - **Phase 1 — identity seam unit** (items 1–3; optional rider 6).
   Crawler stamps `RelativePath` + `LastWriteUtc` → ignore de-stamps →
