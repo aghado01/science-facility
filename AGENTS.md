@@ -57,3 +57,13 @@ Same construct can play different roles per relationship: `#Requires` is
   the payload. Store vs view: in-memory structures optimize for processing
   ergonomics; what the *payload* carries is a writer decision.
 - User prefers working directly on main with targeted commits per work item.
+
+## Maintaining this document (recursive note)
+
+This file is part of the deliverable-for-developer-agents surface and is
+subject to the same discipline it describes: **when your work changes a
+standing convention, retires or adds a module, moves a design doc, or
+alters the pipeline shape, update this file in the same commit.** Stale
+orientation is worse than none — it primes the next agent into the wrong
+basin with full confidence. Keep it short: orientation and pointers only;
+detail belongs in `issues/` design docs and module docstrings.
