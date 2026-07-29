@@ -374,6 +374,60 @@ $rHsMaskOff = Invoke-Processor -Item $hsTerm -Config @{ ForceRegexFallback = $tr
 Assert-True ($rHsMaskOff.Text -notmatch '# masked line') 'MaskHereStrings=$false: interior processed by fallback regexes'
 
 # ============================================================
+# 13. FrontMatter as named kind — partition semantics (6c)
+# ============================================================
+Enter-Section '13. FrontMatter partition: named kind, run-splitting, discriminators'
+
+# Clean-parse preservation under MAXIMAL ops — every strip op active, both
+# frontmatter species survive (no op can select the FrontMatter kind)
+$fmMax = @'
+#Requires -Version 7.0
+# doomed line comment
+$a = 1  # doomed inline
+'@
+$rFmMax = Invoke-Processor -Item $fmMax -Config @{ Operations = @('block-comments', 'doc-strings', 'comment-blocks', 'line-comments', 'inline-comments') }
+Assert-True ($rFmMax.Text -match '(?m)^#Requires -Version 7\.0') 'Maximal ops: #Requires survives'
+Assert-True ($rFmMax.Text -notmatch 'doomed') 'Maximal ops: every ordinary comment stripped'
+
+$rShMax = Invoke-Processor -Item ("#!/usr/bin/env pwsh`n# doomed`n`$x = 1  # doomed too`n") `
+    -Config @{ Operations = @('block-comments', 'doc-strings', 'comment-blocks', 'line-comments', 'inline-comments') }
+Assert-True ($rShMax.Text -match '^#!/usr/bin/env pwsh') 'Maximal ops: shebang survives'
+Assert-True ($rShMax.Text -notmatch 'doomed') 'Maximal ops: ordinary comments around shebang stripped'
+
+# Discriminators — the byte after # decides (space/no-space, word boundary)
+$rSpaced = Invoke-Processor -Item ("# Requires manual setup of the corpus`n`$x = 1`n")
+Assert-True ($rSpaced.Text -notmatch 'Requires manual setup') 'Spaced "# Requires ..." is an ordinary comment — stripped'
+
+$rNoWb = Invoke-Processor -Item ("#requiresXYZ not a directive`n`$x = 1`n")
+Assert-True ($rNoWb.Text -notmatch 'requiresXYZ') 'No word boundary: #requiresXYZ is an ordinary comment — stripped'
+
+$rShLate = Invoke-Processor -Item ("`$a = 1`n#!/not/line-one`n`$b = 2`n")
+Assert-True ($rShLate.Text -notmatch '/not/line-one') 'Shebang form off line 1 is an ordinary comment — stripped'
+
+# Run-splitting as STATED policy: sandwich with ONLY comment-blocks active.
+# FrontMatter splits the would-be run — each neighbor is a 1-line run,
+# classifies LineComment, and is therefore NOT stripped by comment-blocks.
+$fmSplit = @'
+# above
+#Requires -Version 7.0
+# below
+function Test-Split { $x = 1 }
+'@
+$rSplit = Invoke-Processor -Item $fmSplit -Config @{ Operations = @('comment-blocks') }
+Assert-True ($rSplit.Text -match '(?m)^#Requires -Version 7\.0') 'Run-split: #Requires survives'
+Assert-True ($rSplit.Text -match '# above' -and $rSplit.Text -match '# below') `
+    'Run-split: neighbors stay LineComment (1-line runs) — NOT folded into a CommentBlock across the directive'
+
+# Control: without the directive the same two lines ARE a CommentBlock run
+$rNoSplit = Invoke-Processor -Item ($fmSplit -replace '(?m)^#Requires -Version 7\.0\r?\n', '') -Config @{ Operations = @('comment-blocks') }
+Assert-True ($rNoSplit.Text -notmatch '# above' -and $rNoSplit.Text -notmatch '# below') `
+    'Control: adjacent pair without directive folds to CommentBlock and strips'
+
+# Envelope contract unchanged — no new fields from the partition
+$rEnv = Invoke-Processor -Item $fmMax
+Assert-True ($null -eq $rEnv.PSObject.Properties['FrontMatter']) 'Envelope shape unchanged (no FrontMatter field)'
+
+# ============================================================
 # Summary
 # ============================================================
 Write-Host ''

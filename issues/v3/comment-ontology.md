@@ -73,7 +73,18 @@ directives; PS `using` statements.
    stopgap inside the tokenized route: frontmatter is invisible instead of
    named. Target state: classify to `Kind = 'FrontMatter'` (partition, per
    the psdig lineage below), default ops never strip it, run-folding treats
-   it as a run-splitter explicitly. Filed in the consolidation plan.
+   it as a run-splitter explicitly. ~~Filed in the consolidation plan.~~
+   **LANDED 2026-07-28** (consolidation item 6c): `_SplitCommentPopulation`
+   interior helper partitions at the parse boundary (Native/Derived;
+   ScriptRequirements metadata spliced; Shebang SubKind); classification
+   consumes Native with zero frontmatter text predicates; FrontMatter joins
+   the classified list as a named kind with an explicit never-strip case in
+   the ops switch; run-folding flushes on any non-LineComment kind (stated
+   run-splitter policy). Suite 79/79 incl. new section 13 (maximal-ops
+   preservation, spaced/`\b`/off-line-1 discriminators, run-split vs
+   control, envelope stability). Derived metadata is computed and retained
+   internally — the ready-made input for item 3 (canonicalize-frontmatter)
+   when demand arrives.
 
    **Canonical mechanism (source lineage):** `Invoke-Parser` in
    `C:\Users\azrie\PDenv\UserGithub\PowerShellCore\ps.core.psdig\script-surface\src\ast-primitives.psm1`

@@ -208,3 +208,15 @@ copy-on-enrich (waits for admiral state design) · subaddressing.
   hotspot during earlier dev — filesystem vs code-analysis vs
   payload-enrichment concerns, PowerShell ingesting PowerShell; the
   three-layer doctrine is the standing disambiguation.
+- 2026-07-28 — **Item 6c COMPLETE**: rs-psstrip FrontMatter partition landed.
+  `_SplitCommentPopulation` interior helper (partition at parse boundary,
+  Native/Derived, ScriptRequirements metadata spliced, Shebang SubKind);
+  FrontMatter as named sixth kind with explicit never-strip ops case;
+  run-folding flushes on non-LineComment kinds (stated run-splitter policy);
+  zero frontmatter text predicates in classification; regex fallback route
+  untouched (its legitimate pattern-recognition job). Suite 68 → 79 green
+  (section 13: maximal-ops preservation, discriminators, run-split vs
+  control, envelope stability); colonel compile + runspace dispatch
+  verified. Ontology item 1 closed as fully implemented (was
+  minimal-guard). Processor-work block done: Phases 3, 4, 6c all landed —
+  remaining before Phase 5: Phase 2 only (awaits final naming).

@@ -86,12 +86,37 @@ Plan: `issues/v3/v3-consolidation-plan.md` · contracts: `issues/v3/rs.core.asse
   no-Content/empty-content contracts, copy-on-enrich, colonel dispatch
   (GZipStream confirmed resolving in worker runspaces).
 
+### processors/rs-psstrip.ps1 — FrontMatter partition (consolidation 6c)
+
+- **Partition at the parse boundary replaces the population-exclusion text
+  guard** (psdig ast-primitives lineage restored — the design intent lost in
+  the original transfer): new interior helper `_SplitCommentPopulation`
+  splits Comment tokens into Native (feeds classification) and Derived
+  FrontMatter objects (`SubKind` ScriptRequirements with spliced
+  `$ast.ScriptRequirements` metadata, or Shebang). The text match happens
+  exactly once, at the promotion site; classification carries zero
+  frontmatter text predicates.
+- **FrontMatter is a named sixth kind**: joins the classified list, has an
+  explicit never-strip case in the ops switch (no op can select it), and is
+  the first realization of the ontology's `frontmatter` kind. Run-folding
+  now flushes on any non-LineComment kind — FrontMatter splits LineComment
+  runs as stated policy, not as an emergent side effect.
+- Interior helper permitted by the colonel AST validation fix (same-day) —
+  compile + dispatch through a runspace pool verified. Envelope contract
+  unchanged. Suite grows 68 → **79 asserts** (new section 13: maximal-ops
+  preservation for both frontmatter species, spaced-`# Requires` /
+  no-word-boundary / off-line-1 discriminators, run-split vs control pair,
+  envelope stability). Regex fallback route untouched (pattern recognition
+  is its legitimate job — unparseable files only).
+
 ### tests
 
 - New: `crawler.tests.ps1` (27) · `pipeline.smoke.tests.ps1` (23 —
   harness-as-admiral, first end-to-end v3 pipeline run) ·
   `colonel-validation.tests.ps1` (12) ·
   `processors/tests/rs-attributes.tests.ps1` (34).
+- `processors/tests/rs-psstrip.tests.ps1` extended 68 → 79 (FrontMatter
+  partition semantics, section 13).
 - Known-stale: legacy `tests/colonel.tests.ps1` targets the retired
   `rs.core.colonel.psm1` (v1) path — refresh pending (consolidation plan).
 

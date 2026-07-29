@@ -4,7 +4,16 @@
 
 .DESCRIPTION
     Parses PowerShell source text with the native PS parser, classifies every comment
-    token into one of five kinds, and strips the requested kinds based on the Config.Operations array.
+    token into one of six kinds, and strips the requested kinds based on the Config.Operations array.
+    FrontMatter is a first-class named kind with no strip op — never strippable.
+
+    Partition at the parse boundary (psdig ast-primitives lineage): semantic
+    frontmatter (#Requires directives, line-1 shebang) lexes as Comment tokens but is
+    promoted OUT of the native comment population into Derived FrontMatter objects by
+    _SplitCommentPopulation — the ONE site where language knowledge converts a text
+    pattern into a type. Downstream classification consumes the native population
+    with zero frontmatter text predicates; FrontMatter joins the classified list as a
+    named kind (reportable, run-splitting, never stripped).
 
     ISS-load-safe:
       - no #Requires directives
@@ -26,11 +35,17 @@
                     IncludeMeta: bool (default true)
 
 .COMMENT KINDS
+    FrontMatter    #Requires directive, line-1 shebang — Derived kind     (NEVER strippable; no op exists)
     BlockComment   angle-hash block  outside function/class body          (default: strip)
     DocString      angle-hash block  inside  function/class body          (default: strip)
     CommentBlock   Contiguous run of 2+ standalone # lines               (default: strip)
     LineComment    Standalone # line (no code preceding it on that line) (default: strip)
     InlineComment  # token with preceding code on the same line          (default: keep)
+
+    FrontMatter splits LineComment runs as stated policy: a #Requires between
+    comment lines closes the run on each side (each neighbor classifies on its
+    own — a lone neighbor stays LineComment, never folds into a CommentBlock
+    across the directive).
 
 .PARAMETER Item
     String, hashtable, or pscustomobject.  Recognised keys: Text, Path, Id.
@@ -61,6 +76,64 @@ param(
     [Parameter(Position = 1)]
     [hashtable]$Config = @{}
 )
+
+# ---------------------------------------------------------------------------
+# Helper: partition the comment-token population at the parse boundary.
+# Pure function (closure rule: parameters only — runs inside ISS runspaces).
+# Interior helper functions are permitted by colonel's AST validation.
+#
+# This is the ONE site where language knowledge converts a text pattern into
+# a TYPE (psdig ast-primitives lineage — partition, not guard): #Requires
+# directives and a line-1 shebang lex as TokenKind.Comment with zero semantic
+# discrimination; here they are promoted into Derived FrontMatter objects
+# (Token retained; ScriptRequirements metadata spliced from the AST) and are
+# structurally absent from the Native population that classification
+# consumes. No downstream pass carries a frontmatter text predicate.
+# ---------------------------------------------------------------------------
+function _SplitCommentPopulation
+{
+    param(
+        [object[]]$Tokens,
+        [System.Management.Automation.Language.Ast]$Ast
+    )
+
+    $native = [System.Collections.Generic.List[object]]::new()
+    $derived = [System.Collections.Generic.List[pscustomobject]]::new()
+    $ck = [System.Management.Automation.Language.TokenKind]::Comment
+    $reqs = $Ast.ScriptRequirements
+
+    foreach ($tok in $Tokens)
+    {
+        if ($tok.Kind -ne $ck) { continue }
+
+        if ($tok.Text -match '^#requires\b')
+        {
+            $derived.Add([pscustomobject]@{
+                    Kind                = 'FrontMatter'
+                    SubKind             = 'ScriptRequirements'
+                    Token               = $tok
+                    RequiredPSVersion   = if ($null -ne $reqs) { $reqs.RequiredPSVersion } else { $null }
+                    RequiredModules     = if ($null -ne $reqs) { $reqs.RequiredModules } else { $null }
+                    RequiredPSEditions  = if ($null -ne $reqs) { $reqs.RequiredPSEditions } else { $null }
+                    IsElevationRequired = if ($null -ne $reqs) { [bool]$reqs.IsElevationRequired } else { $false }
+                })
+        }
+        elseif ($tok.Extent.StartOffset -eq 0 -and $tok.Text.StartsWith('#!'))
+        {
+            $derived.Add([pscustomobject]@{
+                    Kind    = 'FrontMatter'
+                    SubKind = 'Shebang'
+                    Token   = $tok
+                })
+        }
+        else
+        {
+            $native.Add($tok)
+        }
+    }
+
+    return [pscustomobject]@{ Native = $native; Derived = $derived }
+}
 
 # ---------------------------------------------------------------------------
 # Config resolution
@@ -316,24 +389,14 @@ else
     # ---------------------------------------------------------------------------
     # Select and first-pass classify comment tokens
     # ---------------------------------------------------------------------------
-    $commentKind = [System.Management.Automation.Language.TokenKind]::Comment
-
     # LF-split for inline detection; token line/col numbers are 1-indexed
     $lines = $text -split "`n"
 
-    # FrontMatter exclusion (protection by partition, per script-surface Invoke-Parser):
-    # #Requires directives and a line-1 shebang lex as Comment tokens but are semantic
-    # frontmatter — remove them from the comment population so no downstream
-    # classification can strip them.
-    $commentTokens = @(
-        $tokens |
-        Where-Object {
-            $_.Kind -eq $commentKind -and
-            $_.Text -notmatch '^#requires\b' -and
-            -not ($_.Extent.StartOffset -eq 0 -and $_.Text.StartsWith('#!'))
-        } |
-        Sort-Object { $_.Extent.StartOffset }
-    )
+    # Partition at the parse boundary (see _SplitCommentPopulation): the native
+    # population feeds classification; Derived FrontMatter joins the classified
+    # list below as a named kind. Zero frontmatter text predicates from here on.
+    $population = _SplitCommentPopulation -Tokens $tokens -Ast $ast
+    $commentTokens = @($population.Native | Sort-Object { $_.Extent.StartOffset })
 
     $classified = [System.Collections.Generic.List[pscustomobject]]::new()
 
@@ -380,8 +443,33 @@ else
     }
 
     # ---------------------------------------------------------------------------
+    # FrontMatter joins the classified list as a NAMED kind — reportable and
+    # filterable by name like every other kind, never selected by any strip op
+    # (see the ops switch below). Re-sorted so run-folding sees positional order.
+    # ---------------------------------------------------------------------------
+    if ($population.Derived.Count -gt 0)
+    {
+        foreach ($fm in $population.Derived)
+        {
+            $classified.Add([pscustomobject]@{
+                    Token    = $fm.Token
+                    Kind     = 'FrontMatter'
+                    StartOff = $fm.Token.Extent.StartOffset
+                    EndOff   = $fm.Token.Extent.EndOffset
+                    LineNum  = $fm.Token.Extent.StartLineNumber
+                })
+        }
+        $resorted = [System.Collections.Generic.List[pscustomobject]]::new()
+        foreach ($c in ($classified | Sort-Object StartOff)) { $resorted.Add($c) }
+        $classified = $resorted
+    }
+
+    # ---------------------------------------------------------------------------
     # Second pass: reclassify contiguous LineComment runs (2+ adjacent lines)
     # as CommentBlock.  Single isolated LineComment tokens are left as-is.
+    # Any non-LineComment kind — FrontMatter above all — closes an open run:
+    # stated run-splitter policy, not an emergent side effect (line-number
+    # adjacency would split anyway since these kinds occupy their own lines).
     # ---------------------------------------------------------------------------
     $runStartI = -1
     $runEndI = -1
@@ -389,7 +477,16 @@ else
     for ($i = 0; $i -lt $classified.Count; $i++)
     {
         $c = $classified[$i]
-        if ($c.Kind -ne 'LineComment') { continue }
+        if ($c.Kind -ne 'LineComment')
+        {
+            if ($runStartI -ne -1 -and $runEndI -gt $runStartI)
+            {
+                for ($j = $runStartI; $j -le $runEndI; $j++) { $classified[$j].Kind = 'CommentBlock' }
+            }
+            $runStartI = -1
+            $runEndI = -1
+            continue
+        }
 
         if ($runStartI -eq -1)
         {
@@ -425,6 +522,7 @@ else
     {
         $shouldStrip = switch ($c.Kind)
         {
+            'FrontMatter' { $false }   # ontology: never strip — no op can select it
             'BlockComment' { 'block-comments' -in $ops }
             'DocString' { 'doc-strings' -in $ops }
             'CommentBlock' { 'comment-blocks' -in $ops }
