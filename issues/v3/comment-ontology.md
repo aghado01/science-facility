@@ -85,6 +85,36 @@ directives; PS `using` statements.
    classification. rs-psstrip lifted the ParseInput core but not this layer. Minimal
    port: add the `^#requires\b` exclusion to the `$commentTokens` filter (strip spans
    only arise from classified comment tokens, so the bytes survive automatically).
+
+   **Architectural extraction (read 2026-07-28, for the faithful transfer):**
+   the design intent that was lost (user: "didn't make its way through the
+   transfer — I got more regex-like matching in the AST path despite myself"):
+   - *Layer contract*: ast-primitives is Layer 1 — parse + irreducible token
+     ops only; no judgment, no consumer-shaping. `Invoke-Parser` returns one
+     normalized shape `{Ast; Native{Tokens}; Derived{Tokens}; Errors; IsValid}`
+     with PSTypeName-stamped containers.
+   - *Partition at the parse boundary*: the text match (`^#Requires\b`)
+     happens **exactly once, at the promotion site** — the sanctioned place
+     where language knowledge converts a pattern into a TYPE. Downstream
+     consumes named streams / kind names; promoted tokens are structurally
+     absent from the Native stream, so no consumer ever needs a guard.
+   - *Derived tokens are enriched objects*, not exclusions: Kind string +
+     Text/Extent + spliced typed metadata (`RequiredPSVersion`,
+     `RequiredModules`, `RequiredAssemblies`, `RequiredPSEditions`,
+     `IsElevationRequired`) — the ready-made input for reporting and the
+     `canonicalize-frontmatter` op.
+   - *rs-psstrip's deviation*: the text predicate migrated from the parse
+     boundary into the consumer (classification filter) — mechanism kept,
+     layering lost. The 6c fix is to restore the boundary, not merely rename
+     the guard.
+   - *Adaptation constraint*: rs-psstrip is a body-only ISS processor
+     (Required IssModules: none) — the partition lives as an interior helper
+     function, which colonel's validation permits as of the 2026-07-28 AST
+     fix (it was regex-rejected before). Alternative (open choice): promote
+     ast-primitives into an rs.core module loaded via IssModules — single
+     source of truth, but adds a module dependency to the processor contract
+     and crosses the PowerShellCore↔utils repo boundary. Interior helper is
+     the default until centralization is adjudicated.
    Behavioral nuance to test: a `#Requires` between comment lines currently bridges a
    CommentBlock run; exclusion splits the run. The Derived token's typed metadata is
    also the ready-made basis for canonical frontmatter re-emission (item 3).

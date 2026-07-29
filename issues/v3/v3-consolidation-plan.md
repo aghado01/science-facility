@@ -62,6 +62,15 @@ cross-referenced docs. Update phase status here as work lands.
    pattern recognition belongs to the regex fallback route only. Includes
    explicit run-splitting semantics + clean-parse preservation asserts in
    rs-psstrip.tests.ps1 (68/68 baseline).
+   **Scope sharpened after reading the lineage source** (psdig
+   ast-primitives — extraction recorded in comment-ontology item 1): restore
+   the *partition at the parse boundary* — text match exactly once at the
+   promotion site producing Derived kind objects with spliced
+   `$ast.ScriptRequirements` metadata; classification consumes the Native
+   stream with zero text predicates. Implemented as an interior helper
+   (permitted since the Phase 3 colonel AST fix — the sequence unblocked its
+   own next item); ast-primitives-as-rs.core-module centralization is an
+   open choice, deferred.
 
 ### C. Capability gaps (LTS parity, pre-assemble)
 
