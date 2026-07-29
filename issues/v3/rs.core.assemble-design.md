@@ -217,6 +217,53 @@ Changing what a payload carries or how it is ordered is a data change
 (policy/profile), never an assemble code change — same as changing the tree
 manifest's wording is a template edit, never an engine edit.
 
+## Operation-order doctrine — config selects members, implementation owns sequence (user, 2026-07-28)
+
+Precedent: `format-ws.ps1`. `Operations` is a **set** the user subsets; the
+implementation applies the selected ops in a **fixed internal order** (`lf`
+first so downstream line ops see LF … `eof-eot` last) because application
+order is a correctness invariant of the domain, not a user preference. The
+config surface is structurally incapable of expressing a wrong order —
+membership is tested (`-in $ops`), never iterated as a program. Same
+coherence-by-construction family as cross-mode param inertness: invalid
+states are unrepresentable by the *shape* of the surface, not rejected by
+validation.
+
+The principle transfers to assembly at three levels:
+
+1. **Assemble's internal phases are a fixed sequence** — the direct
+   format-ws analog:
+
+   ```
+   adapt   (track adapter: results → entries; envelope → N exchange entries)
+   route   (entry vs diagnostics — lean-payload policy)
+   order   (AssemblyPolicy ordering op, applied over ingested arrival order)
+   derive  (Elements declaration + counts — after route so skips don't
+            pollute coverage; after order so positional derivations are final)
+   stamp   (Header last — EntryCount/Elements need final entries)
+   ```
+
+   `AssemblyPolicy` plugs *selections into slots* (WHICH adapter, WHICH
+   routing default, WHICH ordering op) and cannot reorder the slots. The
+   per-entry building convention is NOT reinvented: colonel's index-stable
+   Results arrive in ingested order, entries are built in that order, and
+   the `order` phase is an operation applied over it (code-track default
+   PathSort for LTS parity; thread track None — ingested order IS the
+   semantic order).
+
+2. **Chain-profile level (admiral, future)** — today, processor application
+   order is the profile author's responsibility, guided by documented
+   positional contracts (rs-attributes' tail rule). Candidate
+   (unadjudicated): profile compilation orders *selected* processors
+   mechanically from declared precedence classes (content mutators →
+   enrich-only tail), completing the transfer at the chain level — the
+   user picks the processor set, admiral's projection owns the sequence.
+
+3. **Writer level (already embodied)** — `rs.core.template`'s template
+   string fixes the artifact's section sequence; the model supplies
+   content. Header/manifest block layout in emitted artifacts is the
+   writer template's job; assemble guarantees block *content* only.
+
 ### IR schema draft (concrete)
 
 ```
