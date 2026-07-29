@@ -40,12 +40,6 @@ $script:ReadProcessorScript = {
 
         $body = Get-Content -LiteralPath $Path -Raw
 
-        if ($body -match '(?m)^\s*#\s*Requires\b')
-        {
-            $result.Error = 'Processor scripts must not declare #Requires (ISS-load contract).'
-            return $result
-        }
-
         # AST validation of the body-only contract. The positive requirement
         # is a TOP-LEVEL param block (chain-executor calls processors with two
         # positional args); a file that is just an outer function wrapper has
@@ -61,6 +55,18 @@ $script:ReadProcessorScript = {
             $result.Error = "Processor script does not parse: $($parseErrors[0].Message)"
             return $result
         }
+
+        # #Requires check via the parser's own authority, not a regex. The
+        # directive is only honored for script FILES — inert inside an
+        # ISS-registered function body, whose environment Build-Iss owns.
+        # (A regex over-matches: '# Requires manual setup' is an ordinary
+        # comment — PowerShell's directive syntax is exactly '#Requires'.)
+        if ($null -ne $ast.ScriptRequirements)
+        {
+            $result.Error = 'Processor scripts must not declare #Requires (ISS-load contract).'
+            return $result
+        }
+
         if ($null -eq $ast.ParamBlock)
         {
             $result.Error = 'Processor scripts must declare a top-level param($Item, $Config) block — body only, no outer function wrapper.'

@@ -87,6 +87,12 @@ param($Item, $Config
 return $Item
 '@
 
+Set-Content -Path (Join-Path $fixtureRoot 'english-comment.ps1') -Value @'
+param($Item, $Config)
+# Requires manual setup of the corpus directory before first use.
+return $Item
+'@
+
 Set-Content -Path (Join-Path $fixtureRoot 'helper.ps1') -Value @'
 param($Item, $Config)
 
@@ -134,6 +140,8 @@ try
     # -----------------------------------------------------------------------
     $rq = Invoke-CompileOnly @{ 'requires' = (Join-Path $fixtureRoot 'requires.ps1') } 'requires'
     Assert-True ((@($rq.Errors) -join ' ') -match 'Requires') '#Requires rejected with ISS-load message'
+    $ec = Invoke-CompileOnly @{ 'english-comment' = (Join-Path $fixtureRoot 'english-comment.ps1') } 'english-comment'
+    Assert-True (@($ec.Errors).Count -eq 0) 'ordinary "# Requires ..." English comment is NOT a directive — accepted' ($ec.Errors -join '; ')
 
     # -----------------------------------------------------------------------
     Enter-Section '5. Parse errors rejected'

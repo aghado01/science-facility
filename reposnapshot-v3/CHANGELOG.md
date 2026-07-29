@@ -46,8 +46,15 @@ Plan: `issues/v3/v3-consolidation-plan.md` · contracts: `issues/v3/rs.core.asse
 
 - **Body-only contract validated via AST, not regex**: requires a top-level
   `param` block (chain-executor's positional-call contract); rejects
-  non-parsing scripts with the parser message; `#Requires` rejection
-  unchanged. **Interior helper functions are now legitimate** — the old regex
+  non-parsing scripts with the parser message. **`#Requires` rejection now
+  also AST-authoritative** (`$ast.ScriptRequirements`) — the prior pre-parse
+  regex (`^\s*#\s*Requires\b`) over-matched ordinary English comments like
+  `# Requires manual setup` (PowerShell's directive syntax is exactly
+  `#Requires`, no space); the parser's own notion can't. Distinct from the
+  comment-ontology `frontmatter` concern: colonel rejects the directive in
+  processor bodies because it is inert in ISS-registered functions
+  (environment is Build-Iss's); rs-psstrip protects it in ingested scripts
+  because there it is live semantics sharing comment syntax. **Interior helper functions are now legitimate** — the old regex
   rejected any `function` keyword, blocking `tp-perplexity`
   (`_MaskByRegex`); it now compiles into plans and helpers execute correctly
   in dispatched runspaces. New `tests/colonel-validation.tests.ps1`
