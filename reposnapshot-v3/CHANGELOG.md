@@ -86,6 +86,42 @@ Plan: `issues/v3/v3-consolidation-plan.md` · contracts: `issues/v3/rs.core.asse
   no-Content/empty-content contracts, copy-on-enrich, colonel dispatch
   (GZipStream confirmed resolving in worker runspaces).
 
+### rs.core.ignore.psm1 — IngestMode: selection/ignore semantics inversion (Design v3)
+
+- **`-IngestMode 'Ignore'|'Selection'`** on `New-IgnoreCompiler` — explicit
+  run intent, never inferred from data shape. Both modes run the same
+  five-stage machinery; mode branches exist only at the rim (source assembly
+  + prune policy) and in `TestPath` (dual truth table). Cross-mode pattern
+  params are **inert, never errors** — ergonomic defaults survive mode
+  switching.
+- **Ignore mode**: `IgnorePatterns` + new `IgnoreOverridePatterns` are both
+  virtual root-level ignore sources merged with the sentinels — containers
+  for positives and negations *by convention* (override entries are
+  '!'-prefixed on merge; '!'-prefixed override entries double-negate to
+  positive ignores). Overrides follow **canonical gitignore precedence**: a
+  file-only negation cannot re-include content under an excluded directory —
+  negate the directory (`dist/`) to rescue a branch. No separate rescue
+  layer, no broadcast regex, no prune special-casing.
+- **Selection mode**: new `SelectionPatterns` compiles as the selection
+  regime (negations = un-keep exceptions); sentinels are not consulted (no
+  scan, no I/O); directory pruning skipped (the one guarded asymmetry);
+  empty/self-annihilated selection sets throw (fail-fast).
+- **State shape**: two slots (`CompiledIgnore`/`ExecutiveOverride`) collapse
+  to one regime-stamped `CompiledState = @{ Regime; Positives; Exceptions }`;
+  `TestPath` is the single semantic authority (exceptions mean *undo the
+  primary verdict* in both regimes); `Invoke-IgnoreFilter`'s inline
+  semantics duplication collapses to a TestPath call.
+- **Breaking**: `ExecutiveOverrides` removed (clean break — bypass behavior
+  maps to Selection mode; targeted rescues map to overrides under gitignore
+  rules); compiled-node/joined-node output shape changed (`CompiledState`).
+- **Latent bug fixed**: empty-leaf prune leaked `Dictionary.Remove`'s bool
+  return into the pipeline, corrupting `Invoke-IgnoreFilter`'s return value
+  into an array — masked until Selection mode made empty leaves common.
+- New `tests/ignore.tests.ps1` (27 asserts): virtual-file semantics,
+  override rescue/double-negation/gitignore-constraint + directory-negation
+  recipe, cross-mode inertness, pure selection, un-keep negations,
+  fail-fast, output contract. Full six-suite battery green (205 asserts).
+
 ### processors/rs-psstrip.ps1 — FrontMatter partition (consolidation 6c)
 
 - **Partition at the parse boundary replaces the population-exclusion text

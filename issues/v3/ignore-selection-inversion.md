@@ -153,7 +153,48 @@ within the not-ignored universe") remains expressible later as an explicit
 third arrangement if a use case ever demands it — not a feature now, and
 never an implicit collision.
 
-Config surface — candidate naming (user, 2026-07-28; **not settled**):
+## Design v3 — override collapses into negation merge (user, 2026-07-28; FINAL for implementation)
+
+Names adopted provisionally (`IngestMode` / `IgnorePatterns` /
+`IgnoreOverridePatterns` / `SelectionPatterns`) — renameable later; the
+**semantics of the control surface** are what is settled:
+
+- **Cross-mode params are inert, never errors** (supersedes the v2
+  binding-aware coherence throws): in Selection mode, IgnorePatterns and
+  IgnoreOverridePatterns are simply not consulted; in Ignore mode,
+  SelectionPatterns is not consulted. Rationale: ergonomic defaults and mode
+  switching without emptying the other mode's parameter sets.
+- **The override is not a separate device** (supersedes v2's rescue layer
+  `¬Ignores ∨ Override.Matches`): `IgnorePatterns` behaves as a virtual
+  root-level ignore file merged with the sentinels; `IgnoreOverridePatterns`
+  behaves as *negations in that same virtual file*, merged identically.
+  Negations inside IgnorePatterns are valid (it IS a virtual ignore file);
+  negations inside IgnoreOverridePatterns (double negation → positive
+  ignore) are silly but admissible — the engine handles them. **Both params
+  are treated identically as virtual global ignore sources — containers for
+  additional ignores and negations by convention** — because the engine is
+  already all about merging, inheritance, negation, and precedence. No
+  broadcast regex, no filter-time composition, no prune special-casing:
+  `CompiledState = { Regime; Positives; Exceptions }` and the five stages do
+  the rest.
+- **Inherited gitignore semantic (flagged)**: as root-level negations,
+  overrides follow canonical gitignore precedence — a file-only negation
+  cannot re-include content under an excluded directory (the branch prunes
+  first; git has the identical rule). Rescuing inside an ignored branch
+  requires negating the directory (override `dist/` rescues the branch and
+  its contents). **Migration note**: the retired ExecutiveOverride bypass
+  punched through everything; pure-selection use maps to Selection mode,
+  targeted rescues map to overrides with gitignore rules.
+- **ExecutiveOverrides: clean break** (no shim — pre-release module, no
+  external callers; the bypass behavior ≈ Selection mode).
+- Fail-fast retained *within* mode: Selection mode with an
+  empty/self-annihilated SelectionPatterns set throws.
+- **Unresolved tension (recorded, admiral brief)**: config-driven execution
+  will come in time but will not displace direct bound-param invocations —
+  the duality of the two invocation surfaces is a standing design question.
+
+Config surface — candidate naming (user, 2026-07-28; ~~not settled~~ adopted
+provisionally by Design v3 above):
 
 - `IngestMode` = `'Ignore'` | `'Selection'` — named from the run's
   perspective (the mode IS run intent), so the engine param and admiral's
@@ -322,3 +363,14 @@ in either order.
 - 2026-07-28 — Candidate naming recorded (user, not settled): `IngestMode`
   ('Ignore'|'Selection'); `IgnorePatterns` (added to discovered materials) +
   `IgnoreOverridePatterns` (countermands them); `SelectionPatterns`.
+- 2026-07-28 — **Design v3 adjudicated and IMPLEMENTED** (Phase 2 complete):
+  names adopted provisionally; override collapsed into negation merge (both
+  ignore-side params = virtual root ignore sources, containers by
+  convention); cross-mode params inert; CompiledState regime-stamped single
+  slot; TestPath dual truth table; bypass deleted (clean break on
+  ExecutiveOverrides); prune guarded to Ignore regime; fail-fast retained.
+  Bonus latent bug fixed: Invoke-IgnoreFilter's empty-leaf prune leaked
+  Dictionary.Remove's bool into the pipeline (masked until Selection mode
+  made empty leaves common). New `tests/ignore.tests.ps1` 27/27 incl. the
+  gitignore parent-dir constraint + directory-negation recipe as executable
+  documentation; six-suite battery 205/205.

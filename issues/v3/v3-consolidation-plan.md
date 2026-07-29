@@ -220,3 +220,21 @@ copy-on-enrich (waits for admiral state design) · subaddressing.
   verified. Ontology item 1 closed as fully implemented (was
   minimal-guard). Processor-work block done: Phases 3, 4, 6c all landed —
   remaining before Phase 5: Phase 2 only (awaits final naming).
+- 2026-07-28 — **Phase 2 COMPLETE** (item 5). Design v3 (user): names
+  adopted provisionally (`IngestMode`/`IgnorePatterns`/
+  `IgnoreOverridePatterns`/`SelectionPatterns` — renameable; semantics are
+  what is settled); **override collapsed into negation merge** — both
+  ignore-side params are virtual root ignore sources, containers for
+  positives/negations by convention, handled by the engine's existing
+  merge/inheritance/annihilation machinery (no rescue layer, no prune
+  special-casing; inherited canonical-gitignore constraint documented with
+  the directory-negation recipe); **cross-mode params inert** (supersedes
+  binding-aware throws — ergonomic mode switching); CompiledState
+  regime-stamped single slot; TestPath dual truth table; RunOverrideBypass
+  deleted; ExecutiveOverrides clean break. Latent bug #4 of the
+  consolidation pass: Invoke-IgnoreFilter empty-leaf prune leaked
+  Dictionary.Remove bool into the pipeline. New `tests/ignore.tests.ps1`
+  (27); six-suite battery **205/205 green**. Unresolved tension recorded to
+  admiral brief: config-driven execution will not displace direct
+  bound-param invocation. **All consolidation phases complete (0–4, 6b
+  pending, 6c done) — Phase 5 (rs.core.assemble) is unblocked.**

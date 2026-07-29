@@ -198,6 +198,11 @@ contract checks. Recorded as a candidate only — not a decision.
 5. Control-flow implementation (section above): admiral's class structure, DAG
    representation, and where contract enforcement lives (per-boundary
    post-processing vs declared stage contracts).
+6. **Invocation-surface duality (user, 2026-07-28):** config-driven execution
+   will come in time but will NOT displace direct bound-param invocations of
+   stage functions — both surfaces are permanent. How admiral's declarative
+   run-config projection coexists with (and stays consistent against) the
+   direct parameter surfaces is an unresolved design tension.
 
 ## Cross-references
 

@@ -18,10 +18,25 @@ using namespace System.Text.RegularExpressions
       Stage 3: Reduce        — depth precedence, subsumption heuristic
       Stage 4: Gather-Scatter — signature-keyed regex compilation + scatter
 
-    Two pathways:
-      1. ExecutiveOverride — total pipeline bypass. Globs translated once,
-         single regex broadcast to every node. Match = KEEP (inverted semantics).
-      2. Full ignore pipeline — all five stages + directory branch pruning.
+    Two modes (IngestMode — explicit run intent; both run the same five-stage
+    machinery; cross-mode pattern params are inert, never errors):
+      1. Ignore (default) — sentinel scan + virtual root ignore source
+         (IgnoreDefaults + IgnorePatterns + IgnoreOverridePatterns-as-
+         negations) merged through nested gitignore semantics; directory
+         branch pruning runs. IgnorePatterns and IgnoreOverridePatterns are
+         both virtual global ignore sources — containers for positives and
+         negations BY CONVENTION (override entries are '!'-prefixed on
+         merge; a '!'-prefixed override entry double-negates to a positive).
+         Overrides follow canonical gitignore precedence: a file-only
+         negation cannot re-include content under an excluded directory —
+         negate the directory to rescue a branch.
+      2. Selection — the run is expressly about ingesting what is wanted.
+         Sentinels are NOT consulted (no scan, no I/O); SelectionPatterns
+         compiles as a selection regime through the same five stages
+         (negations = un-keep exceptions); match = KEEP at test time;
+         directory pruning is skipped (file-targeted keep patterns never
+         match directory paths); the post-filter empty-leaf prune cleans up.
+         Empty/self-annihilated SelectionPatterns throws (fail-fast).
 
     Input contract (from crawler Graph — ItemDescriptor identity stamped at
     walk time by rs.core.crawler; this stage is a pure filter and enriches
@@ -31,12 +46,14 @@ using namespace System.Text.RegularExpressions
                            RelativePath = 'src/lib/.gitignore'; NodePath = 'src/lib/';
                            SizeBytes = 42; LastWriteUtc = [datetime] } ) } )
       IgnoreFiles is built internally from Files via sentinel scan (New-IgnoreCompiler).
-      IgnorePatterns and ExecutiveOverrides are passed separately to New-IgnoreCompiler.
+      IngestMode and the pattern params are passed separately to New-IgnoreCompiler.
 
     Output contract (to filter stage):
       @( @{ NodePath = 'src/lib/'; AbsolutePath = 'C:/repo/src/lib/'; NodeDepth = 2;
-             CompiledIgnore   = @{ Positives = [regex]; Exceptions = [regex] }  # or $null
-             ExecutiveOverride = [regex]  # or $null } )
+             CompiledState = @{ Regime = 'Ignore'|'Selection'
+                                Positives = [regex]; Exceptions = [regex] } } )  # regex slots may be $null
+      Single regime-stamped state slot; TestPath is the sole semantic
+      authority (dual truth table on Regime).
 #>
 
 # Hard extension blacklist — binary / non-text file types that are never useful
@@ -69,22 +86,23 @@ class IgnoreCompiler
     [object[]]$Nodes                           # the node array — mutated through pipeline stages
     [hashtable]$NodeLookup                     # NodePath → node — built once, used by Walk + Prune
     [hashtable]$RegexCache                     # signature → @{Positives=[regex]; Exceptions=[regex]}
-    [regex]$OverrideRegex                      # compiled executive override — $null when not bypass
+    [string]$Regime                            # 'Ignore' | 'Selection' — stamped on every CompiledState
     [List[PSCustomObject]]$SentinelIgnoreFiles # flat aggregate of all sentinel entries found — @{ NodePath; Source; Globs }
 
     # ── Configuration (immutable after construction) ──────────────────────
-    hidden [string[]]$_ExecutiveOverrides
-    hidden [bool]$IsOverrideMode
     hidden [bool]$HasRun
 
     # ── Constructor (hidden — use New-IgnoreCompiler factory) ────────────
-    hidden IgnoreCompiler([object[]]$flatNodes, [string[]]$ignorePatterns, [string[]]$executiveOverrides)
+    # $rootPatterns: the virtual root-level pattern source — in Ignore mode
+    # the merged IgnoreDefaults + IgnorePatterns + overrides-as-negations;
+    # in Selection mode the SelectionPatterns. Same injection either way —
+    # the compile machinery is semantics-neutral; Regime is interpretation.
+    hidden IgnoreCompiler([object[]]$flatNodes, [string[]]$rootPatterns, [string]$regime)
     {
         $this.Nodes = $flatNodes
         $this.HasRun = $false
         $this.RegexCache = @{}
-        $this.OverrideRegex = $null
-        $this._ExecutiveOverrides = $executiveOverrides
+        $this.Regime = $regime
 
         # Build NodePath → node lookup once
         $this.NodeLookup = @{}
@@ -93,14 +111,12 @@ class IgnoreCompiler
             $this.NodeLookup[$node.NodePath] = $node
         }
 
-        # Inject virtual IgnorePatterns entry at the front of the root node's IgnoreFiles
-        if ($null -ne $ignorePatterns -and $ignorePatterns.Count -gt 0)
+        # Inject virtual root-pattern entry at the front of the root node's IgnoreFiles
+        if ($null -ne $rootPatterns -and $rootPatterns.Count -gt 0)
         {
-            $virtualEntry = [PSCustomObject]@{ Source = 'IgnorePatterns'; Globs = $ignorePatterns }
+            $virtualEntry = [PSCustomObject]@{ Source = 'RootPatterns'; Globs = $rootPatterns }
             $this.NodeLookup[''].IgnoreFiles.Insert(0, $virtualEntry)
         }
-
-        $this.IsOverrideMode = ($null -ne $executiveOverrides -and $executiveOverrides.Count -gt 0)
     }
 
     # ══════════════════════════════════════════════════════════════════════
@@ -116,18 +132,38 @@ class IgnoreCompiler
         }
         $this.HasRun = $true
 
-        if ($this.IsOverrideMode)
-        {
-            return $this.RunOverrideBypass()
-        }
-
-        # ── Full ignore pipeline ──
+        # ── Five-stage pipeline — both regimes, no mode branches inside stages ──
         $this.Normalize()
         $this.Coalesce()
+
+        # Fail-fast (Selection): an empty or self-annihilated selection set is
+        # a user error, never a valid request for nothing.
+        if ($this.Regime -eq 'Selection')
+        {
+            $any = $false
+            foreach ($node in $this.Nodes)
+            {
+                if ($node.LocalIgnore.Positives.Count -gt 0) { $any = $true; break }
+            }
+            if (-not $any)
+            {
+                throw [System.ArgumentException]::new(
+                    'SelectionPatterns is empty or self-annihilated — Selection mode requires a logically non-empty selection set.')
+            }
+        }
+
         $this.Walk()
         $this.Reduce()
         $this.CompileRegex()
-        $this.Prune()
+
+        # Prune only under Ignore regime: file-targeted keep patterns can never
+        # match directory paths, so pruning under Selection would kill subtrees
+        # before their files were evaluated. Greedy crawl makes prune a CPU
+        # optimization only; the post-filter empty-leaf prune cleans up.
+        if ($this.Regime -eq 'Ignore')
+        {
+            $this.Prune()
+        }
 
         return $this.EmitOutput()
     }
@@ -136,94 +172,33 @@ class IgnoreCompiler
     # STATIC — Filter-time path test (stateless, used externally)
     # ══════════════════════════════════════════════════════════════════════
 
+    # The single semantic authority — dual truth table on CompiledState.Regime.
+    # Returns $true when the path is EXCLUDED from results. Exceptions keep one
+    # meaning in both regimes: undo the primary verdict (rescue under Ignore;
+    # un-keep under Selection).
     static [bool] TestPath([string]$relativePath, [object]$nodeState)
     {
-        # ExecutiveOverride pathway: match = KEEP (inverted)
-        if ($null -ne $nodeState.ExecutiveOverride)
+        $state = if ($null -ne $nodeState.PSObject.Properties['CompiledState']) { $nodeState.CompiledState } else { $null }
+
+        if ($null -eq $state -or $null -eq $state.Positives)
         {
-            return (-not $nodeState.ExecutiveOverride.IsMatch($relativePath))
+            # No compiled patterns: Ignore → keep all; Selection → exclude all
+            # (unreachable under Selection: fail-fast guards the empty set).
+            if ($null -ne $state -and $state.Regime -eq 'Selection') { return $true }
+            return $false
         }
 
-        # CompiledIgnore pathway
-        if ($null -eq $nodeState.CompiledIgnore -or $null -eq $nodeState.CompiledIgnore.Positives)
+        if ($state.Regime -eq 'Selection')
         {
-            return $false  # no ignore rules = not ignored
+            if (-not $state.Positives.IsMatch($relativePath)) { return $true }    # unmatched → excluded
+            if ($null -ne $state.Exceptions -and $state.Exceptions.IsMatch($relativePath)) { return $true }  # un-keep
+            return $false                                                          # selected
         }
 
-        if (-not $nodeState.CompiledIgnore.Positives.IsMatch($relativePath))
-        {
-            return $false  # doesn't match any ignore pattern
-        }
-
-        # Matched a positive — check exceptions (rescue)
-        if ($null -ne $nodeState.CompiledIgnore.Exceptions)
-        {
-            if ($nodeState.CompiledIgnore.Exceptions.IsMatch($relativePath))
-            {
-                return $false  # rescued by exception
-            }
-        }
-
-        return $true  # ignored
-    }
-
-    # ══════════════════════════════════════════════════════════════════════
-    # EXECUTIVE OVERRIDE BYPASS
-    # ══════════════════════════════════════════════════════════════════════
-
-    hidden [object[]] RunOverrideBypass()
-    {
-        $overrideGlobs = $this._ExecutiveOverrides
-
-        # Normalize + partition override patterns
-        $positives = [HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
-        $negations = [HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
-
-        foreach ($raw in $overrideGlobs)
-        {
-            $normalized = $this.NormalizeGlob($raw)
-            if ($null -eq $normalized) { continue }
-            $trimmed = $normalized.Trim()
-            if ([string]::IsNullOrWhiteSpace($trimmed)) { continue }
-            if ($trimmed.StartsWith('!'))
-            {
-                [void]$negations.Add($trimmed.Substring(1))
-            }
-            else
-            {
-                [void]$positives.Add($trimmed)
-            }
-        }
-
-        # Exact-match annihilation within override set
-        $annihilated = @($negations | Where-Object { $positives.Contains($_) })
-        foreach ($a in $annihilated)
-        {
-            [void]$positives.Remove($a)
-            [void]$negations.Remove($a)
-        }
-
-        # Fail-fast: empty override after annihilation is a user error
-        if ($positives.Count -eq 0)
-        {
-            throw [System.ArgumentException]::new(
-                'ExecutiveOverride patterns self-annihilated resulting in an empty selection set. Provide logically non-empty override patterns.')
-        }
-
-        $this.OverrideRegex = $this.CompileGlobs(@($positives))
-
-        # Broadcast to all nodes
-        $results = foreach ($node in $this.Nodes)
-        {
-            [PSCustomObject]@{
-                NodePath          = $node.NodePath
-                AbsolutePath      = $node.AbsolutePath
-                NodeDepth         = $node.NodeDepth
-                CompiledIgnore    = $null
-                ExecutiveOverride = $this.OverrideRegex
-            }
-        }
-        return $results
+        # Ignore regime
+        if (-not $state.Positives.IsMatch($relativePath)) { return $false }        # unmatched → kept
+        if ($null -ne $state.Exceptions -and $state.Exceptions.IsMatch($relativePath)) { return $false }     # rescued
+        return $true                                                               # ignored
     }
 
     # ══════════════════════════════════════════════════════════════════════
@@ -443,8 +418,14 @@ class IgnoreCompiler
                 }
             }
 
-            $node | Add-Member -NotePropertyName 'CompiledIgnore' -NotePropertyValue $this.RegexCache[$signature] -Force
-            $node | Add-Member -NotePropertyName 'ExecutiveOverride' -NotePropertyValue $null -Force
+            # Single regime-stamped state slot — filter-time code needs no
+            # out-of-band mode knowledge (TestPath reads Regime from here).
+            $cached = $this.RegexCache[$signature]
+            $node | Add-Member -NotePropertyName 'CompiledState' -NotePropertyValue (@{
+                    Regime     = $this.Regime
+                    Positives  = $cached.Positives
+                    Exceptions = $cached.Exceptions
+                }) -Force
         }
     }
 
@@ -499,11 +480,10 @@ class IgnoreCompiler
         $results = foreach ($node in $this.Nodes)
         {
             [PSCustomObject]@{
-                NodePath          = $node.NodePath
-                AbsolutePath      = $node.AbsolutePath
-                NodeDepth         = $node.NodeDepth
-                CompiledIgnore    = $node.CompiledIgnore
-                ExecutiveOverride = $node.ExecutiveOverride
+                NodePath      = $node.NodePath
+                AbsolutePath  = $node.AbsolutePath
+                NodeDepth     = $node.NodeDepth
+                CompiledState = $node.CompiledState
             }
         }
         return $results
@@ -738,33 +718,51 @@ function New-IgnoreCompiler
         Factory: creates and invokes an IgnoreCompiler instance.
 
     .DESCRIPTION
-        Accepts the crawler graph (Dictionary or flat array) plus the caller-owned
-        IgnorePatterns and ExecutiveOverrides that the crawler no longer carries.
+        Accepts the crawler graph (Dictionary or flat array) plus IngestMode and
+        the mode's pattern params. Cross-mode pattern params are INERT — never
+        errors — so ergonomic defaults can stay populated while switching modes.
 
     .PARAMETER CrawlerGraph
         Crawler graph: either Dictionary[string, PSCustomObject] keyed by NodePath,
         or a flat object[] of node objects. Each node must carry NodePath, AbsolutePath,
         NodeDepth, and Files. IgnoreFiles is built internally by the sentinel scan.
 
+    .PARAMETER IngestMode
+        'Ignore' (default) — canonical ignore-file-driven ingestion.
+        'Selection' — the run is expressly about ingesting what is wanted:
+        sentinels are not consulted (no scan, no I/O); SelectionPatterns is the
+        selection regime; IgnoreDefaults/IgnorePatterns/IgnoreOverridePatterns
+        are not consulted.
+
     .PARAMETER SentinelFileNames
-        Names of ignore files to detect in each node's Files list and parse into
-        IgnoreFiles entries. Defaults to @('.gitignore', '.snapignore').
-        Pass @() to skip sentinel discovery entirely.
+        Ignore mode only. Names of ignore files to detect in each node's Files
+        list and parse into IgnoreFiles entries. Defaults to
+        @('.gitignore', '.snapignore'). Pass @() to skip sentinel discovery.
 
     .PARAMETER IgnoreDefaults
-        Default glob patterns prepended to IgnorePatterns before pipeline entry.
-        Defaults to @('.snapshot/', '.git/', 'node_modules/'). Pass @() to suppress.
-        These are treated identically to IgnorePatterns — visible and overridable,
-        not hardcoded.
+        Ignore mode only. Default glob patterns prepended to IgnorePatterns.
+        Defaults to @('.snapshot/', '.git/', 'node_modules/'). Pass @() to
+        suppress. Treated identically to IgnorePatterns — visible, overridable.
 
     .PARAMETER IgnorePatterns
-        Caller-supplied root-level ignore globs (e.g. @('*.bak', 'dist/')).
-        Appended after IgnoreDefaults and injected as the first IgnoreFiles source
-        on the root node.
+        Ignore mode only. Caller-supplied root-level ignore globs — a VIRTUAL
+        ROOT IGNORE FILE merged with the sentinels and processed through the
+        full nested semantics. Negations ('!x') are valid here, exactly as in
+        a real ignore file.
 
-    .PARAMETER ExecutiveOverrides
-        Override globs. When non-empty, bypasses the full ignore pipeline —
-        only files matching these globs are kept (inverted semantics).
+    .PARAMETER IgnoreOverridePatterns
+        Ignore mode only. Globs that countermand ignore materials — merged into
+        the same virtual root source as NEGATIONS by convention (each entry is
+        '!'-prefixed; an already-'!'-prefixed entry double-negates into a
+        positive ignore — silly but admissible). Follows canonical gitignore
+        precedence: a file-only negation cannot re-include content under an
+        excluded directory; negate the directory (e.g. 'dist/') to rescue a
+        branch and its contents.
+
+    .PARAMETER SelectionPatterns
+        Selection mode only. The selection criteria, in canonical glob
+        semantics; negations are un-keep exceptions ("select *.ps1 except
+        tests/"). An empty or self-annihilated set throws (fail-fast).
 
     .OUTPUTS
         [PSCustomObject] @{
@@ -776,9 +774,12 @@ function New-IgnoreCompiler
     param(
         [Parameter(Mandatory)]
         [object]$CrawlerGraph,
+        [ValidateSet('Ignore', 'Selection')]
+        [string]$IngestMode = 'Ignore',
         [string[]]$IgnoreDefaults = @('.snapshot/', '.git/', 'node_modules/'),
         [string[]]$IgnorePatterns = $null,
-        [string[]]$ExecutiveOverrides = $null,
+        [string[]]$IgnoreOverridePatterns = $null,
+        [string[]]$SelectionPatterns = $null,
         [string[]]$SentinelFileNames = @('.gitignore', '.snapignore')
     )
 
@@ -791,8 +792,27 @@ function New-IgnoreCompiler
         $flatNodes = @($CrawlerGraph)
     }
 
-    # ── Combine IgnoreDefaults + IgnorePatterns ────────────────────────────────
-    $combinedIgnorePatterns = @($IgnoreDefaults) + @($IgnorePatterns) | Where-Object { $_ }
+    # ── Assemble the virtual root pattern source per mode ─────────────────────
+    # Ignore mode: IgnoreDefaults + IgnorePatterns + overrides-as-negations —
+    # one virtual root ignore file; the engine's merge/inheritance/annihilation
+    # machinery treats all three identically (containers by convention).
+    # Selection mode: SelectionPatterns only; ignore-side params are inert.
+    if ($IngestMode -eq 'Selection')
+    {
+        $combinedIgnorePatterns = @($SelectionPatterns) | Where-Object { $_ }
+        $SentinelFileNames = @()   # sentinels are not consulted in Selection mode
+    }
+    else
+    {
+        $overridesAsNegations = @(foreach ($p in @($IgnoreOverridePatterns))
+            {
+                if ([string]::IsNullOrWhiteSpace($p)) { continue }
+                $t = $p.Trim()
+                if ($t.StartsWith('!')) { $t.Substring(1) }   # double negation → positive ignore (admissible)
+                else { "!$t" }
+            })
+        $combinedIgnorePatterns = @($IgnoreDefaults) + @($IgnorePatterns) + $overridesAsNegations | Where-Object { $_ }
+    }
 
     # ── Stamp IgnoreFiles on all nodes — always required by the constructor ──────
     foreach ($node in $flatNodes)
@@ -848,7 +868,7 @@ function New-IgnoreCompiler
         }
     }
 
-    $compiler = [IgnoreCompiler]::new($flatNodes, $combinedIgnorePatterns, $ExecutiveOverrides)
+    $compiler = [IgnoreCompiler]::new($flatNodes, $combinedIgnorePatterns, $IngestMode)
     $compiler.SentinelIgnoreFiles = $sentinelAggregate
     return [PSCustomObject]@{
         CompiledNodes       = $compiler.Invoke()
@@ -861,17 +881,19 @@ function Test-PathIgnored
 {
     <#
     .SYNOPSIS
-        Tests whether a relative path is ignored based on compiled node state.
-        Delegates to [IgnoreCompiler]::TestPath().
+        Tests whether a relative path is excluded based on compiled node state.
+        Delegates to [IgnoreCompiler]::TestPath() — the dual truth table over
+        the regime-stamped CompiledState (Ignore: match = excluded unless
+        rescued; Selection: non-match = excluded, exception un-keeps).
 
     .PARAMETER RelativePath
         Forward-slash normalized relative path to test.
 
     .PARAMETER NodeState
-        Compiled state for the governing node.
+        Node carrying CompiledState = @{ Regime; Positives; Exceptions }.
 
     .OUTPUTS
-        [bool] — $true if the path should be IGNORED (excluded from snapshot).
+        [bool] — $true if the path should be EXCLUDED from the snapshot.
     #>
     [CmdletBinding()]
     [OutputType([bool])]
@@ -922,7 +944,9 @@ function Invoke-IgnoreFilter
 
     .PARAMETER CompiledNodes
         Output from New-IgnoreCompiler:
-          @( @{ NodePath; AbsolutePath; NodeDepth; CompiledIgnore; ExecutiveOverride } )
+          @( @{ NodePath; AbsolutePath; NodeDepth; CompiledState } )
+        CompiledState = @{ Regime; Positives; Exceptions } — regime-stamped;
+        TestPath interprets it (dual truth table).
 
     .PARAMETER CrawlerGraph
         The full crawler graph dictionary (NodePath → node), or flat array.
@@ -944,7 +968,7 @@ function Invoke-IgnoreFilter
             Graph   = [Dictionary[string, PSCustomObject]]  — surviving nodes keyed by NodePath
             Skipped = [PSCustomObject[]]  — @{ Path; Reason; ... } (FileTooLarge or ExtensionBlacklisted)
         }
-        Graph values: @{ NodePath; AbsolutePath; NodeDepth; Files; CompiledIgnore; ExecutiveOverride }
+        Graph values: @{ NodePath; AbsolutePath; NodeDepth; Files; CompiledState }
         Files arrays contain only surviving files (identity fields untouched).
     #>
     [CmdletBinding()]
@@ -1016,24 +1040,18 @@ function Invoke-IgnoreFilter
         }
 
         $joined = [PSCustomObject]@{
-            NodePath          = $source.NodePath
-            AbsolutePath      = $source.AbsolutePath
-            NodeDepth         = $source.NodeDepth
-            Files             = $preFiltered.ToArray()
-            CompiledIgnore    = $compiled.CompiledIgnore
-            ExecutiveOverride = $compiled.ExecutiveOverride
+            NodePath      = $source.NodePath
+            AbsolutePath  = $source.AbsolutePath
+            NodeDepth     = $source.NodeDepth
+            Files         = $preFiltered.ToArray()
+            CompiledState = $compiled.CompiledState
         }
 
         # ── Phase 2: Filter files in-place ──────────────────────────────
+        # TestPath is the single semantic authority (dual truth table on the
+        # regime-stamped state) — no inline semantics duplication here.
         $joined.Files = @($joined.Files.Where({
-                    if ($null -ne $joined.ExecutiveOverride)
-                    {
-                        return $joined.ExecutiveOverride.IsMatch($_.RelativePath)
-                    }
-                    if ($null -eq $joined.CompiledIgnore?.Positives) { return $true }
-                    if (-not $joined.CompiledIgnore.Positives.IsMatch($_.RelativePath)) { return $true }
-                    if ($joined.CompiledIgnore.Exceptions?.IsMatch($_.RelativePath)) { return $true }
-                    return $false
+                    -not [IgnoreCompiler]::TestPath($_.RelativePath, $joined)
                 }))
 
         $result[$np] = $joined
@@ -1049,7 +1067,9 @@ function Invoke-IgnoreFilter
                     $_ -ne $n.NodePath -and $_.StartsWith($n.NodePath, [System.StringComparison]::Ordinal)
                 }, 'First').Count
         })
-    foreach ($leaf in $emptyLeaves) { $result.Remove($leaf) }
+    # [void]: Dictionary.Remove returns bool — unsuppressed it leaks into the
+    # pipeline and corrupts the function's return value into an array.
+    foreach ($leaf in $emptyLeaves) { [void]$result.Remove($leaf) }
 
     return [PSCustomObject]@{
         Graph   = $result
