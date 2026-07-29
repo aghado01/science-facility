@@ -89,10 +89,12 @@ The unit that flows discovery → ingest → colonel → processors → results:
 - `RunContext` — run-level header material: root, timestamp, config echo,
   generator/version, run timing. Assemble stamps it in; computing it is
   admiral's job.
-- `AssemblyPolicy` — ordering (path-sort for code track; semantic order for
-  thread track; processors stay order-blind), entry-vs-skipped policy
-  (default: lean payload — failed/empty reads to the diagnostics sidecar,
-  see Payload doctrine), track adapter selection.
+- `AssemblyPolicy` — entry-vs-diagnostics routing (default: lean payload —
+  failed/empty reads to the diagnostics sidecar, see Payload doctrine) and
+  track adapter selection. **Ordering is deliberately NOT AssemblyPolicy's**
+  (revised 2026-07-28): the IR carries canonical ingested order; sorting,
+  subsorting, and grouping are emission-side arrangement knobs (see
+  Arrangement layer under the Operation-order doctrine).
 
 ### Assemble output — the IR
 
@@ -128,7 +130,7 @@ practice; `git_history` empty (never requested).
 | LTS element | v3 disposition |
 |---|---|
 | `header` | `IR.Header` — assemble stamps RunContext + computes assembly stats |
-| `files` | `IR.Entries` — **note: LTS sorts by path at SERIALIZATION time**; v3 moves ordering into AssemblyPolicy (the IR is ordered; writers preserve) |
+| `files` | `IR.Entries` — **canonical ingested order** (revised 2026-07-28: LTS's path-sort-at-serialization was the arrangement layer done as a hardcode; v3 keeps the IR in ingested order and makes sorting/subsorting/grouping an emission-side knob family — see Arrangement layer) |
 | `DirectoryStructure` / `AsciiTree` / `paths` (flag-gated, default off) | writer-side view options, not IR members; tree-model construction (`Build-DirectoryTree`) is writer-phase, consuming IR entries + SpanBytes |
 
 ### Header elements
@@ -237,19 +239,30 @@ The principle transfers to assembly at three levels:
    ```
    adapt   (track adapter: results → entries; envelope → N exchange entries)
    route   (entry vs diagnostics — lean-payload policy)
-   order   (AssemblyPolicy ordering op, applied over ingested arrival order)
    derive  (Elements declaration + counts — after route so skips don't
-            pollute coverage; after order so positional derivations are final)
+            pollute coverage)
    stamp   (Header last — EntryCount/Elements need final entries)
    ```
 
    `AssemblyPolicy` plugs *selections into slots* (WHICH adapter, WHICH
-   routing default, WHICH ordering op) and cannot reorder the slots. The
-   per-entry building convention is NOT reinvented: colonel's index-stable
-   Results arrive in ingested order, entries are built in that order, and
-   the `order` phase is an operation applied over it (code-track default
-   PathSort for LTS parity; thread track None — ingested order IS the
-   semantic order).
+   routing default) and cannot reorder the slots. The per-entry building
+   convention is NOT reinvented: colonel's index-stable Results arrive in
+   ingested order, entries are built in that order, and **the IR's order IS
+   the canonical ingested order** — assemble has no ordering phase at all.
+
+   **Arrangement layer (user, 2026-07-28)** — between the IR and the
+   serialization write live the sorting, subsorting, and grouping knobs: a
+   design feature expressing reposnapshot's configurability philosophy, not
+   an assemble concern. Precedent already in place: `Partition-Files`'
+   `GroupingStrategy`/`PackingStrategy`, and LTS's path-sort-at-serialization
+   (the same layer, hardcoded instead of knobbed). Consequences: the IR is
+   the *store order* (canonical, ingested); every emitted artifact's order
+   is a *view arrangement* selected by generation knobs ("policy lives in
+   generation knobs, not reader conventions" — shard-format-notes); global
+   idx is assigned over the writer's final arrangement, not in the IR
+   (narrows open decision 3 to the arrangement layer); golden comparison
+   matches entries by path key, never by position (LTS monoliths are
+   path-sorted views of their own ingested order).
 
 2. **Chain-profile level (admiral, future)** — today, processor application
    order is the profile author's responsibility, guided by documented
@@ -283,11 +296,13 @@ IR = @{
                                   # declaration (open element model) —
                                   # payload self-description + coverage
   }
-  Entries  = ordered @( @{ RelativePath; NodePath; LastWriteUtc; Content;
-                           <any processor-attached elements, e.g.
-                            Attributes = @{ SpanBytes; CharCount; ... }> } )
+  Entries  = @( @{ RelativePath; NodePath; LastWriteUtc; Content;
+                   <any processor-attached elements, e.g.
+                    Attributes = @{ SpanBytes; CharCount; ... }> } )
              # OPEN property bags — guaranteed core + whatever the chain
-             # attached; assemble never projects to a fixed column set
+             # attached; assemble never projects to a fixed column set.
+             # Order = CANONICAL INGESTED ORDER (store order); all other
+             # orders are emission-side view arrangements (knobs)
   Skipped / Diagnostics             # lean-payload sidecar feed
 }
 ```
@@ -352,7 +367,9 @@ ratio via ToArray — correctness over parity).
    settled by doctrine; snake_case wire naming is a writer rendering decision.
    Remaining: whether ReadError reasons surface anywhere beyond Diagnostics.
 3. Global idx semantics for the thread track (corpus-wide reading order across
-   threads vs per-thread).
+   threads vs per-thread) — narrowed 2026-07-28: idx is assigned at the
+   arrangement layer over the writer's final order, not in the IR; the
+   semantic question remains but is emission-side.
 4. Module name.
 5. Header `flags` block: retire (derived redundancy over ConfigEcho) vs keep
    (reader quick-orientation value) — from the monolith inventory.
