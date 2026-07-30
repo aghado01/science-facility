@@ -404,6 +404,33 @@ Config specifics:
   container planned" for config/docs) with a leaner mechanism: for config,
   pointers suffice; docs get real tracks.
 
+**Config linkage analysis (user, 2026-07-29 — enrichment species for the
+pointer sidecar):** connect configs to the code that reads them by
+detecting references in code content — explicit (literal path/filename
+strings) or implicit (basename/stem, constructed paths, loader
+conventions) but still tractable. Mechanism fits the pipeline without any
+cross-item processor:
+
+1. Classification (at eligibility) yields the config-name list BEFORE the
+   chain runs; admiral projects it into a per-item processor's Config
+   (e.g. `rs-cfglink` — enrich-only, descriptor contract).
+2. The processor scans its own item's Content for matches and attaches a
+   `ConfigRefs` element per code entry: match target + **match kind**
+   (exact-path | filename | basename/stem — confidence is a lexical fact,
+   never a semantic claim; measurement-not-classification) + span anchors
+   (the follow-up telescope: sidecar entry → reader file → the reference
+   site itself).
+3. Assemble collates as usual (open element model, zero edits); the
+   sidecar writer INVERTS the per-entry ConfigRefs into `ReferencedBy` on
+   each config pointer entry. Cross-item aggregation happens where
+   cross-item work belongs — at emission, not in the chain, not in
+   assemble (whose neutrality forbids content analysis).
+
+Chain-position knob for free (operation-order doctrine): scanning after
+comment strippers links only code-live references; before them includes
+commented-out references — the position in the profile IS the semantics
+selection, stated not hardcoded. Sketch register throughout.
+
 ## Validation without serializers
 
 Golden data-to-data comparison: run the v3 pipeline over this repo → IR;
