@@ -393,7 +393,7 @@ CLASSES — but the classes are NOT symmetric legs (user, 2026-07-29):
 | class | default disposition | artifact/format |
 |---|---|---|
 | code | primary — the code track | rows/shards/tree (the classic payload) |
-| **config** | **NOT ingested by default — companion document, code-run extension** | likely a single DOCUMENT (not necessarily serialized data): pointers to config source files (**absolute paths**, at-will follow-up) + **cross-links to the associated code snapshot shard rows** (the linkage inversion rendered as payload addresses) — tree-manifest analog, template-engine renderable |
+| **config** | **NOT ingested by default — companion CROSSWALK document, code-run extension** | a single orientation document (not serialized data): a crosswalk showing how config files of various kinds connect with code files and where in the workflow they are consumed — pointers to config sources (**absolute paths**, at-will follow-up) + **cross-links to the associated code snapshot shard rows** (the linkage inversion rendered as payload addresses, reference-site anchors giving the where-in-the-workflow). Rounds out the complete picture of a snapshot at ZERO reader overhead when config isn't material to the request — the fourth orientation layer (tree = spatial, Elements = compositional, instruction block = procedural, crosswalk = relational), same economics: never in context by default. Tree-manifest analog, template-engine renderable |
 | documents/markdown | own sharded/JSONL payloads, doc-semantics rows | rows = units the document's structure yields (exchange envelopes for threads via the threadparser application; section-units for project docs/manuscripts) — never mixed into code payloads |
 
 Config specifics:
