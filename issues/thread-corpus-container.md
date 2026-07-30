@@ -354,4 +354,12 @@ said what"), multi-flavor, modestly sized, personally meaningful — ideal dogfo
   global idx narrowed to the emission-side arrangement layer;
   rs.core.sharding header now states this track's store re-disposition.
 
+- 2026-07-29 — Markdown processor family seeded from the mdnav concept
+  extraction (`issues/v3/md-processor-family-design.md`): rs-mdseg is the
+  generalized threadparser core (basis-driven segmentation, tiling
+  invariant, fence-aware); tp-{flavor} refactor implied (shared
+  segmentation + flavor lifting) — bears on open decisions 3 (secondary
+  chunking → windows basis + UNBROKEN) and 4 (flavor coverage →
+  profile-informed basis instead of per-flavor reverse engineering).
+
 _(append findings/results here)_

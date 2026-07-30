@@ -16,6 +16,6 @@ need to design handling and conventions for configuration and documentation file
 
 - considering different output channel/format
 
-incorporate more general markdown processing and specialized segmentaton/sharding mode
+incorporate more general markdown processing and specialized segmentaton/sharding mode (design seeded 2026-07-29 from the mdnav concept extraction — `issues/v3/md-processor-family-design.md`: rs-mdprofile / rs-mdseg / rs-mdstrip family)
 
 incorporate support for more languages, ideally with both regex "pseudoAST" and proper AST support (doctrine recorded 2026-07-28 — comment-ontology language-expansion: thoughtful-regex processors are the default for new languages, native AST on demand; fluid, per-language)
