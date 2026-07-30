@@ -375,6 +375,11 @@ existing streams.
 
 ## Content-class dispositions — forward design (user, 2026-07-29; sketch, not committed)
 
+**Sequencing (user): all of this is downstream of maturing the current
+code-ingest workflow — eventual, not immediate term.** The code trunk
+(writers, then admiral) matures first; class routing, the crosswalk, and
+the docs modes build on it.
+
 The disposition tiers generalize from within-document spans to WHOLE-FILE
 CLASSES — but the classes are NOT symmetric legs (user, 2026-07-29):
 
