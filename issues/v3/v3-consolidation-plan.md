@@ -1,8 +1,9 @@
 # v3 consolidation plan — shore up before breaking ground
 
 **Status:** EXECUTED through Phase 5 (2026-07-29) — inventory items carry
-✓ markers; remaining open: **6d** (tp-era contract harmonization), **item 6**
-(crawler diagnostics split, cosmetic), and the horizon (writers → admiral →
+✓ markers; remaining open: **6d** (tp-era contract harmonization —
+adjudicated 2026-07-29, implementation pending), **item 6** (crawler
+diagnostics split, cosmetic), and the horizon (writers → admiral →
 thread track) · **Filed:** 2026-07-28
 
 **Doctrine (user):** shore up the gaps, bugs, and follow-ups in existing
@@ -67,6 +68,25 @@ cross-referenced docs. Update phase status here as work lands.
    adapter shim); decide the envelope's fate for the thread track. Blocks
    content-transform parity (strip/ws) in code-track chains and the
    comment-ontology "LTS dispatches to processors" end state.
+   **Adjudicated 2026-07-29 (user): bag-native copy-on-mutate, no shim.**
+   The defect is the envelope swap, never the mutation — mutating Content
+   is these processors' job (position class: content mutator). Harmonized
+   shape: clone the incoming bag, replace Content with the transformed
+   text, pass every other property through — the mutator sibling of
+   file-read's copy-on-enrich. Input dual-key (Content preferred, Text
+   fallback — tp-perplexity's existing pattern, keeps intra-thread-track
+   chains working). Envelope Id/Path fields are redundant with descriptor
+   identity; useful envelope cargo (rs-psstrip's Operations record)
+   becomes an attached element — the open element model absorbs it and
+   assemble declares it without knowing it. Transforms unchanged
+   byte-for-byte; the edit is the rim of each script, and the suites
+   (format 29 / rs-psstrip 79) pin transform semantics. Rationale (user):
+   chain members hand off like every other member; the chain's product is
+   a correctly mutated, preprocessed input to the assemble step. The
+   tp-era envelope's fate NARROWS out of processor scope: it is now a
+   thread-track rim question (wrap exchanges into Content-keyed bags at
+   ingestion — envelope disappears — vs some envelope form surviving as a
+   wire/arrangement shape at emission); admiral/thread-milestone decision.
 6c. ✓ DONE — **rs-psstrip FrontMatter kind promotion** (design clarified by user
    2026-07-28, comment-ontology item 1): replace the `^#requires\b`
    population-exclusion text guard in the AST route with classification to a
@@ -117,13 +137,15 @@ Resolved this cycle: ignore naming adopted provisionally + implemented
 (IngestMode/IgnorePatterns/IgnoreOverridePatterns/SelectionPatterns —
 renameable later); ExecutiveOverrides clean break; assemble module name
 adopted; entry naming narrowed (PascalCase in-memory; wire = writer);
-thread idx narrowed to the arrangement layer.
+thread idx narrowed to the arrangement layer; **6d approach adjudicated
+2026-07-29** (bag-native copy-on-mutate, dual-key input, no shim —
+implementation pending; envelope fate narrowed to thread rim/emission).
 
 Still yours, none blocking current code:
 - Header `flags` block: retire vs keep (assemble-design open decision 5).
 - `Header.Root` emission posture vs path doctrine (open decision 6).
-- 6d harmonization approach: dual-key enrich-in-place vs adapter shim, and
-  the tp-era envelope's fate for the thread track.
+- tp-era envelope's wire/arrangement fate for the thread track (narrowed
+  from 6d — thread-rim/emission scope, admiral/thread-milestone timing).
 - Admiral: hand-off form; carried-state shape; control-flow classes/DAG;
   invocation-surface duality (Q1/4/5/6).
 
@@ -333,6 +355,16 @@ Still yours, none blocking current code:
   retired to diagnostics, size_bytes → SpanBytes). New opens: flags
   retire-or-keep, Header.Root emission posture. Assemble implementation can
   begin against this inventory.
+- 2026-07-29 — **6d adjudicated (user): bag-native copy-on-mutate.**
+  format-ws/rs-psstrip keep their transforms byte-for-byte; only the I/O
+  rim changes — clone bag, mutate Content, pass everything else through;
+  dual-key input (Content|Text, tp-perplexity's pattern); no adapter shim
+  (a shim would keep the envelope alive as a second contract purely to
+  avoid two rim edits). Envelope cargo → attached elements. The
+  thread-track envelope question shrinks to the thread rim/emission
+  (out of processor scope; section F updated). 6d now has zero open
+  decisions — small, interleaves freely with writer work the way Phase 3
+  interleaved with consolidation.
 - 2026-07-28 — **TODO item 1 (broken-reference audit) executed**, prompted by
   the user questioning "why was format.ps1 removed": it never was — never
   existed here (git-verified); `format.ps1`/`rs.core.colonel.psm1` are
