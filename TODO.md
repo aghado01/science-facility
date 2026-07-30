@@ -15,6 +15,7 @@ finish v3 mvp e.g. fill in gaps between functionality of v3 and LTS
 need to design handling and conventions for configuration and documentation files
 
 - considering different output channel/format
+- forward design sketched 2026-07-29 (assemble-design §Content-class dispositions): config = descriptor-only POINTER sidecar (absolute paths, at-will follow-up, not ingested by default — no read, no content); docs/markdown = their own tracks/formats (md-family, exchange envelopes); class routing at eligibility, always overridable
 
 incorporate more general markdown processing and specialized segmentaton/sharding mode (design seeded 2026-07-29 from the mdnav concept extraction — `issues/v3/md-processor-family-design.md`: rs-mdprofile / rs-mdseg / rs-mdstrip family)
 

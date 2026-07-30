@@ -373,6 +373,37 @@ different fact than a file empty on disk). Sidecar form/naming not settled
 (`Skipped` + `Diagnostics`), so the sidecar is a writer concern layered on
 existing streams.
 
+## Content-class dispositions — forward design (user, 2026-07-29; sketch, not committed)
+
+The disposition tiers generalize from within-document spans to WHOLE-FILE
+CLASSES: a file's class selects its default channel and payload format —
+one vocabulary at two scales.
+
+| class | default disposition | payload/format |
+|---|---|---|
+| code | primary — the code track | rows/shards/tree (the classic payload) |
+| **config** | **pointer sidecar — NOT ingested by default** | descriptor-only entries carrying **absolute paths** for at-will follow-up at the source |
+| documents/markdown | their own track + formats | md family / exchange envelopes / doc corpus containers — never mixed into code payloads |
+
+Config specifics:
+- **Descriptor-only ingestion**: the pointer entry is exactly the
+  ItemDescriptor (AbsolutePath, RelativePath, SizeBytes, LastWriteUtc) —
+  config files skip the chain entirely (no read, no content). Zero new
+  data structures.
+- **Path-doctrine carve-out, deliberate**: absolute paths are legitimate
+  HERE because the sidecar's consumer is the local, tool-bearing agent
+  following up at the source — not an uploaded-payload reader. Whether a
+  sidecar ships with a rendered payload is itself a writer decision, so
+  web-bound payloads never leak system paths.
+- **Visibility over erasure**: today config exclusion happens via ignore
+  patterns, which erase the record; class routing keeps config followable.
+  Classification is a routing concern (class map at eligibility;
+  per-class channel policy — admiral's projection eventually), always
+  subject to config/one-off overrides (a run MAY ingest specific configs).
+- Supersedes-in-spirit the thread-corpus track-map note ("custom side-car
+  container planned" for config/docs) with a leaner mechanism: for config,
+  pointers suffice; docs get real tracks.
+
 ## Validation without serializers
 
 Golden data-to-data comparison: run the v3 pipeline over this repo → IR;
