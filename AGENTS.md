@@ -7,6 +7,23 @@ decisions are justified by *reader cognition* — token economy, navigation,
 attention dilution, lost-in-the-middle — not by conventional serialization
 taste. Hold that audience frame for every design call.
 
+**The broader mission covers code, config, and documents over ONE substrate
+— asymmetrically, and flexibly.** Code ingestion is the trunk. Config
+handling is an *extension of the code run* (repo config is relevant to code
+analysis): not ingested by default, but surfaced as a companion document of
+pointers to source (absolute paths) cross-linked to code shard rows via
+linkage analysis. Markdown/docs ingestion is the *composable axis* — a
+standalone corpus ingestion (thread corpus) or a repo-run extension
+packaging project documentation as its own sharded/chunked payloads. The
+container/addressing machinery is mode-agnostic; **the ROW is
+mode-semantic** (code rows = files; doc rows = units the document's
+structure yields — exchange envelopes, section-units). Track adapters, the
+open element model, and header-declared schemas carry the differences —
+never format forks. Flexibility is the constitution: these are composable
+run modes with overridable defaults, not a fixed taxonomy.
+(assemble-design §Content-class dispositions; thread-corpus brief;
+md-processor-family design.)
+
 ## The four analysis relationships — name yours before reasoning
 
 Most confusion on this project is a category error between these:

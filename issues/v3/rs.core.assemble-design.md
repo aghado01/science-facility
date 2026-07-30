@@ -376,14 +376,25 @@ existing streams.
 ## Content-class dispositions — forward design (user, 2026-07-29; sketch, not committed)
 
 The disposition tiers generalize from within-document spans to WHOLE-FILE
-CLASSES: a file's class selects its default channel and payload format —
-one vocabulary at two scales.
+CLASSES — but the classes are NOT symmetric legs (user, 2026-07-29):
 
-| class | default disposition | payload/format |
+- **Code ingestion is the trunk.**
+- **Config handling is an EXTENSION of code ingestion** — repo config is
+  relevant to code analysis, so it travels with the code run, not as its
+  own track.
+- **Markdown/docs ingestion is the composable axis**: an entirely separate
+  ingestion of markdown corpora (thread corpus etc.) OR an extension of a
+  repo run that packages the project's documentation proper as its own set
+  of sharded/chunked payloads alongside the code payload.
+- **Flexibility is the constitution** — these are composable run modes with
+  defaults, never a fixed taxonomy; the table states defaults, all
+  overridable per run.
+
+| class | default disposition | artifact/format |
 |---|---|---|
 | code | primary — the code track | rows/shards/tree (the classic payload) |
-| **config** | **pointer sidecar — NOT ingested by default** | descriptor-only entries carrying **absolute paths** for at-will follow-up at the source |
-| documents/markdown | their own track + formats | md family / exchange envelopes / doc corpus containers — never mixed into code payloads |
+| **config** | **NOT ingested by default — companion document, code-run extension** | likely a single DOCUMENT (not necessarily serialized data): pointers to config source files (**absolute paths**, at-will follow-up) + **cross-links to the associated code snapshot shard rows** (the linkage inversion rendered as payload addresses) — tree-manifest analog, template-engine renderable |
+| documents/markdown | own sharded/JSONL payloads, doc-semantics rows | rows = units the document's structure yields (exchange envelopes for threads via the threadparser application; section-units for project docs/manuscripts) — never mixed into code payloads |
 
 Config specifics:
 - **Descriptor-only ingestion**: the pointer entry is exactly the
@@ -421,10 +432,13 @@ cross-item processor:
    (the follow-up telescope: sidecar entry → reader file → the reference
    site itself).
 3. Assemble collates as usual (open element model, zero edits); the
-   sidecar writer INVERTS the per-entry ConfigRefs into `ReferencedBy` on
-   each config pointer entry. Cross-item aggregation happens where
-   cross-item work belongs — at emission, not in the chain, not in
-   assemble (whose neutrality forbids content analysis).
+   companion-document writer INVERTS the per-entry ConfigRefs into
+   `ReferencedBy` on each config pointer entry — rendered as **cross-links
+   into the code payload's shard-row addresses** (emission-time, when
+   addresses exist; tree-manifest analog, template-engine renderable).
+   Cross-item aggregation happens where cross-item work belongs — at
+   emission, not in the chain, not in assemble (whose neutrality forbids
+   content analysis).
 
 Chain-position knob for free (operation-order doctrine): scanning after
 comment strippers links only code-live references; before them includes
