@@ -361,5 +361,16 @@ said what"), multi-flavor, modestly sized, personally meaningful — ideal dogfo
   segmentation + flavor lifting) — bears on open decisions 3 (secondary
   chunking → windows basis + UNBROKEN) and 4 (flavor coverage →
   profile-informed basis instead of per-flavor reverse engineering).
+- 2026-07-29 — **Canonical exchange envelope stated** (user): the goal is a
+  SURJECTION of variable chat-thread sources onto one canonical row —
+  `{ Index; Prompt; Reply; Citations?; ToolUse?; … }` — canonical core +
+  optional elements, flavor lifters as the surjection's legs, absent
+  capabilities absent from the bag. Advances open decision 1 (row schema):
+  flat exchange rows over an open bag, header declares carried elements.
+  **Disposition tiers within the envelope** (md-family §Disposition tiers):
+  Prompt/Reply primary; Citations demoted to a reference sidecar with the
+  inline prose anchors as pointers (reviewed at will, never in context by
+  default — the telescope: prose → anchor → sidecar entry → external
+  reference); noise stripped; ToolUse disposition per-corpus config.
 
 _(append findings/results here)_

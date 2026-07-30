@@ -358,7 +358,11 @@ wire naming belongs to writers).
 
 **Lean payload, diagnostics sidecar:** reposnapshot payloads are as lean as
 possible, with options ensuring high visibility and auditability — through
-the *diagnostics channel*, not payload bloat. Failed ingests (ReadError,
+the *diagnostics channel*, not payload bloat. (Extended 2026-07-29: the
+sidecar concept gains a second species — the **reference/demotion sidecar**
+for secondary content (e.g. citation sections), where a pointer in the
+prose suffices and the material is reviewed at will; four-tier disposition
+vocabulary in `md-processor-family-design.md` §Disposition tiers.) Failed ingests (ReadError,
 binary halt) and **empty reads are never rendered into the payload**; they
 route to a diagnostic sidecar/log artifact. The tree manifest is part of
 the payload, so routed items don't appear there either. Distinct reasons

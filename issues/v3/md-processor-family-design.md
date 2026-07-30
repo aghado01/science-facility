@@ -112,16 +112,94 @@ taxonomy — detection by shape, never by content:
 - Ontology alignment: species are KINDS with per-kind default policy —
   same shape as the comment ontology, one format over.
 
-## tp-{flavor} refactor implied
+## Disposition tiers — demote-to-sidecar (user, 2026-07-29)
 
-tp-perplexity decomposes into: **rs-mdseg (breaks basis) + flavor lifting**
-(citation footers → Citations[], H1 → Prompt, sentinel masking retained).
-The segmentation core becomes shared and measured-basis-capable; flavor
-processors shrink to their genuinely flavor-specific lifting. New flavors
-(claude/chatgpt/gemini — thread-corpus open decision 4) start from
-`profile` output instead of reverse-engineering each export format.
-Thread-corpus open decision 3 (long-reply secondary chunking) gets its
-mechanism for free: windows basis + UNBROKEN flags.
+The user's divergence from mdnav's treatment: some material is neither
+primary content nor noise. Canonical case: **citation sections at the end
+of a Perplexity reply** — content, technically relevant, but *secondary* to
+the prose that cites them; the prose is what gets read, and the questions
+under investigation usually live there. The full disposition vocabulary:
+
+| tier | disposition | artifact | recovery |
+|---|---|---|---|
+| primary | payload | the entry Content | in context |
+| **secondary** | **demote to sidecar; POINTER remains in prose** | organized, addressable sidecar entry | reviewed at will — never in context by default |
+| noise | strip (addressed elision) | elision marker into source bytes | re-read without strip |
+| failed/empty | diagnostics sidecar | routing record | audit |
+
+The distinction from elision matters: an elision marker says "garbage was
+here"; a sidecar entry has an *identity* — listable, scannable,
+cross-referencable without re-reading source. And the pointer is not
+scaffolding — **the inline citation anchors are structurally part of the
+prose** (tp-perplexity already classifies inline cite clusters as content,
+not metadata). The reading experience is exactly the telescope: prose in
+context → anchor → sidecar entry on demand → external reference if the
+investigation merits that level of detail. This is the ad-libitum
+bite-geometry doctrine applied to relevance instead of length.
+
+Mechanism — every piece already exists:
+1. **Lift** (chain-side): the masking-type machinery tp-perplexity uses for
+   citation footers, generalized — footer/reference sections extracted from
+   Content, inline anchors preserved in place.
+2. **Travel** (element): lifted material rides the entry as an element
+   (e.g. `Citations`) through the open element model — declared in
+   Header.Elements, zero assemble changes.
+3. **Route** (emission-side): writers send the element to a sidecar
+   artifact and the pointer convention into the payload — compute-vs-emit,
+   with the diagnostics-sidecar precedent extended from audit trail to
+   reference tier.
+
+Consequences for the family:
+- rs-mdstrip's species table generalizes to a **three-way disposition
+  column** — keep | demote | strip — per species, defaults overridable
+  (configurability doctrine: conventional md ingestion may default
+  citation-like sections to demote; always subject to one-off overrides).
+  The signed-url label-keeping rule is already a micro-demotion (label =
+  pointer, dead URL = dropped) — the continuity is not accidental.
+- tp-perplexity's Citations[] gains its final destination: not payload
+  ballast, a sidecar with prose anchors pointing in.
+- mdnav (reader-side) is slated for the same improvement in the user's
+  hands — extraction-to-sidecar as run artifacts rather than
+  elide-or-ingest; the shared tier vocabulary keeps both sides aligned.
+
+Open: sidecar addressing scheme (entry key = RelativePath + anchor id?
+byte-span addressable like everything else?); one sidecar per corpus vs per
+document; pointer syntax in rendered payloads (the existing `[^n]` anchors
+may simply suffice for the citation case).
+
+## tp-{flavor} refactor implied — the canonical exchange envelope (user, 2026-07-29)
+
+The target is a **surjection: variable chat-thread sources → one canonical
+"exchange envelope."** Each shard payload row is a bag over a canonical
+core plus optional elements:
+
+```
+ExchangeEnvelope = @{ Index; Prompt; Reply;           # canonical core
+                      Citations?; ToolUse?; ... }     # optional elements,
+                                                      # present when the
+                                                      # flavor carries them
+```
+
+This is the open element model at exchange-row granularity: flavor lifters
+are the surjection's legs — each populates what its source structurally
+carries; absent capabilities are absent fields (never empty placeholders —
+lean doctrine); no flavor's native structure leaks into the canonical
+shape. Readers and writers speak ONE row schema regardless of source
+(configurability doctrine: the header declares which elements this corpus's
+rows carry). The four-tier disposition then applies WITHIN the envelope:
+Prompt/Reply primary; Citations secondary (sidecar + prose anchors);
+noise stripped; ToolUse disposition per-corpus config (primary for
+tool-trajectory investigations, secondary otherwise).
+
+Decomposition: tp-perplexity becomes **rs-mdseg (breaks basis) + Perplexity
+lifter** (citation footers → Citations[], H1 → Prompt, sentinel masking
+retained). The segmentation core is shared and measured-basis-capable;
+flavor processors shrink to their genuinely flavor-specific lifting. New
+flavors (claude/chatgpt/gemini — thread-corpus open decision 4) start from
+`profile` output instead of reverse-engineering each export format, and
+their lifters target the same envelope. Thread-corpus open decision 3
+(long-reply secondary chunking) gets its mechanism for free: windows basis
++ UNBROKEN flags.
 
 ## Open decisions
 
