@@ -10,10 +10,15 @@
     permitted per colonel AST validation).
 
     Processor self-documentation (no runtime enforcement in this file):
-        - Item contract:  tp-era Text envelope (unpacks Id/Path/Text and
-          REPLACES the bag with its own envelope). Incompatible with
-          code-track descriptor chains — consolidation item 6d. Chains fine
-          with other tp-era processors.
+        - Item contract:  harmonized content mutator (consolidation 6d) —
+          reads Content (descriptor contract) else Text (tp-era), mutates it,
+          and writes the SAME key back on a CLONE of the incoming bag; every
+          other property passes through untouched. Copy-on-mutate: the mutator
+          sibling of file-read's copy-on-enrich. Track-agnostic — the
+          processor never renames, invents, or edits a key it did not read.
+          Bare string in → bare string out. Bag carrying neither key →
+          returned untouched. Per-invocation metadata appends one record to
+          the `Processing` element (see .NOTES).
         - Position class: content mutator
         - Intended Colonel IssPreset floor: Core
         - Required IssModules: none
@@ -21,8 +26,25 @@
 .NOTES
         Config shape:
                     Operations: string[]  no defaults; processor is wholesale opt-in
-                    IncludeMeta: bool     default true
+                    IncludeMeta: bool     default true — attach the `Processing`
+                                          record. $false returns the mutated bag
+                                          WITHOUT the record; it never collapses a
+                                          bag to a bare string (that was the tp-era
+                                          envelope behavior 6d removed).
                     TargetUnit:  int      spaces per indent level; default 2
+
+        Processing element (harmonized mutator metadata, 6d):
+            An ordered array on the bag; each mutator invocation APPENDS
+                @{ Processor; Operations; Skipped (this processor's extra) }
+            Chain order = array order, so the documented two-pass rs-indent
+            stack records BOTH passes instead of the second overwriting the
+            first — the concrete reason the trail is a list, not a key.
+
+        Skip-list path resolution: the contraindication gate reads
+            RelativePath (descriptor contract) else Path (tp-era)
+        — descriptor bags carry no `Path`, so a Path-only lookup would silently
+        stop protecting Markdown the moment this processor joined a code-track
+        chain.
 
         Op surface:
 
@@ -75,9 +97,9 @@
         # measures leading spaces only; the common-tab case is a no-op.
         # Colonel chaining IS available (v2, plan-driven); the cleaner stack —
         #   format-ws(lf) → rs-indent(detab) → rs-indent(strip-common, min-indent-2)
-        # — works today as a tp-era chain (same Text-envelope contract on all
-        # three); its use inside code-track descriptor chains is gated by the
-        # contract harmonization (consolidation item 6d).
+        # — now works in code-track descriptor chains as well: 6d harmonized all
+        # four content mutators onto copy-on-mutate, so identity fields survive
+        # and each pass appends its own Processing record.
         # For now, specifying detab + strip-common in one call is safe but
         # strip-common will only see already-expanded depths from lines ending
         # in non-tab leading whitespace (the tab expansion from detab within
@@ -105,70 +127,62 @@ $includeMeta = if ($null -ne $Config['IncludeMeta']) { [bool]$Config['IncludeMet
 $targetUnit = if ($null -ne $Config['TargetUnit'] -and [int]$Config['TargetUnit'] -gt 0) { [int]$Config['TargetUnit'] } else { 2 }
 
 # ---------------------------------------------------------------------------
-# Item unpacking
+# Content-key resolution — harmonized content-mutator contract (6d)
+#
+# Read Content (descriptor contract) else Text (tp-era); the key that was read
+# is the key written back, which is what keeps this processor track-agnostic.
+# A bag carrying NEITHER key is returned untouched (mirrors rs-attributes'
+# no-Content contract): a mutator with nothing to mutate must not fabricate an
+# empty payload — assemble routes empty content to Diagnostics and splits
+# EmptyFile from EmptiedByProcessing, so a phantom '' would forge an entry.
+# Content wins when both keys exist; Text is then left exactly as found (never
+# edit a key you did not read) — no current producer emits both.
 # ---------------------------------------------------------------------------
+$keys = @()
+$contentKey = $null
 $text = $null
 $path = $null
-$id = $null
 
 if ($Item -is [string])
 {
     $text = $Item
 }
-elseif ($Item -is [hashtable])
+elseif ($Item -is [hashtable] -or $Item -is [pscustomobject])
 {
-    if ($Item.ContainsKey('Text')) { $text = [string]$Item['Text'] }
-    if ($Item.ContainsKey('Path')) { $path = [string]$Item['Path'] }
-    if ($Item.ContainsKey('Id')) { $id = [string]$Item['Id'] }
+    $keys = if ($Item -is [hashtable]) { @($Item.Keys) } else { @($Item.PSObject.Properties.Name) }
+    $contentKey = if ('Content' -in $keys) { 'Content' } elseif ('Text' -in $keys) { 'Text' } else { $null }
+    if ($null -eq $contentKey) { return $Item }
+    $text = [string]$Item.$contentKey
+
+    # Skip-list path: RelativePath (descriptor) else Path (tp-era). A Path-only
+    # lookup silently stops protecting Markdown in code-track chains.
+    if ('RelativePath' -in $keys) { $path = [string]$Item.RelativePath }
+    elseif ('Path' -in $keys) { $path = [string]$Item.Path }
 }
-elseif ($Item -is [pscustomobject])
+else
 {
-    if ($null -ne $Item.PSObject.Properties['Text']) { $text = [string]$Item.Text }
-    if ($null -ne $Item.PSObject.Properties['Path']) { $path = [string]$Item.Path }
-    if ($null -ne $Item.PSObject.Properties['Id']) { $id = [string]$Item.Id }
+    return $Item
 }
 
 if ([string]::IsNullOrEmpty($text)) { $text = '' }
 
 # ---------------------------------------------------------------------------
-# Skip list — indentation normalization not appropriate for prose/markup
+# Skip list — indentation normalization not appropriate for prose/markup.
+# Skipped items still return through the normal copy-on-mutate tail (content
+# unchanged, Skipped = $true on the Processing record) — every gate below is
+# forced off rather than returning early, so there is exactly one emit site.
 # ---------------------------------------------------------------------------
 $ext = if ($path) { [IO.Path]::GetExtension($path).ToLowerInvariant() } else { '' }
 $skipExts = @('.md', '.txt', '.rst', '.html', '.htm', '.xml', '.json', '.yaml', '.yml', '.toml', '.csv')
-
-if ($ext -in $skipExts)
-{
-    if (-not $includeMeta) { return $text }
-    return [pscustomobject]@{
-        Id         = $id
-        Path       = $path
-        Text       = $text
-        Operations = @($ops)
-        Skipped    = $true
-        Processor  = 'rs-indent'
-    }
-}
-
-# Empty text early-return
-if ($text -eq '')
-{
-    if (-not $includeMeta) { return '' }
-    return [pscustomobject]@{
-        Id         = $id
-        Path       = $path
-        Text       = ''
-        Operations = @($ops)
-        Processor  = 'rs-indent'
-    }
-}
+$skipped = $ext -in $skipExts
 
 # ---------------------------------------------------------------------------
 # Gate resolution
 # ---------------------------------------------------------------------------
-$doStripCommon = 'strip-common' -in $ops
-$doDetab = 'detab' -in $ops -or 'min-indent-2' -in $ops -or 'tabify' -in $ops
-$doMinIndent = 'min-indent-2' -in $ops
-$doTabify = 'tabify' -in $ops
+$doStripCommon = (-not $skipped) -and ('strip-common' -in $ops)
+$doDetab = (-not $skipped) -and ('detab' -in $ops -or 'min-indent-2' -in $ops -or 'tabify' -in $ops)
+$doMinIndent = (-not $skipped) -and ('min-indent-2' -in $ops)
+$doTabify = (-not $skipped) -and ('tabify' -in $ops)
 
 $lines = $text -split "`n"
 $depths = [int[]]::new($lines.Count)
@@ -294,12 +308,25 @@ if ($doTabify)
 
 $t = $lines -join "`n"
 
-if (-not $includeMeta) { return $t }
+# ---------------------------------------------------------------------------
+# Copy-on-mutate return — harmonized content-mutator contract (6d)
+# Clone the bag, replace the content key, pass everything else through so
+# identity fields (and any elements earlier chain steps attached) survive.
+# ---------------------------------------------------------------------------
+if ($null -eq $contentKey) { return $t }
 
-return [pscustomobject]@{
-    Id         = $id
-    Path       = $path
-    Text       = $t
-    Operations = @($ops)
-    Processor  = 'rs-indent'
+$result = [pscustomobject]@{}
+foreach ($name in $keys)
+{
+    $value = if ($name -eq $contentKey) { $t } else { $Item.$name }
+    $result | Add-Member -NotePropertyName $name -NotePropertyValue $value
 }
+
+if ($includeMeta)
+{
+    $record = [pscustomobject]@{ Processor = 'rs-indent'; Operations = @($ops); Skipped = $skipped }
+    if ('Processing' -in $keys) { $result.Processing = @($Item.Processing) + $record }
+    else { $result | Add-Member -NotePropertyName Processing -NotePropertyValue @($record) }
+}
+
+return $result

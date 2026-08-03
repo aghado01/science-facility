@@ -22,10 +22,15 @@
     permitted per colonel AST validation).
 
     Processor self-documentation (no runtime enforcement in this file):
-        - Item contract:  tp-era Text envelope (unpacks Id/Path/Text and
-          REPLACES the bag with its own envelope). Incompatible with
-          code-track descriptor chains — consolidation item 6d. Chains fine
-          with other tp-era processors.
+        - Item contract:  harmonized content mutator (consolidation 6d) —
+          reads Content (descriptor contract) else Text (tp-era), mutates it,
+          and writes the SAME key back on a CLONE of the incoming bag; every
+          other property passes through untouched. Copy-on-mutate: the mutator
+          sibling of file-read's copy-on-enrich. Track-agnostic — the
+          processor never renames, invents, or edits a key it did not read.
+          Bare string in → bare string out. Bag carrying neither key →
+          returned untouched. Per-invocation metadata appends one record to
+          the `Processing` element.
         - Position class: content mutator
         - Intended Colonel IssPreset floor: Core
         - Required IssModules: none
@@ -45,7 +50,17 @@
     Hashtable with optional keys:
       Operations  [string[]] opt-in strip list; default: all four structural kinds (interior + inline kept)
                   Valid values: 'block-comments','interior-comments','doc-strings','comment-blocks','line-comments','inline-comments'
-      IncludeMeta [bool] default $true  — when $false, returns bare string
+      IncludeMeta [bool] default $true  — attach the `Processing` record. $false
+                  returns the mutated bag WITHOUT the record; it never collapses a
+                  bag to a bare string (that was the tp-era envelope behavior 6d
+                  removed). Bare-string input is unaffected either way.
+
+.NOTES
+        Processing element (harmonized mutator metadata, 6d):
+            An ordered array on the bag; each mutator invocation APPENDS
+                @{ Processor; Operations }
+            Chain order = array order. Assemble collates it as an ordinary
+            element (open element model — no per-element branches).
 #>
 param(
     [Parameter(Position = 0)]
@@ -62,11 +77,20 @@ $ops = if ($Config.ContainsKey('Operations')) { @($Config['Operations']) } else 
 $includeMeta = if ($null -ne $Config['IncludeMeta']) { [bool]$Config['IncludeMeta'] } else { $true }
 
 # ---------------------------------------------------------------------------
-# Item unpacking
+# Content-key resolution — harmonized content-mutator contract (6d)
+#
+# Read Content (descriptor contract) else Text (tp-era); the key that was read
+# is the key written back, which is what keeps this processor track-agnostic.
+# A bag carrying NEITHER key is returned untouched (mirrors rs-attributes'
+# no-Content contract): a mutator with nothing to mutate must not fabricate an
+# empty payload — assemble routes empty content to Diagnostics and splits
+# EmptyFile from EmptiedByProcessing, so a phantom '' would forge an entry.
+# Content wins when both keys exist; Text is then left exactly as found (never
+# edit a key you did not read) — no current producer emits both.
 # ---------------------------------------------------------------------------
+$keys = @()
+$contentKey = $null
 $text = $null
-$path = $null
-$id = $null
 
 if ($Item -is [string])
 {
@@ -74,21 +98,19 @@ if ($Item -is [string])
 }
 elseif ($Item -is [hashtable] -or $Item -is [pscustomobject])
 {
-    if ($null -ne $Item.PSObject.Properties['Text']) { $text = [string]$Item.Text }
-    if ($null -ne $Item.PSObject.Properties['Path']) { $path = [string]$Item.Path }
-    if ($null -ne $Item.PSObject.Properties['Id']) { $id = [string]$Item.Id }
+    $keys = if ($Item -is [hashtable]) { @($Item.Keys) } else { @($Item.PSObject.Properties.Name) }
+    $contentKey = if ('Content' -in $keys) { 'Content' } elseif ('Text' -in $keys) { 'Text' } else { $null }
+    if ($null -eq $contentKey) { return $Item }
+    $text = [string]$Item.$contentKey
+}
+else
+{
+    return $Item
 }
 
 if ([string]::IsNullOrEmpty($text))
 {
-    if (-not $includeMeta) { return '' }
-    return [pscustomobject]@{
-        Id         = $id
-        Path       = $path
-        Text       = ''
-        Operations = @($ops)
-        Processor  = 'rs-csstrip'
-    }
+    $text = ''
 }
 
 # ---------------------------------------------------------------------------
@@ -293,17 +315,27 @@ if ($pos -lt $text.Length)
     $null = $sb.Append($text.Substring($pos))
 }
 
-$result = $sb.ToString()
+$stripped = $sb.ToString()
 
 # ---------------------------------------------------------------------------
-# Return
+# Copy-on-mutate return — harmonized content-mutator contract (6d)
+# Clone the bag, replace the content key, pass everything else through so
+# identity fields (and any elements earlier chain steps attached) survive.
 # ---------------------------------------------------------------------------
-if (-not $includeMeta) { return $result }
+if ($null -eq $contentKey) { return $stripped }
 
-return [pscustomobject]@{
-    Id         = $id
-    Path       = $path
-    Text       = $result
-    Operations = @($ops)
-    Processor  = 'rs-csstrip'
+$result = [pscustomobject]@{}
+foreach ($name in $keys)
+{
+    $value = if ($name -eq $contentKey) { $stripped } else { $Item.$name }
+    $result | Add-Member -NotePropertyName $name -NotePropertyValue $value
 }
+
+if ($includeMeta)
+{
+    $record = [pscustomobject]@{ Processor = 'rs-csstrip'; Operations = @($ops) }
+    if ('Processing' -in $keys) { $result.Processing = @($Item.Processing) + $record }
+    else { $result | Add-Member -NotePropertyName Processing -NotePropertyValue @($record) }
+}
+
+return $result

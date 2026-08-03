@@ -21,10 +21,15 @@
     legitimate).
 
     Processor self-documentation (no runtime enforcement in this file):
-        - Item contract:  tp-era Text envelope (unpacks Id/Path/Text and
-          REPLACES the bag with its own envelope). Incompatible with
-          code-track descriptor chains — consolidation item 6d. Chains fine
-          with other tp-era processors.
+        - Item contract:  harmonized content mutator (consolidation 6d) —
+          reads Content (descriptor contract) else Text (tp-era), mutates it,
+          and writes the SAME key back on a CLONE of the incoming bag; every
+          other property passes through untouched. Copy-on-mutate: the mutator
+          sibling of file-read's copy-on-enrich. Track-agnostic — the
+          processor never renames, invents, or edits a key it did not read.
+          Bare string in → bare string out. Bag carrying neither key →
+          returned untouched. Per-invocation metadata appends one record to
+          the `Processing` element (see .NOTES).
         - Position class: content mutator
         - Intended Colonel IssPreset floor: Core (uses pipeline cmdlets;
           Bare is insufficient)
@@ -34,6 +39,13 @@
         Config shape:
             Operations: string[] (opt-in strip list; default strips all structural kinds, keeps inline)
             IncludeMeta: bool (default true)
+
+        Processing element (harmonized mutator metadata, 6d):
+            An ordered array on the bag; each mutator invocation APPENDS
+                @{ Processor; Operations; ParseErrors?; FallbackMode? }
+            ParseErrors / FallbackMode appear only when they occurred — the
+            same conditional-emission rule the tp-era envelope used, now on the
+            record instead of on a replacement bag. Chain order = array order.
 
 .COMMENT KINDS
     FrontMatter    #Requires directive, line-1 shebang — Derived kind     (NEVER strippable; no op exists)
@@ -49,13 +61,16 @@
     across the directive).
 
 .PARAMETER Item
-    String, hashtable, or pscustomobject.  Recognised keys: Text, Path, Id.
+    String, hashtable, or pscustomobject.  Content key: Content (preferred) or Text.
 
 .PARAMETER Config
     Hashtable with optional keys:
       Operations  [string[]] opt-in strip list; default: all four structural kinds (inline kept)
                   Valid values: 'block-comments','doc-strings','comment-blocks','line-comments','inline-comments'
-      IncludeMeta [bool] default $true  — when $false, returns bare string
+      IncludeMeta [bool] default $true  — attach the `Processing` record. $false
+                  returns the mutated bag WITHOUT the record; it never collapses a
+                  bag to a bare string (that was the tp-era envelope behavior 6d
+                  removed). Bare-string input is unaffected either way.
       MaskHereStrings    [bool] default $true — fallback route only: here-strings are code
                   payload, not comments; they are sentinel-masked before the pseudo-AST
                   regexes run and restored afterward. A broken opener masks through a
@@ -143,11 +158,20 @@ $ops = if ($Config.ContainsKey('Operations')) { @($Config['Operations']) } else 
 $includeMeta = if ($null -ne $Config['IncludeMeta']) { [bool]$Config['IncludeMeta'] } else { $true }
 
 # ---------------------------------------------------------------------------
-# Item unpacking
+# Content-key resolution — harmonized content-mutator contract (6d)
+#
+# Read Content (descriptor contract) else Text (tp-era); the key that was read
+# is the key written back, which is what keeps this processor track-agnostic.
+# A bag carrying NEITHER key is returned untouched (mirrors rs-attributes'
+# no-Content contract): a mutator with nothing to mutate must not fabricate an
+# empty payload — assemble routes empty content to Diagnostics and splits
+# EmptyFile from EmptiedByProcessing, so a phantom '' would forge an entry.
+# Content wins when both keys exist; Text is then left exactly as found (never
+# edit a key you did not read) — no current producer emits both.
 # ---------------------------------------------------------------------------
+$keys = @()
+$contentKey = $null
 $text = $null
-$path = $null
-$id = $null
 
 if ($Item -is [string])
 {
@@ -155,21 +179,19 @@ if ($Item -is [string])
 }
 elseif ($Item -is [hashtable] -or $Item -is [pscustomobject])
 {
-    if ($null -ne $Item.PSObject.Properties['Text']) { $text = [string]$Item.Text }
-    if ($null -ne $Item.PSObject.Properties['Path']) { $path = [string]$Item.Path }
-    if ($null -ne $Item.PSObject.Properties['Id']) { $id = [string]$Item.Id }
+    $keys = if ($Item -is [hashtable]) { @($Item.Keys) } else { @($Item.PSObject.Properties.Name) }
+    $contentKey = if ('Content' -in $keys) { 'Content' } elseif ('Text' -in $keys) { 'Text' } else { $null }
+    if ($null -eq $contentKey) { return $Item }
+    $text = [string]$Item.$contentKey
+}
+else
+{
+    return $Item
 }
 
 if ([string]::IsNullOrEmpty($text))
 {
-    if (-not $includeMeta) { return '' }
-    return [pscustomobject]@{
-        Id         = $id
-        Path       = $path
-        Text       = ''
-        Operations = @($ops)
-        Processor  = 'rs-psstrip'
-    }
+    $text = ''
 }
 
 # ---------------------------------------------------------------------------
@@ -620,32 +642,40 @@ if ($pos -lt $text.Length)
     $null = $sb.Append($text.Substring($pos))
 }
 
-$result = $sb.ToString()
+$stripped = $sb.ToString()
 
 # Restore masked here-strings (fallback route only)
 if ($hsStore.Count -gt 0)
 {
-    $result = [regex]::Replace($result, "$HS_OPEN(\d+)$HS_CLOSE", { param($m) $hsStore[[int]$m.Groups[1].Value] })
+    $stripped = [regex]::Replace($stripped, "$HS_OPEN(\d+)$HS_CLOSE", { param($m) $hsStore[[int]$m.Groups[1].Value] })
 }
 
 # ---------------------------------------------------------------------------
-# Return
+# Copy-on-mutate return — harmonized content-mutator contract (6d)
+# Clone the bag, replace the content key, pass everything else through so
+# identity fields (and any elements earlier chain steps attached) survive.
 # ---------------------------------------------------------------------------
-if (-not $includeMeta) { return $result }
+if ($null -eq $contentKey) { return $stripped }
 
-$envelope = [ordered]@{
-    Id         = $id
-    Path       = $path
-    Text       = $result
-    Operations = @($ops)
-    Processor  = 'rs-psstrip'
-}
-if ($null -ne $parseErrors)
+$result = [pscustomobject]@{}
+foreach ($name in $keys)
 {
-    $envelope['ParseErrors'] = $parseErrors
+    $value = if ($name -eq $contentKey) { $stripped } else { $Item.$name }
+    $result | Add-Member -NotePropertyName $name -NotePropertyValue $value
 }
-if ($useFallback)
+
+if ($includeMeta)
 {
-    $envelope['FallbackMode'] = 'regex'
+    $record = [ordered]@{
+        Processor  = 'rs-psstrip'
+        Operations = @($ops)
+    }
+    if ($null -ne $parseErrors) { $record['ParseErrors'] = $parseErrors }
+    if ($useFallback) { $record['FallbackMode'] = 'regex' }
+
+    $recordObj = [pscustomobject]$record
+    if ('Processing' -in $keys) { $result.Processing = @($Item.Processing) + $recordObj }
+    else { $result | Add-Member -NotePropertyName Processing -NotePropertyValue @($recordObj) }
 }
-return [pscustomobject]$envelope
+
+return $result
