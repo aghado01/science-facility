@@ -167,13 +167,31 @@ receipts), filed as entry 6 in `payload-manifest-ledger.md`. Per-entry evidence
 already exists in the `Processing` trail (processor + ops, chain-ordered); the
 header-level summary is what the manifest owes.
 
+**Executability and generality are orthogonal axes** (user, 2026-08-04). The tier
+above measures the first; what makes a strip safe for a READER is the second:
+
+| | preserves executability | preserves generality |
+|---|---|---|
+| comments | yes | yes |
+| IDE / rendering boilerplate | **no** | **yes — for nearly every request** |
+| core logic | no | no |
+
+"Without loss of generality" is **request-relative, not absolute**: a reader is
+not getting IDE rendering aesthetics, so the boilerplate serving them is dead
+weight — unless the request is specifically about rendering embedded in code,
+which is what the ops knob exists for. This is why tier-2 stripping is
+defensible at all: generated furniture is tier-2 on executability but tier-1 on
+generality, and generality is the axis a reader actually cares about.
+
 **Two mechanisms, not one** — "interleaved with core code" picks out the second:
 
 - **Whole-file generated artifacts** (`*.Designer.cs`, `*.g.cs`, `R.java`,
-  generated gRPC/OpenAPI clients, `*.generated.ts`) are a ROUTING decision at
-  eligibility, not a stripping one — demote to a sidecar pointer the way config
-  does (assemble-design §"Content-class dispositions"). Path or extension
-  decides; no region analysis needed.
+  generated gRPC/OpenAPI clients, `*.generated.ts`) **present like config** and
+  take the same disposition: referenceable at the source, not needed inline. A
+  ROUTING decision at eligibility, not a stripping one — demote to a sidecar
+  pointer (assemble-design §"Content-class dispositions"). Path or extension
+  decides; no region analysis needed. The config sidecar mechanism generalizes
+  past config to any class with that shape.
 - **Interleaved regions** in otherwise hand-written files need real region
   strippers: C# `#region Windows Form Designer generated code` +
   `InitializeComponent`, `[GeneratedCode]` / `[CompilerGenerated]` attributes,
