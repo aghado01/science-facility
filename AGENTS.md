@@ -78,6 +78,20 @@ Same construct can play different roles per relationship: `#Requires` is
   the payload. Store vs view: in-memory structures optimize for processing
   ergonomics; what the *payload* carries is a writer decision.
 - User prefers working directly on main with targeted commits per work item.
+- **Minimalism, proportional to the problem** (user, 2026-08-04): prefer
+  language-level PowerShell over provider/vendored surface and the piping
+  baggage it drags in — `1..4 | Where-Object` over reaching for a provider
+  cmdlet like `Get-ChildItem`. Subject to expediency and robustness: *don't
+  bring a bazooka to a knife fight, but bring the bazooka to the bazooka
+  fight.* Roslyn for C# parsing is a sanctioned bazooka — string-literal-aware
+  comment extraction genuinely needs it, and it ships with pwsh. Gratuitous
+  dependencies are the target, not capable ones.
+  Status: the processor fleet is **already provider-free** (audited
+  2026-08-04 — zero `Get-*`/`Test-Path`/`Join-Path`/`Get-Content` anywhere in
+  `processors/`). What remains between it and an empty ISS is a handful of
+  Utility cmdlets: `Add-Member` (dominant, from the copy-on-enrich/mutate
+  clone), plus single uses of `Sort-Object`, `Where-Object`, `ForEach-Object`,
+  `Measure-Object`. `chain-executor.ps1` already uses none at all.
 
 ## Maintaining this document (recursive note)
 
