@@ -488,13 +488,38 @@ Mechanism — no new machinery:
   uses — script param blocks, functions incl. nested helpers, class methods —
   which is the shape of the general problem, not a PS quirk.
 
-**Operation-order consequence, concrete (doctrine instance):** a survey that
-wants doc prose — synopsis, parameter help — MUST run BEFORE the comment
-strippers. Signature *shapes* survive stripping; the prose does not
-(rs-psstrip strips DocStrings by default). So the processor's position in the
-profile *selects what the survey contains*: pre-strip yields documented
-signatures, post-strip yields bare ones. Stated, not hardcoded — the cleanest
-example yet of "config selects members, implementation owns sequence."
+**Operation-order: the survey belongs in the read-only tail, after ALL content
+mutators** — the same invariant as rs-attributes, for the same reason.
+(Corrected 2026-08-04 after user challenge; an earlier draft here argued the
+opposite on the strength of doc prose, which was a documentation concern
+smuggled into a structural one.)
+
+Two facts settle it:
+
+- **Structural extraction is comment-invariant.** Comments are not executable
+  code and contribute nothing to declarations, signatures, types, defaults,
+  call edges, control flow, or effects. Verified against `rs.core.ignore.psm1`:
+  33 declarations before and after rs-psstrip's default ops, with structural
+  records byte-identical, while content shrank 43047 → 26075 chars. So the
+  survey gains nothing from running early.
+- **Span anchors must index the bytes the payload actually ships.** A survey
+  run before the mutators would anchor into pre-mutation content that no
+  reader ever receives — an index pointing at bytes nobody has. This is the
+  binding constraint, and it forces the tail position.
+
+The one comment-shaped thing that IS structural — `#Requires` / frontmatter
+directives (dependency declarations, and in other languages `# type:` hints,
+coding cookies, pragmas) — needs no special positioning either: rs-psstrip's
+ontology makes FrontMatter a named never-strip kind, and it is read as parsed
+`$ast.ScriptRequirements` metadata rather than as comment text. Verified: it
+survives stripping and still parses.
+
+**Documentation harvesting is a separate concern.** If synopsis/help prose is
+ever wanted in a payload it gets its own element and its own position — it must
+not ride the survey. Prose in a survey element works *against* the token
+economy that justifies the element: a survey is an INDEX, prose is CONTENT, and
+an agent that wants the doc fetches the span. The dev tool keeps `Synopsis`
+because it is useful at a console; the element projection drops it.
 
 **Disposition angle:** a survey element makes a new payload tier possible —
 files that ship *signature-only, no content*. That sits between full content

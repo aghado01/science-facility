@@ -87,23 +87,39 @@ element and declares it in `Header.Elements` without knowing it exists.
 rs-attributes is the working precedent for the shape (one namespaced element
 holding a sub-structure).
 
-## Operation-order consequence — decide position deliberately
+## Operation-order — read-only tail, same as rs-attributes
 
-A survey wanting doc prose (synopsis, parameter help) **must run BEFORE the
-comment strippers**. Signature *shapes* survive stripping; the prose does not
-(rs-psstrip strips DocStrings by default). So position in the profile *selects
-what the survey contains* — pre-strip yields documented signatures, post-strip
-yields bare ones. Stated, not hardcoded: the cleanest instance yet of "config
-selects members, implementation owns sequence". The tool's suite asserts this
-directly (comment-stripped text surveys without synopsis while the parameter
-shape is unchanged).
+**Position: after ALL content mutators.** No tension with rs-attributes'
+invariant; the survey shares it, for the same reason.
 
-Note the tension with rs-attributes' invariant (enrich-only tail, after ALL
-content mutators). Both are enrich-only, but they want different positions and
-for principled reasons: attributes describe what the reader will RECEIVE, the
-survey may want what the author WROTE. Two enrich-only steps at different
-positions is legitimate — position is a profile invariant, and each processor
-stays position-ignorant.
+(An earlier draft argued the reverse — that the survey should precede the
+comment strippers to keep doc prose. User challenged it 2026-08-04 and was
+right: that was a documentation concern smuggled into a structural one.
+Comments are not executable code and contribute nothing to structure.)
+
+- **Structural extraction is comment-invariant** — verified against
+  `rs.core.ignore.psm1`: 33 declarations before and after rs-psstrip's default
+  ops, structural records byte-identical, content 43047 → 26075 chars. Nothing
+  is gained by running early.
+- **Span anchors must index the bytes the payload ships.** Running before the
+  mutators would anchor into pre-mutation content no reader receives — an index
+  pointing at bytes nobody has. This is the binding constraint.
+- **Frontmatter needs no special handling**: `#Requires` (and other languages'
+  directive species — `# type:` hints, coding cookies, pragmas) are the one
+  comment-shaped thing that IS structural, and rs-psstrip's ontology already
+  makes FrontMatter a named never-strip kind. Read it as parsed
+  `$ast.ScriptRequirements` metadata, not as comment text. Verified to survive
+  stripping and still parse.
+
+**Keep documentation out of the survey.** If synopsis/help prose is ever wanted
+it gets its own element and position. Prose in a survey element works against
+the token economy that justifies the element — a survey is an INDEX, prose is
+CONTENT, and an agent wanting the doc fetches the span. The dev tool keeps
+`Synopsis` (useful at a console); the element projection drops it.
+
+**Candidate structural addition:** `$ast.ScriptRequirements` is free from the
+parse and genuinely structural (declared dependencies). The tool does not
+extract it yet — worth adding when the port happens, or sooner.
 
 ## Open decisions
 

@@ -279,10 +279,30 @@ try
     Assert-Equal $textScript[0].Parameters[1].DefaultText '@{}' '-ScriptText reports defaults'
 
     # Mutated content surveys as mutated — the reason disk re-reads are wrong.
-    $stripped = $mixedText -replace '(?s)<#.*?#>', ''
-    $noHelp = @(Get-FunctionSignature -ScriptText $stripped -SourceName 'mixed.psm1' -Name 'Get-Thing')
-    Assert-True ($null -eq $noHelp[0].Synopsis) 'comment-stripped text surveys without synopsis (position matters)'
-    Assert-Equal $noHelp[0].ParameterCount 6 'signature shape survives comment stripping'
+    # STRUCTURAL EXTRACTION IS COMMENT-INVARIANT: comments are not executable
+    # code, so they contribute nothing to declarations, signatures, types or
+    # defaults. This is what lets the survey sit in the read-only tail (after all
+    # content mutators) rather than needing to run early — the position that also
+    # keeps its span anchors pointing at the bytes the payload actually ships.
+    # Self-contained strip so the module keeps its no-reposnapshot dependency.
+    $stripped = ($mixedText -replace '(?s)<#.*?#>', '') -replace '(?m)^\s*#(?!Requires)[^\r\n]*\r?\n', ''
+    $preStrip = @(Get-FunctionSignature -ScriptText $mixedText -SourceName 'm.psm1')
+    $postStrip = @(Get-FunctionSignature -ScriptText $stripped -SourceName 'm.psm1')
+
+    Assert-Equal $postStrip.Count $preStrip.Count 'comment-invariant: same declaration count after stripping'
+    $structural = 'Kind', 'Name', 'Class', 'IsNested', 'IsAdvanced', 'HasDynamicParam', 'ParameterCount'
+    $preJson = ($preStrip | Select-Object $structural | ConvertTo-Json -Depth 6 -Compress)
+    $postJson = ($postStrip | Select-Object $structural | ConvertTo-Json -Depth 6 -Compress)
+    Assert-True ($preJson -eq $postJson) 'comment-invariant: structural fields byte-identical after stripping'
+    $preParams = ($preStrip.Parameters | ConvertTo-Json -Depth 6 -Compress)
+    $postParams = ($postStrip.Parameters | ConvertTo-Json -Depth 6 -Compress)
+    Assert-True ($preParams -eq $postParams) 'comment-invariant: parameter surfaces (types, defaults) unchanged'
+    Assert-True ($stripped.Length -lt $mixedText.Length) 'the strip actually removed content (invariance is not vacuous)'
+
+    # Only DOCUMENTATION is lost — a separate concern that must not ride the
+    # survey element (a survey is an index; prose is content).
+    $noHelp = $postStrip | Where-Object { $_.Name -eq 'Get-Thing' }
+    Assert-True ($null -eq $noHelp.Synopsis) 'stripping costs only the synopsis (documentation, not structure)'
 
     $emptyText = @(Get-FunctionSignature -ScriptText '' -SourceName 'empty.ps1')
     Assert-Equal $emptyText.Count 0 'empty text yields no records (no throw)'
