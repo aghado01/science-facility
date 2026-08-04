@@ -47,31 +47,35 @@ comment syntax**: constructs that participate in the code's **runtime trace**
 That is the discriminator, and it is what keeps per-language work mechanical
 instead of ad hoc — a new language needs the RULE applied, not a list memorized.
 
-The collision is a language-design accident, unevenly distributed:
+**Sharpened (user, 2026-08-04): the collision that FORCES this machinery is rare
+and close to unique — comment-delimiter tokens doing double duty as
+LANGUAGE-RECOGNIZED syntax, read by the parser or the source decoder itself.**
+PowerShell `#Requires` (surfaced as `$ast.ScriptRequirements`) and Python's
+PEP 263 coding cookie are essentially the list; shebang is adjacent but
+loader-level, not language-level. Most languages never did this: C `#pragma` is
+a preprocessor directive (`#` is not a comment character there), Java uses
+annotations, JS `'use strict'` is a string literal. PowerShell's `#` overload is
+unfortunate and unrepresentative — do NOT generalize from it.
 
-- **Worst** — languages that overloaded the comment character for real
-  directives: PowerShell (`#Requires`), Python (coding cookie). The lexer cannot
-  discriminate; only language knowledge can. Hence the partition at the parse
-  boundary, performed once, at the promotion site.
-- **Mildest** — languages with genuine directive/annotation syntax: C#
-  `#pragma`/`#if`, Java annotations. Those are not comments at all, so they never
-  enter the comment population (see "Not comments" above).
+Everything else listed in the row above is a **different phenomenon** that merely
+shares the never-strip policy: **tool-recognized comment content** — `# type:`,
+`# noqa`, `# pylint:`, `# fmt:`, `// @ts-*`, `eslint-disable`,
+`//# sourceMappingURL=`. No language reads these; external tools do.
 
-Within the kind the *reason* for protection differs, and the difference will
-matter as languages land:
+The practical consequence is that the two classes need different **mechanisms**,
+not just different justifications:
 
-| tier | effect | examples | note |
+| class | who reads it | examples | mechanism |
 |---|---|---|---|
-| parse-affecting | changes how the source itself decodes | Python coding cookie | stronger than runtime — stripping can corrupt the file's meaning outright |
-| runtime trace | affects execution | PS `#Requires`, shebang | the criterion's core case |
-| tooling-semantic | affects type checkers / bundlers, not runtime | Python `# type:`, `// @ts-*`, `//# sourceMappingURL=` | **may be the only type information present** — a structural survey has a stake here |
-| tooling-directive | suppresses tooling noise | `# noqa`, `# pylint:`, `# fmt:`, `eslint-disable` | protected by convention, not by semantics |
+| language-recognized | the parser / source decoder | PS `#Requires`; Python coding cookie | **partition at the parse boundary** into a typed kind — the lexer cannot discriminate but the language can. Text matched exactly once, at the promotion site (psdig lineage). |
+| loader-recognized | the OS exec path | shebang `#!` | same partition, same reason (position is the discriminator) |
+| tool-recognized | external tooling | `# type:`, `@ts-*`, `eslint-disable`, `sourceMappingURL` | ordinary comment text retained by **policy**. Pattern recognition is legitimate and sufficient — consistent with the standing rule that text-pattern recognition belongs to the regex route, not to classification. |
 
-Default stays **never strip** across all four — conservative, and the token cost
-is trivial — but the reasons are not interchangeable. A language whose type
-information lives in comments (pre-annotation Python) makes tier 3 *structural
-payload* rather than preserved noise, which is a survey concern, not just a
-stripping concern.
+Default stays **never strip** across all of them, but only the first two justify
+the typed-partition machinery. One note carries forward to the survey: where a
+language keeps type information in comments (pre-annotation Python `# type:`),
+tool-recognized content becomes *structural payload* rather than preserved
+noise — a survey concern, not a stripping one.
 
 Corollary, settled independently: comment-based help / doc-strings are NOT
 frontmatter under this criterion. `Get-Help` reads them at runtime, but they do
@@ -84,6 +88,61 @@ extraction is comment-invariant and the survey can run in the read-only tail
 - **economy** — strip everything except `frontmatter` (+ `doc-strings` optionally kept)
 - **debias** — economy + `doc-strings` + `inline-comments`: code-only reading
 - **faithful** — strip nothing; normalization stages only
+
+## Stripping need not be lossy — comment sidecar (user, 2026-08-04; forward design)
+
+**Reframe: stripping is EXTRACTION, not deletion.** Removed comments move to a
+sidecar, indexed and linked by metadata **relative to the payload's bytes**, and
+the TBD MCP layer serves direct lookup on demand. The payload keeps its token
+economy; the prose stays reachable. Same economics as the structural survey
+(assemble-design §"Structural survey elements") applied to a different content
+class: extract → index by span → fetch only what a request actually needs. And
+the case is strong, because comments carry *intent* that code does not.
+
+**The machinery already exists and is being discarded.** `rs-psstrip` classifies
+every comment into a named kind, computes its exact character span, merges
+overlapping spans, then reconstructs the kept text and **throws the removed spans
+away**. Emitting them instead is close to free — no new analysis, only new
+output.
+
+**Anchoring is the real work.** Computed spans are offsets into the PRE-strip
+text; the payload ships POST-strip bytes. Each sidecar entry therefore needs an
+insertion anchor in post-strip space, which falls out of the reconstruction walk
+(track the running post-strip offset at each removal point). The byte doctrine
+applies exactly as it does to survey spans: character offsets are what the
+processor works in, UTF-8 byte offsets are what a payload reader needs, and the
+two are reported separately, never conflated.
+
+**No mask tokens in the payload** (user, explicit). Inserting placeholders where
+comments were removed would violate the **rehydration principle**: payload code
+should still RUN if rehydrated directly. Supporting reasons beyond
+executability — masks would inflate `SpanBytes`, make `Attributes` (entropy,
+line stats, compression ratio) describe a fiction rather than the shipped
+content, and shift every other anchor in the file (survey spans, shard rows).
+The payload must remain *the code*. Nothing is lost by omitting markers: the
+sidecar's anchors record where each removal happened, and the `Processing` trail
+already records that stripping ran and with which ops.
+
+**The round-trip is what makes "lossless" a fact rather than a claim.** Rehydrate
+= re-insert every sidecar entry at its anchor; the result must equal the original
+byte-for-byte. That is a testable invariant, and it doubles as the completeness
+proof for the sidecar — if the round-trip holds, nothing was silently dropped and
+every anchor is correct. So the rehydration principle earns its keep as a
+VERIFICATION mechanism even though readers will rarely rehydrate: it is what
+makes the sidecar trustworthy. Not academic in the way that matters.
+
+**Resolves an open question elsewhere.** The survey work filed "documentation
+harvesting is a separate concern needing its own element". The sidecar is that
+mechanism — doc prose is not dropped, it is relocated and addressable. A survey
+record and its doc-string entry are naturally linkable (adjacent spans), so
+"give me the signature" and "give me its documentation" become two lookups
+against one index.
+
+Open: sidecar granularity (per file / per shard / corpus-wide); whether kinds are
+separately addressable (fetch only `doc-strings`); whether extraction is a knob
+on the existing strippers or a distinct emission stage; and how entries compose
+with writer-assigned payload addresses (the same rebasing queued for sharding's
+ByteSpan naming).
 
 ## Known gaps (action items)
 

@@ -111,11 +111,17 @@ Comments are not executable code and contribute nothing to structure.)
   `$ast.ScriptRequirements` metadata, not as comment text. Verified to survive
   stripping and still parse.
 
-**Keep documentation out of the survey.** If synopsis/help prose is ever wanted
-it gets its own element and position. Prose in a survey element works against
+**Keep documentation out of the survey.** Prose in a survey element works against
 the token economy that justifies the element — a survey is an INDEX, prose is
-CONTENT, and an agent wanting the doc fetches the span. The dev tool keeps
+CONTENT, and an agent wanting the doc fetches it separately. The dev tool keeps
 `Synopsis` (useful at a console); the element projection drops it.
+
+Where the prose goes is now answered: the **comment sidecar**
+(comment-ontology.md §"Stripping need not be lossy"). Stripping becomes
+extraction, so doc prose is relocated and addressable rather than discarded — and
+a survey record links naturally to its doc-string entry (adjacent spans), making
+"give me the signature" and "give me its documentation" two lookups against one
+index.
 
 **Candidate structural addition:** `$ast.ScriptRequirements` is free from the
 parse and genuinely structural (declared dependencies). The tool does not
