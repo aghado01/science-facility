@@ -111,6 +111,49 @@ try
         'ignore-stage skips merged into ingest Skipped'
 
     # -----------------------------------------------------------------------
+    Enter-Section '4b. Param forwarding routes to the right colonel function'
+    # -----------------------------------------------------------------------
+    # Regression (2026-08-04): the compile splat withheld a HARDCODED
+    # @('Items','Plan'), so every other Invoke-Plan-only param fell through into
+    # Compile-Plan, which rejects unknown names. The failure surfaced from
+    # INSIDE the body — "A parameter cannot be found that matches parameter name
+    # 'MaxWorkers'" — not from ingest's own binder, and only on a graph with
+    # files (the count-0 early return fires before the routing lines, which is
+    # why an empty-graph probe reports success and hides it). Both splats now
+    # withhold the sibling command's surface by reflection.
+    foreach ($dispatchOnly in @(
+            @{ Name = 'MaxWorkers'; Value = 1 }
+            @{ Name = 'ReservedCores'; Value = 0 }
+            @{ Name = 'MinItemsPerWorker'; Value = 1 }
+            @{ Name = 'WaitTimeoutMs'; Value = 60000 }
+        ))
+    {
+        $splat = @{
+            FilteredFsGraph   = $filtered
+            Manifest          = @{ 'file-read' = (Join-Path $v3 'processors\file-read.ps1') }
+            Steps             = @(@{ Key = 'file-read'; Config = @{} })
+            ChainExecutorPath = (Join-Path $v3 'processors\chain-executor.ps1')
+            $dispatchOnly.Name = $dispatchOnly.Value
+        }
+        $threw = $null
+        try { $r = Invoke-Ingest @splat } catch { $threw = $_.Exception.Message }
+        Assert-True ($null -eq $threw) "dispatch-only param forwards without reaching Compile-Plan: $($dispatchOnly.Name)" $threw
+        if ($null -eq $threw)
+        {
+            Assert-True (@($r.Results).Count -eq 3) "$($dispatchOnly.Name): pipeline still produced 3 results"
+        }
+    }
+
+    # A compile-side param still reaches Compile-Plan (the split cuts both ways).
+    $issRun = Invoke-Ingest -FilteredFsGraph $filtered `
+        -Manifest @{ 'file-read' = (Join-Path $v3 'processors\file-read.ps1') } `
+        -Steps @(@{ Key = 'file-read'; Config = @{} }) `
+        -ChainExecutorPath (Join-Path $v3 'processors\chain-executor.ps1') `
+        -IssPreset 'Core' -MaxWorkers 1
+    Assert-True (@($issRun.Errors).Count -eq 0) 'compile-side and dispatch-side params coexist in one call' ($issRun.Errors -join '; ')
+    Assert-True ($issRun.Budget.Threads -eq 1) 'dispatch-side value actually took effect (Threads = 1)'
+
+    # -----------------------------------------------------------------------
     Enter-Section '5. Results carry the full identity contract + enrichment'
     # -----------------------------------------------------------------------
     $byRel = @{}

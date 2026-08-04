@@ -163,11 +163,29 @@ function Invoke-Ingest
         }
 
         # ── Route bound params to the correct colonel function ────────────────
+        # BOTH splats withhold the sibling command's surface by REFLECTION —
+        # never a hardcoded name list. Collision policy matches the DynamicParam
+        # merge above (Compile-Plan wins), so only DISPATCH-ONLY names are
+        # withheld from the compile splat; a name declared by both would ride
+        # the compile side.
+        #
+        # Latent bug fixed here: the compile splat used to withhold a hardcoded
+        # @('Items','Plan'), so every OTHER Invoke-Plan-only param (MaxWorkers,
+        # ReservedCores, MinItemsPerWorker, WaitTimeoutMs) fell through into
+        # Compile-Plan, which rejects unknown names — "A parameter cannot be
+        # found that matches parameter name 'MaxWorkers'", raised from inside
+        # the body, not by ingest's own binder. It hid behind the count-0 early
+        # return (an empty graph never reaches this line), so it only surfaced
+        # when a caller tuned dispatch on a graph that actually had files.
+        $compileParams = @((Get-Command 'Compile-Plan').Parameters.Keys)
+        $dispatchOnly = @((Get-Command 'Invoke-Plan').Parameters.Keys |
+                Where-Object { $_ -notin $compileParams })
+
         $compileSplat = Split-ForwardedParams -BoundParameters $PSBoundParameters `
-            -OwnParams (@('FilteredFsGraph') + @('Items', 'Plan'))
+            -OwnParams (@('FilteredFsGraph') + $dispatchOnly)
 
         $dispatchSplat = Split-ForwardedParams -BoundParameters $PSBoundParameters `
-            -OwnParams (@('FilteredFsGraph') + (Get-Command 'Compile-Plan').Parameters.Keys)
+            -OwnParams (@('FilteredFsGraph') + $compileParams)
 
         # ── Stage 1: Compile colonel plan ─────────────────────────────────────
         $compiled = Compile-Plan @compileSplat
