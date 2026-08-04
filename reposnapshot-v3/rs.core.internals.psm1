@@ -36,9 +36,26 @@
     explicitly excluded names) into a dictionary that DynamicParam can return directly.
     Preserves all parameter attributes (mandatory, position, validation, etc.).
 .NOTES
-    DefaultValue reflection is best-effort — PowerShell does not always populate
-    ParameterMetadata.DefaultValue through reflection. Canonical defaults should
-    be declared in the wrapper's own param() block and injected after Split-ForwardedParams.
+    Defaults are NOT reflected, and cannot be: `ParameterMetadata` carries no
+    DefaultValue member at all (its surface is Name, ParameterType, ParameterSets,
+    IsDynamic, Aliases, Attributes, SwitchParameter). A prior best-effort line here
+    read `$p.DefaultValue` and was dead code — it never fired for any command.
+
+    Omission is also the correct semantics, not a shortfall:
+
+      - The TARGET owns its defaults. An unbound forwarded param is simply absent
+        from $PSBoundParameters, so the target's own param() default applies. This
+        preserves the tri-state (unset / set-to-the-default-value / set-explicitly)
+        that null-sentinel defaults depend on. `Invoke-Plan`'s
+        `[nullable[int]] $MaxWorkers = $null` is exactly that: absent means "derive
+        the budget from item count" (Policy=Auto, then grading). Materializing any
+        value would flip it to Policy=Explicit and defeat the grading table.
+      - A WRAPPER that wants a DIFFERENT default declares it in its own param()
+        block and injects it after Split-ForwardedParams — a deliberate policy
+        statement rather than a duplicated echo of the target's.
+      - To READ a function's declared defaults (they live in the AST, never in
+        reflection), use `tools/rs.dev.signatures.psm1` — Get-FunctionSignature
+        reports DefaultText per parameter. Developer convenience; not a runtime path.
 #>
 function New-ForwardedParamDictionary
 {
@@ -65,10 +82,10 @@ function New-ForwardedParamDictionary
         $attrs = [System.Collections.ObjectModel.Collection[System.Attribute]]::new()
         foreach ($a in $p.Attributes) { $attrs.Add($a) }
 
+        # No default is copied — see .NOTES. The target's own param() default
+        # applies precisely because the param stays absent from $PSBoundParameters.
         $rp = [System.Management.Automation.RuntimeDefinedParameter]::new(
             $p.Name, $p.ParameterType, $attrs)
-
-        if ($null -ne $p.DefaultValue) { $rp.Value = $p.DefaultValue }
 
         $dict[$p.Name] = $rp
     }
