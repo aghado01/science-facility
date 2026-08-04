@@ -162,14 +162,10 @@ stripping is not:
 | semantics-preserving | comments, whitespace | yes | optional convenience; the round-trip proves losslessness |
 | semantics-altering | generated / boilerplate code regions | **no** | **mandatory** — the only thing preserving correctness |
 
-**A payload must declare which tier built it.** An agent reading a tier-2 payload
-is looking at a redacted artifact, and silent code removal yields confidently
-wrong analysis — "this class has no constructor" when the constructor lived in a
-generated region. Same family as the survey's mandatory fidelity field: label the
-unsound thing or the reader over-trusts it. Per-entry evidence already exists in
-the `Processing` trail (processor + ops per item, chain-ordered); what is missing
-is the header-level summary that makes the tier legible at a glance — an
-orientation-layer concern, like `Header.Elements`.
+**The payload declares which tier built it** — standing project posture (keep
+receipts), filed as entry 6 in `payload-manifest-ledger.md`. Per-entry evidence
+already exists in the `Processing` trail (processor + ops, chain-ordered); the
+header-level summary is what the manifest owes.
 
 **Two mechanisms, not one** — "interleaved with core code" picks out the second:
 
