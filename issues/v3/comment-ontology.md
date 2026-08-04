@@ -152,36 +152,51 @@ furniture — that a code-analysis reader does not need interleaved with core
 logic. The test is "does this serve the analysis request", not "is this a
 comment".
 
-**This crosses a safety line the current doctrine leans on.** Comment stripping
-is semantics-preserving — strip it and the code still runs, which is exactly why
-frontmatter is partitioned out as the one comment-shaped thing that isn't. Code
-stripping is not:
+**It does NOT break executability** (user correction, 2026-08-04). An earlier
+draft here posited a tier where stripping generated regions leaves a payload that
+no longer runs. That is wrong on the facts for the material actually at issue:
+`#region` markers are compiler-ignored folding directives, and `[GeneratedCode]`,
+`[CompilerGenerated]`, `[DesignerCategory]`, `[Browsable]` and friends are
+runtime-inert metadata. Delete them and the code compiles and runs identically —
+what changes is what an IDE folds, highlights or renders.
 
-| tier | removed | payload still runs? | sidecar role |
-|---|---|---|---|
-| semantics-preserving | comments, whitespace | yes | optional convenience; the round-trip proves losslessness |
-| semantics-altering | generated / boilerplate code regions | **no** | **mandatory** — the only thing preserving correctness |
+**The right model is CHANNELS.** A source file overlays several channels of
+executable code and text; reposnapshot's filtering mechanisms are about being
+selective as to which channels a payload carries. **Rendering semantics are not
+core-logic semantics**, and reposnapshot is generally interested in the latter.
 
-**The payload declares which tier built it** — standing project posture (keep
-receipts), filed as entry 6 in `payload-manifest-ledger.md`. Per-entry evidence
-already exists in the `Processing` trail (processor + ops, chain-ordered); the
-header-level summary is what the manifest owes.
-
-**Executability and generality are orthogonal axes** (user, 2026-08-04). The tier
-above measures the first; what makes a strip safe for a READER is the second:
-
-| | preserves executability | preserves generality |
+| channel | material | default |
 |---|---|---|
-| comments | yes | yes |
-| IDE / rendering boilerplate | **no** | **yes — for nearly every request** |
-| core logic | no | no |
+| core logic | the program's behaviour | always kept |
+| rendering / presentation | `#region` furniture, designer attributes, `InitializeComponent` bodies, styling blocks | strippable — a reader is not getting IDE rendering aesthetics |
+| documentation | comments, doc-strings | extractable to sidecar (stripping as extraction) |
+| runtime directive | PS `#Requires`, Python coding cookie | never stripped (membership criterion above) |
+| tooling directive | `# noqa`, `@ts-*`, `eslint-disable` | never stripped by default |
+| attestation | Authenticode `# SIG #` blocks | strip aggressively — big token win |
 
-"Without loss of generality" is **request-relative, not absolute**: a reader is
-not getting IDE rendering aesthetics, so the boilerplate serving them is dead
-weight — unless the request is specifically about rendering embedded in code,
-which is what the ops knob exists for. This is why tier-2 stripping is
-defensible at all: generated furniture is tier-2 on executability but tier-1 on
-generality, and generality is the axis a reader actually cares about.
+Two things the model buys:
+
+- **It explains the frontmatter partition better than "comment vs not-comment"
+  did.** PowerShell's `#` MULTIPLEXES the documentation channel and the
+  runtime-directive channel onto one delimiter; partitioning at the parse
+  boundary is demultiplexing. That is precisely why the mechanism has to be typed
+  rather than textual.
+- **Strippability stops being a safety question and becomes a selection
+  question.** "Without loss of generality" is request-relative: the rendering
+  channel is dead weight for nearly every request, and the ops knob turns it back
+  on for a reader investigating rendering embedded in code.
+
+**The real constraint is cut integrity, not executability.** Channels are not
+perfectly separable — removing one can strand a reference held by a retained one
+(strip a Designer.cs body while `Form1.cs` still calls `InitializeComponent()`
+and the build breaks). That argues for cutting at clean boundaries, which
+whole-file routing gives for free, and is the caution that interleaved region
+strippers must respect.
+
+**The payload declares which channels it carries** — standing posture (keep
+receipts), filed as entry 6 in `payload-manifest-ledger.md`. Per-entry evidence
+is already in the `Processing` trail (processor + ops, chain-ordered); the
+manifest owes the header-level summary.
 
 **Two mechanisms, not one** — "interleaved with core code" picks out the second:
 
