@@ -124,12 +124,36 @@ cross-referenced docs. Update phase status here as work lands.
 
 ### E. Explicitly deferred
 
-~~Preview processor~~ (RETIRED as a concept 2026-07-28 — assemble-design;
-future previews are a new element family, uncommitted) · Filter-Content
-retire decision · tree model home · all writers/serializers · admiral
-implementation (brief keeps accruing) · thread adapter + corpus first
-milestone · mutation-ownership doctrine beyond copy-on-enrich (waits for
-admiral state design) · subaddressing.
+~~Preview processor~~ (RETIRED as a concept 2026-07-28 — successor named
+2026-08-04: **structural survey elements**, assemble-design §"Structural
+survey elements". Not truncated content but extracted shape — signatures /
+declarations as a cheap high-level index so a reading agent can spend context
+only on spans that survive the survey. Enrich-only processor + open element
+model, no new machinery; PS extraction prototyped in
+`tools/rs.dev.signatures.psm1`) · Filter-Content retire decision · tree model
+home · all writers/serializers · admiral implementation (brief keeps
+accruing) · thread adapter + corpus first milestone · mutation-ownership
+doctrine beyond copy-on-enrich (waits for admiral state design) ·
+subaddressing.
+
+**Effective-config resolver** (deferred 2026-08-04, arising from the ingest
+forwarding fix): report a run's EFFECTIVE parameter values — `{ Name; Value;
+Source = Caller | TargetDefault | WrapperPolicy }` — for the record, without
+touching how calls are constructed. Prompted by the question "if a forwarded
+param has a default, should the wrapper pass it explicitly?" Answer was no for
+the CALL path: forwarding stays omission-based because that is what preserves
+the tri-state (unset / set-to-the-default-value / set-explicitly) that
+null-sentinel defaults need — `Invoke-Plan`'s `$MaxWorkers = $null` means
+"derive the budget from item count", and any materialized value flips it to
+Policy=Explicit and defeats the grading table. But the underlying want —
+knowing what a run actually ran with — is real and belongs to REPORTING, not
+call construction. Home is the header params block / ConfigEcho (assemble-design
+§"Header elements"), admiral-owned, resolved after the fact. A resolver can
+also express what materialization never could: "Auto — computed at dispatch
+from item count". Declared defaults come from the AST (reflection cannot see
+them: `ParameterMetadata` has no DefaultValue member) — `Get-FunctionSignature`
+in `tools/rs.dev.signatures.psm1` already reports them. Reasoning recorded in
+rs.core.internals' `New-ForwardedParamDictionary` .NOTES.
 
 ### F. Adjudications needed from the user (refreshed 2026-07-29)
 

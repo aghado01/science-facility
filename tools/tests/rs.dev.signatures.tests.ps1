@@ -279,6 +279,53 @@ try
     $text = $plan | Format-FunctionSignature
     Assert-True ($text -match '\$MaxWorkers = \$null') 'formatter renders the default as declared'
     Assert-True ($text -notmatch '  $') 'formatter leaves no trailing whitespace'
+
+    # =======================================================================
+    Enter-Section '10. Compare-ParameterSurface'
+    # =======================================================================
+    $cmpFile = Join-Path $fixtureDir 'cmp.psm1'
+    [IO.File]::WriteAllText($cmpFile, @'
+function Left  { param([string] $Only1, [int] $Both = 1, [string] $Typed, [int] $Mand) }
+function Right { param([string] $Only2, [int] $Both = 2, [int] $Typed, [Parameter(Mandatory)][int] $Mand) }
+'@)
+    $left = Get-FunctionSignature -Path $cmpFile -Name 'Left'
+    $right = Get-FunctionSignature -Path $cmpFile -Name 'Right'
+    $cmp = Compare-ParameterSurface -Reference $left -Difference $right
+
+    Assert-True ('Only1' -in $cmp.OnlyInReference) 'reference-only param partitioned'
+    Assert-True ('Only2' -in $cmp.OnlyInDifference) 'difference-only param partitioned'
+    Assert-True ('Both' -in $cmp.Shared) 'shared param listed'
+    Assert-True (-not $cmp.IsDisjoint) 'IsDisjoint false when surfaces overlap'
+    Assert-True ($cmp.HasConflicts) 'conflicts detected'
+
+    $byConflict = @{}
+    foreach ($c in $cmp.Conflicts) { $byConflict[$c.Name] = $c }
+    Assert-True ('DefaultMismatch' -in $byConflict['Both'].Reasons) 'differing defaults flagged'
+    Assert-Equal $byConflict['Both'].ReferenceDefault '1' 'conflict carries reference default'
+    Assert-Equal $byConflict['Both'].DifferenceDefault '2' 'conflict carries difference default'
+    Assert-True ('TypeMismatch' -in $byConflict['Typed'].Reasons) 'differing types flagged'
+    Assert-True ('MandatoryMismatch' -in $byConflict['Mand'].Reasons) 'differing mandatory-ness flagged'
+
+    # Accepts command names as well as records.
+    $byName = Compare-ParameterSurface -Reference 'Compile-Plan' -Difference 'Invoke-Plan'
+    Assert-Equal $byName.Reference 'Compile-Plan' 'string input resolves via Get-Command'
+    $threw = $false
+    try { Compare-ParameterSurface -Reference 42 -Difference 'Invoke-Plan' } catch { $threw = $true }
+    Assert-True $threw 'unusable input throws rather than comparing nothing'
+
+    # LIVE GUARD: ingest routes bound params by withholding the sibling's whole
+    # surface, and its DynamicParam merge resolves collisions "Compile-Plan wins".
+    # While these two surfaces stay disjoint that policy is never exercised. If
+    # colonel ever adds a name to BOTH, this fails — telling you ingest's routing
+    # silently changed meaning, which is precisely how the hardcoded-list bug bit.
+    Assert-True $byName.IsDisjoint `
+        'Compile-Plan / Invoke-Plan surfaces are disjoint (ingest routing is unambiguous)' `
+        "shared: $($byName.Shared -join ', ')"
+    Assert-True (-not $byName.HasConflicts) 'no same-name conflicts across the two colonel targets'
+
+    # Common params never leak in — signatures are AST-declared, not runtime.
+    Assert-True ('Verbose' -notin $byName.OnlyInReference -and 'Verbose' -notin $byName.OnlyInDifference) `
+        'common parameters absent from AST-derived surfaces'
 }
 finally
 {

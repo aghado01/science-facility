@@ -428,4 +428,120 @@ function Format-FunctionSignature
     }
 }
 
-Export-ModuleMember -Function @('Get-FunctionSignature', 'Format-FunctionSignature')
+<#
+.SYNOPSIS
+    Compares two parameter surfaces — partition, plus same-name conflicts.
+.DESCRIPTION
+    Built for the forwarding pattern in rs.core.internals: a wrapper that
+    reflects two targets must know which names belong to which, and a splat
+    routed by a HARDCODED list rots the moment a target gains a parameter. That
+    is not hypothetical — Invoke-Ingest withheld a hardcoded @('Items','Plan')
+    from its compile splat, so every other Invoke-Plan-only param fell through
+    into Compile-Plan and was rejected.
+
+    Common parameters never appear: signatures come from the AST, which sees only
+    the DECLARED param block (CmdletBinding adds commons at runtime).
+
+    Conflicts are same-name parameters whose declared type or default differs.
+    Those are the entries a "one side wins" merge would silently resolve — worth
+    seeing before the merge decides for you.
+.PARAMETER Reference
+    A signature record from Get-FunctionSignature, or a command name to resolve.
+.PARAMETER Difference
+    Same, for the other side.
+.EXAMPLE
+    Compare-ParameterSurface -Reference Compile-Plan -Difference Invoke-Plan
+#>
+function Compare-ParameterSurface
+{
+    [CmdletBinding()]
+    [OutputType([pscustomobject])]
+    param(
+        [Parameter(Mandatory, Position = 0)]
+        [object] $Reference,
+
+        [Parameter(Mandatory, Position = 1)]
+        [object] $Difference
+    )
+
+    $refSig = Resolve-SignatureInput -InputObject $Reference
+    $diffSig = Resolve-SignatureInput -InputObject $Difference
+
+    $refByName = [ordered]@{}
+    foreach ($p in $refSig.Parameters) { $refByName[$p.Name] = $p }
+    $diffByName = [ordered]@{}
+    foreach ($p in $diffSig.Parameters) { $diffByName[$p.Name] = $p }
+
+    $onlyRef = [System.Collections.Generic.List[string]]::new()
+    $onlyDiff = [System.Collections.Generic.List[string]]::new()
+    $shared = [System.Collections.Generic.List[string]]::new()
+    $conflicts = [System.Collections.Generic.List[pscustomobject]]::new()
+
+    foreach ($name in $refByName.Keys)
+    {
+        if (-not $diffByName.Contains($name)) { $onlyRef.Add($name); continue }
+
+        $shared.Add($name)
+        $a = $refByName[$name]
+        $b = $diffByName[$name]
+        $reasons = [System.Collections.Generic.List[string]]::new()
+        if ($a.Type -ne $b.Type) { $reasons.Add('TypeMismatch') }
+        if ($a.DefaultText -ne $b.DefaultText) { $reasons.Add('DefaultMismatch') }
+        if ($a.Mandatory -ne $b.Mandatory) { $reasons.Add('MandatoryMismatch') }
+
+        if ($reasons.Count -gt 0)
+        {
+            $conflicts.Add([pscustomobject]@{
+                    Name              = $name
+                    Reasons           = $reasons.ToArray()
+                    ReferenceType     = $a.Type
+                    DifferenceType    = $b.Type
+                    ReferenceDefault  = $a.DefaultText
+                    DifferenceDefault = $b.DefaultText
+                })
+        }
+    }
+
+    foreach ($name in $diffByName.Keys)
+    {
+        if (-not $refByName.Contains($name)) { $onlyDiff.Add($name) }
+    }
+
+    [pscustomobject]@{
+        Reference        = $refSig.Name
+        Difference       = $diffSig.Name
+        OnlyInReference  = $onlyRef.ToArray()
+        OnlyInDifference = $onlyDiff.ToArray()
+        Shared           = $shared.ToArray()
+        Conflicts        = $conflicts.ToArray()
+        HasConflicts     = ($conflicts.Count -gt 0)
+        IsDisjoint       = ($shared.Count -eq 0)
+    }
+}
+
+function Resolve-SignatureInput
+{
+    # Accepts a signature record or a command name; anything with .Parameters
+    # passes through so callers can pre-filter before comparing.
+    param([object] $InputObject)
+
+    if ($InputObject -is [string])
+    {
+        $sig = @(Get-FunctionSignature -Command $InputObject)
+        if ($sig.Count -eq 0) { throw "No signature resolved for command '$InputObject'." }
+        return $sig[0]
+    }
+
+    if ($null -ne $InputObject -and $null -ne $InputObject.PSObject.Properties['Parameters'])
+    {
+        return $InputObject
+    }
+
+    throw 'Expected a Get-FunctionSignature record or a command name.'
+}
+
+Export-ModuleMember -Function @(
+    'Get-FunctionSignature'
+    'Format-FunctionSignature'
+    'Compare-ParameterSurface'
+)

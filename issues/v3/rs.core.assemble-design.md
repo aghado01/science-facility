@@ -450,6 +450,67 @@ comment strippers links only code-live references; before them includes
 commented-out references — the position in the profile IS the semantics
 selection, stated not hardcoded. Sketch register throughout.
 
+## Structural survey elements — the preview successor (user, 2026-08-04; sketch, not committed)
+
+**Sequencing: same shelf as the content-class work — downstream of the code
+trunk maturing (writers, then admiral). Recorded now because the extraction
+half was just proven cheap.**
+
+"Preview" was retired as a concept 2026-07-28, with the note that future
+previews would be *a new element family, uncommitted*. This is that family,
+and the reason the retirement was right: preview meant **truncated content**
+— the first N bytes, a fragment whose informativeness is an accident of what
+happens to sit at the top of the file. The successor is **structure
+extraction**: emit the shape of a file (declarations, signatures, parameter
+surfaces, defaults) instead of a prefix of its text.
+
+**Motivation is token economy for the reading agent** (developer frame): let
+an agent survey a large corpus at high level, then spend context only on the
+byte spans that survive the survey. Full content for everything is the
+expensive default; a signature-level element is the cheap index that makes
+selective fetch worthwhile. This is the payload-side counterpart to the MCP
+wishlist's byte-span fetch and subaddressing — the survey tells the agent
+*which* spans to ask for.
+
+Mechanism — no new machinery:
+
+- An **enrich-only processor** (position class: read-only tail, same class as
+  rs-attributes) attaches one element, e.g. `Signatures`. The open element
+  model absorbs it: assemble collates with zero edits and declares it in
+  `Header.Elements` without knowing it exists. rs-attributes is the working
+  precedent for the shape (one namespaced element holding a sub-structure).
+- **Per-language implementations behind one element shape.** PowerShell gets a
+  native AST reader — already prototyped as `tools/rs.dev.signatures.psm1`
+  (dev tool; promoting it to the chain means porting to the ISS-load-safe
+  body-only processor contract). Other languages follow the comment-ontology
+  language-expansion doctrine: thoughtful-regex first, native AST on demand.
+  The prototype covers the three declaration forms this codebase actually
+  uses — script param blocks, functions incl. nested helpers, class methods —
+  which is the shape of the general problem, not a PS quirk.
+
+**Operation-order consequence, concrete (doctrine instance):** a survey that
+wants doc prose — synopsis, parameter help — MUST run BEFORE the comment
+strippers. Signature *shapes* survive stripping; the prose does not
+(rs-psstrip strips DocStrings by default). So the processor's position in the
+profile *selects what the survey contains*: pre-strip yields documented
+signatures, post-strip yields bare ones. Stated, not hardcoded — the cleanest
+example yet of "config selects members, implementation owns sequence."
+
+**Disposition angle:** a survey element makes a new payload tier possible —
+files that ship *signature-only, no content*. That sits between full content
+and the config sidecar's descriptor-only pointer, and would extend the
+demote-to-sidecar tiers with a middle rung. Whether a given class or file gets
+full / survey / pointer treatment is a per-run routing decision, same
+constitution as the content classes (defaults, always overridable).
+
+Open, when it comes off the shelf: element naming; whether per-language
+processors or one dispatching processor; **parse-cost sharing** — rs-psstrip
+already parses PS source, so a naive survey processor parses the same file a
+second time (a shared parse artifact, or folding extraction into the existing
+processor, is the obvious economy); and whether the survey is emitted as an
+IR element only, or also as a standalone writer product (a repo-wide
+signature manifest, tree-manifest analog).
+
 ## Validation without serializers
 
 Golden data-to-data comparison: run the v3 pipeline over this repo → IR;
