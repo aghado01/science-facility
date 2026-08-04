@@ -142,7 +142,12 @@ function New-SignatureRecord
     param(
         [string] $Name,
         [string] $Kind,
-        [string] $Class,
+        # [object], not [string]: a typed [string] parameter coerces $null to '',
+        # collapsing "absent" into "empty". Same trap that made IgnoreCompiler's
+        # GetParentPath return '' for a null parent (fixed there as [object]) —
+        # here it would report a help-less function as having an empty synopsis
+        # and a plain function as belonging to a class named ''.
+        [object] $Class,
         [object] $ParamBlock,
         [object[]] $ParameterAsts,
         [object] $Extent,
@@ -151,7 +156,7 @@ function New-SignatureRecord
         [bool] $IsAdvanced,
         [bool] $HasDynamicParam,
         [string[]] $OutputType,
-        [string] $Synopsis
+        [object] $Synopsis
     )
 
     # A function may declare params either in param() or in the name(...) form;
@@ -177,6 +182,87 @@ function New-SignatureRecord
         Synopsis        = $Synopsis
         Parameters      = $params
         ParameterCount  = $params.Count
+    }
+}
+
+function Expand-SignatureFromAst
+{
+    # The single walk shared by every input mode (file / text / command), so a
+    # caller that already holds source in memory gets identical records to one
+    # that points at a path. This is what makes the module wrappable by a
+    # processor: chain items carry Content that upstream mutators have already
+    # rewritten, and re-reading from disk would survey the wrong bytes.
+    param(
+        [ScriptBlockAst] $Ast,
+        [string] $Source,
+        [string] $NameFilter,
+        [bool] $ExcludeNested,
+        [bool] $ExcludeClassMethods
+    )
+
+    # --- Script-level param block (the processor shape) ---------------------
+    if ($null -ne $Ast.ParamBlock)
+    {
+        $scriptName = [IO.Path]::GetFileNameWithoutExtension($Source)
+        if ([string]::IsNullOrWhiteSpace($scriptName)) { $scriptName = $Source }
+        if ($scriptName -like $NameFilter)
+        {
+            $facts = Get-ScriptBlockFacts -Ast $Ast
+            New-SignatureRecord -Name $scriptName -Kind 'Script' -Class $null `
+                -ParamBlock $Ast.ParamBlock -ParameterAsts $null -Extent $Ast.ParamBlock.Extent `
+                -File $Source -IsNested $false -IsAdvanced $facts.IsAdvanced `
+                -HasDynamicParam $facts.HasDynamicParam -OutputType $facts.OutputType -Synopsis $null
+        }
+    }
+
+    # --- Functions (including interior helpers) -----------------------------
+    foreach ($f in $Ast.FindAll({ param($n) $n -is [FunctionDefinitionAst] }, $true))
+    {
+        if ($f.Name -notlike $NameFilter) { continue }
+
+        # Walk every ancestor, not just the grandparent: a helper can sit any
+        # number of scriptblocks deep inside its owner.
+        $nested = $false
+        $ancestor = $f.Parent
+        while ($null -ne $ancestor)
+        {
+            if ($ancestor -is [FunctionDefinitionAst]) { $nested = $true; break }
+            $ancestor = $ancestor.Parent
+        }
+        if ($ExcludeNested -and $nested) { continue }
+
+        $facts = Get-ScriptBlockFacts -Ast $f.Body
+        $help = $f.GetHelpContent()
+
+        New-SignatureRecord -Name $f.Name -Kind 'Function' -Class $null `
+            -ParamBlock $f.Body.ParamBlock -ParameterAsts $f.Parameters -Extent $f.Extent `
+            -File $Source -IsNested $nested -IsAdvanced $facts.IsAdvanced `
+            -HasDynamicParam $facts.HasDynamicParam -OutputType $facts.OutputType `
+            -Synopsis $(
+                # GetHelpContent keeps the block's trailing newline —
+                # trim so consumers get a clean one-liner.
+                if ($null -ne $help -and -not [string]::IsNullOrWhiteSpace($help.Synopsis))
+                { $help.Synopsis.Trim() } else { $null })
+    }
+
+    # --- Class methods ------------------------------------------------------
+    if (-not $ExcludeClassMethods)
+    {
+        foreach ($t in $Ast.FindAll({ param($n) $n -is [TypeDefinitionAst] }, $true))
+        {
+            foreach ($m in $t.Members)
+            {
+                if ($m -isnot [FunctionMemberAst]) { continue }
+                if ($m.Name -notlike $NameFilter) { continue }
+
+                New-SignatureRecord -Name $m.Name -Kind 'ClassMethod' -Class $t.Name `
+                    -ParamBlock $null -ParameterAsts $m.Parameters -Extent $m.Extent `
+                    -File $Source -IsNested $false -IsAdvanced $false `
+                    -HasDynamicParam $false `
+                    -OutputType @($(if ($null -ne $m.ReturnType) { $m.ReturnType.TypeName.Extent.Text } else { 'void' })) `
+                    -Synopsis $null
+            }
+        }
     }
 }
 
@@ -229,6 +315,14 @@ function Get-ScriptBlockFacts
     Caveat: resolution runs inside THIS module's session state, so it sees
     module-exported and global commands — not functions defined script-locally
     by the caller. Pass -Path for those.
+.PARAMETER ScriptText
+    Source held in memory. This is the mode a reposnapshot processor uses: chain
+    items carry Content that upstream mutators have already rewritten, so the
+    survey must read those bytes, never re-read the file from disk.
+.PARAMETER SourceName
+    Label stamped into File/Location for -ScriptText input, and the basis for a
+    script record's Name. Pass the item's RelativePath so records stay
+    addressable in artifact-facing terms (path doctrine).
 .PARAMETER Name
     Wildcard filter on the declaration name. Default '*'.
 .PARAMETER ExcludeNested
@@ -247,6 +341,13 @@ function Get-FunctionSignature
 
         [Parameter(Mandatory, ParameterSetName = 'ByCommand')]
         [string[]] $Command,
+
+        [Parameter(Mandatory, ParameterSetName = 'ByText')]
+        [AllowEmptyString()]
+        [string] $ScriptText,
+
+        [Parameter(ParameterSetName = 'ByText')]
+        [string] $SourceName = '<text>',
 
         [string] $Name = '*',
 
@@ -281,6 +382,19 @@ function Get-FunctionSignature
             return
         }
 
+        if ($PSCmdlet.ParameterSetName -eq 'ByText')
+        {
+            $errs = [ref] $null
+            $ast = [Parser]::ParseInput($ScriptText, [ref] $null, $errs)
+            if ($errs.Value.Count -gt 0)
+            {
+                Write-Warning "[$SourceName] $($errs.Value.Count) parse error(s); reporting what resolved."
+            }
+            Expand-SignatureFromAst -Ast $ast -Source $SourceName -NameFilter $Name `
+                -ExcludeNested $ExcludeNested.IsPresent -ExcludeClassMethods $ExcludeClassMethods.IsPresent
+            return
+        }
+
         foreach ($p in $Path)
         {
             $resolved = Resolve-Path -LiteralPath $p -ErrorAction Stop
@@ -296,73 +410,8 @@ function Get-FunctionSignature
                     Write-Warning "[$([IO.Path]::GetFileName($file))] $($errors.Value.Count) parse error(s); reporting what resolved."
                 }
 
-                # --- Script-level param block (the processor shape) -----------
-                # Only when it is NOT merely the file's sole function: a bare
-                # top-level param() with no wrapper is its own declaration.
-                if ($null -ne $ast.ParamBlock)
-                {
-                    $scriptName = [IO.Path]::GetFileNameWithoutExtension($file)
-                    if ($scriptName -like $Name)
-                    {
-                        $facts = Get-ScriptBlockFacts -Ast $ast
-                        New-SignatureRecord -Name $scriptName -Kind 'Script' -Class $null `
-                            -ParamBlock $ast.ParamBlock -ParameterAsts $null -Extent $ast.ParamBlock.Extent `
-                            -File $file -IsNested $false -IsAdvanced $facts.IsAdvanced `
-                            -HasDynamicParam $facts.HasDynamicParam -OutputType $facts.OutputType -Synopsis $null
-                    }
-                }
-
-                # --- Functions (including interior helpers) -------------------
-                $funcs = $ast.FindAll({ param($n) $n -is [FunctionDefinitionAst] }, $true)
-                foreach ($f in $funcs)
-                {
-                    if ($f.Name -notlike $Name) { continue }
-
-                    # Walk every ancestor, not just the grandparent: a helper can
-                    # sit any number of scriptblocks deep inside its owner.
-                    $nested = $false
-                    $ancestor = $f.Parent
-                    while ($null -ne $ancestor)
-                    {
-                        if ($ancestor -is [FunctionDefinitionAst]) { $nested = $true; break }
-                        $ancestor = $ancestor.Parent
-                    }
-                    if ($ExcludeNested -and $nested) { continue }
-
-                    $facts = Get-ScriptBlockFacts -Ast $f.Body
-                    $help = $f.GetHelpContent()
-
-                    New-SignatureRecord -Name $f.Name -Kind 'Function' -Class $null `
-                        -ParamBlock $f.Body.ParamBlock -ParameterAsts $f.Parameters -Extent $f.Extent `
-                        -File $file -IsNested $nested -IsAdvanced $facts.IsAdvanced `
-                        -HasDynamicParam $facts.HasDynamicParam -OutputType $facts.OutputType `
-                        -Synopsis $(
-                            # GetHelpContent keeps the block's trailing newline —
-                            # trim so consumers get a clean one-liner.
-                            if ($null -ne $help -and -not [string]::IsNullOrWhiteSpace($help.Synopsis))
-                            { $help.Synopsis.Trim() } else { $null })
-                }
-
-                # --- Class methods -------------------------------------------
-                if (-not $ExcludeClassMethods)
-                {
-                    $types = $ast.FindAll({ param($n) $n -is [TypeDefinitionAst] }, $true)
-                    foreach ($t in $types)
-                    {
-                        foreach ($m in $t.Members)
-                        {
-                            if ($m -isnot [FunctionMemberAst]) { continue }
-                            if ($m.Name -notlike $Name) { continue }
-
-                            New-SignatureRecord -Name $m.Name -Kind 'ClassMethod' -Class $t.Name `
-                                -ParamBlock $null -ParameterAsts $m.Parameters -Extent $m.Extent `
-                                -File $file -IsNested $false -IsAdvanced $false `
-                                -HasDynamicParam $false `
-                                -OutputType @($(if ($null -ne $m.ReturnType) { $m.ReturnType.TypeName.Extent.Text } else { 'void' })) `
-                                -Synopsis $null
-                        }
-                    }
-                }
+                Expand-SignatureFromAst -Ast $ast -Source $file -NameFilter $Name `
+                    -ExcludeNested $ExcludeNested.IsPresent -ExcludeClassMethods $ExcludeClassMethods.IsPresent
             }
         }
     }

@@ -222,6 +222,10 @@ try
     $dyn = $all | Where-Object { $_.Name -eq 'Invoke-Dyn' }
     Assert-True ($dyn.HasDynamicParam) 'dynamicparam block detected'
     Assert-Equal $thing.Synopsis 'Does a thing.' 'comment-based help synopsis harvested'
+    # null, not '' — a [string] param would coerce the absent case to empty
+    # (the GetParentPath trap; see New-SignatureRecord).
+    Assert-True ($null -eq ($all | Where-Object { $_.Name -eq 'Invoke-Dyn' }).Synopsis) 'function without help reports null synopsis, not empty string'
+    Assert-True ($null -eq $thing.Class) 'non-class function reports null Class, not empty string'
     Assert-True ($thing.Line -gt 0) 'line number recorded'
     Assert-True ($thing.Location -match 'mixed\.psm1:\d+') 'Location is file:line'
 
@@ -251,6 +255,37 @@ try
     Assert-Equal $cmdSig[0].Name 'Get-FunctionSignature' '-Command resolves the name'
     Assert-Equal (@($cmdSig[0].Parameters | Where-Object Name -eq 'Name')[0].DefaultText) "'*'" '-Command reports declared default'
     Assert-True ($cmdSig[0].IsAdvanced) '-Command reports CmdletBinding'
+
+    # =======================================================================
+    Enter-Section '7b. -ScriptText parameter set (the processor-wrappable mode)'
+    # =======================================================================
+    # A chain item carries Content that upstream mutators already rewrote, so a
+    # survey processor must read those bytes, never re-read the file. Records
+    # must be identical to the -Path route apart from the source label.
+    $mixedText = [IO.File]::ReadAllText($mixedFile)
+    $viaText = @(Get-FunctionSignature -ScriptText $mixedText -SourceName $mixedFile)
+    $viaPath = @(Get-FunctionSignature -Path $mixedFile)
+    Assert-Equal $viaText.Count $viaPath.Count '-ScriptText yields the same record count as -Path'
+    $tJson = ($viaText | Select-Object * -ExcludeProperty File, Location | ConvertTo-Json -Depth 8 -Compress)
+    $pJson = ($viaPath | Select-Object * -ExcludeProperty File, Location | ConvertTo-Json -Depth 8 -Compress)
+    Assert-True ($tJson -eq $pJson) '-ScriptText records identical to -Path (apart from source label)'
+
+    $scriptText = [IO.File]::ReadAllText($scriptFile)
+    $textScript = @(Get-FunctionSignature -ScriptText $scriptText -SourceName 'src/proc-shaped.ps1')
+    Assert-Equal $textScript[0].Kind 'Script' '-ScriptText finds the script param block'
+    Assert-Equal $textScript[0].Name 'proc-shaped' 'script name derived from SourceName'
+    Assert-Equal $textScript[0].File 'src/proc-shaped.ps1' 'SourceName stamped as File (artifact-facing path)'
+    Assert-True ($textScript[0].Location -match '^src/proc-shaped\.ps1:\d+$') 'Location built from SourceName'
+    Assert-Equal $textScript[0].Parameters[1].DefaultText '@{}' '-ScriptText reports defaults'
+
+    # Mutated content surveys as mutated — the reason disk re-reads are wrong.
+    $stripped = $mixedText -replace '(?s)<#.*?#>', ''
+    $noHelp = @(Get-FunctionSignature -ScriptText $stripped -SourceName 'mixed.psm1' -Name 'Get-Thing')
+    Assert-True ($null -eq $noHelp[0].Synopsis) 'comment-stripped text surveys without synopsis (position matters)'
+    Assert-Equal $noHelp[0].ParameterCount 6 'signature shape survives comment stripping'
+
+    $emptyText = @(Get-FunctionSignature -ScriptText '' -SourceName 'empty.ps1')
+    Assert-Equal $emptyText.Count 0 'empty text yields no records (no throw)'
 
     # =======================================================================
     Enter-Section '8. Broken input is non-fatal'
