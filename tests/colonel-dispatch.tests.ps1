@@ -175,6 +175,41 @@ try
     $empty = Invoke-Plan -Items @() -Plan $compiled.Plan
     Assert-True (@($empty.Results).Count -eq 0 -and @($empty.Errors).Count -eq 0) `
         'empty Items binds (AllowEmptyCollection) and returns clean empty envelope'
+
+    # -----------------------------------------------------------------------
+    Enter-Section '7. Every IssPreset builds a runspace that can actually dispatch'
+    # -----------------------------------------------------------------------
+    # Regression: Bare called [InitialSessionState]::CreateEmpty(), which does not
+    # exist (statics are Create / CreateDefault / CreateDefault2 / CreateFrom /
+    # CreateFromSessionConfigurationFile / CreateRestricted). $iss came back null,
+    # Compile-Plan still reported success, and the failure surfaced only at dispatch
+    # as "Invoke-ChainExecutor is not recognized". Bare had never worked — masked
+    # because every profile uses Core. Create() is also NoLanguage by default, which
+    # rejects the AddScript used at the worker boundary, so the preset needs
+    # FullLanguage set explicitly; CreateDefault2 defaults to it, hence Core's luck.
+    $presetProc = Join-Path $fixtureRoot 'preset-probe.ps1'
+    Set-Content -LiteralPath $presetProc -Value @'
+param($Item, $Config)
+$out = [PSCustomObject]@{}
+foreach ($p in $Item.PSObject.Properties) { $out | Add-Member -NotePropertyName $p.Name -NotePropertyValue $p.Value }
+$out | Add-Member -NotePropertyName Doubled -NotePropertyValue ($Item.Value * 2)
+return $out
+'@
+
+    foreach ($preset in 'Bare', 'Core', 'Full')
+    {
+        $pc = Compile-Plan -Manifest @{ 'probe' = $presetProc } `
+            -Steps @(@{ Key = 'probe'; Config = @{} }) `
+            -ChainExecutorPath $chainExec `
+            -IssPreset $preset
+
+        Assert-True (@($pc.Errors).Count -eq 0) "$preset : compiles without errors" ($pc.Errors -join '; ')
+
+        $pr = Invoke-Plan -Items @([pscustomobject]@{ Value = 21 }) -Plan $pc.Plan -MaxWorkers 1
+        Assert-True (@($pr.Errors).Count -eq 0) "$preset : dispatches without errors" ($pr.Errors -join '; ')
+        Assert-True (@($pr.Results).Count -eq 1 -and $pr.Results[0].Doubled -eq 42) `
+            "$preset : processor actually ran in the worker runspace"
+    }
 }
 finally
 {

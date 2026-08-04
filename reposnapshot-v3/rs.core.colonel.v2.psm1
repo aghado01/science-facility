@@ -42,7 +42,7 @@ Set-StrictMode -Version Latest
 
 enum IssPreset
 {
-    Bare  # CreateEmpty       — bare PS engine; processor scripts must be fully self-contained
+    Bare  # Create()          — empty engine (0 cmdlets); processor scripts must be fully self-contained
     Core  # CreateDefault2    — PS core cmdlets only; default; good isolation/speed balance
     Full  # CreateDefault     — full module + provider set; use when processors need providers
 }
@@ -122,10 +122,34 @@ function Build-Iss
 
     $iss = switch ($Preset)
     {
-        ([IssPreset]::Bare) { [InitialSessionState]::CreateEmpty() }
+        ([IssPreset]::Bare)
+        {
+            # NOT ::CreateEmpty() — no such method exists on InitialSessionState.
+            # Its statics are Create / CreateDefault / CreateDefault2 / CreateFrom /
+            # CreateFromSessionConfigurationFile / CreateRestricted. The prior call
+            # threw, leaving $iss null; Compile-Plan still reported success and the
+            # failure only surfaced at dispatch as "Invoke-ChainExecutor is not
+            # recognized". Bare had therefore never worked — masked because every
+            # profile uses Core (every processor documents an IssPreset floor of Core).
+            #
+            # Create() is the empty factory, and it defaults to LanguageMode
+            # NoLanguage — which rejects the AddScript this module uses at the worker
+            # boundary. CreateDefault2 defaults to FullLanguage, which is why Core
+            # never needed this. The mode must therefore be set explicitly.
+            $bare = [InitialSessionState]::Create()
+            $bare.LanguageMode = [System.Management.Automation.PSLanguageMode]::FullLanguage
+            $bare
+        }
         ([IssPreset]::Core) { [InitialSessionState]::CreateDefault2() }
         ([IssPreset]::Full) { [InitialSessionState]::CreateDefault() }
         default { [InitialSessionState]::CreateDefault2() }
+    }
+
+    # Fail loudly here rather than letting a null ISS travel: that is what turned a
+    # bad factory call into a misleading downstream error about a missing function.
+    if ($null -eq $iss)
+    {
+        throw "Build-Iss: InitialSessionState construction returned null for preset '$Preset'."
     }
 
     foreach ($mod in $Modules)

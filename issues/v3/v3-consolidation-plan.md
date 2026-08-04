@@ -140,6 +140,27 @@ accruing) · thread adapter + corpus first milestone · mutation-ownership
 doctrine beyond copy-on-enrich (waits for admiral state design) ·
 subaddressing.
 
+**Declarative ISS composition** (user, 2026-08-04; deferred). Replace the
+coarse `IssPreset` buckets with a capability DECLARATION — spin up runspaces
+carrying exactly what is wanted, rather than Microsoft's Bare/Core/Full lumps.
+Feasibility verified: `InitialSessionState::Create()` + `LanguageMode =
+FullLanguage` + individually added `SessionStateCmdletEntry` items yields a
+session with precisely the named commands (probe: 2 commands vs
+CreateDefault2's 234; `Where-Object` worked, `Get-ChildItem` absent, and
+`Get-Command` itself absent unless declared). `Build-Iss` is already the single
+seam, so the change is contained.
+
+The version worth building: **make the ISS a computed property of the plan
+rather than a caller guess.** Processors already self-document "Required
+IssModules" and an "IssPreset floor", and `Compile-Plan` already reads every
+processor script — so colonel could take the union of declared per-processor
+requirements across a profile's steps and construct exactly that session. Those
+annotations become mechanical instead of advisory, and presets survive only as
+named bundles expressed in terms of the primitive. Costs to scope: name →
+`ImplementingType` resolution needs a catalog (CreateDefault2 serves), some
+surface is functions rather than cmdlets (`SessionStateFunctionEntry`), and
+providers/variables/formats are separate collections.
+
 **Effective-config resolver** (deferred 2026-08-04, arising from the ingest
 forwarding fix): report a run's EFFECTIVE parameter values — `{ Name; Value;
 Source = Caller | TargetDefault | WrapperPolicy }` — for the record, without
