@@ -511,6 +511,90 @@ processor, is the obvious economy); and whether the survey is emitted as an
 IR element only, or also as a standalone writer product (a repo-wide
 signature manifest, tree-manifest analog).
 
+### How deep can extraction go? — feasibility boundary (2026-08-04)
+
+Question asked: given an AST, can handles / inputs / outputs / side effects be
+enumerated across all three declaration kinds, yielding a typed control-flow
+graph? Answer: **a useful subset, and the boundary matters more than the yes.**
+
+Soundly available: declared params with types and defaults; `ValueFromPipeline*`
+and begin/process/end shape; free variables and scope-qualified access
+(`$script:`/`$global:`) via variable + assignment analysis; call edges from
+`CommandAst`; every control-flow construct (if/while/switch/try/break/
+continue/return/throw), so a genuine intra-procedural CFG is buildable —
+standard compiler work, not research. **Class methods are the typed island**:
+declared param types AND declared return types, with `$this` member access
+resolvable.
+
+Where it degrades — and this repo is its own counterexample:
+
+- `chain-executor` does `& $step.Fn $current $step.Config`. The callee is DATA,
+  resolved at runtime from a compiled plan, and processors become runspace
+  functions by name via ISS registration. **The dispatch architecture is
+  invisible to static call-graph extraction.**
+- Splatting (`Compile-Plan @compileSplat`) hides which parameters actually
+  flow — exactly why the forwarding defect could not be seen structurally.
+- `Invoke-Ingest`'s parameter surface does not exist until DynamicParam runs at
+  bind time. Plus Invoke-Expression, aliases, module-scope shadowing.
+
+So the static graph is a **lower bound on edges**, and here the most
+architecturally important edges are absent by construction.
+
+"Typed" is likewise partial: PowerShell is gradually typed, `[OutputType()]` is
+advisory (unenforced, often stale), and real outputs include **implicit
+pipeline emission** — every un-suppressed expression statement. Those
+statements are enumerable structurally; their types usually are not without
+evaluation. Side effects yield an evidence-based inventory (scope-qualified
+assignment, filesystem/network cmdlet names, .NET static calls, runspace/job
+creation), never a soundness guarantee — the same register as ConfigRefs'
+"confidence is a lexical fact, never a semantic claim" and rs-psstrip's
+FallbackMode reporting HOW a result was derived.
+
+**Tiering — and why tier 3 must not be a payload element:**
+
+| tier | content | cost | soundness |
+|---|---|---|---|
+| 1 | declarations + signatures + defaults + span anchors | trivial | sound |
+| 2 | call edges (static names), effect tags, free/scope vars | cheap | lower-bound, evidence-tagged |
+| 3 | intra-procedural CFG, type inference | expensive | unsound in PS |
+
+A per-function basic-block graph across a repo is **larger than the source it
+summarizes** — the survey's value is inverse to its resolution. Tiers 1–2 earn
+their tokens as an ingestion element; **tier 3 belongs in the MCP layer as an
+on-demand tool** ("give me the CFG of this one function"), costing nothing
+until an agent has already narrowed the target using tiers 1–2. That composes
+with the survey → byte-span-fetch architecture instead of fighting it.
+
+**Mandatory for an agent-facing payload: the element declares its own
+fidelity** (`ast` vs `regex`, per the language-expansion doctrine). Without it
+a reader cannot distinguish "no edge exists" from "could not see edges", and
+will over-trust the summary. FallbackMode is the precedent.
+
+### Span anchors — settled 2026-08-04 (implemented in the tool)
+
+Anchors are what turn a survey into an INDEX rather than a summary: they let a
+reader fetch exactly one declaration's bytes. The byte doctrine applies in
+full — **char and byte offsets are reported separately and never conflated**:
+
+- `Span.CharStart/CharEnd/CharLength` — AST-native character offsets (UTF-16
+  code units; PS strings are UTF-16), valid for `.Substring` on the same
+  in-memory text. `CharEnd` is exclusive. rs-psstrip already lives in this
+  space.
+- `Span.ByteStart/ByteEnd/SpanBytes` — UTF-8 byte offsets, the pair a payload
+  reader needs. `SpanBytes` is the same semantic as `Attributes.SpanBytes`, one
+  scope down.
+
+For pure-ASCII source the two coincide; that is DETECTED with one encode of the
+whole text, never assumed. **The divergence is not hypothetical here** —
+reposnapshot's own docstrings use em-dashes and box-drawing, so its sources are
+routinely non-ASCII (`rs-psstrip.ps1` shows a 26-byte skew at its first
+declaration). Reading char offsets as byte offsets there returns a visibly
+garbage slice; the suite asserts exactly that failure.
+
+Byte offsets are `$null` when they cannot be derived honestly — the tool's
+`-Command` mode holds only a function's own text while its extents are
+file-relative. **Absent beats wrong**, and a nullable field states it.
+
 ## Validation without serializers
 
 Golden data-to-data comparison: run the v3 pipeline over this repo → IR;

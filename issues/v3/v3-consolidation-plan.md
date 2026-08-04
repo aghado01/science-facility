@@ -126,11 +126,15 @@ cross-referenced docs. Update phase status here as work lands.
 
 ~~Preview processor~~ (RETIRED as a concept 2026-07-28 — successor named
 2026-08-04: **structural survey elements**, assemble-design §"Structural
-survey elements". Not truncated content but extracted shape — signatures /
-declarations as a cheap high-level index so a reading agent can spend context
-only on spans that survive the survey. Enrich-only processor + open element
-model, no new machinery; PS extraction prototyped in
-`tools/rs.dev.signatures.psm1`) · Filter-Content retire decision · tree model
+survey elements" for design + feasibility boundary + span-anchor decision,
+implementation brief in `structural-survey-brief.md`. Not truncated content
+but extracted shape — signatures / declarations as a cheap high-level index so
+a reading agent can spend context only on spans that survive the survey.
+Enrich-only processor + open element model, no new machinery; PS extraction
+prototyped in `tools/rs.dev.signatures.psm1`, and the port is a WRAPPER on it
+via colonel's existing IssModules import, never a copy. First preview-adjacent
+capability to arrive organically — discovered by use, not specified up front)
+· Filter-Content retire decision · tree model
 home · all writers/serializers · admiral implementation (brief keeps
 accruing) · thread adapter + corpus first milestone · mutation-ownership
 doctrine beyond copy-on-enrich (waits for admiral state design) ·

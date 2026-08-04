@@ -316,6 +316,52 @@ try
     Assert-True ($text -notmatch '  $') 'formatter leaves no trailing whitespace'
 
     # =======================================================================
+    Enter-Section '9b. Span anchors (survey → byte-span fetch)'
+    # =======================================================================
+    $asciiText = "function Alpha { param([int] `$A = 1) }`nfunction Beta { param([string] `$B) }`n"
+    $asciiSigs = @(Get-FunctionSignature -ScriptText $asciiText -SourceName 'a.ps1')
+    $alpha = $asciiSigs | Where-Object Name -eq 'Alpha'
+
+    Assert-True ($null -ne $alpha.Span) 'record carries a Span anchor'
+    Assert-Equal $alpha.Span.CharStart 0 'CharStart is 0-based'
+    Assert-Equal $alpha.Span.CharLength ($alpha.Span.CharEnd - $alpha.Span.CharStart) 'CharLength = CharEnd - CharStart (end exclusive)'
+    Assert-Equal $asciiText.Substring($alpha.Span.CharStart, $alpha.Span.CharLength) 'function Alpha { param([int] $A = 1) }' `
+        'char span round-trips to the declaration text'
+    Assert-Equal $alpha.Span.ByteStart $alpha.Span.CharStart 'pure ASCII: ByteStart == CharStart'
+    Assert-Equal $alpha.Span.SpanBytes $alpha.Span.CharLength 'pure ASCII: SpanBytes == CharLength'
+
+    $beta = $asciiSigs | Where-Object Name -eq 'Beta'
+    Assert-True ($beta.Span.CharStart -gt $alpha.Span.CharEnd - 1) 'second declaration anchored after the first'
+
+    # Multibyte: the two offset families DIVERGE, which is why both are reported.
+    # This is not hypothetical for this repo — its docstrings use em-dashes and
+    # box-drawing, so source files are routinely non-ASCII.
+    $mbText = "# héllo — ünicode ✓ emoji 🚀`nfunction Gamma { param([int] `$N = 1) }`n"
+    $gamma = Get-FunctionSignature -ScriptText $mbText -SourceName 'mb.ps1' -Name 'Gamma'
+    $declText = 'function Gamma { param([int] $N = 1) }'
+
+    Assert-True ($gamma.Span.ByteStart -gt $gamma.Span.CharStart) 'multibyte: ByteStart exceeds CharStart'
+    Assert-Equal $mbText.Substring($gamma.Span.CharStart, $gamma.Span.CharLength) $declText 'multibyte: char span still round-trips in memory'
+    $mbBytes = [System.Text.Encoding]::UTF8.GetBytes($mbText)
+    Assert-Equal ([System.Text.Encoding]::UTF8.GetString($mbBytes, $gamma.Span.ByteStart, $gamma.Span.SpanBytes)) $declText `
+        'multibyte: byte span round-trips against UTF-8 bytes'
+    Assert-True (([System.Text.Encoding]::UTF8.GetString($mbBytes, $gamma.Span.CharStart, $gamma.Span.CharLength)) -ne $declText) `
+        'multibyte: using char offsets as byte offsets yields the WRONG slice (the conflation this guards)'
+
+    # Class methods and script param blocks are anchored too.
+    $allSpans = @(Get-FunctionSignature -Path $mixedFile)
+    Assert-True (@($allSpans | Where-Object { $null -eq $_.Span }).Count -eq 0) 'every kind carries a Span'
+    $describe = $allSpans | Where-Object { $_.Kind -eq 'ClassMethod' -and $_.Name -eq 'Describe' }
+    Assert-True ($describe.Span.SpanBytes -gt 0) 'class method span is non-empty'
+
+    # -Command cannot derive bytes honestly: its extents are file-relative while
+    # only the function's own text is in hand. Absent beats wrong.
+    $cmdSpan = (Get-FunctionSignature -Command 'Get-FunctionSignature').Span
+    Assert-True ($cmdSpan.CharStart -ge 0) '-Command still reports char offsets'
+    Assert-True ($null -eq $cmdSpan.ByteStart) '-Command reports NULL byte offsets rather than guessing'
+    Assert-True ($null -eq $cmdSpan.SpanBytes) '-Command reports null SpanBytes'
+
+    # =======================================================================
     Enter-Section '10. Compare-ParameterSurface'
     # =======================================================================
     $cmpFile = Join-Path $fixtureDir 'cmp.psm1'

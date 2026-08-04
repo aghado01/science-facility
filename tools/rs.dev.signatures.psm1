@@ -156,7 +156,8 @@ function New-SignatureRecord
         [bool] $IsAdvanced,
         [bool] $HasDynamicParam,
         [string[]] $OutputType,
-        [object] $Synopsis
+        [object] $Synopsis,
+        [object] $Span
     )
 
     # A function may declare params either in param() or in the name(...) form;
@@ -180,8 +181,60 @@ function New-SignatureRecord
         HasDynamicParam = $HasDynamicParam
         OutputType      = $OutputType
         Synopsis        = $Synopsis
+        Span            = $Span
         Parameters      = $params
         ParameterCount  = $params.Count
+    }
+}
+
+function New-SpanAnchor
+{
+    # Span anchors are what turn a survey into an INDEX: they let a reader fetch
+    # exactly this declaration's bytes instead of the whole file.
+    #
+    # Char and byte offsets are reported SEPARATELY and never conflated — the
+    # standing byte doctrine (SizeBytes / SpanBytes / rendered row length are
+    # three different things). AST extents are CHARACTER offsets (UTF-16 code
+    # units, since PS strings are UTF-16), valid for .Substring on the same
+    # in-memory text. A payload reader seeking into UTF-8 bytes needs the byte
+    # pair instead. For pure-ASCII source the two coincide, which is the common
+    # case — detected with ONE encode of the whole text rather than assumed.
+    #
+    # Byte offsets are $null when they cannot be derived honestly (see the
+    # -Command path: its extents are file-relative while only the function's own
+    # text is in hand). Absent beats wrong.
+    param(
+        [object] $Extent,
+        [object] $SourceText,
+        [object] $IsAscii
+    )
+
+    $cs = $Extent.StartOffset
+    $ce = $Extent.EndOffset          # exclusive
+    $bs = $null
+    $be = $null
+
+    if ($null -ne $SourceText -and $cs -ge 0 -and $ce -le $SourceText.Length -and $ce -ge $cs)
+    {
+        if ($IsAscii -eq $true)
+        {
+            $bs = $cs
+            $be = $ce
+        }
+        else
+        {
+            $bs = [System.Text.Encoding]::UTF8.GetByteCount($SourceText.Substring(0, $cs))
+            $be = $bs + [System.Text.Encoding]::UTF8.GetByteCount($SourceText.Substring($cs, $ce - $cs))
+        }
+    }
+
+    [pscustomobject]@{
+        CharStart  = $cs
+        CharEnd    = $ce
+        CharLength = $ce - $cs
+        ByteStart  = $bs
+        ByteEnd    = $be
+        SpanBytes  = $(if ($null -ne $bs) { $be - $bs } else { $null })
     }
 }
 
@@ -200,6 +253,21 @@ function Expand-SignatureFromAst
         [bool] $ExcludeClassMethods
     )
 
+    # The AST's own extent text IS the parsed source, so offsets and text are
+    # guaranteed to agree regardless of how the parse was fed. Byte conversion
+    # is skipped unless this scriptblock starts at offset 0 — otherwise the
+    # extents are relative to a larger source we do not hold.
+    $sourceText = $null
+    $isAscii = $false
+    if ($Ast.Extent.StartOffset -eq 0)
+    {
+        $sourceText = $Ast.Extent.Text
+        # One encode decides it: UTF-8 byte count equals UTF-16 length only when
+        # every character is ASCII (anything >= U+0080 costs more bytes than
+        # code units, astral pairs included).
+        $isAscii = [System.Text.Encoding]::UTF8.GetByteCount($sourceText) -eq $sourceText.Length
+    }
+
     # --- Script-level param block (the processor shape) ---------------------
     if ($null -ne $Ast.ParamBlock)
     {
@@ -210,6 +278,7 @@ function Expand-SignatureFromAst
             $facts = Get-ScriptBlockFacts -Ast $Ast
             New-SignatureRecord -Name $scriptName -Kind 'Script' -Class $null `
                 -ParamBlock $Ast.ParamBlock -ParameterAsts $null -Extent $Ast.ParamBlock.Extent `
+                -Span (New-SpanAnchor -Extent $Ast.ParamBlock.Extent -SourceText $sourceText -IsAscii $isAscii) `
                 -File $Source -IsNested $false -IsAdvanced $facts.IsAdvanced `
                 -HasDynamicParam $facts.HasDynamicParam -OutputType $facts.OutputType -Synopsis $null
         }
@@ -236,6 +305,7 @@ function Expand-SignatureFromAst
 
         New-SignatureRecord -Name $f.Name -Kind 'Function' -Class $null `
             -ParamBlock $f.Body.ParamBlock -ParameterAsts $f.Parameters -Extent $f.Extent `
+            -Span (New-SpanAnchor -Extent $f.Extent -SourceText $sourceText -IsAscii $isAscii) `
             -File $Source -IsNested $nested -IsAdvanced $facts.IsAdvanced `
             -HasDynamicParam $facts.HasDynamicParam -OutputType $facts.OutputType `
             -Synopsis $(
@@ -257,6 +327,7 @@ function Expand-SignatureFromAst
 
                 New-SignatureRecord -Name $m.Name -Kind 'ClassMethod' -Class $t.Name `
                     -ParamBlock $null -ParameterAsts $m.Parameters -Extent $m.Extent `
+                    -Span (New-SpanAnchor -Extent $m.Extent -SourceText $sourceText -IsAscii $isAscii) `
                     -File $Source -IsNested $false -IsAdvanced $false `
                     -HasDynamicParam $false `
                     -OutputType @($(if ($null -ne $m.ReturnType) { $m.ReturnType.TypeName.Extent.Text } else { 'void' })) `
@@ -375,6 +446,7 @@ function Get-FunctionSignature
 
                 New-SignatureRecord -Name $cmd.Name -Kind 'Function' -Class $null `
                     -ParamBlock $paramBlock -ParameterAsts $null -Extent $sbAst.Extent `
+                    -Span (New-SpanAnchor -Extent $sbAst.Extent -SourceText $null -IsAscii $false) `
                     -File ($cmd.ScriptBlock.File ?? '<in-memory>') -IsNested $false `
                     -IsAdvanced $facts.IsAdvanced -HasDynamicParam $facts.HasDynamicParam `
                     -OutputType $facts.OutputType -Synopsis $null
