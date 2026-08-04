@@ -39,6 +39,46 @@ semantic discrimination. Only language knowledge separates directive from noise.
 Not comments — must never be touched by strippers: C# `#region`/`#pragma`/`#if` preprocessor
 directives; PS `using` statements.
 
+### Membership criterion — what makes something `frontmatter` (user, 2026-08-04)
+
+The kind is not "comments we decided to keep". It is **not-comments wearing
+comment syntax**: constructs that participate in the code's **runtime trace**
+(or in its parse) and merely happen to be spelled with the comment character.
+That is the discriminator, and it is what keeps per-language work mechanical
+instead of ad hoc — a new language needs the RULE applied, not a list memorized.
+
+The collision is a language-design accident, unevenly distributed:
+
+- **Worst** — languages that overloaded the comment character for real
+  directives: PowerShell (`#Requires`), Python (coding cookie). The lexer cannot
+  discriminate; only language knowledge can. Hence the partition at the parse
+  boundary, performed once, at the promotion site.
+- **Mildest** — languages with genuine directive/annotation syntax: C#
+  `#pragma`/`#if`, Java annotations. Those are not comments at all, so they never
+  enter the comment population (see "Not comments" above).
+
+Within the kind the *reason* for protection differs, and the difference will
+matter as languages land:
+
+| tier | effect | examples | note |
+|---|---|---|---|
+| parse-affecting | changes how the source itself decodes | Python coding cookie | stronger than runtime — stripping can corrupt the file's meaning outright |
+| runtime trace | affects execution | PS `#Requires`, shebang | the criterion's core case |
+| tooling-semantic | affects type checkers / bundlers, not runtime | Python `# type:`, `// @ts-*`, `//# sourceMappingURL=` | **may be the only type information present** — a structural survey has a stake here |
+| tooling-directive | suppresses tooling noise | `# noqa`, `# pylint:`, `# fmt:`, `eslint-disable` | protected by convention, not by semantics |
+
+Default stays **never strip** across all four — conservative, and the token cost
+is trivial — but the reasons are not interchangeable. A language whose type
+information lives in comments (pre-annotation Python) makes tier 3 *structural
+payload* rather than preserved noise, which is a survey concern, not just a
+stripping concern.
+
+Corollary, settled independently: comment-based help / doc-strings are NOT
+frontmatter under this criterion. `Get-Help` reads them at runtime, but they do
+not participate in the execution path — which is precisely why structural
+extraction is comment-invariant and the survey can run in the read-only tail
+(assemble-design §"Structural survey elements").
+
 ## Mode presets (ops bundles)
 
 - **economy** — strip everything except `frontmatter` (+ `doc-strings` optionally kept)
