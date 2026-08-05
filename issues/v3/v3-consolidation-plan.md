@@ -140,6 +140,27 @@ accruing) · thread adapter + corpus first milestone · mutation-ownership
 doctrine beyond copy-on-enrich (waits for admiral state design) ·
 subaddressing.
 
+**Shared ISS-registered helper library** (user, 2026-08-04; deferred). The 6d
+harmonization duplicated the same ~10-line copy-on-enrich / copy-on-mutate clone
+across four mutators, and `Add-Member` is the fleet's dominant cmdlet purely
+because of it. Collapse it into one helper **registered into the ISS the way
+chain-executor is** — `SessionStateFunctionEntry`, unconditional, never in the
+manifest or any profile. User's alternative was a method on chain-executor
+itself; a sibling file is cleaner, since chain-executor's stated job is *running*
+step-processors, not supplying item utilities.
+
+Wins: one definition of the clone contract instead of six copies; one place to
+swap N `Add-Member` reflection calls for a single ordered-hashtable cast
+(`[pscustomobject]$ordered`), which is both more minimal and likely faster on the
+hot path — **measure before claiming the speed half**; and it removes the fleet's
+main obstacle to Bare.
+
+Cost to weigh first: processors are currently invocable standalone, and every
+`processors/tests/*` suite dot-invokes them outside any ISS. A helper dependency
+means those suites must load it too. Self-contained still holds in the sense that
+matters (no module imports, and an ISS-registered function is available even at
+Bare) — but the standalone-invocation property is genuinely traded away.
+
 **Declarative ISS composition** (user, 2026-08-04; deferred). Replace the
 coarse `IssPreset` buckets with a capability DECLARATION — spin up runspaces
 carrying exactly what is wanted, rather than Microsoft's Bare/Core/Full lumps.
@@ -160,6 +181,16 @@ named bundles expressed in terms of the primitive. Costs to scope: name →
 `ImplementingType` resolution needs a catalog (CreateDefault2 serves), some
 surface is functions rather than cmdlets (`SessionStateFunctionEntry`), and
 providers/variables/formats are separate collections.
+
+*Prior art worth a look when this is picked up:* PSOneTools (user's collection at
+`PDenv/UserGithub/PowerShellCore/ps.core.psdig/PSOneTools/src`) — colonel already
+borrowed its parallel manifest-bootstrap pattern. `Where-ObjectFast` /
+`Foreach-ObjectFast` / `Group-ObjectFast` use a steppable pipeline internally to
+cut per-item cmdlet overhead. Note the aim differs from this project's
+convention: those optimize code that must KEEP a pipeline shape, whereas a plain
+`foreach` skips the pipeline entirely and beats both. Relevant where streaming or
+memory shape is required; otherwise the convention already wins. They document
+the tradeoff honestly (debugging differs, `$MyInvocation` behaves differently).
 
 **Effective-config resolver** (deferred 2026-08-04, arising from the ingest
 forwarding fix): report a run's EFFECTIVE parameter values — `{ Name; Value;

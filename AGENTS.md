@@ -78,20 +78,43 @@ Same construct can play different roles per relationship: `#Requires` is
   the payload. Store vs view: in-memory structures optimize for processing
   ergonomics; what the *payload* carries is a writer decision.
 - User prefers working directly on main with targeted commits per work item.
-- **Minimalism, proportional to the problem** (user, 2026-08-04): prefer
+- **Minimalism, proportional to the problem** (user, 2026-08-04). Prefer
   language-level PowerShell over provider/vendored surface and the piping
-  baggage it drags in — `1..4 | Where-Object` over reaching for a provider
-  cmdlet like `Get-ChildItem`. Subject to expediency and robustness: *don't
-  bring a bazooka to a knife fight, but bring the bazooka to the bazooka
-  fight.* Roslyn for C# parsing is a sanctioned bazooka — string-literal-aware
-  comment extraction genuinely needs it, and it ships with pwsh. Gratuitous
-  dependencies are the target, not capable ones.
-  Status: the processor fleet is **already provider-free** (audited
-  2026-08-04 — zero `Get-*`/`Test-Path`/`Join-Path`/`Get-Content` anywhere in
-  `processors/`). What remains between it and an empty ISS is a handful of
-  Utility cmdlets: `Add-Member` (dominant, from the copy-on-enrich/mutate
-  clone), plus single uses of `Sort-Object`, `Where-Object`, `ForEach-Object`,
-  `Measure-Object`. `chain-executor.ps1` already uses none at all.
+  baggage it drags in. Subject to expediency and robustness: *don't bring a
+  bazooka to a knife fight, but bring the bazooka to the bazooka fight.* The
+  target is **gratuitous** dependency, not capable tooling — Roslyn for C#
+  comment extraction is sanctioned (string-literal-aware parsing genuinely
+  needs it, and it ships with pwsh).
+
+  **Weigh the caveat every time: barebones forfeits convenient guarantees.**
+  Cmdlets carry edge-case semantics you inherit free and must otherwise
+  re-establish by hand — `Sort-Object` is a *stable* sort where `List.Sort` /
+  `[Array]::Sort` are not; `Measure-Object` survives empty input;
+  `Where-Object`/`ForEach-Object` normalize null and scalar-vs-array;
+  `Add-Member` tolerates collisions and awkward names. Replacements that quietly
+  drop those become latent bugs of exactly the kind this repo keeps finding
+  (the `[string]` → `''` null coercion, the `Dictionary.Remove` bool leak,
+  GetParentPath's infinite loop).
+
+  Guidance for new processors:
+  1. Default to language constructs where the semantics are total and obvious
+     (`foreach`, `if`, `-match`, `-replace`, direct .NET calls).
+  2. Reach for a cmdlet when it carries a guarantee you would otherwise
+     reimplement — and say which, in the self-doc block.
+  3. Declare what you use; `IssPreset floor` / `Required IssModules` already
+     exist in that block.
+  4. Do **not** hand-roll merely to reach Bare. **Bare ISS is an aspiration,
+     not a mandate** — deliberately not institutionalized; Core stays the
+     working default until a declarative ISS makes the choice granular
+     (consolidation §E).
+
+  Where the fleet stands (audited 2026-08-04): already **provider-free** — no
+  `Get-*`/`Test-Path`/`Join-Path`/`Get-Content` in `processors/`, and
+  chain-executor uses no cmdlets at all. The remaining gap to an empty ISS is a
+  handful of Utility cmdlets: `Add-Member` (dominant, from the
+  copy-on-enrich/copy-on-mutate clone) plus single uses of `Sort-Object`,
+  `Where-Object`, `ForEach-Object`, `Measure-Object`. Incidental debt, not
+  structural dependency.
 
 ## Maintaining this document (recursive note)
 
