@@ -100,7 +100,10 @@ if ('strip-zwsp' -in $ops)
 
 if ('trim-trailing' -in $ops)
 {
-    $t = ($t -split "`n" | ForEach-Object { $_.TrimEnd() }) -join "`n"
+    # Index loop mutating in place — no pipeline, no per-item cmdlet dispatch.
+    $lines = $t -split "`n"
+    for ($i = 0; $i -lt $lines.Count; $i++) { $lines[$i] = $lines[$i].TrimEnd() }
+    $t = $lines -join "`n"
 }
 
 if ('trim-inner' -in $ops)

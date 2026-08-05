@@ -193,6 +193,46 @@ try
     Assert-True ($null -eq $entry.PSObject.Properties['SizeBytes']) 'SizeBytes absent from the entry (descriptor bookkeeping)'
 
     # -----------------------------------------------------------------------
+    Enter-Section '5b. The whole chain runs under Bare (0-cmdlet ISS)'
+    # -----------------------------------------------------------------------
+    # Bare is an aspiration, not a mandate (AGENTS.md) — but the code-track
+    # profile now reaches it, and this asserts it stays reached. The fleet is
+    # cmdlet-free: the only calls left are the project's own ISS-registered
+    # helpers (Copy-Bag / Resolve-BagContent) and interior helpers. Under Bare
+    # there is no Add-Member, no Sort-Object, no ForEach-Object, no
+    # Set-StrictMode — anything that crept back in would fail here rather than
+    # silently degrade.
+    $bareIngest = Invoke-Ingest -FilteredFsGraph $filtered `
+        -Manifest @{
+            'file-read'     = (Join-Path $v3 'processors\file-read.ps1')
+            'format'        = (Join-Path $v3 'processors\format-ws.ps1')
+            'rs-psstrip'    = (Join-Path $v3 'processors\rs-psstrip.ps1')
+            'rs-attributes' = (Join-Path $v3 'processors\rs-attributes.ps1')
+        } `
+        -Steps @(
+            @{ Key = 'file-read'; Config = @{} }
+            @{ Key = 'format'; Config = @{ Operations = @('lf', 'trim-trailing', 'trim-doc') } }
+            @{ Key = 'rs-psstrip'; Config = @{ Operations = @('block-comments', 'doc-strings', 'comment-blocks', 'line-comments') } }
+            @{ Key = 'rs-attributes'; Config = @{} }
+        ) `
+        -ChainExecutorPath (Join-Path $v3 'processors\chain-executor.ps1') `
+        -SharedHelperPath (Join-Path $v3 'processors\bag-helpers.ps1') `
+        -IssPreset 'Bare' -MaxWorkers 1
+
+    Assert-True (@($bareIngest.Errors).Count -eq 0) 'Bare: no dispatch errors' ($bareIngest.Errors -join '; ')
+    Assert-True (@($bareIngest.Streams | Where-Object { $_.Stream -eq 'Error' }).Count -eq 0) `
+        'Bare: no error-stream noise (a missing cmdlet would surface here)'
+
+    $bareIr = Invoke-Assemble -DispatchOutput $bareIngest
+    $bareEntry = $bareIr.Entries | Where-Object { $_.RelativePath -eq 'src/thing.ps1' }
+    Assert-True ($null -ne $bareEntry) 'Bare: entry assembled'
+    Assert-True ($bareEntry.Content -eq $entry.Content) 'Bare output byte-identical to the Core run'
+    $bareRecords = @($bareEntry.Processing)
+    Assert-True ($bareRecords.Count -eq 2) 'Bare: Processing trail intact' "got $($bareRecords.Count)"
+    Assert-True ($null -ne $bareEntry.PSObject.Properties['Attributes']) 'Bare: enrich-only tail ran'
+    Assert-True (@($bareIngest.Streams).Count -eq 0) 'Bare: Streams forwarded through ingest and empty on a clean run'
+
+    # -----------------------------------------------------------------------
     Enter-Section '6. Serial and parallel dispatch agree'
     # -----------------------------------------------------------------------
     # Content mutators must be dispatch-mode invariant: the harmonized clone

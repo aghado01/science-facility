@@ -193,7 +193,10 @@ if ($doStripCommon)
 
     if ($spaceLeads.Count -gt 0)
     {
-        $common = ($spaceLeads | Measure-Object -Minimum).Minimum
+        # Manual minimum — Measure-Object's empty-input tolerance is not needed
+        # here because the Count guard above already established non-empty.
+        $common = $spaceLeads[0]
+        foreach ($d in $spaceLeads) { if ($d -lt $common) { $common = $d } }
         if ($common -gt 0)
         {
             for ($i = 0; $i -lt $lines.Count; $i++)
@@ -242,7 +245,8 @@ if ($doDetab)
 # ---------------------------------------------------------------------------
 if ($doMinIndent)
 {
-    $nonZero = @($depths | Where-Object { $_ -gt 0 })
+    $nonZero = [System.Collections.Generic.List[int]]::new()
+    foreach ($d in $depths) { if ($d -gt 0) { $nonZero.Add($d) } }
     if ($nonZero.Count -gt 0)
     {
         $gcd = $nonZero[0]

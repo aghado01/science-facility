@@ -45,11 +45,15 @@ Import-Module "$PSScriptRoot/rs.core.internals.psm1" -Force
       as Items verbatim — processors receive them as $Item.
 
     Output contract (to admiral / caller):
-      @{ Results; Skipped; Errors; Warnings; Budget; Timing }
+      @{ Results; Skipped; Errors; Warnings; Streams; Budget; Timing }
       Results  — [object[]] ordered by original eligible-file index (from colonel)
       Skipped  — [PSCustomObject[]] @{ Path; Reason; ... } merged from all stages
       Errors   — string[] from Compile-Plan + Invoke-Plan
       Warnings — string[] aggregated across all stages
+      Streams  — structured worker output from colonel, passed through intact
+                 (@{ Stream; Worker; Message; ErrorId; Category; Target;
+                 StackTrace }). Collating streams in colonel is only useful if
+                 they reach the caller, so ingest forwards rather than flattens.
 
 .NOTES
     Module load order (admiral's responsibility):
@@ -89,6 +93,7 @@ function Invoke-Ingest
             Skipped  — [PSCustomObject[]] ineligible files with Reason
             Errors   — string[]
             Warnings — string[]
+            Streams  — structured worker streams from Invoke-Plan
             Budget   — from Invoke-Plan
             Timing   — from Invoke-Plan
         }
@@ -157,6 +162,7 @@ function Invoke-Ingest
                 Skipped  = $skipped.ToArray()
                 Errors   = $errors.ToArray()
                 Warnings = $warnings.ToArray()
+                Streams  = @()
                 Budget   = $null
                 Timing   = $null
             }
@@ -200,6 +206,7 @@ function Invoke-Ingest
                 Skipped  = $skipped.ToArray()
                 Errors   = $errors.ToArray()
                 Warnings = $warnings.ToArray()
+                Streams  = @()
                 Budget   = $null
                 Timing   = $null
             }
@@ -219,6 +226,7 @@ function Invoke-Ingest
             Skipped  = $skipped.ToArray()
             Errors   = $errors.ToArray()
             Warnings = $warnings.ToArray()
+            Streams  = @($result.Streams)
             Budget   = $result.Budget
             Timing   = $result.Timing
         }

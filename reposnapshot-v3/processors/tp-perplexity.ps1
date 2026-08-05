@@ -354,7 +354,9 @@ if ($prev -lt $text.Length)
 }
 
 # Empty chunks (e.g. consecutive terminators) drop out
-$chunks = @($chunks | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+$kept = [System.Collections.Generic.List[string]]::new()
+foreach ($c in $chunks) { if (-not [string]::IsNullOrWhiteSpace($c)) { $kept.Add($c) } }
+$chunks = @($kept)
 
 # ---------------------------------------------------------------------------
 # Stage 6/7 — Per chunk: extract prompt / reply / citations; restore code blocks

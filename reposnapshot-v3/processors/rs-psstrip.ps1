@@ -186,7 +186,9 @@ $errors = @($errorsRef.Value)
 $parseErrors = $null
 if ($errors.Count -gt 0)
 {
-    $parseErrors = @($errors | ForEach-Object { $_.Message })
+    $msgs = [System.Collections.Generic.List[string]]::new()
+    foreach ($e in $errors) { $msgs.Add($e.Message) }
+    $parseErrors = @($msgs)
 }
 
 # ---------------------------------------------------------------------------
@@ -380,14 +382,15 @@ else
     # ---------------------------------------------------------------------------
     $bodyExtents = [System.Collections.Generic.List[System.Management.Automation.Language.IScriptExtent]]::new()
 
-    $ast.FindAll(
+    $bodyNodes = $ast.FindAll(
         {
             param($node)
             $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -or
             $node -is [System.Management.Automation.Language.TypeDefinitionAst]
         },
         $true
-    ) | ForEach-Object { $bodyExtents.Add($_.Extent) }
+    )
+    foreach ($node in $bodyNodes) { $bodyExtents.Add($node.Extent) }
 
     # ---------------------------------------------------------------------------
     # Select and first-pass classify comment tokens
@@ -399,7 +402,11 @@ else
     # population feeds classification; Derived FrontMatter joins the classified
     # list below as a named kind. Zero frontmatter text predicates from here on.
     $population = _SplitCommentPopulation -Tokens $tokens -Ast $ast
-    $commentTokens = @($population.Native | Sort-Object { $_.Extent.StartOffset })
+    # In-place sort by start offset. Token offsets are unique, so there are no
+    # ties for a stable sort to preserve.
+    $population.Native.Sort(
+        [System.Comparison[object]] { param($a, $b) $a.Extent.StartOffset.CompareTo($b.Extent.StartOffset) })
+    $commentTokens = $population.Native
 
     $classified = [System.Collections.Generic.List[pscustomobject]]::new()
 
@@ -462,9 +469,9 @@ else
                     LineNum  = $fm.Token.Extent.StartLineNumber
                 })
         }
-        $resorted = [System.Collections.Generic.List[pscustomobject]]::new()
-        foreach ($c in ($classified | Sort-Object StartOff)) { $resorted.Add($c) }
-        $classified = $resorted
+        # Re-sort so run-folding below sees positional order. Offsets are unique
+        # per token, so no ties — stability is moot.
+        $classified.Sort([System.Comparison[object]] { param($a, $b) $a.StartOff.CompareTo($b.StartOff) })
     }
 
     # ---------------------------------------------------------------------------
@@ -584,7 +591,10 @@ $merged = [System.Collections.Generic.List[pscustomobject]]::new()
 
 if ($spansToStrip.Count -gt 0)
 {
-    $sorted = @($spansToStrip | Sort-Object { $_.Start })
+    # In-place sort; the merge below takes max(End) over overlapping spans, so
+    # equal-Start ties produce the same union regardless of order.
+    $spansToStrip.Sort([System.Comparison[object]] { param($a, $b) $a.Start.CompareTo($b.Start) })
+    $sorted = $spansToStrip
     $cur = [pscustomobject]@{ Start = $sorted[0].Start; End = $sorted[0].End }
 
     for ($i = 1; $i -lt $sorted.Count; $i++)

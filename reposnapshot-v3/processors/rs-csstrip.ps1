@@ -257,7 +257,12 @@ $merged = [System.Collections.Generic.List[pscustomobject]]::new()
 
 if ($spansToStrip.Count -gt 0)
 {
-    $sorted = @($spansToStrip | Sort-Object { $_.Start })
+    # In-place List.Sort — no pipeline. Sort-Object is a STABLE sort and
+    # List.Sort is not, but stability is not load-bearing here: the merge below
+    # takes max(End) over overlapping spans, so equal-Start ties produce the
+    # same union either way.
+    $spansToStrip.Sort([System.Comparison[object]] { param($a, $b) $a.Start.CompareTo($b.Start) })
+    $sorted = $spansToStrip
     $cur = [pscustomobject]@{ Start = $sorted[0].Start; End = $sorted[0].End }
 
     for ($i = 1; $i -lt $sorted.Count; $i++)
