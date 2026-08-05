@@ -155,11 +155,43 @@ swap N `Add-Member` reflection calls for a single ordered-hashtable cast
 hot path — **measure before claiming the speed half**; and it removes the fleet's
 main obstacle to Bare.
 
-Cost to weigh first: processors are currently invocable standalone, and every
-`processors/tests/*` suite dot-invokes them outside any ISS. A helper dependency
-means those suites must load it too. Self-contained still holds in the sense that
-matters (no module imports, and an ISS-registered function is available even at
-Bare) — but the standalone-invocation property is genuinely traded away.
+Cost, **adjudicated 2026-08-04 (user): accepted.** Collapsing duplicated lines is
+worth more than a standalone-invocation convenience that is rarely used; the
+`processors/tests/*` suites will get a small wrapper that imports the helper
+where the ISS would otherwise supply it. Self-contained still holds in the sense
+that matters — no module imports, and an ISS-registered function exists even at
+Bare.
+
+**Companion findings (probed 2026-08-04, all verified inside a real Bare
+runspace):**
+
+- `Sort-Object` (4 sites: rs-psstrip ×3, rs-csstrip ×1) — **stability is not
+  load-bearing at any of them.** Three sort by unique token offsets; the fourth
+  feeds a union-merge that takes `max(End)`, which was demonstrated tie-order
+  independent. So the stable-sort guarantee named in AGENTS.md, while real in
+  general, is not being relied on here. Replacement:
+  `List.Sort([System.Comparison[object]]{ param($a,$b) ... })` — verified to work
+  in a worker runspace (scriptblock→delegate conversion is fine), in place, no
+  pipeline.
+- `ForEach-Object` (3 sites) — all trivially `foreach`/`for`. The format-ws case
+  (`-split` → trim each → `-join`) becomes an index loop mutating in place;
+  verified.
+- `Add-Member` — `[pscustomobject][ordered]@{}` clone verified: preserves
+  property order and the mutated key, one allocation instead of N reflection
+  calls.
+- **`Set-StrictMode` does not belong in processor bodies — recommend removal**
+  (rs-attributes, tp-perplexity; only 2 of 7 carry it). In Bare it is a
+  *non-terminating* error: the processor keeps running WITHOUT strict mode while
+  writing to the error stream — and colonel clears `$Error` before each processor
+  call and attributes what it finds per item, so every item would carry a
+  spurious error. Beyond that it is the same category as `#Requires`, which
+  colonel already REJECTS in processor bodies because the environment is
+  Build-Iss's to set; a body-only fragment imposing an engine-wide setting is the
+  same scope-hygiene violation, merely undetected. The strictness that matters is
+  already structural — processors probe `PSObject.Properties['X']` rather than
+  assuming shape — and the test harnesses set `Set-StrictMode -Version Latest` at
+  script scope, which is where a development aid belongs: strictness where it
+  catches bugs, without the runtime dependency where it costs.
 
 **Declarative ISS composition** (user, 2026-08-04; deferred). Replace the
 coarse `IssPreset` buckets with a capability DECLARATION — spin up runspaces
