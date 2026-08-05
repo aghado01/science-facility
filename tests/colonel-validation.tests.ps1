@@ -93,6 +93,29 @@ param($Item, $Config)
 return $Item
 '@
 
+Set-Content -Path (Join-Path $fixtureRoot 'strictmode.ps1') -Value @'
+param($Item, $Config)
+Set-StrictMode -Version Latest
+return $Item
+'@
+
+Set-Content -Path (Join-Path $fixtureRoot 'strictmode-nested.ps1') -Value @'
+param($Item, $Config)
+function _Inner
+{
+    Set-PSDebug -Strict
+    return 1
+}
+return $Item
+'@
+
+Set-Content -Path (Join-Path $fixtureRoot 'strictmode-mention.ps1') -Value @'
+param($Item, $Config)
+# ISS-load-safe: no #Requires, no Set-StrictMode, top-level param contract
+$note = 'Set-StrictMode'
+return $Item
+'@
+
 Set-Content -Path (Join-Path $fixtureRoot 'helper.ps1') -Value @'
 param($Item, $Config)
 
@@ -142,6 +165,37 @@ try
     Assert-True ((@($rq.Errors) -join ' ') -match 'Requires') '#Requires rejected with ISS-load message'
     $ec = Invoke-CompileOnly @{ 'english-comment' = (Join-Path $fixtureRoot 'english-comment.ps1') } 'english-comment'
     Assert-True (@($ec.Errors).Count -eq 0) 'ordinary "# Requires ..." English comment is NOT a directive — accepted' ($ec.Errors -join '; ')
+
+    # -----------------------------------------------------------------------
+    Enter-Section '4b. Engine-state commands rejected (same contract as #Requires)'
+    # -----------------------------------------------------------------------
+    # A body-only fragment must not set engine state — that belongs to Build-Iss.
+    # Set-StrictMode was the live case: documented as forbidden in every processor
+    # header but never enforced, and under Bare it is a NON-terminating error, so
+    # the processor would run WITHOUT strict mode while writing to the error
+    # stream. (No processor actually called it — this makes the documented
+    # contract mechanical rather than fixing a violation.)
+    $sm = Invoke-CompileOnly @{ 'strictmode' = (Join-Path $fixtureRoot 'strictmode.ps1') } 'strictmode'
+    Assert-True ((@($sm.Errors) -join ' ') -match 'Set-StrictMode') 'Set-StrictMode rejected'
+    Assert-True ((@($sm.Errors) -join ' ') -match 'Build-Iss') 'rejection explains whose job engine state is'
+
+    $sn = Invoke-CompileOnly @{ 'strictmode-nested' = (Join-Path $fixtureRoot 'strictmode-nested.ps1') } 'strictmode-nested'
+    Assert-True ((@($sn.Errors) -join ' ') -match 'Set-PSDebug') 'banned call inside an interior helper is still caught'
+
+    # Text mentions are not calls — the whole point of checking the AST rather
+    # than grepping (the fleet audit initially miscounted docstrings as usage).
+    $smm = Invoke-CompileOnly @{ 'strictmode-mention' = (Join-Path $fixtureRoot 'strictmode-mention.ps1') } 'strictmode-mention'
+    Assert-True (@($smm.Errors).Count -eq 0) 'comment/string mentions of Set-StrictMode are NOT calls — accepted' ($smm.Errors -join '; ')
+
+    # The shipped fleet complies.
+    $fleetOk = $true
+    foreach ($proc in (Get-ChildItem (Join-Path $v3 'processors') -Filter '*.ps1'))
+    {
+        if ($proc.Name -eq 'chain-executor.ps1') { continue }
+        $r = Invoke-CompileOnly @{ 'p' = $proc.FullName } 'p'
+        if ((@($r.Errors) -join ' ') -match 'Set-StrictMode|Set-PSDebug') { $fleetOk = $false }
+    }
+    Assert-True $fleetOk 'every shipped processor already complies with the engine-state ban'
 
     # -----------------------------------------------------------------------
     Enter-Section '5. Parse errors rejected'

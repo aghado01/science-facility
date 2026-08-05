@@ -104,6 +104,30 @@ $script:ReadProcessorScript = {
             return $result
         }
 
+        # Engine-state commands are banned for the same reason as #Requires: the
+        # environment belongs to Build-Iss, and a body-only fragment must not set
+        # it. Set-StrictMode was the live case — carried by only 2 of 7 processors,
+        # so the fleet was already inconsistent, and under the Bare preset it is a
+        # NON-terminating error: the processor keeps running WITHOUT strict mode
+        # while writing to the error stream, which colonel now collects per worker.
+        # The strictness that matters is structural anyway (processors probe
+        # PSObject.Properties rather than assuming shape), and the test harnesses
+        # set it at script scope — strictness where it catches bugs, without the
+        # runtime dependency where it costs.
+        # Checked over the whole fragment, interior helpers included.
+        $banned = @('Set-StrictMode', 'Set-PSDebug')
+        $cmdAsts = $ast.FindAll(
+            { param($n) $n -is [System.Management.Automation.Language.CommandAst] }, $true)
+        foreach ($c in $cmdAsts)
+        {
+            $name = $c.GetCommandName()
+            if ($null -ne $name -and $banned -contains $name)
+            {
+                $result.Error = "Processor scripts must not call $name — engine state belongs to Build-Iss, not to a body-only fragment (same contract as the #Requires ban)."
+                return $result
+            }
+        }
+
         $result.Body = $body
     }
     catch { $result.Error = $_.Exception.Message }
