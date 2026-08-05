@@ -22,7 +22,9 @@ Set-StrictMode -Version Latest
       Invoke-Plan — slices Items round-robin across a worker budget
         (Resolve-WorkerBudget), executes the chain per item via
         Invoke-ChainExecutor inside a runspace pool, returns the
-        index-stable envelope @{ Results; Errors; Warnings; Budget; Timing }.
+        index-stable envelope @{ Results; Errors; Warnings; Streams; Budget;
+        Timing }. Errors are collected and collated like any other output
+        stream — see `Streams` in the Invoke-Plan contract below.
 
     Items are ItemDescriptor objects dispatched verbatim (rs.core.ingest
     forwards them); processors receive them as $Item and copy-on-enrich.
@@ -422,7 +424,19 @@ function Resolve-WorkerBudget
 #   MinItemsPerWorker int              (default 4)
 #   WaitTimeoutMs     int              (default 60000)
 #
-# Returns [pscustomobject] @{ Results; Errors; Warnings; Budget; Timing }
+# Returns [pscustomobject] @{ Results; Errors; Warnings; Streams; Budget; Timing }
+#
+#   Streams   ALL five worker streams, structured and collated in worker order:
+#             @{ Stream; Worker; Message; ErrorId; Category; Target; StackTrace }
+#             Stream is Error|Warning|Verbose|Debug|Information. Errors are one
+#             stream among five, not a special case — Warning/Verbose/Debug/
+#             Information were formerly discarded, so a processor's Write-Warning
+#             vanished silently. Records keep FullyQualifiedErrorId, CategoryInfo,
+#             TargetObject and ScriptStackTrace, which ToString() destroys.
+#   Errors    flat string[] projection kept for existing consumers (ingest merges
+#             it; suites assert on it). Fed from the structured rows plus
+#             chain-executor's per-item entries and dispatch-level failures.
+#   Warnings  budget warnings plus worker Warning records.
 # =============================================================================
 function Invoke-Plan
 {
@@ -498,6 +512,60 @@ function Invoke-Plan
     $pool.Open()
     $timing['PoolOpenMs'] = $swPool.ElapsedMilliseconds
 
+    # ── Stream collation ──────────────────────────────────────────────────────
+    # Results are collated index-stably; streams get the same treatment rather
+    # than being flattened to one joined string per worker. Errors are ONE stream
+    # among five — Warning/Verbose/Debug/Information used to be discarded
+    # outright, so a processor calling Write-Warning vanished without trace.
+    # Records are kept structured: ToString() throws away FullyQualifiedErrorId,
+    # CategoryInfo, TargetObject and ScriptStackTrace, which are precisely the
+    # fields worth having when a processor misbehaves inside a runspace.
+    $readWorkerStreams = {
+        param([object] $Ps, [int] $WorkerIndex)
+
+        $rows = [System.Collections.Generic.List[pscustomobject]]::new()
+
+        foreach ($e in $Ps.Streams.Error)
+        {
+            $rows.Add([pscustomobject]@{
+                    Stream     = 'Error'
+                    Worker     = $WorkerIndex
+                    Message    = [string]$e.Exception.Message
+                    ErrorId    = [string]$e.FullyQualifiedErrorId
+                    Category   = [string]$e.CategoryInfo.Category
+                    Target     = [string]$e.TargetObject
+                    StackTrace = [string]$e.ScriptStackTrace
+                })
+        }
+
+        foreach ($spec in @(
+                @{ Name = 'Warning'; Records = $Ps.Streams.Warning }
+                @{ Name = 'Verbose'; Records = $Ps.Streams.Verbose }
+                @{ Name = 'Debug'; Records = $Ps.Streams.Debug }
+                @{ Name = 'Information'; Records = $Ps.Streams.Information }
+            ))
+        {
+            foreach ($rec in $spec.Records)
+            {
+                # InformationRecord carries MessageData; the rest carry Message.
+                $msg = if ($rec -is [System.Management.Automation.InformationRecord])
+                { [string]$rec.MessageData } else { [string]$rec.Message }
+
+                $rows.Add([pscustomobject]@{
+                        Stream     = $spec.Name
+                        Worker     = $WorkerIndex
+                        Message    = $msg
+                        ErrorId    = $null
+                        Category   = $null
+                        Target     = $null
+                        StackTrace = $null
+                    })
+            }
+        }
+
+        return $rows
+    }
+
     # ── Worker scriptblock — RUNSPACE BOUNDARY ────────────────────────────────
     # using namespace directives are parse-time and module-scoped — they do NOT
     # propagate into AddScript() contexts. All .NET types here must be fully qualified.
@@ -564,29 +632,40 @@ function Invoke-Plan
     }
     $timing['WaitMs'] = $swWait.ElapsedMilliseconds
 
-    # ── Collect results and dispose workers ───────────────────────────────────
+    # ── Collect results, streams, and dispose workers ─────────────────────────
+    # Worker order is deterministic here (the $workers list is built in slice
+    # order), so $streams is collated deterministically even though $errors
+    # remains a ConcurrentBag whose own ordering is not guaranteed.
     $swCollect = [System.Diagnostics.Stopwatch]::StartNew()
-    foreach ($worker in $workers)
+    $streams = [System.Collections.Generic.List[pscustomobject]]::new()
+    for ($wi = 0; $wi -lt $workers.Count; $wi++)
     {
+        $worker = $workers[$wi]
         try
         {
             if ($worker.Async.IsCompleted)
             {
                 $null = $worker.PS.EndInvoke($worker.Async)
-                if ($worker.PS.HadErrors)
-                {
-                    $msgs = @($worker.PS.Streams.Error | ForEach-Object { $_.ToString() }) -join '; '
-                    $errors.Add("Worker stream errors: $msgs")
-                }
             }
             else
             {
                 try { $worker.PS.Stop() } catch {}
                 $errors.Add('Worker did not complete before timeout; stopped forcibly.')
             }
+
+            # Harvest EVERY stream, whether or not HadErrors is set — warnings and
+            # verbose output are worth collecting from a worker that succeeded.
+            foreach ($row in (& $readWorkerStreams $worker.PS $wi)) { $streams.Add($row) }
         }
         catch { $errors.Add("Worker collect error: $($_.Exception.Message)") }
         finally { $worker.PS.Dispose() }
+    }
+
+    # Back-compat projection: Errors stays a flat string[] for existing consumers
+    # (ingest merges it; suites assert on it), now fed from the structured rows.
+    foreach ($row in $streams)
+    {
+        if ($row.Stream -eq 'Error') { $errors.Add("Worker [$($row.Worker)] $($row.Message)") }
     }
     $timing['CollectMs'] = $swCollect.ElapsedMilliseconds
 
@@ -595,10 +674,18 @@ function Invoke-Plan
 
     $timing['TotalMs'] = $swTotal.ElapsedMilliseconds
 
+    # Worker Warning records join the envelope's Warnings (previously only
+    # Resolve-WorkerBudget could contribute, so processor warnings were lost).
+    foreach ($row in $streams)
+    {
+        if ($row.Stream -eq 'Warning') { $warnings.Add("Worker [$($row.Worker)] $($row.Message)") }
+    }
+
     return [pscustomobject]@{
         Results  = $ordered
         Errors   = @($errors.ToArray())
         Warnings = $warnings.ToArray()
+        Streams  = $streams.ToArray()
         Budget   = $budget
         Timing   = [pscustomobject]$timing
     }

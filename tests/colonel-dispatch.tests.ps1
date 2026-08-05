@@ -177,6 +177,54 @@ try
         'empty Items binds (AllowEmptyCollection) and returns clean empty envelope'
 
     # -----------------------------------------------------------------------
+    Enter-Section '6b. All worker streams are collected and collated'
+    # -----------------------------------------------------------------------
+    # Errors are one stream among five, not a special case. Previously only
+    # Streams.Error was read — flattened with ToString() and joined into a single
+    # string per worker — while Warning/Verbose/Debug/Information were discarded
+    # outright, so a processor's Write-Warning vanished without trace.
+    $noisy = Join-Path $fixtureRoot 'noisy.ps1'
+    Set-Content -LiteralPath $noisy -Value @'
+param($Item, $Config)
+Write-Warning "warned"
+Write-Verbose "verbosed" -Verbose
+Write-Information "informed"
+Write-Error "non-terminating"
+return $Item
+'@
+
+    $nc = Compile-Plan -Manifest @{ 'noisy' = $noisy } `
+        -Steps @(@{ Key = 'noisy'; Config = @{} }) `
+        -ChainExecutorPath $chainExec
+    $nr = Invoke-Plan -Items @([pscustomobject]@{ N = 1 }, [pscustomobject]@{ N = 2 }) -Plan $nc.Plan -MaxWorkers 1
+
+    Assert-True ($null -ne $nr.PSObject.Properties['Streams']) 'envelope exposes a Streams collection'
+    $byStream = @{}
+    foreach ($row in $nr.Streams) { $byStream[$row.Stream] = 1 + ($byStream[$row.Stream] ?? 0) }
+    foreach ($s in 'Error', 'Warning', 'Verbose', 'Information')
+    {
+        Assert-True (($byStream[$s] ?? 0) -ge 1) "stream collected: $s" "rows: $($byStream[$s] ?? 0)"
+    }
+
+    # Structure preserved — ToString() would have destroyed all of these.
+    $errRow = @($nr.Streams | Where-Object { $_.Stream -eq 'Error' })[0]
+    Assert-True ($errRow.Message -match 'non-terminating') 'error row carries the message'
+    Assert-True (-not [string]::IsNullOrWhiteSpace($errRow.ErrorId)) 'error row keeps FullyQualifiedErrorId'
+    Assert-True (-not [string]::IsNullOrWhiteSpace($errRow.StackTrace)) 'error row keeps ScriptStackTrace'
+    Assert-True ($null -ne $errRow.Worker) 'row is attributed to a worker'
+
+    # Results are unaffected by a processor that merely writes to streams.
+    Assert-True (@($nr.Results).Count -eq 2) 'stream output does not disturb results'
+    # Back-compat projections still populated.
+    Assert-True (@($nr.Errors).Count -ge 1) 'Errors string[] projection retained for existing consumers'
+    Assert-True (@($nr.Warnings | Where-Object { $_ -match 'warned' }).Count -ge 1) `
+        'worker warnings now reach the Warnings projection (previously dropped)'
+
+    # A quiet processor produces no stream rows at all.
+    $qr = Invoke-Plan -Items @([pscustomobject]@{ N = 1 }) -Plan $compiled.Plan -MaxWorkers 1
+    Assert-True (@($qr.Streams).Count -eq 0) 'quiet run collates an empty Streams collection'
+
+    # -----------------------------------------------------------------------
     Enter-Section '7. Every IssPreset builds a runspace that can actually dispatch'
     # -----------------------------------------------------------------------
     # Regression: Bare called [InitialSessionState]::CreateEmpty(), which does not
