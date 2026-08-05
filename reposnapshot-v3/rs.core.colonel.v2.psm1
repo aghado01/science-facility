@@ -195,6 +195,10 @@ function Build-Iss
 #   Manifest          hashtable  { 'processor-key' = 'path/to/script.ps1' }
 #   Steps             ordered object[]  @{ Key = string; Config = hashtable }
 #   ChainExecutorPath string     path to chain-executor.ps1
+#   SharedHelperPath  string[]   optional library files whose TOP-LEVEL functions
+#                                are each registered into the ISS (e.g.
+#                                processors/bag-helpers.ps1). Unlike processors,
+#                                these declare function wrappers.
 #   IssPreset         IssPreset  enum value (default Core)
 #   IssModules        string[]   extra PS modules pre-loaded into every worker
 #   InitThreads       int        max concurrent bootstrap readers (default 4)
@@ -212,6 +216,7 @@ function Compile-Plan
         [Parameter(Mandatory)] [hashtable]  $Manifest,
         [Parameter(Mandatory)] [object[]]   $Steps,
         [Parameter(Mandatory)] [string]     $ChainExecutorPath,
+        [string[]]                          $SharedHelperPath = @(),
         [IssPreset]                         $IssPreset = [IssPreset]::Core,
         [string[]]                          $IssModules = @(),
         [int]                               $InitThreads = 4
@@ -333,6 +338,27 @@ function Compile-Plan
     $iss.Commands.Add(
         [System.Management.Automation.Runspaces.SessionStateFunctionEntry]::new('Invoke-ChainExecutor', $chainBody)
     )
+
+    # Register shared helper libraries. UNLIKE processors and chain-executor,
+    # these files DO declare function wrappers — each top-level function is
+    # registered separately, so one file can supply several helpers. The body
+    # text is taken from the AST rather than by string surgery, so nested braces
+    # and here-strings inside a helper are handled by the parser, not a regex.
+    foreach ($helperPath in $SharedHelperPath)
+    {
+        $helperSrc = Get-Content -LiteralPath $helperPath -Raw
+        $helperAst = [System.Management.Automation.Language.Parser]::ParseInput($helperSrc, [ref]$null, [ref]$null)
+        foreach ($fn in $helperAst.FindAll(
+                { param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $false))
+        {
+            # Body.Extent.Text includes the wrapping braces; SessionStateFunctionEntry wants the interior.
+            $bodyText = $fn.Body.Extent.Text
+            $iss.Commands.Add(
+                [System.Management.Automation.Runspaces.SessionStateFunctionEntry]::new(
+                    $fn.Name, $bodyText.Substring(1, $bodyText.Length - 2))
+            )
+        }
+    }
 
     # ── Phase 4: Bind steps to resolved Fn names ─────────────────────────────
     # All name resolution happens here at compile time.

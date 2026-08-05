@@ -130,7 +130,8 @@ try
             @{ Key = 'rs-psstrip'; Config = @{ Operations = @('block-comments', 'doc-strings', 'comment-blocks', 'line-comments') } }
             @{ Key = 'rs-attributes'; Config = @{} }
         ) `
-        -ChainExecutorPath (Join-Path $v3 'processors\chain-executor.ps1')
+        -ChainExecutorPath (Join-Path $v3 'processors\chain-executor.ps1') `
+        -SharedHelperPath (Join-Path $v3 'processors\bag-helpers.ps1')
 
     Assert-True ($null -ne $ingest) 'ingest returned a dispatch envelope'
     Assert-True (@($ingest.Errors).Count -eq 0) 'no per-item dispatch errors' "errors: $(@($ingest.Errors) -join '; ')"
@@ -208,6 +209,7 @@ try
             @{ Key = 'rs-psstrip'; Config = @{ Operations = @('block-comments', 'doc-strings', 'comment-blocks', 'line-comments') } }
         ) `
         -ChainExecutorPath (Join-Path $v3 'processors\chain-executor.ps1') `
+        -SharedHelperPath (Join-Path $v3 'processors\bag-helpers.ps1') `
         -MaxWorkers 1
 
     Assert-True ($serial.Budget.Threads -eq 1) 'serial run used one worker'

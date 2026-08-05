@@ -65,21 +65,14 @@
 # group selection, honest-CR line lengths.
 param($Item, $Config)
 
-# Copy-on-enrich: clone ALL input properties (identity contract — never
-# mutate the caller's reference object).
-$result = [PSCustomObject]@{}
-foreach ($p in $Item.PSObject.Properties)
+# No-Content contract: pass through unenriched. Checked on the INPUT, before any
+# clone — a bag with nothing to measure comes back exactly as it arrived.
+if ($null -eq $Item.PSObject.Properties['Content'] -or $Item.Content -isnot [string])
 {
-    $result | Add-Member -NotePropertyName $p.Name -NotePropertyValue $p.Value
+    return $Item
 }
 
-# No-Content contract: pass through unenriched.
-if ($null -eq $result.PSObject.Properties['Content'] -or $result.Content -isnot [string])
-{
-    return $result
-}
-
-$content = [string]$result.Content
+$content = [string]$Item.Content
 
 # ── Counts ───────────────────────────────────────────────────────────────
 $charCount = if ($content) { $content.Length } else { 0 }
@@ -152,16 +145,18 @@ if ($content -and $charCount -gt 0)
     }
 }
 
-$result | Add-Member -NotePropertyName Attributes -NotePropertyValue ([PSCustomObject]@{
-        SpanBytes        = if ($content) { [System.Text.Encoding]::UTF8.GetByteCount($content) } else { 0 }
-        CharCount        = $charCount
-        WordCount        = $wordCount
-        PunctuationCount = $punctCount
-        UniqueChars      = $uniqueChars
-        Entropy          = [Math]::Round($entropy, 4)
-        CompressionRatio = $compressionRatio
-        WhitespaceRatio  = $whitespaceRatio
-        LineStats        = $lineStats
+# Copy-on-enrich via the shared Copy-Bag helper (processors/bag-helpers.ps1):
+# clone ALL input properties, then attach. Never mutates the caller's reference.
+return Copy-Bag -Item $Item -Add ([ordered]@{
+        Attributes = [PSCustomObject]@{
+            SpanBytes        = if ($content) { [System.Text.Encoding]::UTF8.GetByteCount($content) } else { 0 }
+            CharCount        = $charCount
+            WordCount        = $wordCount
+            PunctuationCount = $punctCount
+            UniqueChars      = $uniqueChars
+            Entropy          = [Math]::Round($entropy, 4)
+            CompressionRatio = $compressionRatio
+            WhitespaceRatio  = $whitespaceRatio
+            LineStats        = $lineStats
+        }
     })
-
-return $result

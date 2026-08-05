@@ -25,6 +25,7 @@ Set-StrictMode -Version Latest
 
 $v3 = Join-Path $PSScriptRoot '..\reposnapshot-v3'
 $chainExec = Join-Path $v3 'processors\chain-executor.ps1'
+$bagHelpers = Join-Path $v3 'processors\bag-helpers.ps1'
 
 # ---------------------------------------------------------------------------
 # Minimal assertion framework (house pattern)
@@ -102,13 +103,13 @@ try
     # -----------------------------------------------------------------------
     Enter-Section '1. Compile-Plan input validation'
     # -----------------------------------------------------------------------
-    $cEmpty = Compile-Plan -Manifest @{} -Steps $steps -ChainExecutorPath $chainExec
+    $cEmpty = Compile-Plan -Manifest @{} -Steps $steps -ChainExecutorPath $chainExec -SharedHelperPath $bagHelpers
     Assert-True (@($cEmpty.Errors).Count -gt 0 -and $null -eq $cEmpty.Plan) 'empty manifest → error, no plan'
 
-    $cMissing = Compile-Plan -Manifest @{ 'stage1' = $manifest['stage1'] } -Steps $steps -ChainExecutorPath $chainExec
+    $cMissing = Compile-Plan -Manifest @{ 'stage1' = $manifest['stage1'] } -Steps $steps -ChainExecutorPath $chainExec -SharedHelperPath $bagHelpers
     Assert-True ((@($cMissing.Errors) -join ' ') -match 'absent from the manifest') 'step key absent from manifest → named error'
 
-    $compiled = Compile-Plan -Manifest $manifest -Steps $steps -ChainExecutorPath $chainExec
+    $compiled = Compile-Plan -Manifest $manifest -Steps $steps -ChainExecutorPath $chainExec -SharedHelperPath $bagHelpers
     Assert-True (@($compiled.Errors).Count -eq 0 -and $null -ne $compiled.Plan) 'two-step plan compiles clean'
 
     # -----------------------------------------------------------------------
@@ -195,7 +196,7 @@ return $Item
 
     $nc = Compile-Plan -Manifest @{ 'noisy' = $noisy } `
         -Steps @(@{ Key = 'noisy'; Config = @{} }) `
-        -ChainExecutorPath $chainExec
+        -ChainExecutorPath $chainExec -SharedHelperPath $bagHelpers
     $nr = Invoke-Plan -Items @([pscustomobject]@{ N = 1 }, [pscustomobject]@{ N = 2 }) -Plan $nc.Plan -MaxWorkers 1
 
     Assert-True ($null -ne $nr.PSObject.Properties['Streams']) 'envelope exposes a Streams collection'
@@ -248,7 +249,7 @@ return $out
     {
         $pc = Compile-Plan -Manifest @{ 'probe' = $presetProc } `
             -Steps @(@{ Key = 'probe'; Config = @{} }) `
-            -ChainExecutorPath $chainExec `
+            -ChainExecutorPath $chainExec -SharedHelperPath $bagHelpers `
             -IssPreset $preset
 
         Assert-True (@($pc.Errors).Count -eq 0) "$preset : compiles without errors" ($pc.Errors -join '; ')

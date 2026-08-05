@@ -18,40 +18,29 @@
 #     - Required IssModules: none
 param($Item, $Config)
 
-# Copy-on-enrich: clone ALL input properties so identity fields — including
-# ones added to the descriptor after this processor was written — survive the
-# chain without mutation of the caller's reference object.
-$result = [PSCustomObject]@{}
-foreach ($p in $Item.PSObject.Properties)
-{
-    $result | Add-Member -NotePropertyName $p.Name -NotePropertyValue $p.Value
-}
-
-
+# Copy-on-enrich via the shared Copy-Bag helper (processors/bag-helpers.ps1,
+# registered into the ISS by Compile-Plan -SharedHelperPath): clones ALL input
+# properties so identity fields — including ones added to the descriptor after
+# this processor was written — survive the chain without mutating the caller's
+# reference object. [ordered] on -Add keeps emitted property order deterministic.
 try
 {
-    $bytes = [System.IO.File]::ReadAllBytes($result.AbsolutePath)
+    $bytes = [System.IO.File]::ReadAllBytes($Item.AbsolutePath)
 
     # NUL byte / binary guard
     # null byte check on full file read may benefit from streaming read if large files are expected. however right now, there is maxfilesize bytes filter upstream
     # Note: High entropy on short files could be useful but also have false positives, introduce a new processor if desired
     if ($bytes -contains 0)
     {
-        $result | Add-Member -NotePropertyName ReadError -NotePropertyValue 'BinaryOrNulContent'
-        $result | Add-Member -NotePropertyName _ChainHalt -NotePropertyValue $true
-        return $result
+        return Copy-Bag -Item $Item -Add ([ordered]@{ ReadError = 'BinaryOrNulContent'; _ChainHalt = $true })
     }
 
     $enc = [System.Text.Encoding]::UTF8
     $content = $enc.GetString($bytes)
 
-    $result | Add-Member -NotePropertyName Content -NotePropertyValue $content
-    $result | Add-Member -NotePropertyName Encoding -NotePropertyValue 'UTF-8'
-    return $result
+    return Copy-Bag -Item $Item -Add ([ordered]@{ Content = $content; Encoding = 'UTF-8' })
 }
 catch
 {
-    $result | Add-Member -NotePropertyName ReadError -NotePropertyValue $_.Exception.Message
-    $result | Add-Member -NotePropertyName _ChainHalt -NotePropertyValue $true
-    return $result
+    return Copy-Bag -Item $Item -Add ([ordered]@{ ReadError = $_.Exception.Message; _ChainHalt = $true })
 }

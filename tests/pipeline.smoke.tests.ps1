@@ -103,7 +103,8 @@ try
     $ingest = Invoke-Ingest -FilteredFsGraph $filtered `
         -Manifest @{ 'file-read' = (Join-Path $v3 'processors\file-read.ps1') } `
         -Steps @(@{ Key = 'file-read'; Config = @{} }) `
-        -ChainExecutorPath (Join-Path $v3 'processors\chain-executor.ps1')
+        -ChainExecutorPath (Join-Path $v3 'processors\chain-executor.ps1') `
+        -SharedHelperPath (Join-Path $v3 'processors\bag-helpers.ps1')
 
     Assert-True (@($ingest.Errors).Count -eq 0) 'no compile/dispatch errors' ($ingest.Errors -join '; ')
     Assert-True (@($ingest.Results).Count -eq 3) 'Results count = 3 eligible items' "got $(@($ingest.Results).Count)"
@@ -133,6 +134,7 @@ try
             Manifest          = @{ 'file-read' = (Join-Path $v3 'processors\file-read.ps1') }
             Steps             = @(@{ Key = 'file-read'; Config = @{} })
             ChainExecutorPath = (Join-Path $v3 'processors\chain-executor.ps1')
+            SharedHelperPath  = (Join-Path $v3 'processors\bag-helpers.ps1')
             $dispatchOnly.Name = $dispatchOnly.Value
         }
         $threw = $null
@@ -149,6 +151,7 @@ try
         -Manifest @{ 'file-read' = (Join-Path $v3 'processors\file-read.ps1') } `
         -Steps @(@{ Key = 'file-read'; Config = @{} }) `
         -ChainExecutorPath (Join-Path $v3 'processors\chain-executor.ps1') `
+        -SharedHelperPath (Join-Path $v3 'processors\bag-helpers.ps1') `
         -IssPreset 'Core' -MaxWorkers 1
     Assert-True (@($issRun.Errors).Count -eq 0) 'compile-side and dispatch-side params coexist in one call' ($issRun.Errors -join '; ')
     Assert-True ($issRun.Budget.Threads -eq 1) 'dispatch-side value actually took effect (Threads = 1)'

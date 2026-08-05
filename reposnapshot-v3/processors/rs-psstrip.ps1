@@ -169,30 +169,10 @@ $includeMeta = if ($null -ne $Config['IncludeMeta']) { [bool]$Config['IncludeMet
 # Content wins when both keys exist; Text is then left exactly as found (never
 # edit a key you did not read) — no current producer emits both.
 # ---------------------------------------------------------------------------
-$keys = @()
-$contentKey = $null
-$text = $null
+$bc = Resolve-BagContent -Item $Item
+if ($null -eq $bc) { return $Item }
 
-if ($Item -is [string])
-{
-    $text = $Item
-}
-elseif ($Item -is [hashtable] -or $Item -is [pscustomobject])
-{
-    $keys = if ($Item -is [hashtable]) { @($Item.Keys) } else { @($Item.PSObject.Properties.Name) }
-    $contentKey = if ('Content' -in $keys) { 'Content' } elseif ('Text' -in $keys) { 'Text' } else { $null }
-    if ($null -eq $contentKey) { return $Item }
-    $text = [string]$Item.$contentKey
-}
-else
-{
-    return $Item
-}
-
-if ([string]::IsNullOrEmpty($text))
-{
-    $text = ''
-}
+$text = $bc.Text
 
 # ---------------------------------------------------------------------------
 # Parse
@@ -655,27 +635,18 @@ if ($hsStore.Count -gt 0)
 # Clone the bag, replace the content key, pass everything else through so
 # identity fields (and any elements earlier chain steps attached) survive.
 # ---------------------------------------------------------------------------
-if ($null -eq $contentKey) { return $stripped }
-
-$result = [pscustomobject]@{}
-foreach ($name in $keys)
-{
-    $value = if ($name -eq $contentKey) { $stripped } else { $Item.$name }
-    $result | Add-Member -NotePropertyName $name -NotePropertyValue $value
-}
-
+$recordObj = $null
 if ($includeMeta)
 {
+    # ParseErrors / FallbackMode appear only when they occurred — conditional
+    # emission on the record, [ordered] so field order is stable.
     $record = [ordered]@{
         Processor  = 'rs-psstrip'
         Operations = @($ops)
     }
     if ($null -ne $parseErrors) { $record['ParseErrors'] = $parseErrors }
     if ($useFallback) { $record['FallbackMode'] = 'regex' }
-
     $recordObj = [pscustomobject]$record
-    if ('Processing' -in $keys) { $result.Processing = @($Item.Processing) + $recordObj }
-    else { $result | Add-Member -NotePropertyName Processing -NotePropertyValue @($recordObj) }
 }
 
-return $result
+return Copy-Bag -Item $Item -Resolved $bc -Content $stripped -Record $recordObj

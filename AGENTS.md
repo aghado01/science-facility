@@ -108,13 +108,18 @@ Same construct can play different roles per relationship: `#Requires` is
      working default until a declarative ISS makes the choice granular
      (consolidation §E).
 
-  Where the fleet stands (audited 2026-08-04): already **provider-free** — no
-  `Get-*`/`Test-Path`/`Join-Path`/`Get-Content` in `processors/`, and
-  chain-executor uses no cmdlets at all. The remaining gap to an empty ISS is a
-  handful of Utility cmdlets: `Add-Member` (dominant, from the
-  copy-on-enrich/copy-on-mutate clone) plus single uses of `Sort-Object`,
-  `Where-Object`, `ForEach-Object`, `Measure-Object`. Incidental debt, not
-  structural dependency.
+  Where the fleet stands (AST-audited 2026-08-04 — audit by parser, not grep:
+  a first pass miscounted docstring mentions as calls): **provider-free**, and
+  `Add-Member` is now **gone entirely**, absorbed into the shared
+  `processors/bag-helpers.ps1` (`Resolve-BagContent` / `Copy-Bag`, registered
+  into every worker runspace by `Compile-Plan -SharedHelperPath`). The clone is
+  a single `[ordered]` cast, which also works under Bare where `Add-Member`
+  does not exist. `chain-executor.ps1` and `bag-helpers.ps1` use no cmdlets at
+  all. What remains is four Utility calls: `Sort-Object` (rs-csstrip,
+  rs-psstrip), `ForEach-Object` (format-ws, rs-psstrip), `Where-Object`
+  (rs-indent, tp-perplexity), `Measure-Object` (rs-indent) — all with
+  verified language-level equivalents, none load-bearing for stability
+  (consolidation §E). Incidental debt, not structural dependency.
 
 ## Maintaining this document (recursive note)
 

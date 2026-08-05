@@ -220,7 +220,8 @@ try
             'rs-attributes' = (Join-Path $v3 'processors\rs-attributes.ps1')
         } `
         -Steps @(@{ Key = 'file-read'; Config = @{} }, @{ Key = 'rs-attributes'; Config = @{} }) `
-        -ChainExecutorPath (Join-Path $v3 'processors\chain-executor.ps1')
+        -ChainExecutorPath (Join-Path $v3 'processors\chain-executor.ps1') `
+        -SharedHelperPath (Join-Path $v3 'processors\bag-helpers.ps1')
 
     $golden = Invoke-Assemble -DispatchOutput $ingest -RunContext ([pscustomobject]@{
             Root = $fixtureRoot; GeneratorVersion = '3.0' })

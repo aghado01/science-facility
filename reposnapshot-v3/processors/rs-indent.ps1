@@ -138,33 +138,16 @@ $targetUnit = if ($null -ne $Config['TargetUnit'] -and [int]$Config['TargetUnit'
 # Content wins when both keys exist; Text is then left exactly as found (never
 # edit a key you did not read) — no current producer emits both.
 # ---------------------------------------------------------------------------
-$keys = @()
-$contentKey = $null
-$text = $null
+$bc = Resolve-BagContent -Item $Item
+if ($null -eq $bc) { return $Item }
+
+$text = $bc.Text
+
+# Skip-list path: RelativePath (descriptor) else Path (tp-era). A Path-only
+# lookup silently stops protecting Markdown in code-track chains.
 $path = $null
-
-if ($Item -is [string])
-{
-    $text = $Item
-}
-elseif ($Item -is [hashtable] -or $Item -is [pscustomobject])
-{
-    $keys = if ($Item -is [hashtable]) { @($Item.Keys) } else { @($Item.PSObject.Properties.Name) }
-    $contentKey = if ('Content' -in $keys) { 'Content' } elseif ('Text' -in $keys) { 'Text' } else { $null }
-    if ($null -eq $contentKey) { return $Item }
-    $text = [string]$Item.$contentKey
-
-    # Skip-list path: RelativePath (descriptor) else Path (tp-era). A Path-only
-    # lookup silently stops protecting Markdown in code-track chains.
-    if ('RelativePath' -in $keys) { $path = [string]$Item.RelativePath }
-    elseif ('Path' -in $keys) { $path = [string]$Item.Path }
-}
-else
-{
-    return $Item
-}
-
-if ([string]::IsNullOrEmpty($text)) { $text = '' }
+if ('RelativePath' -in $bc.Keys) { $path = [string]$Item.RelativePath }
+elseif ('Path' -in $bc.Keys) { $path = [string]$Item.Path }
 
 # ---------------------------------------------------------------------------
 # Skip list — indentation normalization not appropriate for prose/markup.
@@ -313,20 +296,10 @@ $t = $lines -join "`n"
 # Clone the bag, replace the content key, pass everything else through so
 # identity fields (and any elements earlier chain steps attached) survive.
 # ---------------------------------------------------------------------------
-if ($null -eq $contentKey) { return $t }
-
-$result = [pscustomobject]@{}
-foreach ($name in $keys)
+$record = if ($includeMeta)
 {
-    $value = if ($name -eq $contentKey) { $t } else { $Item.$name }
-    $result | Add-Member -NotePropertyName $name -NotePropertyValue $value
+    [pscustomobject]@{ Processor = 'rs-indent'; Operations = @($ops); Skipped = $skipped }
 }
+else { $null }
 
-if ($includeMeta)
-{
-    $record = [pscustomobject]@{ Processor = 'rs-indent'; Operations = @($ops); Skipped = $skipped }
-    if ('Processing' -in $keys) { $result.Processing = @($Item.Processing) + $record }
-    else { $result | Add-Member -NotePropertyName Processing -NotePropertyValue @($record) }
-}
-
-return $result
+return Copy-Bag -Item $Item -Resolved $bc -Content $t -Record $record

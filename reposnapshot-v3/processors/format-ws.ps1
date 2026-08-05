@@ -70,44 +70,13 @@ param(
 $ops = if ($Config.ContainsKey('Operations')) { @($Config['Operations']) } else { @('lf', 'no-bom', 'nfc', 'strip-zwsp', 'trim-trailing', 'trim-inner', 'max-blank-2', 'trim-doc') }
 $includeMeta = if ($null -ne $Config['IncludeMeta']) { [bool]$Config['IncludeMeta'] } else { $true }
 
-# ---------------------------------------------------------------------------
-# Content-key resolution — harmonized content-mutator contract (6d)
-#
-# Read Content (descriptor contract) else Text (tp-era); the key that was read
-# is the key written back, which is what keeps this processor track-agnostic.
-# A bag carrying NEITHER key is returned untouched (mirrors rs-attributes'
-# no-Content contract): a mutator with nothing to mutate must not fabricate an
-# empty payload — assemble routes empty content to Diagnostics and splits
-# EmptyFile from EmptiedByProcessing, so a phantom '' would forge an entry.
-# Content wins when both keys exist; Text is then left exactly as found (never
-# edit a key you did not read) — no current producer emits both.
-# ---------------------------------------------------------------------------
-$keys = @()
-$contentKey = $null
-$text = $null
+# Content-key resolution — harmonized content-mutator contract (6d), shared by
+# the whole fleet via processors/bag-helpers.ps1. $null means there is nothing
+# to mutate, so the item passes through untouched.
+$bc = Resolve-BagContent -Item $Item
+if ($null -eq $bc) { return $Item }
 
-if ($Item -is [string])
-{
-    $text = $Item
-}
-elseif ($Item -is [hashtable] -or $Item -is [pscustomobject])
-{
-    $keys = if ($Item -is [hashtable]) { @($Item.Keys) } else { @($Item.PSObject.Properties.Name) }
-    $contentKey = if ('Content' -in $keys) { 'Content' } elseif ('Text' -in $keys) { 'Text' } else { $null }
-    if ($null -eq $contentKey) { return $Item }
-    $text = [string]$Item.$contentKey
-}
-else
-{
-    return $Item
-}
-
-if ([string]::IsNullOrEmpty($text))
-{
-    $text = ''
-}
-
-$t = $text
+$t = $bc.Text
 
 if ('lf' -in $ops)
 {
@@ -159,25 +128,9 @@ if ('eof-eot' -in $ops)
     $t = $t.TrimEnd("`r", "`n") + "`n`u{0004}"
 }
 
-# ---------------------------------------------------------------------------
-# Copy-on-mutate return — harmonized content-mutator contract (6d)
-# Clone the bag, replace the content key, pass everything else through so
-# identity fields (and any elements earlier chain steps attached) survive.
-# ---------------------------------------------------------------------------
-if ($null -eq $contentKey) { return $t }
-
-$result = [pscustomobject]@{}
-foreach ($name in $keys)
-{
-    $value = if ($name -eq $contentKey) { $t } else { $Item.$name }
-    $result | Add-Member -NotePropertyName $name -NotePropertyValue $value
-}
-
-if ($includeMeta)
-{
-    $record = [pscustomobject]@{ Processor = 'format'; Operations = @($ops) }
-    if ('Processing' -in $keys) { $result.Processing = @($Item.Processing) + $record }
-    else { $result | Add-Member -NotePropertyName Processing -NotePropertyValue @($record) }
-}
-
-return $result
+# Copy-on-mutate return — shared Copy-Bag helper. Clones the bag, replaces the
+# resolved content key, passes everything else through so identity fields (and
+# any elements earlier chain steps attached) survive. Bare string in → bare
+# string out. IncludeMeta = $false simply withholds the Processing record.
+$record = if ($includeMeta) { [pscustomobject]@{ Processor = 'format'; Operations = @($ops) } } else { $null }
+return Copy-Bag -Item $Item -Resolved $bc -Content $t -Record $record

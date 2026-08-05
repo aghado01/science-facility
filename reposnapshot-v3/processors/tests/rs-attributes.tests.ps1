@@ -26,6 +26,10 @@ $procDir = Split-Path $PSScriptRoot -Parent
 $v3 = Split-Path $procDir -Parent
 $attrPath = Join-Path $procDir 'rs-attributes.ps1'
 
+# Shared ISS helpers (Resolve-BagContent / Copy-Bag) — colonel registers these
+# into worker runspaces; dot-invocation here needs them loaded explicitly.
+. (Join-Path $PSScriptRoot '_helpers.ps1')
+
 # ---------------------------------------------------------------------------
 # Minimal assertion framework (house pattern)
 # ---------------------------------------------------------------------------
@@ -145,7 +149,8 @@ try
     $compiled = Compile-Plan `
         -Manifest @{ 'file-read' = (Join-Path $procDir 'file-read.ps1'); 'rs-attributes' = $attrPath } `
         -Steps @(@{ Key = 'file-read'; Config = @{} }, @{ Key = 'rs-attributes'; Config = @{} }) `
-        -ChainExecutorPath (Join-Path $procDir 'chain-executor.ps1')
+        -ChainExecutorPath (Join-Path $procDir 'chain-executor.ps1') `
+            -SharedHelperPath (Join-Path $procDir 'bag-helpers.ps1')
     Assert-True (@($compiled.Errors).Count -eq 0) 'chain compiles' ($compiled.Errors -join '; ')
 
     $items = @([pscustomobject]@{

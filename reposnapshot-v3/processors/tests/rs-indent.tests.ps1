@@ -47,6 +47,10 @@ Set-StrictMode -Version Latest
 
 $processorPath = Join-Path $PSScriptRoot '..\rs-indent.ps1'
 
+# Shared ISS helpers (Resolve-BagContent / Copy-Bag) — colonel registers these
+# into worker runspaces; dot-invocation here needs them loaded explicitly.
+. (Join-Path $PSScriptRoot '_helpers.ps1')
+
 # ---------------------------------------------------------------------------
 # Assertion framework
 # ---------------------------------------------------------------------------
