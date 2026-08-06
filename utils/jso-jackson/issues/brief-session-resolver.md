@@ -1,0 +1,615 @@
+# Brief: session-id resolver for the chat exporter
+
+**Status:** OPEN — code update first. Skill minting is explicitly OUT of scope (see §7).
+**Target repo:** `D:\aghado01\utils\jso-jackson\claude-export\` (the utils copy — see §2)
+**Authored:** 2026-07-24, from the design discussion in session `296be375-492a-464f-a08e-55cc1bf962f8`
+(exported to `D:\aghado01\.discussion\opus-296be375-492a-464f-a08e-55cc1bf962f8.md`).
+
+---
+
+## 1. Objective
+
+`Invoke-ClaudeThreadExport` currently requires the caller to supply BOTH `-SourceDir` (the
+project transcript folder) and `-SessionIds`. The session id alone is sufficient: the transcript
+path is structurally guaranteed to be
+
+```
+{claudeConfigRoot}/projects/{encodedProjectDir}/{sessionId}.jsonl
+```
+
+Add a resolver so that **given only a session id, the tool locates its own transcript**. This
+removes the caller's need to know the project-dir encoding, and makes the forthcoming
+`chat-export` skill a thin, branch-free wrapper.
+
+## 2. Which copy to edit (IMPORTANT)
+
+Two divergent copies of jso-jackson exist. **Edit the utils one. Do not touch `.claude/tools`.**
+
+| | `C:\Users\azrie\.claude\tools\jso-jackson` | `D:\aghado01\utils\jso-jackson` |
+|---|---|---|
+| status | **RETIRING** — do not modify | **CANONICAL** — edit here |
+| `claude-jso-*.ps1` mtime | 2026-05-16 (units: 2026-04-26) | 2026-07-23 |
+| layout | flat | primitives at root, exporter under `claude-export/` |
+| divergence | all 7 shared `.ps1` files differ by SHA-256 | utils is newer by ~2 months |
+
+Rationale: the user is centralizing agentic tooling under `D:\aghado01\utils` so the
+jso-jackson primitives (`jso-jackson.ps1`, `jso-debug.ps1`, `jso-hash.ps1`) can be reused across
+tools rather than living inside `.claude`.
+
+**Caveat for the implementer:** the export run verified on 2026-07-24 used the OLDER `.claude`
+copy. The utils copy is newer but was not exercised. **Before making changes, confirm the utils
+copy runs a baseline export successfully** — otherwise a failure after the edit is ambiguous
+between "my resolver broke it" and "the utils copy was already divergent/broken."
+
+## 3. Verified facts (established 2026-07-24 — do not re-derive)
+
+1. **The harness exposes the session id to the agent**: `$env:CLAUDE_CODE_SESSION_ID`
+   = `296be375-492a-464f-a08e-55cc1bf962f8`, which matched the transcript filename exactly.
+   (This was NOT true when the exporter was first written; it is true now.)
+2. **Decoys**: `CLAUDE_CODE_HOST_SESSION_ID` (`local_c6588df0-…`) and `CLAUDE_CODE_CHILD_SESSION=1`
+   also exist and are **not** the transcript key. Only `CLAUDE_CODE_SESSION_ID` matches.
+3. **Session ids are globally unique across projects**: 14 project dirs, 222 `.jsonl` files,
+   **zero** duplicate UUID basenames. The id alone is a sufficient key.
+4. **Project-dir encoding** is cwd with `[:\\/ ]` → `-`
+   (`D:\aghado01\codex-scientiae` → `D--aghado01-codex-scientiae`), but see §4: we deliberately
+   do NOT depend on this.
+5. **Nested strays exist**: 11 non-UUID `.jsonl` files live below project dirs. A one-level
+   lookup excludes them by construction; never use `-Recurse`.
+6. **`$env:CLAUDE_CONFIG_DIR` was EMPTY** in a live agent shell on 2026-07-24 — the original
+   scratch template's `. "$env:CLAUDE_CONFIG_DIR/tools/..."` dot-source failed because of it.
+   The resolver must not assume it is set.
+
+## 4. Design decisions (settled — implement, do not relitigate)
+
+**D1. Glob/probe by session id; do NOT derive the project dir from cwd.**
+Deriving re-implements an undocumented Claude Code convention that could drift (dots, UNC,
+unicode). Probing by UUID is exact, filename-only, and additionally correct when exporting a
+thread from a different cwd than the one it ran in.
+
+**D2. Fail loud; NO fallbacks.**
+If the session id is unavailable, or resolution yields 0 or >1 hits, **throw**. Do not fall back
+to newest-mtime, and do not content-search transcripts. Rationale (user, verbatim intent): a
+missing session id is "a highly unexpected case and my concerns would immediately elevate to a
+system problem of unknown origin" — a silent fallback converts a loud system fault into a quiet
+wrong-thread export. Newest-mtime is also unsafe under concurrent sessions, which this user runs.
+
+**D3. Do NOT lift the reposnapshot crawler**
+(`D:\aghado01\utils\reposnapshot\reposnapshot-v3\rs.core.crawler.psm1`). It was evaluated and
+rejected on evidence, not taste:
+
+| approach | time | work done |
+|---|---|---|
+| direct probe/glob | 94 ms | exactly the match |
+| crawler BFS | 267 ms | 70 dirs, 550 files, a `SizeBytes` stat on every one |
+
+2.8× slower today and O(tree) vs O(one lookup) — the gap widens as history grows. The crawler's
+real value (per-directory failure domains, reparse-point skipping, `Skipped` diagnostics) is for
+unknown/hostile trees; `~/.claude/projects` is machine-generated, flat, and known
+(`SkippedCount=0`). Lifting it would also mean either copying a 227-line class (which then
+drifts) or taking a dependency the user explicitly does not want yet.
+
+**D4. Keep `-SourceDir` load-bearing for the batch/chain paths.**
+`Get-ClaudeThreadPlan` and `Invoke-ClaudeThreadExportBatch` genuinely enumerate a directory.
+This is a resolver added *in front of* the single-thread entry point, not a module-wide
+signature change.
+
+## 5. Implementation spec
+
+### 5a. New function `Resolve-ClaudeThreadPath`
+
+In `claude-export/claude-jso-run.ps1`.
+
+```powershell
+param(
+    [Parameter(Mandatory)][string]$SessionId,
+    [string]$ConfigRoot   # optional override
+)
+```
+
+- **Root resolution:** `$ConfigRoot` → else `$env:CLAUDE_CONFIG_DIR` (if non-empty) → else
+  `Join-Path $env:USERPROFILE '.claude'`. Throw if `{root}/projects` does not exist.
+- **Validate** `$SessionId` against `^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$` (ordinal,
+  case-insensitive); throw on malformed input rather than probing for it.
+- **Probe** — explicit .NET, per the user's low-level PowerShell preference (no pipeline idioms,
+  no `Get-ChildItem` globbing engine, no `FileInfo` allocation):
+
+```powershell
+$hits = [List[string]]::new()
+foreach ($d in [Directory]::EnumerateDirectories($projectsRoot)) {
+    $p = [Path]::Combine($d, "$SessionId.jsonl")
+    if ([File]::Exists($p)) { $hits.Add($p) }
+}
+```
+
+- **Guards (fail loud):**
+  - `0` hits → `throw "No transcript found for session {id} under {projectsRoot}"`
+  - `>1` hits → `throw` listing every path found. Empirically impossible today (§3.3); the guard
+    costs one line and surfaces exactly the anomaly class D2 wants screaming.
+- **Return** `[PSCustomObject]` with `SessionId`, `JsonlPath`, `SourceDir` (containing project
+  dir), `ProjectName` (leaf), `ConfigRoot`.
+
+### 5b. `-SessionId` parameter set on `Invoke-ClaudeThreadExport`
+
+- Add parameter sets: `BySessionId` (new) and `BySourceDir` (existing behaviour, default).
+- Under `BySessionId`: call the resolver, then populate the existing internals with
+  `SourceDir = $resolved.SourceDir` and `SessionIds = @($SessionId)`.
+- **No changes downstream.** The chain-walk in `New-ClaudeThreadManifest -SessionIds` operates
+  within `SourceDir`, which the resolver supplies correctly.
+- Existing `-SourceDir` callers must remain byte-for-byte compatible.
+
+## 6. Verification
+
+Run **from the utils copy** (`D:\aghado01\utils\jso-jackson\claude-export\claude-jso-run.ps1`):
+
+1. **Baseline first** (see §2 caveat) — old-style call with explicit `-SourceDir` + `-SessionIds`
+   for session `296be375-492a-464f-a08e-55cc1bf962f8`; confirm it produces markdown.
+2. **Equivalence** — same session via `-SessionId` only. Assert the output markdown is
+   **identical** to the baseline. This isolates resolver correctness from the utils/`.claude`
+   code divergence.
+3. **Guard tests** — a well-formed but nonexistent UUID → throws "no transcript"; a malformed id
+   → throws on validation; `$env:CLAUDE_CONFIG_DIR` unset → still resolves via `$env:USERPROFILE`.
+4. Known-good reference output from the `.claude` copy on 2026-07-24:
+   `D:\aghado01\.discussion\opus-296be375-492a-464f-a08e-55cc1bf962f8.md`
+   (9 exchanges; 180 source records → 101 after filter → 40 deduped → 61 merged).
+   Treat as a sanity reference only — the utils code has diverged, so exact-match is NOT expected
+   across copies (only within step 2).
+
+### Reference invocation (current settings)
+
+```powershell
+$exclude = @('thinking','synthetic','timestamps','session-markers',
+             'exchange-markers','tool-calls','tool-results','subagents')
+Invoke-ClaudeThreadExport -SessionId $env:CLAUDE_CODE_SESSION_ID `
+    -MarkdownDir 'D:\aghado01\.discussion' `
+    -Exclude $exclude -Format 'Structural' -OutputPrefix 'opus'
+```
+
+## 7. OUT OF SCOPE — deferred to discussion after the code lands
+
+Do **not** implement these; the user wants to discuss them first.
+
+- **Minting the `chat-export` skill.** Design context so far: the skill becomes ~4 lines with no
+  branching — read `$env:CLAUDE_CODE_SESSION_ID`, throw if empty, call the tool, report the
+  output path. Anti-flood doctrine to encode when it IS written: resolve to a *filename*, never
+  read transcript content into context; if content search is ever needed, filenames-only mode
+  (`Select-String -List` / `rg -l`) and scope to one project dir. Home per user convention:
+  `~/.claude/skills/chat-export/SKILL.md` — but note the tension with centralizing tools under
+  `D:\aghado01\utils`, which is itself a discussion item.
+- **Retiring `.claude/tools/jso-jackson`** — sequencing, and what else references it.
+- **Reuse of the jso-jackson primitives** across other agentic tools (the motivation for
+  centralizing).
+- **`-MarkdownDir` default** of `D:\aghado01\.discussion` — currently passed per-call.
+
+## 8. Completion report
+
+**Completed 2026-07-25.** Implemented as specified in §5. Skill minting and `.claude/tools`
+retirement (§7) untouched.
+
+### 8a. What changed
+
+Single file: `D:\aghado01\utils\jso-jackson\claude-export\claude-jso-run.ps1`.
+
+1. **New `Resolve-ClaudeThreadPath -SessionId [-ConfigRoot]`** (placed after the dot-sources,
+   ahead of `Invoke-ClaudeThreadExport`). Exactly per §5a:
+   - Root: `-ConfigRoot` → `$env:CLAUDE_CONFIG_DIR` (non-empty test, not existence test) →
+     `{USERPROFILE}\.claude`. Throws if all three are unavailable, and throws if
+     `{root}/projects` does not exist.
+   - Validates `^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$` via
+     `[Regex]::IsMatch` with `IgnoreCase -bor CultureInvariant` **before** touching the
+     filesystem.
+   - Probes with `[Directory]::EnumerateDirectories` + `[Path]::Combine` + `[File]::Exists`
+     into a `List[string]`. One level, no `Get-ChildItem`, no `-Recurse`, no `FileInfo`
+     allocation.
+   - Guards: 0 hits → throw; >1 hits → throw listing every path.
+   - Returns `SessionId`, `JsonlPath`, `SourceDir`, `ProjectName`, `ConfigRoot`.
+2. **`-SessionId` parameter set on `Invoke-ClaudeThreadExport`.** `[CmdletBinding(DefaultParameterSetName='BySourceDir')]`;
+   `SourceDir`/`SessionIds` are pinned to `BySourceDir`, new `SessionId`/`ConfigRoot` to
+   `BySessionId`. Every other parameter is left unattributed so it belongs to both sets. Under
+   `BySessionId` the body calls the resolver and assigns `$SourceDir = $resolved.SourceDir`,
+   `$SessionIds = @($SessionId)` before any existing logic runs — no downstream code changed.
+3. **Header comment block** — added the resolver to the FUNCTIONS list plus a
+   `SESSION-ID ENTRY POINT` section recording the fail-loud rationale (D2), so the
+   no-fallback decision is defended at the code, not just in this brief.
+
+### 8b. Verification results (§6)
+
+All runs from the utils copy, artifacts in a session scratchpad (not `.discussion`).
+
+| # | Test | Result |
+|---|---|---|
+| 1 | **Baseline** — `-SourceDir` + `-SessionIds` for `296be375-…`, pre-edit | PASS — 30,997-byte markdown, 219→114→43→71, 14 exchanges |
+| 2 | **Equivalence** — same session, `-SessionId` only | PASS — byte-identical except one line |
+| 3a | Well-formed nonexistent UUID (`00000000-…`) | throws `No transcript found for session … under …\projects` |
+| 3b | Malformed (`not-a-uuid`, trailing `Z`, `../../etc/passwd`) | all throw on validation, before any FS access |
+| 3c | `$env:CLAUDE_CONFIG_DIR` empty string / unset / set | all three resolve to `C:\Users\azrie\.claude` |
+| 3d | Bad `-ConfigRoot` | throws `Claude projects root not found: …` |
+| 3e | Uppercase UUID | resolves (case-insensitive as specified) |
+| 3f | `-SessionId` and `-SourceDir` together | PowerShell rejects: parameter set cannot be resolved |
+| 3g | `-SessionId` bad id via `Invoke-ClaudeThreadExport` | throws through the wrapper |
+| 4 | **Regression** — `Get-ClaudeThreadPlan` on the 106-file dir | 106 chains / 106 leaves, unchanged |
+| 5 | **Regression** — `Invoke-ClaudeThreadExportBatch` full run | 3 threads, 3 markdown files, unchanged |
+
+**On step 2's "identical":** the two markdowns differ on exactly one line —
+`exported_at: 2026-07-25T03:58:07.87…Z` vs `…T03:59:31.77…Z`, the frontmatter stamp, which is
+regenerated per run and cannot match across two invocations. All 266 other lines are `-cne`-clean
+and both files are 30,997 bytes. Resolver correctness is established.
+
+Incidental confirmation of **D1**: cwd during the test was `D:\aghado01\utils\jso-jackson`, and the
+session resolved into `D--aghado01-codex-scientiae`. A cwd-derived project dir would have missed it.
+
+### 8c. Findings against §2–§4
+
+**§3.6 holds and is worse than stated — this is the one thing to carry into the §7 discussion.**
+`$env:CLAUDE_CONFIG_DIR` was again empty in this agent shell. The resolver handles it, but two
+*pre-existing* call sites build paths from it with no fallback:
+
+- `jso-jackson.ps1:2416` — `New-JobWorkingDir`: `[Path]::Combine($env:CLAUDE_CONFIG_DIR, 'tmp')`
+- `claude-jso-run.ps1` — `Invoke-ClaudeThreadExportBatch` `WorkingDir` and `MarkdownDir` defaults
+
+`[Path]::Combine('', 'tmp')` returns the **relative** string `tmp`, so with the variable empty the
+default working dir is created under whatever the current directory happens to be, not
+`~/.claude/tmp`. §6's reference invocation omits `-WorkingDir`, so the deferred `chat-export`
+skill would, as drafted, scatter `tmp/claude-jso-run/{ts}/` into whichever repo is cwd when the
+user invokes it. **Not fixed here** — it lives in a different file, predates this work, and
+changing it silently relocates the default output of every existing caller. It should be settled
+alongside the `-MarkdownDir` default already listed in §7.
+
+**§6.4's reference numbers are stale, not contradicted.** The known-good line (180→101→40→61,
+9 exchanges) does not reproduce; the utils copy yields 219→114→43→71 and 14 exchanges. The
+source transcript grew from 180 to 219 records because session `296be375-…` continued after the
+2026-07-24 export, so copy divergence and transcript growth are confounded and cannot be
+separated from this number alone. §6.4 already scoped itself to "sanity reference only", and
+step 2's within-copy equivalence is the test that actually matters. Worth restamping the
+reference if it is kept.
+
+**§2's caveat was worth having, and discharged.** The utils copy ran the baseline clean on first
+attempt — no latent breakage, so the equivalence result is unambiguous.
+
+**Minor, no action:** the projects root now holds 16 project dirs (4 of them empty of top-level
+`.jsonl`) against §3.3's 14. Consistent with normal growth; §3.3's uniqueness conclusion was not
+re-derived, per instruction.
+
+---
+
+## 9. Follow-up: removing the `CLAUDE_CONFIG_DIR` dependency
+
+**Completed 2026-07-25**, on the user's instruction to refactor so the code works without
+depending on `$env:CLAUDE_CONFIG_DIR` *and* without hard-coding a filesystem path. This closes
+the §8c finding.
+
+### 9a. What the audit found
+
+Four sites read the empty variable, and they were conflating **two different roots**:
+
+| # | Site | Root wanted | Symptom with the var empty |
+|---|---|---|---|
+| 1 | `jso-jackson.ps1` — `New-JobWorkingDir` default `$Root` | write: `{root}/tmp` | `Combine('','tmp')` → relative `tmp` under cwd |
+| 2 | `claude-jso-run.ps1` — batch `WorkingDir` default | write: `{root}/tmp` | same |
+| 3 | `claude-jso-run.ps1` — batch `MarkdownDir` default | write: `{root}/tmp` | same |
+| 4 | `claude-jso-jackson.ps1` — `Get-ClaudeCurrentSessionFile -ProjectsRoot` default | read: `{root}/projects` | resolved to relative `projects`, then threw |
+
+The **read** root is not ours to choose — it is wherever Claude Code writes transcripts, and must
+be *discovered*. The **write** root only needs a real, absolute base directory. Collapsing both
+onto one env var is why a single empty string broke all four.
+
+Dependency graph (established, not assumed):
+`claude-jso-run.ps1` → `claude-jso-jackson.ps1` → `../jso-jackson.ps1`. The base layer already
+carried the Claude coupling (site 1), so that is where discovery belongs — one function knows
+Claude's layout, four sites consume it.
+
+### 9b. What was added — `jso-jackson.ps1`, new `Claude Config Root` region
+
+- **`Get-ClaudeConfigRootCandidate`** — builds conventional locations at call time from
+  `[Environment]::GetFolderPath('UserProfile')` (the OS API, with `USERPROFILE`/`HOME` as
+  backstops), plus `XDG_CONFIG_HOME`. Returns `{home}/.claude`, `{XDG}/claude`,
+  `{home}/.config/claude`, separator-normalized via `GetFullPath`.
+
+  *This is the crux of "no hard-coded path".* The list contains no absolute path literal — only
+  directory **names** that are Claude Code's own storage convention, joined onto a home the
+  operating system reports. `C:\Users\azrie\.claude` is a hard-coded path; `.claude` under the
+  OS-reported home is a convention, identical on every machine and account.
+
+- **`Get-ClaudeConfigRoot [-ConfigRoot] [-RequireProjects]`** — resolution in strict order:
+  1. `-ConfigRoot` (explicit caller override)
+  2. `$env:CLAUDE_CONFIG_DIR` — **honoured when set, never required**
+  3. probed candidates
+
+  Sources 1 and 2 are authoritative: a supplied-but-invalid root **throws** rather than falling
+  through to a probe, because silently ignoring an explicit root would hide the exact
+  misconfiguration the caller was trying to state. This is D2's fail-loud doctrine applied to
+  configuration. Every candidate must prove itself on disk before being returned — under
+  `-RequireProjects`, by actually containing `projects/`. A guess that cannot be corroborated is
+  rejected, never returned.
+
+  `-RequireProjects` is what separates the two roots: read paths demand a root that really holds
+  transcripts and throw otherwise; write paths accept the conventional location so a first run on
+  a fresh machine still creates an absolute, predictable directory.
+
+- **`Get-ClaudeProjectsRoot [-ConfigRoot]`** — `{discoveredRoot}/projects`, required to exist.
+
+**Not added:** no result caching (the probe is a few `Directory.Exists` calls; staleness would
+cost more than it saves) and no module-global `Set-ClaudeConfigRoot`. Every call site already has
+an explicit override parameter — `-ConfigRoot`, `-Root`, `-WorkingDir`, `-MarkdownDir`,
+`-ProjectsRoot` — so a fourth injection channel would add hidden order-dependent state for
+nothing.
+
+### 9c. Call sites rewired
+
+1. `New-JobWorkingDir` → `Combine((Get-ClaudeConfigRoot), 'tmp')`
+2. batch `WorkingDir` → `Combine((Get-ClaudeConfigRoot), 'tmp', $slug, $stamp)`
+3. batch `MarkdownDir` → `Combine((Get-ClaudeConfigRoot), 'tmp', 'markdown')`
+4. `Get-ClaudeCurrentSessionFile` → `$ProjectsRoot` default moved out of the param block into the
+   body (`if (-not $ProjectsRoot) { $ProjectsRoot = Get-ClaudeProjectsRoot }`) so a discovery
+   failure surfaces as its own error instead of parameter-binding noise
+5. `Resolve-ClaudeThreadPath` → its bespoke root logic from §8a replaced by
+   `Get-ClaudeConfigRoot -RequireProjects` + `Get-ClaudeProjectsRoot`
+
+Doc comments claiming `~/.claude/tmp/...` were restated as `{configRoot}/tmp/...`.
+
+**Exactly one live read of `$env:CLAUDE_CONFIG_DIR` remains in the whole tree** — the
+authoritative-source branch inside `Get-ClaudeConfigRoot`. The other eight occurrences are
+docstrings, comments, and one error-message string.
+
+### 9d. Verification
+
+Parse check: 0 errors across all three edited files.
+
+| Test | Result |
+|---|---|
+| `CLAUDE_CONFIG_DIR` empty / unset / whitespace | all resolve to `C:\Users\azrie\.claude` |
+| set and valid | honoured (returned verbatim) |
+| set but nonexistent | **throws**, does not fall through to probe |
+| set, exists, but no `projects/` | passes bare, **throws** under `-RequireProjects` |
+| `-ConfigRoot` bogus, with a *valid* env var present | **throws** — explicit input wins and is not rescued |
+| **`New-JobWorkingDir` with no `-Root`, cwd = repo root** | `C:\Users\azrie\.claude\tmp\…` — rooted, **no `./tmp` in cwd** |
+| **batch with no `-WorkingDir`/`-MarkdownDir`** | `~/.claude/tmp/{slug}/{stamp}` and `~/.claude/tmp/markdown` |
+| `Get-ClaudeCurrentSessionFile`, default root, env empty | found this session's own transcript |
+| … explicit root / bad root / no history | matches / throws / returns `$null` as documented |
+| Resolver guards from §8b (malformed, nonexistent, explicit root, bad root) | unchanged |
+| `Get-ClaudeThreadPlan` on the 106-file dir | 106 chains, unchanged |
+| **End-to-end `-SessionId` with no `-WorkingDir`** (the skill invocation shape) | markdown byte-identical to the §8b baseline — 30,997 bytes, 267 lines, sole diff the `exported_at` stamp |
+
+Corroboration that `~/.claude/tmp` was always the intended target, not a new invention:
+`~/.claude/tmp/` already contained a `claude-jso-run/` directory (2026-07-23) and `markdown/`
+(2026-05-25) from earlier runs made when the variable *was* populated. The fix restores the
+documented behaviour rather than relocating anything. All test artifacts created under
+`~/.claude/tmp` during verification were removed; pre-existing directories were left intact.
+
+### 9e. Discovered, not fixed
+
+**Timestamp-format inconsistency between the two working-dir defaults.**
+`New-JobWorkingDir` stamps with `[datetime]::UtcNow`, while the batch default in
+`Invoke-ClaudeThreadExportBatch` uses `[DateTime]::Now` (local). Observed side by side during
+verification: `claude-jso-run\20260725_040957` (UTC) beside
+`D--aghado01-utils-reposnapshot\20260724_211043` (local, same moment). Sibling run directories
+under the same `tmp/` root therefore sort inconsistently and can appear to be from different
+days. Pre-existing, unrelated to `CLAUDE_CONFIG_DIR`, and a one-word fix — but it changes
+directory names, so it is left for the §7 discussion alongside the `-MarkdownDir` default.
+
+_Resolved in §10._
+
+---
+
+## 10. Follow-up: shared run stamp, `CLAUDE_HOME`, deliverable destination
+
+**Completed 2026-07-25**, closing the §9e timestamp finding and wiring the `CLAUDE_HOME` variable
+the user added to `settings.json`.
+
+### 10a. `Get-JobTimestamp` — one definition of a run stamp
+
+The audit found **three** directory-stamp sites, not two:
+
+| Site | Was |
+|---|---|
+| `jso-jackson.ps1` — `New-JobWorkingDir` | `[datetime]::UtcNow` |
+| `claude-jso-run.ps1` — batch working dir | `[DateTime]::Now` (local) |
+| `claude-jso-units.ps1` — `ConvertTo-ClaudeReviewWorkerInputs -RunStamp` | `[DateTime]::Now` (local) |
+
+`Get-JobTimestamp [-At]` now lives in the base layer beside `New-JobWorkingDir` and is the single
+definition. **UTC**, matching the site that already used it. Local time was the wrong choice
+independently of consistency: it repeats an hour at a DST boundary, so run-directory names there
+are non-monotonic and can collide. The offset is not academic — measured live during verification,
+`20260725_052453` (UTC) against `20260724_222453` (local) for the same instant: a five-hour gap
+that lands on the previous day.
+
+`-At` exists for the "same chain of code" case: a caller mints one instant and stamps a set of
+related directories with it, rather than each minting its own. Non-UTC input is normalized via
+`ToUniversalTime()`, so a coordinated stamp is UTC no matter what the caller passes.
+
+**One site duplicates rather than calls.** `claude-jso-units.ps1` declares itself standalone in
+its header (no dot-sources at all, loaded on its own for the review-worker phase). Pulling in the
+2,600-line base file for one timestamp would break that documented property, so it keeps a local
+`[datetime]::UtcNow.ToString('yyyyMMdd_HHmmss')` with a comment naming `Get-JobTimestamp` as
+canonical. Its orchestrator passes `-RunStamp` explicitly anyway, so the default rarely fires.
+The formats now agree, which is what makes the directories comparable.
+
+Zero `[DateTime]::Now`-based directory stamps remain. Content timestamps (`exported_at`, record
+`at` fields) were already UTC ISO-8601 and were left alone — different concern.
+
+### 10b. `CLAUDE_HOME` wired into discovery
+
+The user added `CLAUDE_HOME=C:/Users/azrie/.claude` to `settings.json`'s `env` block; confirmed
+live in the agent shell, while `CLAUDE_CONFIG_DIR` remains empty. Resolution order is now:
+
+1. `-ConfigRoot`
+2. `$env:CLAUDE_CONFIG_DIR` — Claude Code's own variable
+3. `$env:CLAUDE_HOME` — this environment's pin
+4. probed conventional roots
+
+All three explicit sources stay authoritative: set-but-invalid throws rather than falling through
+to a probe. Return values are now `GetFullPath`-normalized whichever source wins, because
+`CLAUDE_HOME` is written with forward slashes and would otherwise produce mixed-separator artifact
+paths like `C:/Users/azrie/.claude\tmp\...`.
+
+**The probe is not redundant and was not removed.** Variables declared in `settings.json` exist
+only inside Claude Code sessions. A cron job, a bare `pwsh`, or another agent runtime sees none of
+them. `CLAUDE_HOME` makes resolution deterministic where it is present; discovery is what makes
+the tool work where it is not.
+
+### 10c. `JSO_EXPORT_DIR` — deliverable destination
+
+New precedence for single-thread markdown: `-MarkdownPath` → `-MarkdownDir` →
+`$env:JSO_EXPORT_DIR` → `{WorkingDir}/output/`. Inert until the variable is set, so nothing
+changes for existing callers.
+
+Rationale for an env var rather than a code default: unlike the working dir, the deliverable
+location is a *preference*, not something discoverable — there is no correct value to compute.
+The name is `JSO_`-prefixed rather than `CLAUDE_` to stay out of Anthropic's namespace, and
+because it is tied to the tool name rather than to a path it survives the pending
+`aghado01/utils` rename.
+
+**The batch runner deliberately ignores it** and keeps its own `{configRoot}/tmp/markdown`
+default. A standing deliverable directory is for the one export the user asked for; pointing a
+106-thread batch at it would bury that.
+
+### 10d. Verification
+
+Parse-clean across all four edited files.
+
+| Test | Result |
+|---|---|
+| `Get-JobTimestamp` vs UTC clock | match; local clock differs by 5h / one calendar day |
+| `-At` with an explicit instant | `20260102_030405` |
+| `-At` with local-kind input | normalized to UTC |
+| `[DateTime]::Now` directory stamps remaining in tree | 0 |
+| `CLAUDE_HOME` set and valid, `CLAUDE_CONFIG_DIR` empty | resolves, normalized to `C:\Users\azrie\.claude` |
+| `CLAUDE_HOME` set but nonexistent | throws, no silent probe fallback |
+| `CLAUDE_HOME` unset | falls through to probe, resolves |
+| `JSO_EXPORT_DIR` set, no `-MarkdownDir` | deliverable written there |
+| `-MarkdownDir` with `JSO_EXPORT_DIR` also set | parameter wins |
+| End-to-end `-SessionId`, no `-WorkingDir` | still byte-identical to the §8b baseline — 267 lines, sole diff `exported_at` |
+
+Test artifacts under `~/.claude/tmp/claude-jso-run/` were removed; the 55 pre-existing run
+directories were left intact.
+
+### 10e. Still open for the §7 discussion
+
+- **Tool-root variable.** The forthcoming skill must dot-source
+  `{tools}/claude-export/claude-jso-run.ps1` by absolute path. `settings.json` already hardcodes
+  `D:/aghado01/utils/context-mode-core/...` in four hook commands, so the pending rename of
+  `aghado01/utils` is already a live breakage risk wider than this tool. A `JSO_JACKSON_HOME` —
+  or one shared hub-root variable covering both — would reduce that to a single settings edit.
+- **`JSO_EXPORT_DIR` value** — plumbing is in, value not chosen; entangled with the rename.
+- Retiring `.claude/tools/jso-jackson`, and minting the `chat-export` skill.
+
+---
+
+## 11. Follow-up: `-SourceDir` optional on every entry point
+
+**Completed 2026-07-25.** The user reported that specifying `-SourceDir` still seemed necessary.
+Two distinct causes — one a documentation defect, one a real gap. **This revisits D4.**
+
+### 11a. The documentation defect (the actual trigger)
+
+`Invoke-ClaudeThreadExport -SessionId` has needed no `-SourceDir` since §8 — reconfirmed by
+binding and running the call with nothing else supplied. But the usage block at the top of
+`claude-jso-run.ps1` still read:
+
+```
+#   Invoke-ClaudeThreadExport -SourceDir $path
+#   Invoke-ClaudeThreadExportBatch -SourceDir $path -MarkdownDir $outDir
+```
+
+§8 added a `SESSION-ID ENTRY POINT` section and updated the FUNCTIONS list, but left the usage
+example — the first thing a reader sees — advertising only the old signature. Rewritten to lead
+with the session-id forms and show the directory forms second. Worth recording as a process
+point: the feature was complete and verified, and still read as missing.
+
+### 11b. The real gap — `Get-ClaudeThreadPlan` and `Invoke-ClaudeThreadExportBatch`
+
+Both still had a mandatory `-SourceDir`. D4 kept it load-bearing there because they "genuinely
+enumerate a directory" — true, but it does not follow that the caller must *name* that directory.
+A session id identifies its project dir exactly as well, and §1's invariant-location argument
+applies unchanged.
+
+Both now carry a `BySessionId` parameter set alongside the default `BySourceDir` — the same
+parameter name used by `Invoke-ClaudeThreadExport`. See §11f: this shipped briefly as
+`-ProjectOfSession` and was corrected.
+
+**Why one name across all three is right.** Resolving a session id is a *single* act that yields
+two facts, because the project slug is a path component of the transcript it finds:
+`{configRoot}/projects/{slug}/{sessionId}.jsonl`. There is therefore no separate project to
+specify — the caller supplies an id and the directory comes with it. A parameter named after the
+project would name something that never needs naming.
+
+What differs between the three entry points is the *verb*, not the input. `Get-ClaudeThreadPlan`
+returns chains; `Invoke-ClaudeThreadExportBatch` exports all of them; `Invoke-ClaudeThreadExport`
+exports the one thread. PowerShell users read the cmdlet name first, and it already carries the
+scope — encoding it a second time in the parameter is redundant with the function name.
+
+`Get-ClaudeThreadPlan` needed no other change; the batch runner resolves before planning and logs
+`Resolved session {id} → project {name}`.
+
+Also simplified: the §8 resolve block in `Invoke-ClaudeThreadExport` built a splatted hashtable to
+conditionally pass `-ConfigRoot`. Unnecessary — an empty `-ConfigRoot` already falls through to
+discovery inside `Get-ClaudeConfigRoot`, so it forwards unconditionally. One line instead of four,
+and the same form now appears at all three call sites.
+
+### 11c. Verification
+
+Parse-clean. No entry point requires `-SourceDir` any more:
+
+All three now expose the identical pair of sets:
+
+| Function | Sets | Mandatory |
+|---|---|---|
+| `Invoke-ClaudeThreadExport` | `BySourceDir` (default) / `BySessionId` | `SourceDir` / `SessionId` |
+| `Get-ClaudeThreadPlan` | `BySourceDir` (default) / `BySessionId` | `SourceDir` / `SessionId` |
+| `Invoke-ClaudeThreadExportBatch` | `BySourceDir` (default) / `BySessionId` | `SourceDir` / `SessionId` |
+
+| Test | Result |
+|---|---|
+| `Get-ClaudeThreadPlan -SessionId` | 107 chains, `D--aghado01-codex-scientiae` |
+| same dir via `-SourceDir` | 107 chains — identical |
+| `Invoke-ClaudeThreadExportBatch -SessionId` | resolved and ran the reposnapshot project |
+| both sets supplied together, plan and batch | PowerShell rejects at binding |
+| malformed id through `-SessionId` | throws on validation |
+| `ProjectOfSession` references remaining in tree | 0 |
+| end-to-end `-SessionId` after touching the resolve block | still byte-identical to the §8b baseline — 267 lines, sole diff `exported_at` |
+
+Test artifacts removed; `~/.claude/tmp/claude-jso-run/` back to its pre-test 55 directories.
+
+### 11d. Amendment to D4
+
+D4 called the resolver "added *in front of* the single-thread entry point, not a module-wide
+signature change." Right scope for §8, now superseded: session-id resolution fronts all three
+entry points. What D4 got right is the underlying distinction — plan and batch really do operate
+on a directory, and that is precisely why they take `-ProjectOfSession` rather than `-SessionId`.
+The distinction survived; only its reach changed.
+
+### 11f. Correction — `-ProjectOfSession` was wrong
+
+The first cut of §11b named the new parameter `-ProjectOfSession` on plan and batch, reasoning
+that one parameter name carrying different scopes on sibling functions was a trap. The user
+rejected it, correctly:
+
+> the project slug is *in the jsonl file's system path*, so when sessionid is specified, project
+> doesn't need to be specified either, and given the structural invariant, it's kind of
+> superfluous to need to do so anyway
+
+The error was conflating **what the caller supplies** with **what the function does**. The input
+is a session id in all three cases — identical. The scope difference belongs to the verb, and the
+cmdlet name already states it. `-ProjectOfSession` also implied a "project" the caller must think
+about, when the whole point of the structural invariant is that resolving the id hands you the
+directory for free. Renamed to `-SessionId`, parameter set `ByProjectOfSession` → `BySessionId`,
+shipped in commit `74d4c5a` and corrected immediately after.
+
+**Known consequence, not fixed:** `Invoke-ClaudeThreadExport` now carries both `-SessionId`
+(singular, `BySessionId`) and `-SessionIds` (plural, the `BySourceDir` discovery filter), so the
+abbreviation `-Session` is ambiguous and throws at binding:
+
+```
+Parameter cannot be processed because the parameter name 'Session' is ambiguous.
+Possible matches include: -SessionIds -SessionId.
+```
+
+Loud, precise, and caught at bind time rather than silently mis-bound, which meets the D2
+standard. Renaming `-SessionIds` to something like `-OnlySessions` would clear it, at the cost of
+a signature change to a parameter `Invoke-ClaudeThreadExportBatch` splats internally. Left for the
+§7 discussion.
+
+### 11e. Note on this file's location
+
+Between §10 and §11 the user moved this brief from `claude-export/` to `issues/` (and added
+`claude-export/TEMPLATE.md`). §11 was written to the new path. The move itself is unstaged and
+left for the user to commit with the rest of that reorganization.
