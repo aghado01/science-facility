@@ -178,6 +178,16 @@ try
     Assert-True ($null -ne $binary.PSObject.Properties['_ChainHalt']) 'NUL file carries _ChainHalt'
     Assert-True ($null -eq $binary.PSObject.Properties['Content']) 'NUL file has no Content property'
 }
+catch
+{
+    # A terminating error inside the try block — a StrictMode property access, a
+    # parameter-binding failure — would otherwise abort the suite SILENTLY:
+    # finally runs, execution resumes after the block, and the summary prints a
+    # PASSING count while the remaining asserts never ran. That mode is invisible
+    # from outside (tests/run-all.ps1 cannot detect it — the counts are
+    # self-consistent), so it has to be caught HERE.
+    Assert-True $false "SUITE ABORTED: $($_.Exception.Message)" $_.ScriptStackTrace
+}
 finally
 {
     Remove-Item -LiteralPath $fixtureRoot -Recurse -Force -ErrorAction SilentlyContinue

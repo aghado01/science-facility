@@ -62,6 +62,17 @@ Same construct can play different roles per relationship: `#Requires` is
 - `reposnapshot-v3/CHANGELOG.md` — dated per-change sections, newest first.
 - `tests/` + `reposnapshot-v3/processors/tests/` — plain-PS assert harness
   (Enter-Section / Assert-True), no Pester, `$PSScriptRoot`-relative.
+  **Run the battery with `tests/run-all.ps1`** — do not hand-count PASS lines.
+  It pre-parses each suite, requires the summary line, cross-checks the
+  summary against the emitted asserts, and exits 1 on any suite that fails,
+  aborts, or never ran. Two ways a suite can look green while truncated, and
+  they need different defenses:
+    - *dies before its summary / does not parse* — the runner catches this.
+    - *aborts mid-run inside try{}/finally{} with no catch* — the runner
+      **cannot**: finally runs, execution resumes past the block, and the
+      summary prints a self-consistent passing count for the asserts that did
+      run. Every suite therefore carries a `catch` that records
+      `SUITE ABORTED` as a failure. **Keep it when adding a suite.**
 - `RepoSnapshotLts.psm1` — the legacy monolith. **Not authoritative**
   (see `issues/v3/lts-v3-transfer-audit.md`); it carries known defects
   (zeroed metrics when content off; compression_ratio always 0). As of
