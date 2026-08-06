@@ -1,0 +1,323 @@
+#Requires -Version 7.6
+Set-StrictMode -Version Latest
+
+<#
+.SYNOPSIS
+    Unit tests for processors/format-ws.ps1.
+    (PowerShellCore-era name: format.ps1 / tp-generic — renamed in the v3
+    copy-over; the processor still self-identifies as Processor = 'format'.)
+
+.DESCRIPTION
+    Tests the processor directly (dot-invoked, not via colonel).
+
+    Bare-string arguments to Invoke-Processor are wrapped into a minimal
+    Content bag (see the helper) so the suite exercises the harmonized
+    descriptor path — the shape the chain carries. Invoke-ProcessorRaw covers
+    the bare-string convenience path.
+
+    Coverage:
+      1. Item unpacking — string / hashtable / pscustomobject
+      2. Default ops applied when Operations omitted
+      3. lf  — CRLF and CR normalized to LF
+      4. no-bom — UTF-8 BOM stripped
+      5. strip-zwsp — zero-width space characters removed
+      6. trim-trailing — per-line trailing whitespace removed
+      7. trim-inner — multi-space runs between words collapsed
+      8. max-blank-2 — 3+ blank lines collapsed to 2
+      9. max-blank-1 — 2+ blank lines collapsed to 1
+     10. trim-doc — leading/trailing blank lines stripped from document
+     11. eof-eot — U+0004 sentinel appended
+     12. IncludeMeta = $false — suppresses the Processing record; a bag stays
+         a bag (bare-string input still returns a bare string)
+     13. Empty Operations — no-op (text passes through unchanged)
+     14. Empty text — returns empty string
+     15. Harmonized content-mutator contract (6d) — identity survival,
+         copy-on-mutate, no-content pass-through, Processing trail order
+
+.NOTES
+    Run from any directory:
+        & "$PSScriptRoot\format.tests.ps1"
+#>
+
+$processorPath = Join-Path $PSScriptRoot '..\format-ws.ps1'
+
+# Shared ISS helpers (Resolve-BagContent / Copy-Bag) — colonel registers these
+# into worker runspaces; dot-invocation here needs them loaded explicitly.
+. (Join-Path $PSScriptRoot '_helpers.ps1')
+
+# ---------------------------------------------------------------------------
+# Assertion framework
+# ---------------------------------------------------------------------------
+$script:Passed = 0
+$script:Failed = 0
+
+function Enter-Section ([string]$Name)
+{
+    Write-Host "`n── $Name" -ForegroundColor Cyan
+}
+
+function Assert-True ([bool]$Condition, [string]$Label, [string]$Detail = '')
+{
+    if ($Condition)
+    {
+        $script:Passed++
+        Write-Host "    PASS  $Label" -ForegroundColor Green
+    }
+    else
+    {
+        $script:Failed++
+        $msg = "    FAIL  $Label"
+        if ($Detail) { $msg += "  ($Detail)" }
+        Write-Host $msg -ForegroundColor Red
+    }
+}
+
+function Assert-Equal ($Actual, $Expected, [string]$Label)
+{
+    Assert-True ($Actual -eq $Expected) $Label "expected $(([string]$Expected).Length -le 40 ? "'$Expected'" : "(value)"), got $(([string]$Actual).Length -le 40 ? "'$Actual'" : "(value)")"
+}
+
+function Invoke-Processor ([object]$Item, [hashtable]$Config = @{})
+{
+    # The suite exercises the harmonized descriptor path (6d) — the shape the
+    # chain actually carries. A bare string argument is wrapped into a minimal
+    # Content bag, so transform asserts read $r.Content. The bare-string
+    # convenience path (string in → string out) is covered by
+    # Invoke-ProcessorRaw in sections 1, 12 and 15.
+    if ($Item -is [string]) { $Item = [pscustomobject]@{ Content = $Item } }
+    & $processorPath $Item $Config
+}
+
+function Invoke-ProcessorRaw ([object]$Item, [hashtable]$Config = @{})
+{
+    & $processorPath $Item $Config
+}
+
+Write-Host '============================================================' -ForegroundColor Yellow
+Write-Host ' format.tests.ps1 (format-ws)' -ForegroundColor Yellow
+Write-Host '============================================================' -ForegroundColor Yellow
+
+# ============================================================
+# 1. Item unpacking
+# ============================================================
+Enter-Section '1. Item unpacking'
+
+$text = "hello`r`nworld`r`n"
+
+$rStr = Invoke-ProcessorRaw -Item $text -Config @{ Operations = @('lf') }
+$rHash = Invoke-Processor -Item @{ Text = $text; Id = 'h1'; Path = 'x.txt' } -Config @{ Operations = @('lf') }
+$rPsco = Invoke-Processor -Item ([pscustomobject]@{ Text = $text; Id = 'p1'; Path = 'y.txt' }) -Config @{ Operations = @('lf') }
+
+Assert-True ($rStr -is [string]) 'String item: bare string in → bare string out'
+Assert-Equal $rStr "hello`nworld`n" 'String item: op applied to the returned string'
+Assert-True ($rHash -is [pscustomobject]) 'Hashtable item: returns pscustomobject'
+Assert-True ($rPsco -is [pscustomobject]) 'PSCustomObject item: returns pscustomobject'
+Assert-Equal $rPsco.Id 'p1' 'PSCustomObject item: Id propagated'
+Assert-Equal $rPsco.Path 'y.txt' 'PSCustomObject item: Path propagated'
+Assert-Equal $rPsco.Text "hello`nworld`n" 'Text-keyed bag: Text mutated in place (key preserved)'
+Assert-True ($null -eq $rPsco.PSObject.Properties['Content']) 'Text-keyed bag: no Content key invented'
+Assert-Equal $rPsco.Processing[0].Processor 'format' 'Processing record names the processor'
+
+# ============================================================
+# 2. Default ops applied when Operations omitted
+# ============================================================
+Enter-Section '2. Default ops (no Operations key in Config)'
+
+$rDefault = Invoke-Processor -Item "hello   world`r`n`r`n`r`n`r`nend"
+Assert-True ($rDefault -is [pscustomobject]) 'No Operations: returns object'
+Assert-True ($rDefault.Content -notmatch "`r") 'No Operations: lf applied (CRLF gone)'
+Assert-True ($rDefault.Content -notmatch '   ') 'No Operations: trim-inner applied'
+Assert-True ($rDefault.Content -notmatch "`n`n`n`n") 'No Operations: max-blank-2 applied'
+Assert-True ($rDefault.Processing[0].Operations.Count -gt 0) 'No Operations: Processing record carries the resolved defaults'
+
+# ============================================================
+# 3. lf
+# ============================================================
+Enter-Section '3. lf — line ending normalization'
+
+$crlfText = "line1`r`nline2`r`nline3"
+$crText = "line1`rline2`rline3"
+
+$rLf1 = Invoke-Processor -Item $crlfText -Config @{ Operations = @('lf') }
+$rLf2 = Invoke-Processor -Item $crText -Config @{ Operations = @('lf') }
+
+Assert-True ($rLf1.Content -eq "line1`nline2`nline3") 'lf: CRLF → LF'
+Assert-True ($rLf2.Content -eq "line1`nline2`nline3") 'lf: CR → LF'
+
+# ============================================================
+# 4. no-bom
+# ============================================================
+Enter-Section '4. no-bom — BOM strip'
+
+$bomText = [char]0xFEFF + "hello"
+
+$rBom = Invoke-Processor -Item $bomText -Config @{ Operations = @('no-bom') }
+Assert-True ($rBom.Content -eq 'hello') 'no-bom: BOM removed'
+Assert-True ($rBom.Content[0] -ne [char]0xFEFF) 'no-bom: first char is not BOM'
+
+# ============================================================
+# 5. strip-zwsp
+# ============================================================
+Enter-Section '5. strip-zwsp — zero-width space removal'
+
+$zwspText = "hel`u{200B}lo wor`u{200C}ld"
+
+$rZwsp = Invoke-Processor -Item $zwspText -Config @{ Operations = @('strip-zwsp') }
+Assert-True ($rZwsp.Content -eq 'hello world') 'strip-zwsp: ZWSP and ZWNJ removed'
+
+# ============================================================
+# 6. trim-trailing
+# ============================================================
+Enter-Section '6. trim-trailing — per-line trailing whitespace'
+
+$trailText = "line1   `nline2  `nline3"
+
+$rTrail = Invoke-Processor -Item $trailText -Config @{ Operations = @('trim-trailing') }
+Assert-True ($rTrail.Content -eq "line1`nline2`nline3") 'trim-trailing: trailing spaces removed per line'
+
+# ============================================================
+# 7. trim-inner
+# ============================================================
+Enter-Section '7. trim-inner — multi-space collapse between words'
+
+$innerText = "hello   world  foo"
+
+$rInner = Invoke-Processor -Item $innerText -Config @{ Operations = @('trim-inner') }
+Assert-True ($rInner.Content -eq 'hello world foo') 'trim-inner: multi-space runs collapsed to single space'
+
+# Leading indentation (non-S + S sequence) must NOT be touched
+$indentText = "    indented line"
+$rIndent = Invoke-Processor -Item $indentText -Config @{ Operations = @('trim-inner') }
+Assert-True ($rIndent.Content -eq '    indented line') 'trim-inner: leading indentation preserved'
+
+# ============================================================
+# 8. max-blank-2
+# ============================================================
+Enter-Section '8. max-blank-2 — 3+ blank lines → 2'
+
+$blank3 = "a`n`n`n`nb"   # 3 blank lines between a and b
+
+$rBlank2 = Invoke-Processor -Item $blank3 -Config @{ Operations = @('max-blank-2') }
+Assert-True ($rBlank2.Content -eq "a`n`n`nb") 'max-blank-2: 3 blank lines → 2'
+Assert-True ($rBlank2.Content -notmatch "`n`n`n`n") 'max-blank-2: no 4+ consecutive newlines remain'
+
+# ============================================================
+# 9. max-blank-1
+# ============================================================
+Enter-Section '9. max-blank-1 — 2+ blank lines → 1'
+
+$blank2 = "a`n`n`nb"   # 2 blank lines between a and b
+
+$rBlank1 = Invoke-Processor -Item $blank2 -Config @{ Operations = @('max-blank-1') }
+Assert-True ($rBlank1.Content -eq "a`n`nb") 'max-blank-1: 2 blank lines → 1'
+
+# ============================================================
+# 10. trim-doc
+# ============================================================
+Enter-Section '10. trim-doc — document-level leading/trailing blank line strip'
+
+$docText = "`n`nhello world`n`n"
+
+$rDoc = Invoke-Processor -Item $docText -Config @{ Operations = @('trim-doc') }
+Assert-True ($rDoc.Content -eq 'hello world') 'trim-doc: leading and trailing blank lines stripped'
+
+# ============================================================
+# 11. eof-eot
+# ============================================================
+Enter-Section '11. eof-eot — U+0004 sentinel'
+
+$eotText = "hello world"
+
+$rEot = Invoke-Processor -Item $eotText -Config @{ Operations = @('eof-eot') }
+Assert-True ($rEot.Content.EndsWith("`n`u{0004}")) 'eof-eot: sentinel appended after trailing newline'
+
+# ============================================================
+# 12. IncludeMeta = $false
+# ============================================================
+Enter-Section '12. IncludeMeta = $false'
+
+$rBare = Invoke-ProcessorRaw -Item "hello   world" -Config @{ Operations = @('trim-inner'); IncludeMeta = $false }
+Assert-True ($rBare -is [string]) 'IncludeMeta=false: bare string in still returns bare string'
+Assert-True ($rBare -eq 'hello world') 'IncludeMeta=false: op still applied'
+
+# Harmonized contract (6d): IncludeMeta suppresses the Processing record — it
+# never collapses a bag to a bare string (that was the tp-era envelope behavior).
+$rBagNoMeta = Invoke-Processor -Item ([pscustomobject]@{ RelativePath = 'a.txt'; Content = "hello   world" }) -Config @{ Operations = @('trim-inner'); IncludeMeta = $false }
+Assert-True ($rBagNoMeta -is [pscustomobject]) 'IncludeMeta=false: bag stays a bag'
+Assert-Equal $rBagNoMeta.RelativePath 'a.txt' 'IncludeMeta=false: identity survives'
+Assert-Equal $rBagNoMeta.Content 'hello world' 'IncludeMeta=false: op still applied to bag'
+Assert-True ($null -eq $rBagNoMeta.PSObject.Properties['Processing']) 'IncludeMeta=false: no Processing record'
+
+# ============================================================
+# 13. Empty Operations — no-op
+# ============================================================
+Enter-Section '13. Empty Operations — pass-through'
+
+$noopText = "hello   world`r`n"
+
+$rNoop = Invoke-Processor -Item $noopText -Config @{ Operations = @() }
+Assert-True ($rNoop.Content -eq $noopText) 'Empty ops: text passes through unchanged'
+
+# ============================================================
+# 14. Empty text
+# ============================================================
+Enter-Section '14. Empty text'
+
+$rEmpty = Invoke-Processor -Item '' -Config @{ Operations = @('lf', 'trim-trailing') }
+Assert-True ($rEmpty -is [pscustomobject]) 'Empty text: returns object'
+Assert-Equal $rEmpty.Content '' 'Empty text: Content is empty string'
+
+# ============================================================
+# 15. Harmonized content-mutator contract (consolidation 6d)
+# ============================================================
+Enter-Section '15. Harmonized content-mutator contract (6d)'
+
+$descriptor = [pscustomobject]@{
+    AbsolutePath = 'D:\repo\src\a.txt'
+    RelativePath = 'src/a.txt'
+    NodePath     = 'src/'
+    SizeBytes    = 41
+    LastWriteUtc = [datetime]'2026-07-29T12:00:00Z'
+    Content      = "hello   world`r`n`r`n`r`n`r`nend"
+    Encoding     = 'UTF-8'
+}
+$rDesc = Invoke-Processor -Item $descriptor
+
+# Identity survival — the whole point of 6d: the tp-era envelope dropped these.
+Assert-Equal $rDesc.AbsolutePath 'D:\repo\src\a.txt' 'descriptor: AbsolutePath survives'
+Assert-Equal $rDesc.RelativePath 'src/a.txt' 'descriptor: RelativePath survives'
+Assert-Equal $rDesc.NodePath 'src/' 'descriptor: NodePath survives'
+Assert-Equal $rDesc.SizeBytes 41 'descriptor: SizeBytes survives'
+Assert-Equal $rDesc.LastWriteUtc ([datetime]'2026-07-29T12:00:00Z') 'descriptor: LastWriteUtc survives'
+Assert-Equal $rDesc.Encoding 'UTF-8' 'descriptor: Encoding (chain enrichment) survives'
+Assert-True ($rDesc.Content -notmatch "`r") 'descriptor: Content mutated (lf applied)'
+Assert-True ($null -eq $rDesc.PSObject.Properties['Text']) 'descriptor: no Text key invented'
+
+# Copy-on-mutate: the caller's reference is never touched.
+Assert-True ($descriptor.Content -match "`r") 'copy-on-mutate: input bag not mutated'
+
+# No-content bag → returned untouched. A mutator must not fabricate an empty
+# payload: assemble splits EmptyFile from EmptiedByProcessing and routes empty
+# content to Diagnostics, so a phantom '' would forge an entry.
+$halted = [pscustomobject]@{ RelativePath = 'bin/x.dll'; SizeBytes = 9; ReadError = 'BinaryOrNulContent' }
+$rHalt = Invoke-Processor -Item $halted
+Assert-True ($null -eq $rHalt.PSObject.Properties['Content']) 'no-content bag: no phantom Content fabricated'
+Assert-True ($null -eq $rHalt.PSObject.Properties['Processing']) 'no-content bag: no Processing record attached'
+Assert-Equal $rHalt.ReadError 'BinaryOrNulContent' 'no-content bag: returned intact'
+
+# Processing trail accumulates in chain order across mutator invocations.
+$pass1 = Invoke-Processor -Item $descriptor -Config @{ Operations = @('lf') }
+$pass2 = Invoke-Processor -Item $pass1 -Config @{ Operations = @('trim-inner') }
+Assert-Equal $pass2.Processing.Count 2 'Processing: two passes recorded (no overwrite)'
+Assert-Equal $pass2.Processing[0].Operations[0] 'lf' 'Processing: first record keeps its own ops'
+Assert-Equal $pass2.Processing[1].Operations[0] 'trim-inner' 'Processing: second record appended in chain order'
+Assert-Equal $pass2.RelativePath 'src/a.txt' 'Processing: identity survives a two-step chain'
+
+# ============================================================
+# Summary
+# ============================================================
+Write-Host ''
+Write-Host '============================================================' -ForegroundColor Yellow
+$color = if ($script:Failed -eq 0) { 'Green' } else { 'Red' }
+Write-Host "  Passed: $($script:Passed)   Failed: $($script:Failed)" -ForegroundColor $color
+Write-Host '============================================================' -ForegroundColor Yellow
