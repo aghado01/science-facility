@@ -50,6 +50,27 @@ Same construct can play different roles per relationship: `#Requires` is
 - **PowerShell ingesting PowerShell**: pipeline code vs ingested code —
   always ask which role a construct is playing.
 
+## History before 2026-08-06 lives under the pre-migration paths
+
+reposnapshot moved from `D:\aghado01\utils\reposnapshot` (repo retired) into
+`science-facility` at `utils/reposnapshot`, via `git subtree add`. All 77 commits
+came with it — but the imported commits carry their ORIGINAL paths
+(`reposnapshot-v3/...`, not `utils/reposnapshot/reposnapshot-v3/...`), and the
+subtree merge is where the two path spaces join. Consequences:
+
+- `git blame <file>` **works normally** and is the everyday tool — it traverses
+  the merge and attributes lines to the original commits and paths.
+- `git show <hash>` works for any pre-migration commit.
+- `git log -- utils/reposnapshot/...` shows **only the merge commit**. Default
+  history simplification does not cross into the imported side.
+- To browse pre-migration file history, either add `--full-history` and use the
+  OLD path, or log from the imported tip:
+  `git log 58a1a26 -- reposnapshot-v3/processors/rs-psstrip.ps1`
+  (`58a1a26` = imported reposnapshot tip; jso-jackson's is `5cf0f1e`.)
+
+Nothing is lost; it is just addressed by the old path. Do not "fix" this by
+rewriting history.
+
 ## Where things live
 
 - `reposnapshot-v3/` — v3 modules (crawler → ignore/selection → colonel
