@@ -1,6 +1,6 @@
 ```Powershell
 # Dot-source the export pipeline
-. "D:\aghado01\utils\jso-jackson\claude-export\claude-jso-run.ps1"
+. "D:\aghado01\science-facility\utils\jso-jackson\claude-export\claude-jso-run.ps1"
 
 # Source directory
 $sourceDir = "C:\Users\azrie\.claude\projects\D--aghado01-codex-scientiae"

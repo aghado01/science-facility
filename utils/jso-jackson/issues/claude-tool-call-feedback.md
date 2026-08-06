@@ -23,7 +23,7 @@ One thing from the run that may be worth a look during the real investigation: *
 
 Both are the tool having moved ahead of the template:
 
-1. Dot-source points at `~/.claude/tools/jso-jackson/claude-jso-run.ps1` — pre-relocation path, doesn't exist. Should be `D:\aghado01\utils\jso-jackson\claude-export\claude-jso-run.ps1`.
+1. Dot-source points at `~/.claude/tools/jso-jackson/claude-jso-run.ps1` — pre-relocation path, doesn't exist. Should be `D:\aghado01\science-facility\utils\jso-jackson\claude-export\claude-jso-run.ps1`.
 2. The invocation passes `-SourceDir $sourceDir -SessionIds @($sessionId)` with `$sourceDir` commented out. Since `-SessionIds` (plural) belongs to the `BySourceDir` set, that selects the default set and hard-fails on the missing mandatory `SourceDir`. The discovery path you added is the `BySessionId` set, which takes singular `-SessionId` — that's what worked here.
 
 Want me to update the template to the working invocation? Small edit, and it'd stop the next run from hitting the same wall.

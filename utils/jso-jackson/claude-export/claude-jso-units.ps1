@@ -8,7 +8,7 @@
 # to drop a `.summary.md` + `.sig` into WorkerOutputs/<runstamp>/.
 #
 # Usage:
-#   . "D:\aghado01\utils\jso-jackson\claude-export\claude-jso-units.ps1"
+#   . "D:\aghado01\science-facility\utils\jso-jackson\claude-export\claude-jso-units.ps1"
 #
 #   # orchestrator (one call, renders every envelope):
 #   $items = ConvertTo-ClaudeReviewWorkerInputs `

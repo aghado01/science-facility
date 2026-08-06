@@ -29,15 +29,15 @@ Open design and implementation follow-ups are tracked in `TODO.md`.
 Dot-source only the layers needed for the task. The files are intentionally independently dot-sourceable.
 
 ```powershell
-. "D:\aghado01\utils\jso-jackson\jso-hash.ps1"
-. "D:\aghado01\utils\jso-jackson\jso-jackson.ps1"
-. "D:\aghado01\utils\jso-jackson\jso-debug.ps1"
+. "D:\aghado01\science-facility\utils\jso-jackson\jso-hash.ps1"
+. "D:\aghado01\science-facility\utils\jso-jackson\jso-jackson.ps1"
+. "D:\aghado01\science-facility\utils\jso-jackson\jso-debug.ps1"
 ```
 
 For Claude export/grouping workflows:
 
 ```powershell
-. "D:\aghado01\utils\jso-jackson\claude-export\claude-jso-run.ps1"
+. "D:\aghado01\science-facility\utils\jso-jackson\claude-export\claude-jso-run.ps1"
 ```
 
 ## Inspection Workflow

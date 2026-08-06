@@ -1,7 +1,7 @@
 # Brief: session-id resolver for the chat exporter
 
 **Status:** OPEN — code update first. Skill minting is explicitly OUT of scope (see §7).
-**Target repo:** `D:\aghado01\utils\jso-jackson\claude-export\` (the utils copy — see §2)
+**Target repo:** `D:\aghado01\science-facility\utils\jso-jackson\claude-export\` (the utils copy — see §2)
 **Authored:** 2026-07-24, from the design discussion in session `296be375-492a-464f-a08e-55cc1bf962f8`
 (exported to `D:\aghado01\.discussion\opus-296be375-492a-464f-a08e-55cc1bf962f8.md`).
 
@@ -74,7 +74,7 @@ system problem of unknown origin" — a silent fallback converts a loud system f
 wrong-thread export. Newest-mtime is also unsafe under concurrent sessions, which this user runs.
 
 **D3. Do NOT lift the reposnapshot crawler**
-(`D:\aghado01\utils\reposnapshot\reposnapshot-v3\rs.core.crawler.psm1`). It was evaluated and
+(`D:\aghado01\science-facility\utils\reposnapshot\reposnapshot-v3\rs.core.crawler.psm1`). It was evaluated and
 rejected on evidence, not taste:
 
 | approach | time | work done |
@@ -139,7 +139,7 @@ foreach ($d in [Directory]::EnumerateDirectories($projectsRoot)) {
 
 ## 6. Verification
 
-Run **from the utils copy** (`D:\aghado01\utils\jso-jackson\claude-export\claude-jso-run.ps1`):
+Run **from the utils copy** (`D:\aghado01\science-facility\utils\jso-jackson\claude-export\claude-jso-run.ps1`):
 
 1. **Baseline first** (see §2 caveat) — old-style call with explicit `-SourceDir` + `-SessionIds`
    for session `296be375-492a-464f-a08e-55cc1bf962f8`; confirm it produces markdown.
@@ -187,7 +187,7 @@ retirement (§7) untouched.
 
 ### 8a. What changed
 
-Single file: `D:\aghado01\utils\jso-jackson\claude-export\claude-jso-run.ps1`.
+Single file: `D:\aghado01\science-facility\utils\jso-jackson\claude-export\claude-jso-run.ps1`.
 
 1. **New `Resolve-ClaudeThreadPath -SessionId [-ConfigRoot]`** (placed after the dot-sources,
    ahead of `Invoke-ClaudeThreadExport`). Exactly per §5a:

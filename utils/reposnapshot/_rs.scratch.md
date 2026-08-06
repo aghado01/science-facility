@@ -8,7 +8,7 @@ import-module "C:/Users/azrie/PDenv/UserGithub/PowerShellCore/ps.core.reposnapsh
 # $target = "C:\Users\azrie\PDenv\UserGithub\packages\gudhi-devel\src"\
 # "D:\pdenv\CyberneticCodePilot"
 $projectname = "reposnapshot"
-$target = "D:\aghado01\utils\reposnapshot"
+$target = "D:\aghado01\science-facility\utils\reposnapshot"
 $target = $target -Replace '\\', '/'
 $shardOutputDir = "C:/Users/azrie/PDenv/UserGithub/project-snapshots/$projectname"
 $shardOutputDir = $shardOutputDir -Replace '\\', '/'

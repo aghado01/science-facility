@@ -6,7 +6,7 @@
     Call this script directly with `&` — it dot-sources what it needs and takes
     bound parameters from the calling shell. Nothing to load first:
 
-        & "D:\aghado01\utils\jso-jackson\claude-export\Export-ClaudeChat.ps1" `
+        & "D:\aghado01\science-facility\utils\jso-jackson\claude-export\Export-ClaudeChat.ps1" `
             -SessionId $env:CLAUDE_CODE_SESSION_ID
 
     This script exposes arguments that can be adjusted from their defaults based on user request.

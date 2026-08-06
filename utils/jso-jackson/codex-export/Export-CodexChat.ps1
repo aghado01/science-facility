@@ -6,7 +6,7 @@
     Agent-facing entry point. In a Codex task, the current thread id is supplied
     by $env:CODEX_THREAD_ID, so the normal invocation needs no arguments:
 
-        & "D:\aghado01\utils\jso-jackson\codex-export\Export-CodexChat.ps1"
+        & "D:\aghado01\science-facility\utils\jso-jackson\codex-export\Export-CodexChat.ps1"
 
     Report the returned paths. Do not read the generated transcript back into
     the task context.

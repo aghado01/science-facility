@@ -3,7 +3,7 @@
 **Status:** OPEN — captured, not actioned. Low urgency (see §4).
 **Raised:** 2026-07-25, as a tangent while making `-SourceDir` optional
 (see [brief-session-resolver.md](brief-session-resolver.md) §11).
-**Target:** `D:\aghado01\utils\jso-jackson\claude-export\`
+**Target:** `D:\aghado01\science-facility\utils\jso-jackson\claude-export\`
 
 ---
 

@@ -12,7 +12,7 @@ conversation you are in, you only need §1.
 Call the script directly. Do **not** dot-source anything first — it loads what it needs:
 
 ```powershell
-& "D:\aghado01\utils\jso-jackson\claude-export\Export-ClaudeChat.ps1" `
+& "D:\aghado01\science-facility\utils\jso-jackson\claude-export\Export-ClaudeChat.ps1" `
     -SessionId $env:CLAUDE_CODE_SESSION_ID
 ```
 
@@ -102,7 +102,7 @@ under `~/.claude/projects` are redundant copies. Details:
 Everything below is a function, so dot-source once:
 
 ```powershell
-. "D:\aghado01\utils\jso-jackson\claude-export\claude-jso-run.ps1"
+. "D:\aghado01\science-facility\utils\jso-jackson\claude-export\claude-jso-run.ps1"
 ```
 
 `Invoke-ClaudeThreadExport` is the full single-thread pipeline with every knob exposed. It takes

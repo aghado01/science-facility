@@ -4,7 +4,7 @@
 #
 # Dot-source this file to get the Claude-specific layer on top of jso-jackson.ps1:
 #
-#   . "D:\aghado01\utils\jso-jackson\claude-export\claude-jso-jackson.ps1"
+#   . "D:\aghado01\science-facility\utils\jso-jackson\claude-export\claude-jso-jackson.ps1"
 #
 # This file dot-sources jso-jackson.ps1 automatically.
 #

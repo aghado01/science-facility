@@ -2,7 +2,7 @@
 #
 # Dot-source this file to get the base JSONL primitives:
 #
-#   . "D:\aghado01\utils\jso-jackson\jso-jackson.ps1"
+#   . "D:\aghado01\science-facility\utils\jso-jackson\jso-jackson.ps1"
 #
 # CLASSES
 # ------
