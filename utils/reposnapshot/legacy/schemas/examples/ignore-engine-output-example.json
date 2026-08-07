@@ -1,0 +1,52 @@
+[
+  {
+    "NodePath": "",
+    "AbsolutePath": "C:/Users/azrie/repo/",
+    "NodeDepth": 0,
+    "CompiledIgnore": {
+      "Positives": "(^|/)(node_modules/|build/|[^/]*\\.log$|[^/]*\\.tmp$|\\.snapshot$)",
+      "Exceptions": null
+    },
+    "ExecutiveOverride": null
+  },
+  {
+    "NodePath": "docs/",
+    "AbsolutePath": "C:/Users/azrie/repo/docs/",
+    "NodeDepth": 1,
+    "CompiledIgnore": {
+      "Positives": "(^|/)(node_modules/|build/|[^/]*\\.log$)",
+      "Exceptions": null
+    },
+    "ExecutiveOverride": null
+  },
+  {
+    "NodePath": "src/",
+    "AbsolutePath": "C:/Users/azrie/repo/src/",
+    "NodeDepth": 1,
+    "CompiledIgnore": {
+      "Positives": "(^|/)(node_modules/|build/|[^/]*\\.log$)",
+      "Exceptions": null
+    },
+    "ExecutiveOverride": null
+  },
+  {
+    "NodePath": "tests/",
+    "AbsolutePath": "C:/Users/azrie/repo/tests/",
+    "NodeDepth": 1,
+    "CompiledIgnore": {
+      "Positives": "(^|/)(node_modules/|build/|[^/]*\\.log$|[^/]*\\.snap$)",
+      "Exceptions": "(^|/)important\\.snap$"
+    },
+    "ExecutiveOverride": null
+  },
+  {
+    "NodePath": "src/lib/",
+    "AbsolutePath": "C:/Users/azrie/repo/src/lib/",
+    "NodeDepth": 2,
+    "CompiledIgnore": {
+      "Positives": "(^|/)(node_modules/|build/|[^/]*\\.log$|[^/]*\\.generated\\.ts$)",
+      "Exceptions": null
+    },
+    "ExecutiveOverride": null
+  }
+]

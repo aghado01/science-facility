@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tree-graph-schema-v1.json",
+  "title": "DiscoveryCrawler Exhaustive Graph Output",
+  "description": "Source-of-truth schema for the DiscoveryCrawler output. A flat JSON array where each element is one directory node discovered during the BFS walk. The graph is exhaustive, unfiltered, and unpruned — every directory in the tree is represented regardless of ignore rules. Downstream stages (compiler, join, filtering) consume projections and copies; the graph itself is never mutated. The tree's nested directory structure is implicitly encoded in the NodePath values — parent-child relationships are derived by path prefix comparison, not by explicit nesting in the JSON. The compiler traverses these paths during depth-annotated inheritance to resolve last-rule-wins precedence across the glob compilation/reconciliation pipeline.",
+
+  "_design_notes": {
+    "format_rationale": "JSON flat array, NOT JSONL. The graph is a single cohesive data structure — consumers always load the full set for projection, inner join, or pruning. JSONL is appropriate for independently-processable records (shard payloads, log lines, streaming ingestion). The crawler graph has none of those properties: every node is related through the tree hierarchy, the compiler needs the full sorted set, and the inner join requires the complete dictionary. Fragmenting into JSONL adds parsing overhead with zero structural benefit.",
+    "node_ordering": "Nodes are keyed by NodePath in the Dictionary. When serialized, sorted by NodeDepth ascending (BFS order, shallow → deep). This is the contract the compiler expects.",
+    "absolute_path_convention": "All paths — both NodePath and file AbsolutePath — are forward-slash normalized absolute paths. The crawler is the single filesystem boundary — all normalization happens here, once. Downstream phases never see backslashes. NodePath IS the absolute directory path; there is no separate relative representation stored.",
+    "implicit_tree_structure": "The flat array encodes a tree. A node with NodePath 'C:/repo/src/lib/' is a child of 'C:/repo/src/' which is a child of 'C:/repo/'. The compiler derives this hierarchy by path prefix trimming — no explicit parent/child references needed. NodeDepth (slash-count offset from root) enables BFS-order sorting and depth-annotated set operations.",
+    "immutability": "Once Invoke() completes, the graph is frozen. No downstream stage writes back to it. Projections (GetProjection) and joins create new structures."
+  },
+
+  "type": "array",
+  "items": {
+    "$ref": "#/$defs/DirectoryNode"
+  },
+
+  "$defs": {
+
+    "DirectoryNode": {
+      "type": "object",
+      "description": "One directory in the tree. Every directory visited during the BFS walk gets exactly one entry. The root node's NodePath is the resolved absolute root path (e.g. 'C:/Users/azrie/repo/'). Child NodePaths extend the root with their relative segments. NodePath doubles as both the node identity / join key and the authoritative filesystem reference.",
+      "required": ["NodePath", "NodeDepth", "IgnoreFiles", "Files"],
+      "additionalProperties": false,
+      "properties": {
+
+        "NodePath": {
+          "type": "string",
+          "description": "Forward-slash normalized absolute path to this directory, with trailing slash. This is the primary identity of the node — used as the Dictionary key, the join key for fork-and-rejoin operations, and the implicit tree structure carrier. The compiler traverses NodePaths (deriving parent from child by trimming the last segment) during depth-annotated inheritance to resolve glob precedence. Produced by [IO.Path]::GetFullPath() then -replace '\\\\', '/' with trailing '/' appended.",
+          "examples": ["C:/Users/azrie/repo/", "C:/Users/azrie/repo/src/", "C:/Users/azrie/repo/src/lib/"],
+          "pattern": "^.+/$"
+        },
+
+        "NodeDepth": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Depth of this node relative to the snapshot root. Root = 0. Direct children of root = 1. Calculated as slash-count offset from the root NodePath. Used by the compiler for BFS-order sorting and depth-annotated set operations during inheritance and precedence resolution."
+        },
+
+        "IgnoreFiles": {
+          "type": "array",
+          "description": "Ignore files discovered at this directory during the BFS walk. Each entry is one file (e.g. a .gitignore or .snapignore found at this node). Empty array when no ignore files exist at this node. Rules are the raw non-empty, non-comment lines from each file — NOT normalized. Normalization (separator collapse, anchor-prefix injection) is Stage 0 of the compiler, not the crawler's responsibility.",
+          "items": {
+            "$ref": "#/$defs/IgnoreFileEntry"
+          }
+        },
+
+        "Files": {
+          "type": "array",
+          "description": "All files living directly under this directory (immediate children only, not recursive). These are filesystem entries that are NOT directories. Completely unfiltered — binary files, huge files, ignored files are all present. Filtering (ignore regex, extension-based rejection, size caps) happens downstream in Phase 5. Empty array for directories with no files.",
+          "items": {
+            "$ref": "#/$defs/FileEntry"
+          }
+        }
+      }
+    },
+
+    "IgnoreFileEntry": {
+      "type": "object",
+      "description": "One ignore file discovered at a directory node. Source identifies which ignore file name matched. Rules are rawlines from the file in original order — the compiler consumes these for glob compilation and last-match-wins reconciliation.",
+      "required": ["Source", "Rules"],
+      "additionalProperties": false,
+      "properties": {
+
+        "Source": {
+          "type": "string",
+          "description": "The ignore file name that was found (e.g. '.gitignore', '.snapignore'). Matches one of the names in the $IgnoreFileNames crawler configuration. Just the filename — the parent node's NodePath provides the directory context.",
+          "examples": [".gitignore", ".snapignore"]
+        },
+
+        "Rules": {
+          "type": "array",
+          "description": "Raw glob lines from the ignore file. Whitespace-trimmed, blank lines and # comment lines removed by the crawler during read. Order preserved — order matters for gitignore last-match-wins semantics. Negation prefixes (!) are intact — the compiler strips them during Stage 0 normalization. These are UNPROCESSED patterns: no separator normalization, no anchor-prefix injection, no leading-slash stripping.",
+          "items": {
+            "type": "string"
+          },
+          "examples": [["node_modules/", "*.log", "build/", "!build/keep.txt"]]
+        }
+      }
+    },
+
+    "FileEntry": {
+      "type": "object",
+      "description": "One file discovered at a directory node. Contains only what the crawler can determine without opening the file: its absolute path and byte size. No binary detection, no content inspection, no ignore evaluation — those are downstream concerns.",
+      "required": ["AbsolutePath", "SizeBytes"],
+      "additionalProperties": false,
+      "properties": {
+
+        "AbsolutePath": {
+          "type": "string",
+          "description": "Forward-slash normalized absolute path to the file. Produced by: $entry -replace '\\\\', '/'. This is the authoritative file reference throughout the pipeline — Phase 6 uses it to open files, Phase 7 derives relative paths from it at serialization time via [IO.Path]::GetRelativePath().",
+          "examples": ["C:/Users/azrie/repo/src/lib/parser.ps1", "C:/Users/azrie/repo/README.md"]
+        },
+
+        "SizeBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "File size in bytes from [IO.FileInfo].Length. Used downstream by Phase 5 filtering for $MaxFileSizeKB threshold checks. Collected here because it's essentially free (FileInfo already instantiated) and avoids a second filesystem hit during filtering."
+        }
+      }
+    }
+  }
+}

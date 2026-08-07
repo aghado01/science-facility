@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:reposnapshot:schemas:ignore-engine-input",
+  "title": "RepoSnapshot Ignore Engine Input Contract",
+  "$comment": "Flat BFS-ordered array. NodeDepth non-decreasing. Position [0] is always the root node (enforced by prefixItems). Derived from crawler output via GetProjection() — identical structure minus Files.",
+  "description": "Flat node array from DiscoveryCrawler.GetProjection(). Input contract to the ignore engine (New-IgnoreCompiler). Files are stripped; only node paths, ignore sources, and executive overrides are retained.",
+  "type": "array",
+  "minItems": 1,
+  "prefixItems": [
+    { "$ref": "#/$defs/RootDirectoryNode" }
+  ],
+  "items": {
+    "$ref": "#/$defs/DirectoryNode"
+  },
+  "$defs": {
+    "GlobPattern": {
+      "type": "string",
+      "description": "A raw glob pattern string. May begin with '!' for negation. Blank lines and comment lines (#) are stripped before storage.",
+      "minLength": 1,
+      "pattern": "^!?[^\\s#].*$"
+    },
+    "GlobArray": {
+      "description": "Array of glob pattern strings, or null when the source param was $null at invocation time. Empty array = param was provided but contained no patterns.",
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "array",
+          "items": { "$ref": "#/$defs/GlobPattern" }
+        }
+      ]
+    },
+    "IgnoreFileEntry": {
+      "type": "object",
+      "title": "IgnoreFileEntry",
+      "description": "One ignore source at a directory node. Source is either a filename basename found on disk, or the reserved virtual name 'IgnorePatterns' for param-injected rules (root node only, always first entry).",
+      "required": ["Source", "Globs"],
+      "additionalProperties": false,
+      "properties": {
+        "Source": {
+          "type": "string",
+          "description": "Basename of the ignore file (e.g. '.gitignore', '.snapignore'), or the reserved name 'IgnorePatterns' for the virtual root param-injected source. No path separators permitted.",
+          "minLength": 1,
+          "pattern": "^[^/\\\\]+$"
+        },
+        "Globs": {
+          "$ref": "#/$defs/GlobArray"
+        }
+      }
+    },
+    "ExecutiveOverrides": {
+      "type": "object",
+      "title": "ExecutiveOverrides",
+      "description": "Root-only bypass mechanism. Always present as an object on the root node. Globs null = $ExecutiveOverrides param was not provided — normal ignore pipeline active. Globs [] = param was provided but empty. Globs non-empty = bypass active: ignore pipeline skipped, globs compiled to a single regex with inverted semantics (match = KEEP).",
+      "required": ["Globs"],
+      "additionalProperties": false,
+      "properties": {
+        "Globs": {
+          "$ref": "#/$defs/GlobArray"
+        }
+      }
+    },
+    "DirectoryNode": {
+      "type": "object",
+      "title": "DirectoryNode",
+      "description": "A non-root directory node. No root-only fields. Files stripped by GetProjection().",
+      "required": ["NodePath", "AbsolutePath", "NodeDepth", "IgnoreFiles"],
+      "additionalProperties": false,
+      "properties": {
+        "NodePath": {
+          "type": "string",
+          "description": "Path relative to snapshot root, forward-slash, trailing '/' required. Single-segment example: 'src/'. Multi-segment: 'src/lib/'.",
+          "minLength": 2,
+          "pattern": "^[^/].+/$"
+        },
+        "AbsolutePath": {
+          "type": "string",
+          "description": "Absolute path to this directory, forward-slash normalized, trailing '/' required.",
+          "minLength": 2,
+          "pattern": "^.+/$"
+        },
+        "NodeDepth": {
+          "type": "integer",
+          "description": "Depth below snapshot root. Non-root nodes are always >= 1.",
+          "minimum": 1
+        },
+        "IgnoreFiles": {
+          "type": "array",
+          "description": "Ignore sources discovered at this node. May be empty.",
+          "items": { "$ref": "#/$defs/IgnoreFileEntry" }
+        }
+      }
+    },
+    "RootDirectoryNode": {
+      "type": "object",
+      "title": "RootDirectoryNode",
+      "description": "The snapshot root node. NodePath is always '' (empty string). Adds two root-only structural invariants: (1) ExecutiveOverrides object always present — Globs null/empty = inactive, non-empty = bypass active. (2) IgnoreFiles must contain a 'IgnorePatterns' virtual source as its first entry — always injected from the $IgnorePatterns param, Globs may be null or empty.",
+      "required": ["NodePath", "AbsolutePath", "NodeDepth", "IgnoreFiles", "ExecutiveOverrides"],
+      "additionalProperties": false,
+      "properties": {
+        "NodePath": {
+          "type": "string",
+          "description": "Always empty string for the root node.",
+          "const": ""
+        },
+        "AbsolutePath": {
+          "type": "string",
+          "description": "Absolute path to the snapshot root, forward-slash normalized, trailing '/' required.",
+          "minLength": 2,
+          "pattern": "^.+/$"
+        },
+        "NodeDepth": {
+          "type": "integer",
+          "description": "Root node is always depth 0.",
+          "const": 0
+        },
+        "IgnoreFiles": {
+          "type": "array",
+          "description": "Ignore sources at root. First entry must always be the virtual 'IgnorePatterns' source. Subsequent entries are disk-sourced files in alphabetical discovery order.",
+          "items": { "$ref": "#/$defs/IgnoreFileEntry" },
+          "contains": {
+            "type": "object",
+            "required": ["Source"],
+            "properties": {
+              "Source": { "const": "IgnorePatterns" }
+            }
+          }
+        },
+        "ExecutiveOverrides": {
+          "$ref": "#/$defs/ExecutiveOverrides"
+        }
+      }
+    }
+  }
+}

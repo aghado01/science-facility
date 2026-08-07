@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:reposnapshot:schemas:filtering-output",
+  "title": "RepoSnapshot Invoke-IgnoreFilter Output",
+  "$comment": "Dictionary-valued structure keyed by NodePath. Produced by Invoke-IgnoreFilter — joins ignore engine compiled output with crawler Files, stamps RelativePath, and filters in a single fused pass. Pruned branches absent. BFS order not guaranteed (dictionary iteration); NodeDepth retained for downstream ordering.",
+  "description": "Output of Invoke-IgnoreFilter. Each entry is a surviving directory node with filtered Files (only non-ignored files remain). RelativePath is pre-computed on each FileEntry for downstream serialization and content processing.",
+  "type": "object",
+  "minProperties": 1,
+  "additionalProperties": {
+    "$ref": "#/$defs/JoinedNode"
+  },
+  "$defs": {
+    "CompiledIgnoreState": {
+      "type": "object",
+      "title": "CompiledIgnoreState",
+      "description": "Compiled regex pair for a node's merged ignore rules. Positives = main ignore regex (match = ignore). Exceptions = negation override regex (match = un-ignore). Either may be null if no patterns of that polarity exist after reduction.",
+      "required": ["Positives", "Exceptions"],
+      "additionalProperties": false,
+      "properties": {
+        "Positives": {
+          "description": "Compiled regex for positive ignore patterns, or null.",
+          "oneOf": [
+            { "type": "null" },
+            { "type": "string", "minLength": 1 }
+          ]
+        },
+        "Exceptions": {
+          "description": "Compiled regex for negation (!) patterns, or null.",
+          "oneOf": [
+            { "type": "null" },
+            { "type": "string", "minLength": 1 }
+          ]
+        }
+      }
+    },
+    "FileEntry": {
+      "type": "object",
+      "title": "FileEntry",
+      "description": "A file from the crawler's BFS, enriched with RelativePath during RunJoin(). RelativePath is forward-slash normalized, relative to the snapshot root — computed once here for all downstream use (filtering, serialization).",
+      "required": ["AbsolutePath", "SizeBytes", "RelativePath"],
+      "additionalProperties": false,
+      "properties": {
+        "AbsolutePath": {
+          "type": "string",
+          "description": "Absolute path, forward-slash normalized. Retained for file I/O during content processing (Phase 6).",
+          "minLength": 1,
+          "pattern": "^.+[^/]$"
+        },
+        "SizeBytes": {
+          "type": "integer",
+          "description": "File size in bytes from [IO.FileInfo].Length.",
+          "minimum": 0
+        },
+        "RelativePath": {
+          "type": "string",
+          "description": "Path relative to snapshot root, forward-slash normalized. Computed once during RunJoin() via [IO.Path]::GetRelativePath(). Used by filtering (.Where() regex match) and artifact serialization.",
+          "minLength": 1,
+          "pattern": "^[^/].*[^/]$"
+        }
+      }
+    },
+    "JoinedNode": {
+      "type": "object",
+      "title": "JoinedNode",
+      "description": "A surviving directory node after join. Carries the crawler's node identity + Files, plus the ignore engine's compiled regex state. CompiledIgnore and ExecutiveOverride are mutually exclusive pathways.",
+      "required": ["NodePath", "AbsolutePath", "NodeDepth", "Files", "CompiledIgnore", "ExecutiveOverride"],
+      "additionalProperties": false,
+      "properties": {
+        "NodePath": {
+          "type": "string",
+          "description": "Path relative to snapshot root, forward-slash. '' for root, trailing '/' for non-root."
+        },
+        "AbsolutePath": {
+          "type": "string",
+          "description": "Absolute path to this directory, forward-slash normalized, trailing '/' required.",
+          "minLength": 2,
+          "pattern": "^.+/$"
+        },
+        "NodeDepth": {
+          "type": "integer",
+          "description": "Depth below snapshot root. Root = 0.",
+          "minimum": 0
+        },
+        "Files": {
+          "type": "array",
+          "description": "Files directly in this directory, enriched with RelativePath.",
+          "items": { "$ref": "#/$defs/FileEntry" }
+        },
+        "CompiledIgnore": {
+          "description": "Compiled ignore state from normal pipeline, or null when ExecutiveOverride is active.",
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/CompiledIgnoreState" }
+          ]
+        },
+        "ExecutiveOverride": {
+          "description": "Compiled regex for executive override bypass (match = KEEP), or null when normal pipeline is active.",
+          "oneOf": [
+            { "type": "null" },
+            { "type": "string", "minLength": 1 }
+          ]
+        }
+      }
+    }
+  }
+}

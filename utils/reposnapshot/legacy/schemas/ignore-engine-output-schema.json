@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:reposnapshot:schemas:ignore-engine-output",
+  "title": "RepoSnapshot Ignore Engine Output",
+  "$comment": "Flat array of surviving directory nodes after ignore compilation and branch pruning. BFS order preserved, NodeDepth non-decreasing. Position [0] is always the root node. Pruned branches are absent entirely.",
+  "description": "Output of New-IgnoreCompiler (IgnoreEngine.Invoke()). Each surviving node carries compiled regex state for the filter stage. Two mutually exclusive pathways: (1) ExecutiveOverride active — all nodes have ExecutiveOverride regex + null CompiledIgnore, (2) Normal pipeline — all nodes have CompiledIgnore + null ExecutiveOverride. Downstream join with the original crawler graph recovers Files for surviving nodes.",
+  "type": "array",
+  "minItems": 1,
+  "prefixItems": [
+    { "$ref": "#/$defs/RootOutputNode" }
+  ],
+  "items": {
+    "$ref": "#/$defs/OutputNode"
+  },
+  "$defs": {
+    "CompiledIgnoreState": {
+      "type": "object",
+      "title": "CompiledIgnoreState",
+      "description": "Compiled regex pair for a node's merged ignore rules. Positives is the main ignore regex (match = ignore). Exceptions is the negation override regex (match = un-ignore). Either may be null if no patterns of that polarity exist at this node after reduction.",
+      "required": ["Positives", "Exceptions"],
+      "additionalProperties": false,
+      "properties": {
+        "Positives": {
+          "description": "Compiled regex for positive ignore patterns, or null if no patterns apply to this node.",
+          "oneOf": [
+            { "type": "null" },
+            { "type": "string", "minLength": 1 }
+          ]
+        },
+        "Exceptions": {
+          "description": "Compiled regex for negation (!) patterns, or null if no exceptions apply to this node.",
+          "oneOf": [
+            { "type": "null" },
+            { "type": "string", "minLength": 1 }
+          ]
+        }
+      }
+    },
+    "OutputNode": {
+      "type": "object",
+      "title": "OutputNode",
+      "description": "A non-root surviving directory node with compiled ignore state.",
+      "required": ["NodePath", "AbsolutePath", "NodeDepth", "CompiledIgnore", "ExecutiveOverride"],
+      "additionalProperties": false,
+      "properties": {
+        "NodePath": {
+          "type": "string",
+          "description": "Path relative to snapshot root, forward-slash, trailing '/' required. Same value as the input node.",
+          "minLength": 2,
+          "pattern": "^[^/].+/$"
+        },
+        "AbsolutePath": {
+          "type": "string",
+          "description": "Absolute path to this directory, forward-slash normalized, trailing '/' required. Passed through from input.",
+          "minLength": 2,
+          "pattern": "^.+/$"
+        },
+        "NodeDepth": {
+          "type": "integer",
+          "description": "Depth below snapshot root. Non-root nodes are always >= 1.",
+          "minimum": 1
+        },
+        "CompiledIgnore": {
+          "description": "Compiled ignore state for normal pipeline, or null when ExecutiveOverride pathway is active.",
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/CompiledIgnoreState" }
+          ]
+        },
+        "ExecutiveOverride": {
+          "description": "Compiled regex for executive override bypass (match = KEEP, inverted semantics), or null when normal pipeline is active.",
+          "oneOf": [
+            { "type": "null" },
+            { "type": "string", "minLength": 1 }
+          ]
+        }
+      }
+    },
+    "RootOutputNode": {
+      "type": "object",
+      "title": "RootOutputNode",
+      "description": "The root node in the output. Always survives pruning. NodePath is always '' (empty string), NodeDepth is always 0.",
+      "required": ["NodePath", "AbsolutePath", "NodeDepth", "CompiledIgnore", "ExecutiveOverride"],
+      "additionalProperties": false,
+      "properties": {
+        "NodePath": {
+          "type": "string",
+          "description": "Always empty string for the root node.",
+          "const": ""
+        },
+        "AbsolutePath": {
+          "type": "string",
+          "description": "Absolute path to the snapshot root, forward-slash normalized, trailing '/' required.",
+          "minLength": 2,
+          "pattern": "^.+/$"
+        },
+        "NodeDepth": {
+          "type": "integer",
+          "description": "Root node is always depth 0.",
+          "const": 0
+        },
+        "CompiledIgnore": {
+          "description": "Compiled ignore state for normal pipeline, or null when ExecutiveOverride pathway is active.",
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/CompiledIgnoreState" }
+          ]
+        },
+        "ExecutiveOverride": {
+          "description": "Compiled regex for executive override bypass, or null when normal pipeline is active.",
+          "oneOf": [
+            { "type": "null" },
+            { "type": "string", "minLength": 1 }
+          ]
+        }
+      }
+    }
+  }
+}

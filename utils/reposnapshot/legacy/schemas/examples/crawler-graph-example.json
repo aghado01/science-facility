@@ -1,0 +1,75 @@
+[
+  {
+    "NodePath": "",
+    "AbsolutePath": "C:/Users/azrie/repo/",
+    "NodeDepth": 0,
+    "IgnoreFiles": [
+      {
+        "Source": "IgnorePatterns",
+        "Globs": [".snapshot"]
+      },
+      {
+        "Source": ".gitignore",
+        "Globs": ["node_modules/", "build/", "*.log"]
+      },
+      {
+        "Source": ".snapignore",
+        "Globs": ["*.tmp", ".snapshot"]
+      }
+    ],
+    "ExecutiveOverrides": {
+      "Globs": null
+    },
+    "Files": [
+      { "AbsolutePath": "C:/Users/azrie/repo/.gitignore",   "SizeBytes": 87   },
+      { "AbsolutePath": "C:/Users/azrie/repo/.snapignore",  "SizeBytes": 42   },
+      { "AbsolutePath": "C:/Users/azrie/repo/package.json", "SizeBytes": 1120 },
+      { "AbsolutePath": "C:/Users/azrie/repo/README.md",    "SizeBytes": 2480 }
+    ]
+  },
+  {
+    "NodePath": "docs/",
+    "AbsolutePath": "C:/Users/azrie/repo/docs/",
+    "NodeDepth": 1,
+    "IgnoreFiles": [],
+    "Files": []
+  },
+  {
+    "NodePath": "src/",
+    "AbsolutePath": "C:/Users/azrie/repo/src/",
+    "NodeDepth": 1,
+    "IgnoreFiles": [],
+    "Files": [
+      { "AbsolutePath": "C:/Users/azrie/repo/src/index.ts", "SizeBytes": 4096 }
+    ]
+  },
+  {
+    "NodePath": "tests/",
+    "AbsolutePath": "C:/Users/azrie/repo/tests/",
+    "NodeDepth": 1,
+    "IgnoreFiles": [
+      {
+        "Source": ".gitignore",
+        "Globs": ["*.snap", "!important.snap"]
+      }
+    ],
+    "Files": [
+      { "AbsolutePath": "C:/Users/azrie/repo/tests/parser.tests.ps1", "SizeBytes": 8200 }
+    ]
+  },
+  {
+    "NodePath": "src/lib/",
+    "AbsolutePath": "C:/Users/azrie/repo/src/lib/",
+    "NodeDepth": 2,
+    "IgnoreFiles": [
+      {
+        "Source": ".gitignore",
+        "Globs": ["*.generated.ts"]
+      }
+    ],
+    "Files": [
+      { "AbsolutePath": "C:/Users/azrie/repo/src/lib/parser.ps1", "SizeBytes": 14832 },
+      { "AbsolutePath": "C:/Users/azrie/repo/src/lib/utils.ps1",  "SizeBytes": 3200  }
+    ]
+  }
+]

@@ -1,0 +1,43 @@
+[
+  {
+    "NodePath": "",
+    "AbsolutePath": "C:/Users/azrie/repo/",
+    "NodeDepth": 0,
+    "IgnoreFiles": [
+      { "Source": "IgnorePatterns", "Globs": ["node_modules/", "*.log", "build/"] },
+      { "Source": ".gitignore", "Globs": ["node_modules/", "*.log", "build/"] },
+      { "Source": ".snapignore", "Globs": ["*.tmp", ".snapshot"] }
+    ],
+    "ExecutiveOverrides": {
+      "Globs": null
+    }
+  },
+  {
+    "NodePath": "docs/",
+    "AbsolutePath": "C:/Users/azrie/repo/docs/",
+    "NodeDepth": 1,
+    "IgnoreFiles": []
+  },
+  {
+    "NodePath": "src/",
+    "AbsolutePath": "C:/Users/azrie/repo/src/",
+    "NodeDepth": 1,
+    "IgnoreFiles": []
+  },
+  {
+    "NodePath": "tests/",
+    "AbsolutePath": "C:/Users/azrie/repo/tests/",
+    "NodeDepth": 1,
+    "IgnoreFiles": [
+      { "Source": ".gitignore", "Globs": ["*.snap", "!important.snap"] }
+    ]
+  },
+  {
+    "NodePath": "src/lib/",
+    "AbsolutePath": "C:/Users/azrie/repo/src/lib/",
+    "NodeDepth": 2,
+    "IgnoreFiles": [
+      { "Source": ".gitignore", "Globs": ["*.generated.ts"] }
+    ]
+  }
+]
