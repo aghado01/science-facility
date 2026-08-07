@@ -13,7 +13,7 @@ This directory is independent of `claude-export`. It reuses only the generic
 Inside a Codex task:
 
 ```powershell
-& "D:\aghado01\science-facility\utils\jso-jackson\codex-export\Export-CodexChat.ps1"
+& "D:\aghado01\science-facility\utils\chat-export\codex-export\Export-CodexChat.ps1"
 ```
 
 The wrapper reads the exact task identifier from `$env:CODEX_THREAD_ID`.
@@ -78,7 +78,7 @@ records.
 ## Library endpoints
 
 ```powershell
-. "D:\aghado01\science-facility\utils\jso-jackson\codex-export\codex-jso-run.ps1"
+. "D:\aghado01\science-facility\utils\chat-export\codex-export\codex-jso-run.ps1"
 
 # Stop at the exchange-envelope IR.
 Invoke-CodexThreadExport `

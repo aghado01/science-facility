@@ -9,7 +9,7 @@
 # tool calls are pre-matched with their results.
 #
 # Usage:
-#   . "D:\aghado01\science-facility\utils\jso-jackson\claude-export\claude-jso-markdown-v2.ps1"
+#   . "D:\aghado01\science-facility\utils\chat-export\claude-export\claude-jso-markdown-v2.ps1"
 #   ConvertTo-ClaudeMarkdownV2 -ExchangesJsonlPath $path -OutputPath thread.md
 #   ConvertTo-ClaudeMarkdownV2 -ExchangesJsonlPath $path  # returns string
 #

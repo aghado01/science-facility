@@ -9,7 +9,7 @@
 
 $ErrorActionPreference = 'Stop'
 
-. "$PSScriptRoot\..\jso-jackson.ps1"
+. "$PSScriptRoot\..\..\jso-jackson\jso-jackson.ps1"
 
 function Get-CodexHome
 {

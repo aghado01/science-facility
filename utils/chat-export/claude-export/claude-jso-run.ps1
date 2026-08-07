@@ -2,7 +2,7 @@
 #
 # Dot-source this file to get all pipeline functions:
 #
-#   . "D:\aghado01\science-facility\utils\jso-jackson\claude-export\claude-jso-run.ps1"
+#   . "D:\aghado01\science-facility\utils\chat-export\claude-export\claude-jso-run.ps1"
 #
 #   # by session id — nothing else needed; the transcript locates itself, and
 #   # the project slug is a component of the path it resolves to
