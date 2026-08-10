@@ -70,3 +70,57 @@ So this isn't inventing a boundary; it's _naming_ one that's implicit and tangle
 So the boundary question is: does **`rs.core.shards`** decide membership purely on abstract content spans + policy (and **`rs.core.serialize`** owns encoding _and_ the byte-offset TOC, template included) — accepting that `.txt` framing/escaping shifts the real bytes? Or do you want byte-accurate `.txt` shards, which needs a serialize-measure pass feeding sizes _back_ to `shards`? That fork decides whether the two modules are a clean one-way pipe (`shards → ShardPlan → serialize`) or a two-pass loop.
 
 How are you thinking about that coupling — is byte-exact `.txt` packing a requirement, or is content-span packing good enough and offsets become purely a serialize-side product?
+
+---
+
+## Session continuation (captured 2026-08-10) — serialization architecture
+
+> **Provenance caveat.** This half of the session ran in the stale `aghado01/utils`
+> copy, without the committed `shard-format-notes.md` codec spec or the
+> `rs-attributes.ps1` "CANONICAL UTF-8 / planning-grade SpanBytes" note in view. So
+> parts below re-derive what those already settle, and two conclusions **diverge from
+> committed decisions** — flagged **RECONCILE**. The codec is authoritative in
+> `shard-format-notes.md`; this note does not restate it.
+
+**LTS `.txt` emission, decomposed into five passes** (`RepoSnapshotLts.psm1:2288-2554`):
+render (escaped rows → one flat buffer, running byte offsets) · arrange (byte-cursor
+cuts under `max_span`; anti-fragmentation = an oversized unit takes its own shard) ·
+emit (schema block + rows; contiguous slice for Flat, per-shard render for grouped) ·
+measure (post-write in-shard spans: `row_offset / row_meta_end / row_content_begin /
+row_content_end`) · navigate (`_tree.md` via the template engine).
+
+**Net-new this session (proposals for the two final stages):**
+- **`rs.core.shards` (planning) vs `rs.core.serialize` (emission)** — naming the boundary
+  already latent in `rs.core.sharding`: `Partition-Files` = arrangement; the writers =
+  emission. `serialize` brackets `shards` as **measure → plan → execute**. serialize owns
+  escaping + byte-accounting + offsets + tree; shards owns grouping + ordering + packing
+  policy. The codec and byte-counter never touch shards.
+- **Serializer = a stateful SDK-grade class** — holds buffer/cursor/offset-map/template
+  ref; template engine **injected** (testable); buffering-vs-streaming an internal
+  strategy (streaming matters for large corpora, unlike LTS's buffer-everything).
+- **`shards` emits a "resolved IR"** (entries + shard assignment + order) as the contract
+  into serialize.
+- **`assemble.schema.json`** — the IR contract captured as a decoupled schema
+  (`reposnapshot-v3/schema/`; location/naming provisional).
+- **`AllowOversizedShards` = top-level policy**, orthogonal to grouping, over the
+  unit-integrity invariant (never split a unit); opt-out = reject/flag. (Consistent with
+  `shard-format-notes.md` §Configurability.)
+- **Naming:** "escaper" → **codec** (aligns with the `jsonl_engine` `Codec` axis).
+
+**RECONCILE — two divergences from committed spec:**
+1. **SpanBytes location.** This session proposed moving `SpanBytes` out of `rs-attributes`
+   into serialization ("length/spanbytes/escaping are container properties, computed
+   JIT"). The committed `rs-attributes.ps1` note argues the opposite and more sharply:
+   `SpanBytes` **stays in `rs-attributes`** as a UTF-8-by-convention, serializer-invariant
+   **planning-grade** metric (ranking / skip / packing budgets), explicitly *not* an
+   offset or encoded length. That separation (SpanBytes = content/planning vs
+   `length`/offsets = encoded/serializer) is cleaner than collapsing them. **Assessment:
+   committed likely wins — SpanBytes stays put; only `length` + offsets are serializer-JIT.**
+2. **Packing input.** This session pushed **byte-exact** packing (a measure pass feeding
+   shards exact encoded row sizes). The committed spec packs on **planning-grade
+   SpanBytes** ("the right input for shard packing budgets"), offsets exact only
+   post-emission.
+
+Both collapse to one axis: **is shard packing planning-grade (committed) or byte-exact
+(this session)?** User's call — and it decides whether the `measure → plan → execute`
+bracket is needed or whether `shards` plans on SpanBytes and serialize measures after.

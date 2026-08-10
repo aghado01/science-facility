@@ -15,6 +15,15 @@ Per capability, the decision is one of: **transfer to v3** · **LTS-only conveni
 
 ## Inventory — LTS surface vs v3 counterpart
 
+**Structural correction (verified 2026-08-09, from code — supersedes any "separate
+implementations" reading of this table):** LTS is **not** a standalone monolith. It
+dot-sources `reposnapshot-v3\rs.core.template.ps1` at load
+(`RepoSnapshotLts.psm1:11-14`, also re-loadable via `Import-TocTemplateEngine`) and
+imports `reposnapshot-v3\rs.core.sharding.psm1` (`:21-24`), **consuming both v3 modules
+as an orchestrator**. For the Tree/TOC and Sharding rows the "v3 counterpart" is
+therefore already the LTS-driven engine, not a parallel reimplementation — the gap is a
+**V3-native driver**, not the writer modules themselves. Those two rows corrected below.
+
 | Capability | LTS (RepoSnapshotLts.psm1) | v3 counterpart | Direction / status |
 |---|---|---|---|
 | Comment stripping | `Normalize-FileContent` stage 4 — token walk (2026-07-22 fix); cs/py/js combined alternation scan | `rs-psstrip` (kind ops + masking + auto-route, ahead of LTS as of 2026-07-22), `rs-csstrip` | **Resolved both sides.** End state: LTS dispatches to processors (comment-ontology). rs-csstrip should adopt LTS's combined-alternation technique (superior to span regexes for cs/js) — evaluate. |
@@ -22,8 +31,8 @@ Per capability, the decision is one of: **transfer to v3** · **LTS-only conveni
 | Ignore/selection | `Get-GitIgnoredPaths`, `Read-GitIgnoreRules`, `Convert-GitIgnoreGlobToRegex`, `Build-GitIgnoreMatcher`, `Find-ExternalIgnoreRules`, `Normalize-PatternArray`, `New-PathInclusionTester` | `rs.core.ignore` (IgnoreCompiler: inheritance walk, exception domination, override bypass, regex cache) | v3 is the design forward. Audit LTS for semantics v3 lacks: external ignore rules, `SelectionOverrides` behavior. Redesign complete 2026-07-28: `issues/v3/ignore-selection-inversion.md` (Design v2 — mode dichotomy + override rescue + reconciliation); implementation pending. |
 | Binary/content filter | `Test-IsBinaryFile`, `Get-FilteredFiles`, `Filter-Content` (has the `-ExpandProperty Count -gt 0` bug) | `file-read` NUL guard; `Invoke-IgnoreFilter` size/ext blacklist | v3 forward; decide whether content-pattern filtering (`Filter-Content`) survives at all or retires. |
 | Preview/byte offsets | `New-ContentAndPreview`, `Get-EntryByteOffsets` (UTF-8 byte-accurate — the seek contract) | none yet | Split 2026-07-28: **preview RETIRED as a concept** (perfunctory head/tail; future previews = new element family, uncommitted — assemble-design). **Byte offsets still transfer** with the writers; the seek contract remains load-bearing for the MCP fetch API. |
-| Tree/TOC rendering | `Build-DirectoryTree`, `Build-AsciiTree`, `Build-TreeDiagramCompact`, `Build-TocTree`, `Import-TocTemplateEngine` | `rs.core.template.ps1` (handlebars-lite, TOC models) | Overlapping; verify whether LTS already loads rs.core.template (Import-TocTemplateEngine) and consolidate renderers in v3. |
-| Sharding/output | `Shard-SnapshotFile`, `Get-ShardedRepoSnapshot` (.txt shards + `*_tree.md`, escaped rows) | `rs.core.sharding` (older 3.1 gen: JSONL/piped + toc + manifest) | **Format decision pending** (TODO: make json monolith optional; runstamped subdir convention). LTS's txt+tree format is the agent-proven one for the CODE track. Re-disposition 2026-07-22: the module's JSONL machinery is NOT vestigial — it's the substrate for the thread-corpus track (`issues/thread-corpus-container.md`); don't retire. |
+| Tree/TOC rendering | `Build-DirectoryTree`, `Build-AsciiTree`, `Build-TreeDiagramCompact`, `Build-TocTree` (inline renderers); `Import-TocTemplateEngine` (loads the v3 engine) | `rs.core.template.ps1` (handlebars-lite, TOC models) — **shared, already LTS-consumed** | **"Verify" RESOLVED 2026-08-09: YES.** LTS dot-sources `rs.core.template.ps1` at module load (`:11-14`) and via `Import-TocTemplateEngine` (`:79`) — the template engine is the shared engine LTS already drives, not a v3-only reimplementation. Remaining gap: (a) wire it into a V3-native path (no ingest/assemble consumer today), (b) consolidate LTS's **inline** `Build-*Tree` renderers against the module's TOC models. |
+| Sharding/output | `Shard-SnapshotFile`, `Get-ShardedRepoSnapshot` — **inline `.txt`+`*_tree.md` emission** (escaped rows, byte offsets); **delegates grouped-strategy partitioning to the module** (`Partition-Files`, `:2355-2360`; Flat cuts inline) | `rs.core.sharding` (v3.1 gen): `Partition-Files` (arrangement) + JSONL/piped writers + toc + manifest | **Corrected 2026-08-09 — three surfaces, not two.** (1) `Partition-Files` = shared **arrangement** layer, **already LTS-consumed** for the code-track shard path. (2) The code-track **`.txt` row/offset/tree emission is still inline in LTS `Shard-SnapshotFile`** (`:2443-2465`, `[IO.File]::Open` byte writes) — the one piece **not** lifted to a v3 module. (3) The module's **JSONL/piped writers** (`ConvertTo-ShardFiles`/`Export-ShardedSnapshot`) are the **thread-corpus** substrate (module header `:22-34`); `ConvertTo-ShardFiles` takes `FromSnapshot`/`FromFiles` today with an **IR-entries entry point queued** — the intended IR→shards seam. Real gap = extract the inline `.txt` emitter + a V3-native driver (assemble IR → `Partition-Files` → writer). Format decision (json monolith optional; runstamped subdir) still open; the module's JSONL machinery is NOT vestigial (`issues/thread-corpus-container.md`). |
 | Orchestration | inline sequential + serialized-function parallel runspaces | `rs.core.colonel.v2` (ISS plan compile, chain executor, worker budget) | Colonel forward. 2026-07-29: v3 pipeline is whole through the IR (crawl → ignore → colonel chains → assemble, golden-validated); LTS retires for the code track when the writers land. |
 | Path utilities | `Resolve-RelPath`, `Norm-Path`, `Get-SnapshotPathParts`, `Get-SnapshotSiblingPath`, `Get-SnapshotArtifactPaths` | crawler `ToNodePath`; sharding `Get-NormalizedPath`, `ConvertTo-RelativePath` | Consolidate into one v3 home (internals?); currently three dialects of path normalization. |
 
@@ -46,6 +55,18 @@ Per capability, the decision is one of: **transfer to v3** · **LTS-only conveni
   encoding a first-class writer decision instead of a serialization byproduct
   (shard-format-notes: selective encoding).
 
+- **Gratuitous quote escaping in emitted rows — LTS defect, precluded in v3 (user,
+  2026-08-09).** Measured on a production C# payload
+  (`project-snapshots/ThermoMapper/src_20260701_122622`, 70 shards): **`\"` accounts
+  for 7050 escapes, 12.0% of every escape in the artifact** — second only to `\n` at
+  87.8%, and dwarfing `\\` at 127 (0.22%). It is pure `ConvertTo-Json` residue: under
+  length-prefix framing quotes need no escaping at all, since the frame is declared
+  and content is the final field. It is also where the payload's real legibility
+  damage lives — `return '\"' + text.Replace(\"\\\"\", \"\\\"\\\"\") + '\"';` for a
+  source line reading `return '"' + text.Replace("\"", "\"\"") + '"';`. v3 drops the
+  whole class *by construction* (no JSON hop), so this needs no work — but it must
+  not be reintroduced by a writer that reaches for `ConvertTo-Json` out of habit.
+  Spec: `shard-format-notes.md` §"What the length prefix buys".
 - Instruction template drift: sharded instructions still say "seek to row_offset in the
   .json file" for .txt shards (visible in selfie tree.md).
 - `Filter-Content` bug is live in LTS whenever include patterns/indicators are used.
@@ -136,3 +157,21 @@ Per capability, the decision is one of: **transfer to v3** · **LTS-only conveni
   as interpretation (enum + state stamp + dual TestPath truth table + Include-
   mode prune guard); C# dead-cache defect flagged do-not-import; sentinel
   semantics under Selection mode identified as the open design decision.
+
+- 2026-08-09 — **Sharding/template consumer graph verified from code; inventory
+  corrected** (prompted by user: "I thought LTS imported sharding already and was using
+  that" — correct). All facts file:line-checked:
+  - LTS dot-sources `rs.core.template.ps1` (`RepoSnapshotLts.psm1:11-14`) and imports
+    `rs.core.sharding.psm1` (`:21-24`) — a **hybrid orchestrator over the extracted v3
+    writer modules**, not a standalone monolith. Resolves the Tree/TOC row's standing
+    "verify whether LTS already loads rs.core.template" → **yes**.
+  - Sharding is **three** surfaces: `Partition-Files` (shared arrangement; LTS calls it
+    at `:2360` for grouped strategies); the code-track **`.txt`/tree/offset emission
+    still inline in LTS `Shard-SnapshotFile`** (`:2443-2465`); and the module's
+    JSONL/piped writers = thread-corpus substrate with an IR-entries entry point
+    **queued** on `ConvertTo-ShardFiles` (module header `:22-34`).
+  - Back-half framing corrected: the writer *modules* are real and in production use
+    **via LTS**; what is unbuilt is the **V3-native driver** (assemble IR →
+    `Partition-Files` → writer) plus extraction of the inline `.txt` emitter.
+    "Writers unbuilt" was too strong — "emission monolith-locked + no V3 orchestrator"
+    is accurate. Audit-only correction; no code changed this session.
