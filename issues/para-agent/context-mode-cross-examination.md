@@ -22,7 +22,7 @@ The resulting design lesson is:
 
 > Capture is not derivation; derivation is not indexing; indexing is not memory; memory is not guidance; guidance is not authorization; runtime adaptation is not administration.
 
-This refines, rather than replaces, the current para-agent synthesis. Keep four **agent-facing functional layers**—Console, Artifact, Job Exchange, and Guidance—but remove “adapter” from the fourth layer. Client adapters are cross-cutting boundary compilers. A privileged administrative control plane sits outside the agent-facing runtime.
+This refines, rather than replaces, the current para-agent synthesis. Keep four **agent-facing functional layers**—Console, Artifact, Job Exchange, and Guidance—but remove “adapter” from the fourth layer. Client adapters are cross-cutting boundary compilers. A privileged administrative control plane sits outside the agent-facing runtime. Capture, derivation, and indexing may still share the internal capability substrate described in [`backend-engine-architecture.md`](backend-engine-architecture.md); separation of authority does not require one MCP tool per concern.
 
 ## Evidence and version boundary
 
@@ -599,17 +599,20 @@ The near-term roadmap remains contract-first, with two refinements:
 Recommended design artifact order:
 
 1. Console v1 conformance errata and executable invariants.
-2. Artifact reference/receipt contract, including the three material-handling modes.
-3. Job Exchange contract.
-4. Harness observation, typed decision, capability evidence, and decision receipt contract.
-5. Minimal semantic guidance source plus two or three typed recipe resources.
-6. Only then, an optional index provider and a separate administrative deployment design.
+2. Backend application/engine boundary and neutral operation result.
+3. Artifact reference/receipt contract, including the three material-handling modes.
+4. Job Exchange contract.
+5. Harness observation, typed decision, capability evidence, and decision receipt contract.
+6. Minimal semantic guidance source plus two or three typed recipe resources.
+7. Only then, a workload-justified index provider and a separate administrative deployment design.
 
 This ordering prevents the skill from teaching accidental APIs, prevents adapters from becoming policy engines, and prevents cross-client administration from entering the runtime merely because deployment is eventually necessary.
 
 ## Open design questions
 
-1. Should derivation and indexing be para-agent tools, or separate Artifact providers sharing the same reference contract?
+Derivation and indexing are now located as internal Artifact/query providers, not primitive MCP tools. What remains open is their physical packaging and which semantic agent operations, if any, need their results.
+
+1. Should those providers begin inside para-agent and move only after a second real consumer appears, or is a shared package already justified?
 2. What is the smallest eagerly exposed high-level surface for each client, and how are primitive schemas discovered without forcing an extra turn in common workflows?
 3. Which clients expose a stable conversation identity and context epoch, and which must operate honestly as unbound?
 4. Which optimization decisions, if any, justify `ask` or `block` when advice delivery is unsupported? The default recommendation is none.

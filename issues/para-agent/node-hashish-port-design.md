@@ -1,11 +1,11 @@
 # Node-native Hashish design for para-agent
 
 **Status:** design note; no implementation authorized | **Date:** 2026-08-10
-**Scope:** a direct Node implementation derived from ThermoMapper Hashish, informed by jso-jackson and cybernetic-copilot, for use inside para-agent
+**Scope:** a direct Node implementation derived from ThermoMapper Hashish, informed by jso-jackson and cybernetic-copilot, for use as a capability provider inside para-agent's backend engine
 
 ## Executive conclusion
 
-A direct Node implementation is the right integration path. It avoids introducing a process, PowerShell, and .NET-loading boundary into para-agent's hot path and gives the Node server one coherent implementation for exact digests, text models, similarity candidates, JSONL indexes, and compact projections.
+A direct Node implementation is the right provider path. It avoids introducing a process, PowerShell, and .NET-loading boundary into para-agent's hot path and gives the Node backend one coherent implementation for Hashish's text models, similarity candidates, and compact projections. Exact cryptographic digests, JSONL framing, and indexes are sibling backend capabilities that may guard or consume these results; they are not part of Hashish itself.
 
 The earlier warning against “a second JavaScript implementation” was too broad. The actual warning should be:
 
@@ -13,11 +13,13 @@ The earlier warning against “a second JavaScript implementation” was too bro
 
 The algorithmic lift is manageable. The canonical Hashish surface is 22 C# files totaling about 129 KB, with only `System.Numerics.Tensors` as an external package dependency. The hard part is not translating loops; it is defining algorithm identity, fixing known edge cases, separating exact and approximate authority, and proving cross-runtime behavior.
 
-The recommended shape is a pure ESM library internal to para-agent—not 22 new MCP tools—with high-level integration through Artifact receipts, journal summaries, search projections, and bounded hook state.
+The recommended shape is a pure ESM capability library internal to para-agent—not 22 new MCP tools and not an Artifact sub-API. The Artifact/query engines consume it while satisfying agent-level operations; receipts, journal summaries, search results, and bounded hook state may disclose its derived evidence without exposing its primitives.
 
 ## Source and maturity boundary
 
 The canonical source is [`ThermoMapper/src/hashish`](../../../ThermoMapper/src/hashish). [`projects/Hashish/Hashish.csproj`](../../../ThermoMapper/projects/Hashish/Hashish.csproj) compiles that directory directly and adds only `System.Numerics.Tensors`.
+
+The companion [`Hashish capability and application inventory`](hashish-capability-inventory.md) catalogs what each algorithmic concept measures, the questions it can answer, its plausible applications, and the limits of the donor implementation. This note narrows that broader conceptual palette to a possible Node provider design.
 
 All 22 C# files are byte-identical by SHA-256 to the copy under [`pet-projects/rector-codicis/primitives/hashish`](../../../pet-projects/rector-codicis/primitives/hashish). The ThermoMapper location can therefore serve as the donor source while the Rector copy establishes the architectural lineage.
 
@@ -113,12 +115,11 @@ The exact source remains authoritative. Views, signatures, and indexes are dispo
 
 ## Node module boundary
 
-Start as a dependency-light internal ESM library under para-agent, for example:
+Start as a dependency-light internal ESM capability beneath the backend projection engine, for example:
 
 ```text
-src/hashish/
+src/capabilities/hashish/
   descriptor.js       semantic profiles and typed identity references
-  digest.js           streaming SHA-256 and exact byte verification
   hash64.js           BigInt Mix64 and named FNV input bases
   text-profile.js     normalization, case, tokenization, shingles
   idf.js              accumulator and immutable fitted model
@@ -130,31 +131,32 @@ src/hashish/
   exact.js            Jaccard/containment/Levenshtein
 ```
 
-Para-agent-specific composition belongs outside that directory:
+Backend composition belongs outside that directory:
 
 ```text
-src/artifacts/jsonl/  framing, selectors, guarded offsets, and result wrappers
-src/artifacts/        receipt writer and artifact/sidecar codecs
-src/analysis/         console/artifact view recipes and candidate policies
-src/journal/          journal integration and projection maintenance
-src/index.js          small MCP surface over high-level operations
+src/engines/artifacts/    artifact identity, lifecycle, and publication
+src/engines/query/        selectors, projection choice, and bounded results
+src/capabilities/digest/  streaming SHA-256 and exact byte verification
+src/capabilities/jsonl/   framing, guarded offsets, and result coordinates
+src/application/          semantic para-agent operations and receipt assembly
+src/mcp/                  thin schemas, handlers, and result presentation
 ```
 
-The Hashish library must not import JSONL traversal, the MCP SDK, psmux, client hooks, or governance code. Artifact/JSONL infrastructure may consume Hashish digests and projections through the Artifact contract, not the reverse. If a second real Node consumer appears, the same pure library and test suite can be promoted to a shared science-facility package without changing its contracts.
+The Hashish library must not import JSONL traversal, the MCP SDK, psmux, client hooks, artifact paths, or governance code. Artifact/JSONL infrastructure may consume Hashish results through versioned provider contracts, not the reverse. If a second real Node consumer appears, the same pure library and test suite can be promoted to a shared science-facility package without changing its contracts.
 
 ### Do not expose the file list as a tool list
 
-Implementing the algorithms in Node does not justify one MCP tool per algorithm. That would reproduce the tool-schema overhead already identified elsewhere.
+Implementing the algorithms in Node does not justify one MCP tool per algorithm—or even a generic `artifact_analyze` tool. That would reproduce the tool-schema overhead and require the model to assemble an internal execution plan.
 
-The initial public behavior should appear through high-level operations such as:
+Instead, ordinary backend paths may:
 
-- capture an artifact and return its exact digest/receipt;
-- build or refresh a named projection;
-- search or nominate near-duplicate candidates;
-- exactly verify selected candidates;
-- inspect the descriptor and coverage of a projection.
+- calculate an exact digest while capturing an artifact;
+- ensure a guarded projection while satisfying an artifact query;
+- nominate and exactly verify related candidates inside a semantic comparison;
+- maintain a membership accelerator when a store generation is published;
+- place descriptor, coverage, and algorithm/model facts in provenance or a maintainer diagnostic.
 
-A future compact `artifact_analyze` operation could accept an `analyses[]` list if direct access is genuinely useful. Primitive library exports remain available to para-agent code and tests without becoming resident model-facing schemas.
+Whether “compare artifacts” or “find related results” ever deserves an MCP operation is a separate agent-intent decision governed by the tool-admission rule in [`backend-engine-architecture.md`](backend-engine-architecture.md). Primitive library exports remain available to backend code and tests without becoming resident model-facing schemas.
 
 ## Algorithm profile and result identity
 
@@ -364,7 +366,7 @@ The rolling value chooses candidate boundaries. SHA-256 identifies each chunk. A
 
 ## JSONL and jso-jackson integration
 
-jso-jackson contributes the right interaction model:
+jso-jackson contributes useful backend interaction and storage mechanics:
 
 - count/validate → inspect schema → measure fields → preview → exact materialization;
 - keep large results in artifacts and return small receipts;
@@ -616,15 +618,15 @@ Measure allocation, throughput, and latency across short/long, ASCII/Unicode, sp
 3. Full cryptographic artifact guards should precede fuzzy dedup work.
 4. Console summaries may report `near_output_candidates`, but must retain exact source references, model/profile identity, score/distance, and candidate wording.
 5. Hook projections may include already-computed fingerprints or membership state, but hooks do not compute large models or infer suppression authority.
-6. Search/index projections should share the Artifact receipt and guard contract with JSONL/Markdown/console providers.
-7. The port should reduce runtime overhead without expanding the agent-facing tool/schema surface.
+6. Search/index projections should share the Artifact receipt and guard contract with JSONL/Markdown/console providers while remaining backend capabilities.
+7. The port should reduce runtime overhead without expanding the agent-facing tool/schema surface or asking the agent to select algorithms.
 
 ## Open decisions
 
 1. Is `thermomapper-compat-v1` required as a public persisted profile, or only as a private conformance oracle?
 2. Should the first useful near-output profile be frozen-IDF BM25 weighting, an explicit constant-IDF/TF-only profile, or both?
 3. May Console v1 widen its short digest fields before external stabilization, or must full guards live only in the Artifact layer/v2?
-4. Should the pure ESM library begin under `mcp/para-agent/src/hashish`, or start as a shared science-facility package because jso-jackson will also consume it?
+4. Should the pure ESM library begin under `mcp/para-agent/src/capabilities/hashish`, or become a shared science-facility package only after a second real Node consumer appears?
 5. Which first concrete workload justifies MinHash/LSH or Bloom beyond an exact map and linear scan?
 6. Is real content-defined chunking needed in the first Artifact contract, or should the contract reserve its descriptor while implementation waits for a large mutable-file workload?
 

@@ -17,7 +17,7 @@ The three old projects are useful as architectural lineage, not as code to port.
 
 They also reveal why those boundaries matter. The old implementations repeatedly blurred launch with completion, file visibility with model exposure, physical duplication with memory promotion, advisory detection with enforcement, and JSONL storage with database correctness.
 
-The current four agent-facing layers should survive intact. “Garden” is an ingress pattern within the artifact plane, not a fifth subsystem. Durable knowledge promotion should remain an explicit reference-bearing boundary, not be smuggled into Console Journal or job events. Semantic supervision may observe any plane, while separately authorized governance may independently use that observation as evidence for its own intervention decision; advisory authority is never upgraded in place. Runtime components still enforce their schemas, authorization, leases, deadlines, cancellation, and resource bounds. The companion [`context-mode-cross-examination.md`](context-mode-cross-examination.md) further separates the Guidance layer from cross-cutting Harness Adapters and an out-of-band privileged Control Plane.
+The current four agent-facing layers should survive intact. “Garden” is an ingress pattern within the artifact plane, not a fifth subsystem. Durable knowledge promotion should remain an explicit reference-bearing boundary, not be smuggled into Console Journal or job events. Semantic supervision may observe any plane, while separately authorized governance may independently use that observation as evidence for its own intervention decision; advisory authority is never upgraded in place. Runtime components still enforce their schemas, authorization, leases, deadlines, cancellation, and resource bounds. The companion [`context-mode-cross-examination.md`](context-mode-cross-examination.md) further separates the Guidance layer from cross-cutting Harness Adapters and an out-of-band privileged Control Plane. [`backend-engine-architecture.md`](backend-engine-architecture.md) locates the many storage, serialization, query, and Hashish-derived mechanics beneath those agent-facing layers rather than turning the archaeology into a tool inventory.
 
 ## Method and source map
 
@@ -44,7 +44,7 @@ The code predates para-agent and is incomplete in places. It is evidence of recu
 | Central “supervisor” object | Retire as an abstraction; admit a coordinator only when it owns real runtime duties | Runtime implementation detail |
 | JSONL read-modify-rewrite without leases | Retire | Append-only truth plus disposable projections |
 | File stability, silence, or timeout as terminal job truth | Retire | Authoritative lifecycle-owner events |
-| Probabilistic stream-dedup hints | Implement deliberately through the Node-native Hashish port, but keep only for candidate nomination; prohibit equality, freshness, or exposure authority | Derived Artifact projection |
+| Probabilistic stream-dedup hints | Implement deliberately through the Node-native Hashish port, but keep only for candidate nomination; prohibit equality, freshness, or exposure authority | Backend-derived Artifact projection; no primitive MCP tool |
 
 ## Cybernetic-copilot
 
@@ -132,7 +132,7 @@ The snapshot reader is not salvageable: it scans files, silently drops malformed
 
 ## Refined architecture
 
-The archaeology does not require another agent-facing para-agent plane. It sharpens the existing boundaries; client adapters cross them rather than belonging inside the Guidance layer, and privileged administration stays outside the runtime:
+The archaeology does not require another agent-facing para-agent plane. It sharpens the existing boundaries; an in-process application facade composes backend providers beneath them, client adapters cross them rather than belonging inside the Guidance layer, and privileged administration stays outside the runtime:
 
 ```text
 console producers ── Console Journal provider ─────────────┐

@@ -16,6 +16,8 @@ The next useful shape has four distinct layers:
 
 Client adapters are not part of that fourth layer. They are cross-cutting boundary compilers that normalize native events, prove identity and effect capabilities, and format native responses. Privileged cross-client deployment is a separate out-of-band control plane, not a fifth agent-facing plane.
 
+Beneath Console, Artifact, and Job, para-agent also needs an internal capability substrate: an in-process application facade over engines for capture, storage, serialization, querying, projections, receipts, and lifecycle. That is implementation architecture, not a fifth model-visible layer and not a new family of primitive MCP tools.
+
 The common path should be short and economical, but the primitive console surface must remain available. The system should offer paved paths rather than a mandatory workflow language.
 
 ## Evidence and provenance
@@ -28,7 +30,9 @@ This synthesis builds on:
 - a direct audit of [`src/`](../../mcp/para-agent/src), [`CONSOLE-CONTRACT.md`](../../mcp/para-agent/contract/CONSOLE-CONTRACT.md), [`ParaConsole.psm1`](../../mcp/para-agent/capture/ParaConsole.psm1), and the relevant rector-codicis design documents;
 - the selective old-project archaeology and disposition analysis in [`project-archaeology.md`](project-archaeology.md).
 - the upstream and locally customized context-mode cross-examination in [`context-mode-cross-examination.md`](context-mode-cross-examination.md).
+- the engine/client boundary analysis in [`backend-engine-architecture.md`](backend-engine-architecture.md).
 - the direct Node port analysis for ThermoMapper Hashish, jso-jackson, and cybernetic-copilot in [`node-hashish-port-design.md`](node-hashish-port-design.md).
+- the algorithm-by-algorithm conceptual and application map in [`hashish-capability-inventory.md`](hashish-capability-inventory.md).
 
 The default `agy` journal contains failed login attempts rather than another completed report, so it was not treated as substantive design evidence.
 
@@ -209,6 +213,22 @@ Every event needs job, actor/writer, bound writer role, job generation or lease 
 
 Causal links and per-writer sequence define semantic ordering, but they do not create one cross-writer polling cursor. A multi-writer `job_wait` must use either a coordinator-assigned ingestion cursor or a vector cursor `{writer: seq}`. A globally meaningful total event order is unnecessary unless a real consumer requires it; if it does, one coordinator must assign it.
 
+## Backend capability substrate
+
+The Codex-Scientiae `jsonl_engine` comparison clarifies the implementation boundary. Its Python package owns store semantics; its PowerShell client hides runtime, process, protocol, and value-conversion impedance; its public cmdlets provide ergonomic calls. In para-agent's single Node runtime, the subprocess and CLI protocol should disappear, but the semantic boundary should remain:
+
+```text
+MCP handler → ParaApplication facade → Console / Artifact / Job engines
+                                      → JSONL, selector, digest, and Hashish capabilities
+                                      → mux and storage adapters
+```
+
+One MCP call should cross that boundary once per agent intent. The backend can then perform record-wise framing, capture, locking, sequencing, hashing, projection, publication, and cleanup without extra model turns. The agent chooses the task, target, requested evidence, and material lifecycle; it does not choose scratch paths, sidecars, sentinels, polling mechanics, serialization profiles, or hash primitives.
+
+MCP handlers should be nearly declarative: validate a public request, call one application method, and present its neutral result. The application facade owns operation identity, deadline/cancellation, response budget, retention, composition, typed partial outcomes, and receipt assembly. Engines provide measured facts and source guards. Stores do not know tool names or emit continuation prose; the MCP presenter maps a neutral continuation to the exact exposed `{tool, input}` pair.
+
+Hashish and jso-jackson-derived functionality live below the Artifact query/projection engine. A module, algorithm, or internal CLI verb becomes a public tool only when it represents a distinct agent decision, effect/permission boundary, and result contract. The full responsibility map, current `index.js` pressure points, and design-only migration sequence are in [`backend-engine-architecture.md`](backend-engine-architecture.md).
+
 ## Agent-facing guidance as an explicit layer
 
 The current system has tool descriptions and inherited habits, but no deliberate teaching surface connecting capabilities into efficient workflows. That layer should be designed rather than allowed to accrete.
@@ -255,7 +275,7 @@ Tool exposure and discovery remain separate from guidance and routing. A hook ca
 
 ## Node-native Hashish as a derived projection library
 
-The intended integration is a deliberate Node port of the canonical [`ThermoMapper/src/hashish`](../../../ThermoMapper/src/hashish) source, not a PowerShell/.NET bridge and not an ad hoc generic SimHash. The algorithms should live in a pure internal ESM library and surface through a few high-level Artifact operations rather than one MCP schema per primitive.
+The intended integration is a deliberate Node port of the canonical [`ThermoMapper/src/hashish`](../../../ThermoMapper/src/hashish) source, not a PowerShell/.NET bridge and not an ad hoc generic SimHash. The algorithms should live in a pure internal ESM capability library beneath the Artifact query/projection engine. They do not define a public operation catalog; an agent-level query or comparison may use them internally and disclose the relevant profile/model provenance in its receipt.
 
 Keep the result classes distinct:
 
@@ -340,21 +360,22 @@ The important guidance metrics are not subjective elegance: solo-tool turn rate,
 5. Which layer owns agent profiles, worktree policy, auth preflight, and optional caller-supplied verification/postconditions?
 6. What Claude events reliably mark a new context epoch, especially after automatic or manual compaction?
 7. What response budget should the Claude client profile recommend for known-needed final reports?
-8. Should primitive tools remain eagerly exposed, or can the client defer their full schemas behind the high-level surface?
-9. Should derivation and indexing live inside para-agent or behind separate Artifact providers using the same reference contract?
+8. Which primitive tools remain eagerly exposed after higher-level operations exist, and which schemas can be deferred without making the capabilities unusable in fixed-tool clients?
+9. Should the backend derivation/index providers begin inside para-agent, or become shared packages only after a second real consumer appears?
 10. Where should the semantic guidance source and out-of-band client control plane live so neither becomes para-agent runtime authority?
 11. Which Node Hashish profile should ship first: frozen-IDF SimHash, an explicit constant-IDF/TF-only profile, or only exact digest/verification primitives until a corpus lifecycle exists?
 
 ## Recommended next design artifacts
 
-Before implementation, write five small contracts rather than another umbrella document:
+Before implementation, write six small contracts rather than another umbrella document:
 
 1. **Console v1 conformance errata** — explicit corrections, compatibility decision, and executable invariant tests.
-2. **Artifact reference and receipt contract** — provider-neutral identity, guard, selector, completeness, and structured continuations.
-3. **Job exchange contract** — states, typed talk-back, causal links, budgets, and report artifacts.
-4. **Harness routing and capability contract** — native observations, typed decision domains, exact effect support, identity quality, and decision receipts.
-5. **Guidance and observability profile** — one semantic guidance source, adapter-visible projections, measurement basis, and explicit unknowns.
+2. **Backend application boundary** — neutral operation context/result, cancellation, budgets, retention, errors, and dependency rules for MCP handlers versus engines.
+3. **Artifact reference and receipt contract** — provider-neutral identity, guard, selector, completeness, and structured continuations.
+4. **Job exchange contract** — states, typed talk-back, causal links, budgets, and report artifacts.
+5. **Harness routing and capability contract** — native observations, typed decision domains, exact effect support, identity quality, and decision receipts.
+6. **Guidance and observability profile** — one semantic guidance source, adapter-visible projections, measurement basis, and explicit unknowns.
 
 The skill should then be drafted against those contracts as the teaching interface over them. This ordering prevents guidance from fossilizing accidental details of the current 13-tool prototype while keeping the eventual workflow open-ended.
 
-The Hashish descriptor and source/model guards belong inside the Artifact contract rather than a sixth umbrella contract. Implementation should begin with donor fixtures and exact digests only after that vocabulary is stable.
+The Hashish descriptor and source/model guards belong inside the Artifact contract rather than another umbrella contract or an MCP surface. Implementation should begin with donor fixtures and exact digests only after that vocabulary is stable.
