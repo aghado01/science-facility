@@ -8,6 +8,10 @@
 
         & "D:\aghado01\science-facility\utils\chat-export\codex-export\Export-CodexChat.ps1"
 
+    The command above is the complete agent contract. Do not read or dot-source
+    this script or its helper modules merely to learn how to export; inspect the
+    implementation only when the user explicitly asks to debug or change it.
+
     Report the returned paths. Do not read the generated transcript back into
     the task context.
 

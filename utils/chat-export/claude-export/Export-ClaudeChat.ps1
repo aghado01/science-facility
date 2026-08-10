@@ -3,8 +3,11 @@
     Export a Claude Code chat thread to markdown. The agent-facing entry point.
 
 .DESCRIPTION
-    Call this script directly with `&` — it dot-sources what it needs and takes
-    bound parameters from the calling shell. Nothing to load first:
+    Call this script directly with `&`. The command below is the complete agent
+    contract: the wrapper resolves the current session, loads its implementation,
+    and applies defaults. Do not read or dot-source this script or its helper
+    modules merely to learn how to export; inspect implementation only when the
+    user explicitly asks to debug or change the exporter.
 
         & "D:\aghado01\science-facility\utils\chat-export\claude-export\Export-ClaudeChat.ps1" `
             -SessionId $env:CLAUDE_CODE_SESSION_ID
@@ -37,8 +40,9 @@
 
 .OUTPUTS
     PSCustomObject { MarkdownPath, SessionId, ProjectName, ThreadId }
-    Report the path. Do not read the file back — it is the conversation you just
-    had, and pulling it into context is what this tool exists to avoid.
+    Report the returned path. Do not read the generated transcript back into the
+    conversation; avoiding that redundant context load is part of this command's
+    contract.
 
 #>
 [CmdletBinding()]

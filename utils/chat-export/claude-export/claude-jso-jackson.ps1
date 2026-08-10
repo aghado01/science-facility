@@ -21,7 +21,8 @@
 #
 # DESIGN CONTRACT
 # ---------------
-#   - This file IS a user-facing entry point. jso-jackson.ps1 is not.
+#   - This file is an implementation library. Agents invoke Export-ClaudeChat.ps1
+#     directly and do not need to inspect or dot-source this file.
 #   - Takes JsonElement[] from jso-jackson's Stream(), transforms to annotated
 #     JSONL output.
 #
@@ -38,8 +39,10 @@
 #   - Depth is computed automatically — never hardcoded.
 #
 #   DEDUP:
-#   - Assistant record dedup: last occurrence wins per message.id.
-#   - Uses bloom filter + HashSet hybrid from base (no false negatives).
+#   - Claude persists one record per content block and reuses message.id for every
+#     block in one assistant response. message.id is therefore not a record key.
+#   - Continued sessions copy prior history while preserving each record's uuid.
+#     Exact historical copies are deduplicated by uuid; the later copy wins.
 #
 #   TOOL MATCHING:
 #   - Two-pass: pre-scan all records in Get-ClaudeExchanges to build a global
@@ -466,8 +469,11 @@ function Export-ClaudeThread
     .SYNOPSIS
         Full pipeline: discover thread → snapshot all files → merge → write unified JSONL + .jidx.
     .DESCRIPTION
-        First deliverable: flat chronological merged JSONL with all sessions and subagents,
-        deduplicated on message.id (last wins), minimally filtered, annotated with provenance.
+        Flat chronological merged JSONL with all sessions and subagents, exact copied-history
+        records deduplicated on uuid (last wins), minimally filtered, and annotated with provenance.
+
+        Distinct records that share message.id are retained. Claude uses one such record for each
+        thinking, text, or tool-use block in a multi-block assistant response.
 
         Writes to $WorkingDir/raw/ (per-file snapshots) and $WorkingDir/merged/ (unified output).
 
@@ -572,9 +578,13 @@ function Export-ClaudeThread
     # Collect all annotated records into a single list for global timestamp sort
     $allRecords = [System.Collections.Generic.List[string]]::new()
 
-    # message.id dedup tracker — global across all sessions.
-    # Stores index into $allRecords so we can replace with later occurrence.
-    $msgIdIndex = [System.Collections.Generic.Dictionary[string, int]]::new()
+    # Record UUID dedup tracker — global across all sessions. Continued sessions
+    # copy prior records with the same uuid while changing session-level envelope
+    # fields. Keep the later copy so its provenance reflects the selected leaf.
+    # Never deduplicate on message.id: one assistant response legitimately spans
+    # several records with that same id.
+    $recordUuidIndex = [System.Collections.Generic.Dictionary[string, int]]::new(
+        [System.StringComparer]::Ordinal)
 
     # Stats
     [int]$totalRead = 0
@@ -617,20 +627,23 @@ function Export-ClaudeThread
                 continue
             }
 
-            # Assistant dedup: if message.id exists and we've seen it before, replace
-            $msgId = [JsonlTraversal]::GetElementValue($el, 'message.id')
+            # Exact copied-history dedup: if this record uuid already appeared in
+            # an earlier session snapshot, replace that copy with this later one.
+            $recordUuid = [JsonlTraversal]::GetElementValue($el, 'uuid')
 
-            if ($null -ne $msgId -and $msgId -is [string] -and $msgId.Length -gt 0)
+            if ($null -ne $recordUuid -and
+                $recordUuid -is [string] -and
+                $recordUuid.Length -gt 0)
             {
-                $msgIdStr = [string]$msgId
-                if ($msgIdIndex.ContainsKey($msgIdStr))
+                $recordUuidString = [string]$recordUuid
+                if ($recordUuidIndex.ContainsKey($recordUuidString))
                 {
                     # Replace earlier occurrence with this one (last wins)
-                    $prevIdx = $msgIdIndex[$msgIdStr]
+                    $prevIdx = $recordUuidIndex[$recordUuidString]
                     $allRecords[$prevIdx] = $null  # mark for removal
                     $totalDeduped++
                 }
-                $msgIdIndex[$msgIdStr] = $allRecords.Count
+                $recordUuidIndex[$recordUuidString] = $allRecords.Count
             }
 
             $allRecords.Add($annotatedJson)
@@ -647,7 +660,9 @@ function Export-ClaudeThread
 
     # Sort by timestamp (extracted from the JSON string)
     # Parse each record to get timestamp for sorting, then sort
-    $sortable = [System.Collections.Generic.List[System.Tuple[string, string]]]::new($finalRecords.Count)
+    $sortable = [System.Collections.Generic.List[System.Tuple[string, long, string]]]::new(
+        $finalRecords.Count)
+    [long]$sourceOrdinal = 0
     foreach ($json in $finalRecords)
     {
         $tsKey = ''
@@ -661,14 +676,20 @@ function Export-ClaudeThread
             }
         }
         catch {}
-        $sortable.Add([System.Tuple[string, string]]::new($tsKey, $json))
+        $sortable.Add([System.Tuple[string, long, string]]::new(
+                $tsKey, $sourceOrdinal, $json))
+        $sourceOrdinal++
     }
 
-    # Stable sort by timestamp string (ISO 8601 sorts lexicographically)
+    # Stable sort by timestamp string (ISO 8601 sorts lexicographically), then
+    # original traversal ordinal for records that share an exact timestamp.
     $sortedArray = $sortable.ToArray()
-    [System.Array]::Sort($sortedArray, [System.Comparison[System.Tuple[string, string]]] {
+    [System.Array]::Sort($sortedArray, [System.Comparison[System.Tuple[string, long, string]]] {
             param($a, $b)
-            return [string]::Compare($a.Item1, $b.Item1, [System.StringComparison]::Ordinal)
+            $timestampComparison = [string]::Compare(
+                $a.Item1, $b.Item1, [System.StringComparison]::Ordinal)
+            if ($timestampComparison -ne 0) { return $timestampComparison }
+            return $a.Item2.CompareTo($b.Item2)
         })
 
     # --- Phase 3: Write merged JSONL + .jidx ---
@@ -695,7 +716,7 @@ function Export-ClaudeThread
     {
         foreach ($entry in $sortedArray)
         {
-            $jsonLine = $entry.Item2.Trim()
+            $jsonLine = $entry.Item3.Trim()
             if ([string]::IsNullOrWhiteSpace($jsonLine)) { continue }
 
             $offsets.Add($bytePos)
@@ -736,6 +757,7 @@ function Export-ClaudeThread
         TotalSourceRecords = $totalRead
         AfterFilter        = $totalFiltered
         Deduped            = $totalDeduped
+        DedupKey           = 'uuid'
         MergedRecords      = $writtenCount
         SessionCount       = $manifest.SessionCount()
         SubagentCount      = ($snapshots | Where-Object { $_.IsLateral }).Count
