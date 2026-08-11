@@ -394,6 +394,34 @@ specifically **does not** make shard packing wrong:
 The one live rule that follows is narrow: don't *publish* a layer 2 number where
 a reader will spend it as an offset or an exact length. Packing is not that.
 
+**Naming grade — `Span` measures content, `Size` bounds a container (user,
+2026-08-10).** The naming corollary, and it binds on the modules **not yet
+written** rather than on anything in service. `Span` is reserved for numbers
+stating how much *content* something actually is: `Attributes.SpanBytes` (layer
+2), the tree manifest's byte spans and the rendered row `length` (layer 3).
+`Size` is for numbers stating what a *container* holds or may hold: on-disk
+`SizeBytes` (layer 1), and every packing budget. Under that split a budget knob
+named `MaxShardSpanBytes` is misnamed — it is a policy ceiling on a shard file,
+not a measurement of content extent, and borrowing the measurement family's
+vocabulary for it invites exactly the layer conflation the section above exists
+to prevent. `MaxShardSizeBytes` is the forward name.
+
+This falls on a seam the v3 module plan already draws: **`rs.core.shards`
+(arrangement / planning) speaks `Size`** for budgets and packing ceilings, while
+**`rs.core.serialize` (emission) is where measured spans come from.** Note the
+rule does *not* disturb the reconciliation queued above — `Partition-Files`
+probes an entry's content extent, which is genuinely a span, so aligning
+`ByteSpan` → `SpanBytes` stays correct. It is only the *budget* that changes
+family.
+
+**Scope: forward-only.** LTS (`RepoSnapshotLts.psm1`) and the legacy
+`rs.core.sharding` — relegated to LTS service, superseded by `rs.core.shards` —
+keep `MaxShardSpanBytes` unchanged. Both are in active use until v3 stands up,
+and the label is emitted into the tree manifest's summary line
+(`Strategy | Grouping | Packing | MaxShardSpanBytes | Created | Shards`), so
+renaming there would be a payload-visible change to a running tool for no
+present gain.
+
 **Lean payload, diagnostics sidecar:** reposnapshot payloads are as lean as
 possible, with options ensuring high visibility and auditability — through
 the *diagnostics channel*, not payload bloat. (Extended 2026-07-29: the

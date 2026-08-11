@@ -61,6 +61,20 @@ Same construct can play different roles per relationship: `#Requires` is
   corrupted by not knowing them. Do not "fix" packing to chase serialized
   exactness — the only real rule is narrower: never publish a layer 2 number
   where a reader will spend it as an offset or an exact length.
+- **Naming grade: `Span` measures content, `Size` bounds a container** (user,
+  2026-08-10). The naming corollary of the rule above, and it binds on code
+  **not yet written**. `Span` belongs to numbers stating how much *content*
+  something actually is — `Attributes.SpanBytes`, the tree manifest's byte
+  spans, the rendered row `length`. `Size` belongs to numbers stating what a
+  *container* holds or may hold — on-disk `SizeBytes`, and every packing
+  budget. A budget named `…SpanBytes` borrows the measurement family's
+  vocabulary for what is only a policy knob, which is precisely the conflation
+  the rule above warns about. So v3's new `rs.core.shards` (arrangement /
+  planning) names its budgets with `Size`, while `rs.core.serialize`
+  (emission) is where measured spans come from — the planned module split is
+  already drawn on this seam. **Forward-only:** LTS and the legacy
+  `rs.core.sharding` keep `MaxShardSpanBytes` as-is; they are in service and
+  deliberately not renamed.
 - **PowerShell ingesting PowerShell**: pipeline code vs ingested code —
   always ask which role a construct is playing.
 
