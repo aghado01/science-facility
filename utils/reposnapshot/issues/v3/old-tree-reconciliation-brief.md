@@ -39,6 +39,14 @@ replayed-then-superseded; `rs-attributes.ps1` took both in one docstring block.
   bullet was placed adjacent to `fetch / materialize` (its actual subject) instead
   of after `Codified guidance` where the old tree had it.
 
+**Two of this brief's own premises were wrong — corrected inline in the ⚠ section
+below.** (1) The do-not-regress list named 23 files; only **2** were ever
+canonical-ahead. The other 21 are byte-identical to old — the apparent divergence
+was CRLF-vs-LF, which makes a raw `diff` report whole files as rewritten. (2)
+`58a1a264` is not an ancestor of old HEAD, so no commit range scopes this work.
+Neither error affected what landed (every delta was verified against blobs, not
+working-tree diffs), but both would mislead the next reader.
+
 **★ Doctrine consequence, flagged not re-opened.** Landing B+C brings the user's
 2026-08-09 adjudication into canonical: **SpanBytes stays in `rs-attributes` as a
 planning-grade metric; the serializer owns only `length` + offsets.** This
@@ -70,13 +78,35 @@ absolute paths"). So:
 - **Re-apply each delta ON canonical's current file and review for conflict — never `cp`
   old over canonical.** The verified-additive ones are safe; the rest need a merge.
 - **Do NOT re-implement path-repointed / canonical-ahead files from old** — that would
-  regress the migration path fixes. Those are: `README.md`, `.gitignore`, `.snapignore`,
-  `_rs.scratch.md`, `rs.core.ingest.psm1`, `rs.core.internals.psm1`,
-  `processors/chain-executor.ps1`, `processors/rs-indent.ps1`, `processors/tests/*`,
-  `issues/v3/feedback/*`, `grok-*`, `toc-template/reports/*`, `TODO.md`s. They differ
-  because canonical changed them.
+  regress the migration path fixes. Those are: **`README.md` and `_rs.scratch.md`.**
+  That is the whole list.
 - **Already shared (predate migration, in canonical):** colonel stream-collation +
   engine-state ban, the false-green fix (`tests/run-all.ps1`), the Bare fix.
+
+> **Corrected 2026-08-10 (on completion).** This bullet originally also named
+> `.gitignore`, `.snapignore`, `rs.core.ingest.psm1`, `rs.core.internals.psm1`,
+> `processors/chain-executor.ps1`, `processors/rs-indent.ps1`, `processors/tests/*`,
+> `issues/v3/feedback/*`, `grok-*`, `toc-template/reports/*` and the `TODO.md`s.
+> **All 21 of those are byte-identical between old `54ee33b` and canonical** —
+> verified file by file. They were never canonical-ahead and needed no protection.
+>
+> The false signal was **line endings**: the old working tree is CRLF, canonical is
+> LF, so a raw `diff -rq` reports every one of those files as differing and a whole
+> file as rewritten. Compare with `diff --strip-trailing-cr`, or against blobs via
+> `git show`, before concluding anything about divergence.
+>
+> Ground truth for what canonical actually changed post-migration: `3586584`
+> touched **2** reposnapshot files (`README.md`, `_rs.scratch.md`, one path line
+> each — its other 15 files were jso-jackson), and `834b886` only deleted
+> `.snapshot/` artifacts and added `opus-reposnapshotV3-LTS-updates.md`. No source
+> file under `reposnapshot-v3/` was ever touched on the canonical side.
+
+> **Also corrected: `58a1a264` is NOT an ancestor of old HEAD.** The subtree import
+> is genuinely `23253d4` "from old `@58a1a264`", but that commit sits on a line the
+> old repo's HEAD diverged from — so `git log 58a1a264..HEAD` in the old repo
+> returns its *entire* 122-commit history, not the thread. Do not scope this work
+> with a commit range. Compare trees, or name the thread's commits explicitly as
+> the theme sections below do.
 
 Review a delta with `git -C D:/aghado01/utils/reposnapshot show <hash> -- <path>`.
 
