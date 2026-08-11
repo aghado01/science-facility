@@ -1,6 +1,52 @@
 # Old-tree → canonical reconciliation brief
 
-**Status:** to review + re-implement · **Filed:** 2026-08-10
+**Status:** ✓ DONE — A, B and C all landed 2026-08-10 · **Filed:** 2026-08-10
+
+## Closing record (2026-08-10)
+
+All three themes re-implemented on canonical. Battery green: **14 suites · 723
+passed · 0 failed** — the same figures the old-tree commits reported, as expected
+for a docstring/doc-only pass.
+
+**Landed additively, verified byte-identical to old `54ee33b` afterward:**
+`processors/rs-attributes.ps1`, `processors/file-read.ps1`, `rs.core.assemble.psm1`,
+`rs.core.template.ps1`, `issues/v3/rs.core.assemble-design.md`,
+`issues/v3/payload-manifest-ledger.md`. All six had a clean additive base — canonical
+was byte-identical to the old *pre*-delta blob, so no merge was needed and nothing
+was regressed. B and C were written in their **final post-C form** rather than
+replayed-then-superseded; `rs-attributes.ps1` took both in one docstring block.
+
+**Landed with deliberate divergence:**
+- `AGENTS.md` — both hotspot bullets added in post-C form, above the existing
+  `PowerShell ingesting PowerShell` bullet. The migration-note section canonical
+  added after the subtree move was left untouched.
+- `issues/v3/v3-consolidation-plan.md` — §B.6e and the escape-regime block landed;
+  the removed packing adjudication was never transferred (C withdrew it). **One
+  correction on transfer:** the "Two things still the user's call" paragraph was
+  stale — `113218d` settled the sigil by production measurement and demoted the
+  tokenizer install to optional, but left item (2) standing as though a measurement
+  were still owed before committing to substitution. Narrowed to the one genuinely
+  open call (preserve vs normalize EOLs), with the supersession noted inline.
+- `reposnapshot-v3/CHANGELOG.md` — the six old-tree entries transferred verbatim,
+  plus **one new entry written here**: `f8bf3db fb71567 113218d 2ad9628 54ee33b`
+  shipped without changelog records, so the log's last word on the sigil was
+  "still owed: a real tokenizer measurement" while the plan and shard-format-notes
+  recorded it settled. The new top entry closes that span (measurement settles `\`,
+  Compaction block sited in the tree, MCP decoded-spans consequence) and is marked
+  as written on transfer.
+- `issues/mcp-surface.md` — the decoded-spans bullet was **merged, not appended**:
+  canonical carries an uncommitted 2026-08-10 rewrite of §Surface sketch, so the
+  bullet was placed adjacent to `fetch / materialize` (its actual subject) instead
+  of after `Codified guidance` where the old tree had it.
+
+**★ Doctrine consequence, flagged not re-opened.** Landing B+C brings the user's
+2026-08-09 adjudication into canonical: **SpanBytes stays in `rs-attributes` as a
+planning-grade metric; the serializer owns only `length` + offsets.** This
+supersedes the `opus-updates` session's "byte-exact packing / move SpanBytes to
+serialization" lean, per this brief's own instruction. The `measure → plan →
+execute` bracket is therefore *not* needed. Re-opening it is a deliberate act.
+
+---
 
 ## Why this exists
 

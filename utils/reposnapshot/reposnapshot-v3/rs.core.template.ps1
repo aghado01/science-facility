@@ -29,6 +29,19 @@
     (template string, instruction sets) as declarative data. The template
     fixes the artifact's SECTION SEQUENCE; models supply content —
     operation-order doctrine, writer level.
+
+    QUEUED — Compaction section (design 2026-08-09, not yet implemented):
+    the codec's cipher key belongs here, as an optional `{{#if Compaction}}`
+    block placed BEFORE the Tree block (adjacent to Instructions — both are
+    reader guidance), plus a model-builder field. The tree file is the
+    payload's exclusive entrypoint and is read first, which is what makes it
+    the correct carrier: the key precedes all shard content structurally, not
+    by convention. Contents are a RECEIPT of substitutions actually made, not
+    a catalog of what the codec can do — an absent entry is information. Each
+    entry names the target character AND its code point (`\n -> LF U+000A`);
+    a bare `{newline}` would blur the LF/CR/CRLF distinction the codec's
+    preserve stance exists to maintain. Spec: issues/shard-format-notes.md
+    §"The Compaction block"; obligation: payload-manifest-ledger #16.
 #>
 
 # ---------------------------------------------------------------------------

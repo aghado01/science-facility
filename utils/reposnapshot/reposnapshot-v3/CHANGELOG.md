@@ -1,5 +1,302 @@
 # Changelog — rs.core - formerly threadparser/v2-new
 
+## 2026-08-09 — Codec settled: `\` stands on measurement; cipher key gets a home
+
+Closes the sigil thread the four entries below leave open, and sites the key.
+*(Record written 2026-08-10 during the old-tree → canonical transfer — this span
+of the work shipped without changelog entries; the doc changes themselves are
+contemporaneous.)*
+
+**Escape-layer collision, then measurement — `\` stands.** The strongest
+objection raised was that `\` is the escape character in exactly the languages
+queued for ingestion (C#, JS/TS, Java, Python, regex), so a backslash codec
+stacks its layer on the source's and `\\n` reads as *literal backslash-n* under
+language semantics — the payload stops showing the reader what the file says.
+Sound in kind, and settled by scanning a production LTS C# snapshot
+(`project-snapshots/ThermoMapper/src_20260701_122622`, 70 shards): `\n` 51617
+(87.8%), `\"` 7050 (12.0%), **`\\` 127 (0.22%)** — ~1.8 collision sites per
+shard, a 0.25% tax. The earlier +3.4% figure was a PowerShell artifact (Windows
+paths, regex), not a property of the C-family targets the concern was about.
+The tokenizer measurement "still owed" below therefore drops from blocking to
+optional; Control Pictures stay on file as the fallback.
+
+The consequential row is the other one: **12% of every escape in that payload is
+`\"`, pure JSON residue that length-prefix framing makes unnecessary** — v3 drops
+it by construction, which beats any sigil choice on legibility. Filed against LTS
+in `lts-v3-transfer-audit.md` so a writer does not reintroduce it by reaching for
+`ConvertTo-Json` out of habit.
+
+**The dictionary ships in the artifact, and its home is the tree.** Carrier
+settled first (same place the column schema is already declared — existing
+doctrine reused, not new machinery), then sited concretely: an optional
+`Compaction` block in the **tree file**, placed before the Tree block. The tree
+is the payload's exclusive entrypoint and is read first, so the key precedes all
+shard content *structurally* rather than by a rule someone has to remember. It is
+a **receipt of substitutions actually made**, not a capability catalog — an absent
+`\r` entry tells a reader no CR survived. Each entry names the target character
+*and* its code point (`\n -> LF U+000A`), since a bare `{newline}` would blur the
+LF/CR/CRLF distinction the preserve stance exists to keep. Implementation site
+queued in the `rs.core.template.ps1` docstring (`{{#if Compaction}}` section plus
+a model-builder field). Ledger #16 carries the full statement.
+
+**Per tree, not per shard — because the MCP path does not need the key at all.**
+Fetch returns content with the codec already **undone**, so a reader behind a tool
+never meets an encoded character. The cipher key exists for the tool-free path,
+which is the same progressive-enhancement shape the surface is already designed
+around: the tool era makes the key *unnecessary* rather than reimplementing it.
+Two riders recorded on `issues/mcp-surface.md` — the MCP becomes **the only real
+decoder in the system**, which turns the codec's totality requirement from design
+discipline into an operational dependency the day it ships; and **decoded spans
+break byte-offset arithmetic**, since tree offsets address the *encoded* artifact,
+so the fetch contract must either return offsets alongside or make the decode
+explicit in the response shape.
+
+## 2026-08-09 — Codec: dictionary is a cipher key; TAB literal; LTS quote-escape defect
+
+Four clarifications from the user, each changing a rationale rather than a rule.
+
+**The manifest is never a decoder.** Payloads are prepared to be read **as-is,
+without tooling** — that is the format's premise. So the substitution dictionary is a
+**cipher key addressed to the reading model**, not a decoder spec: it exists so the
+model has absorbed the sigil↔character correspondence before it meets one and can
+carry the mapping internally while reading. Consequences recorded: it must sit
+*ahead* of the content it explains (header/row-zero or tree, never a trailer), and it
+should read as a short legible correspondence rather than a formal grammar. Ledger
+#16 updated — it had the carrier but the wrong purpose attached.
+
+**Round-trip is a design constraint, not an operational feature.** No decoder is
+being written and code is never rehydrated from snapshots; the imperative is that it
+*could* be, if a span were fed to a compiler. Keep the discipline — it is what rules
+out silent normalization and lossy folds — but do not spend reader tokens buying
+fidelity nobody exercises. This is now the stated reasoning behind escaping the hard
+set rather than everything JSON would.
+
+**TAB stays literal.** It is soft by the line-invariant rule (a tab cannot break a
+row) and is ordinary text in every corpus, unlike the rest of C0. Escaping costs 2
+bytes where the character costs 1, for no invariant benefit; LTS's `\t` was
+`ConvertTo-Json` residue (6 occurrences in 70 shards). The line to draw is
+**text-vs-not, not C0-vs-not**.
+
+**Tab-run substitution evaluated and declined.** The LTS-era token-pinching tactic
+does not carry forward: `rs-indent` (`detab` / `min-indent-2` / `tabify` — tabify
+exists precisely to collapse leading space runs) and `format-ws` already own
+indentation shape, so by serialization the runs are normalized and a serializer pass
+would re-solve a solved problem on data shaped to defeat it. **Third instance of one
+principle, now named: the serializer does not perform compaction a content processor
+already owns.** EOL normalization, indentation shape, whitespace runs — all content
+stage, all opt-in per profile, all receipted in `Processing`. A compaction with no
+receipt is one nobody can audit.
+
+**LTS quote-escaping filed as a defect** (`lts-v3-transfer-audit.md`): 7050 `\"`
+escapes, 12.0% of all escapes in the measured payload, pure JSON residue that
+length-prefix framing makes unnecessary. v3 drops it by construction; the note exists
+so a writer does not reintroduce it by reaching for `ConvertTo-Json` out of habit.
+
+## 2026-08-09 — Sigil resolved to `\` on token economy (supersedes Control Pictures)
+
+User raised token cost against the 3-4 byte markers. Measured, and it **inverts the
+recommendation** — the interim Control Pictures pick optimized reader legibility at
+a price this project should not pay.
+
+**The governing insight: rarity and token-cheapness are the same axis, inverted.**
+BPE vocabularies are frequency-built, so a code point rare enough to be *safe*
+(nobody writes it) is rare enough to be *out of vocabulary* — and that means
+byte-fallback at ~1 token per UTF-8 byte. This is structural, not incidental, and it
+condemns the whole exotic-character direction the question was pointed at: Control
+Pictures, ligatures (ﬁ), the small-punctuation blocks (․ ‥ ⁃), zero-widths. All land
+at 3-4 bytes ≈ 3-4 tokens against a raw newline's ~1. On a 2 MB / ~50k-line shard,
+Control Pictures cost **+100k tokens** — a rounding error in bytes, a catastrophe in
+the currency actually being spent.
+
+`\n` is near-certainly a *single merged token* in any code-trained vocabulary. Being
+the most common escape sequence in existence is exactly what buys that, and it is
+unavailable to anything chosen for obscurity.
+
+**The objection to `\` was never token cost — it was self-escaping. So it was
+measured**, on the corpus most hostile to it (PowerShell: Windows paths *and* regex):
+
+| corpus | newlines | `\` | tax |
+|---|---|---|---|
+| `.ps1`/`.psm1`, 40 files, 677 KB | 16123 | 545 | **+3.4%** |
+| `.md`, 24 files, 432 KB | 6809 | 228 | **+3.3%** |
+
+The earlier "unbounded worst case" framing was true in theory and negligible in
+fact. The same scan disqualified alternatives outright: backtick **64.4%** in
+markdown (and PowerShell's own escape character), `@` 7.2% in PS. Tilde is genuinely
+rare (0% PS / 1.4% md), but a rare ASCII prefix makes `~n` an uncommon byte pair —
+likely 2 tokens where `\n` is 1. Newline escapes outnumber self-escapes ~30:1, so
+per-newline cost dominates every time.
+
+Kept on file rather than discarded: **Control Pictures** for payloads meant for human
+inspection or debugging rather than model consumption; **RS U+001E** as the one
+genuinely cheaper scheme (1 byte, a C0 delimiter by design) — rejected on transport
+risk, since raw C0 bytes trip the binary-classification heuristics external tools
+apply to `.txt`, a hazard our NUL-only guard would not catch.
+
+**Still owed: a real tokenizer measurement.** The token figures are estimated from
+BPE structure. The direction is robust; the exact multiples are not, and the decision
+now rests on them. *(Superseded by the entry above — the production-payload scan
+settled it and demoted this to optional.)*
+
+## 2026-08-09 — Sigil: strip-zwsp RESERVES the invisibles (correction)
+
+**User correction to the entry below, and it inverts that argument.** `strip-zwsp`
+deleting the zero-width characters does not disqualify them as escape markers — it
+**reserves** them. The op runs at the content stage, upstream of serialization, so
+those code points are guaranteed absent from anything the serializer sees.
+Collision-freedom for free, and the same structural move the format already makes
+with ` | `, which is safe because `|` is filesystem-invalid rather than because
+anything escapes it.
+
+The "destroys its own output on re-ingest" framing was overweighted and is demoted
+to a noted property: re-ingest does delete invisible markers where `\n` or ␊ would
+survive as text, but payloads are ephemeral views and snapshot output is normally
+excluded from ingest.
+
+Rider added: the codec should **not depend** on the reservation — `format-ws` is
+opt-in and its op list is caller-subsettable, so the guarantee is profile-dependent.
+The serializer self-escapes by doubling regardless; the reservation's real value is
+that the escape never fires.
+
+Section rewritten as **two coherent designs** rather than a verdict:
+
+- **Reserved-invisible prefix** — U+2060 WJ, 4 bytes/newline, pristine-looking
+  payload. Pool size forces a prefix mechanism: ~6 reserved code points against the
+  33 needed for 1:1 over C0+DEL. Noted: **not ZWSP** — U+200B is a break
+  *opportunity*, semantically backwards for a marker whose job is holding a record
+  on one line.
+- **Visible 1:1 substitution** — Control Pictures, 3 bytes/newline, fixed-width
+  table lookup.
+
+Recommendation still favors visible, but now rests only on the two objections that
+survive the correction: **silent** corruption in transit (stripped invisibles leave
+no trace — the worst failure mode for a byte-addressed format, where a mangled ␊ at
+least fails loudly), and reader legibility on the project's primary axis (an
+invisible marker hides line structure from the model the payload exists to serve).
+Counter-case recorded as genuine: for MCP/local delivery the transport objection
+weakens, and a per-artifact split is defensible since #16 declares the codec anyway.
+
+## 2026-08-09 — Escape regime: scope corrected by the length prefix; sigil analysis
+
+Follow-up to the entry below, correcting its framing. **The length prefix means
+escaping is never needed for parsing** — framing does not depend on encoding — so
+the requirement is narrower than that entry implied. Rescoped in
+`shard-format-notes.md` §"Escape regime — codec spec":
+
+- **HARD**: the one-record-per-line invariant only. LF, CR, VT, FF, NEL, LS, PS.
+- **SOFT**: remaining C0 + DEL — reader hygiene and a total inverse, not
+  load-bearing.
+- Everything JSON escapes for its own parser (quotes, delimiters, `/`) is simply
+  not our problem.
+
+The prior entry called backslash-escaping "non-negotiable". **It is conditional on
+the sigil, not universal** — it binds only if the escape marker can occur in
+source. Choosing a marker that cannot dissolves the obligation instead of
+discharging it.
+
+**Sigil question answered (user asked about invisible codepoints): no, and the
+evidence is in-house.** Every zero-width candidate — ZWSP, ZWNJ, ZWJ, WJ, BOM, SHY
+— is deleted by `format-ws`'s own default-on `strip-zwsp` op, whose character class
+is exactly the invisible-sigil shortlist. Since snapshots get re-ingested, an
+invisible sigil is a codec that destroys its own output on the second pass. They
+are also undebuggable and the most transport-fragile option, against a format whose
+`.txt` extension exists to survive web-chat mangling. PUA survives but renders as
+tofu.
+
+**Recommended: 1:1 codepoint substitution over Control Pictures** — U+2400+n for
+C0 (verified arithmetic: LF→␊, CR→␍, TAB→␉, VT→␋, FF→␌, ESC→␛), U+2421 for DEL
+(U+2420 is SPACE). Covers C0+DEL exactly, matching the coverage target. Visible and
+self-documenting, NFC-stable, survives every pipeline op, and **zero occurrences
+across 114 of this repo's own source files**. No prefix means no prefix collision.
+Specified loose ends: ␛+4hex fallback for NEL/LS/PS (no pictures — not C0), and
+doubling for self-collision.
+
+**Not committed — a token measurement is owed first.** 3 UTF-8 bytes vs 2 for `\n`
+on the most frequent escape (one per line). The schemes differ in cost *shape*, not
+just size: backslash taxes backslash-heavy content with an unbounded worst case;
+substitution taxes every line flatly. Measure on real corpus material.
+
+## 2026-08-09 — Escape regime spec: newline handling, and the backslash landmine
+
+Spec only, ahead of the serializer that will implement it —
+`shard-format-notes.md` §"Escape regime — codec spec". Requirement from the user:
+the serialization escaping must handle the different kinds of newline, LF and
+CRLF at minimum.
+
+`ConvertTo-Json`'s policy was **measured rather than recalled** (pwsh 7.6.3) and
+recorded in the doc as a reference point: it **preserves** EOLs rather than
+normalizing (LF/CR/CRLF escape distinctly and round-trip byte-exact), escapes past
+the RFC minimum to cover NEL/LS/PS, and leaves DEL raw.
+
+Requirements set for our own regime:
+
+- **Escape the backslash.** The correctness landmine, and the reason #16 is
+  load-bearing rather than tidy: LTS gets `\\` free from its `ConvertTo-Json` hop
+  (`RepoSnapshotLts.psm1:2112`), and hand-authoring the codec forfeits it. Source
+  code is full of literal backslash-n, which without it is indistinguishable from
+  an encoded newline — an ambiguity no length prefix can resolve. Textbook case of
+  the AGENTS.md caveat about barebones forfeiting inherited guarantees.
+- Escape the full C0 range plus NEL/LS/PS, not just LF/CRLF — the
+  one-record-per-line invariant is only as strong as the rarest terminator it
+  forgets.
+- Keep CR distinct from LF, so CRLF stays recoverable.
+- Stay total; don't lean on the upstream NUL guard. Note `format-ws`'s `eof-eot`
+  op deliberately appends U+0004 *to content*, so C0 controls provably reach the
+  serializer.
+
+One fork left to the user: preserve EOLs vs normalize. The doc recommends
+**preserve**, and the LTS read makes that continuity rather than a new position —
+`Normalize-FileContent` (`:777`) already folds CRLF/CR→LF at the *content* stage
+and lets the serializer escape only what survives. `format-ws`'s `lf` op is that
+line's v3 successor (default-on, run-first, receipted in `Processing`). Only the
+serializer's half changes: it stops being inherited from JSON and gets written down.
+
+Also fixed: the probe table in that section was first written with **literal**
+control characters (0x0B, 0x01, U+0085, U+2028, U+2029) instead of the escape text
+naming them — a doc about escaping line terminators containing raw ones. Rewritten
+programmatically; verified zero control characters on those lines.
+
+## 2026-08-09 — Encoding and codec sited at the serializer; upstream look-back
+
+Doctrine pass, **no behavior changed** — docstrings, design docs and planning
+only. Battery green (14 suites · 723 asserts) as a no-op check on the two
+ISS-loaded processor bodies whose comment blocks were edited.
+
+Character encoding and the content codec are **serializer-stage declarations**,
+owed to the reader in the manifest (`payload-manifest-ledger.md` #16/#17). The
+custom container authors its own escape regime — no `ConvertTo-Json` in that
+path, and the JSONL writer's escaping stays on its own side of the wire — so
+unlike a JSON payload there is no external spec a reader can fall back on when
+decoding a `row_content_begin..row_content_end` span. That makes declaring the
+codec the only thing that keeps a span round-trippable to source.
+
+Siting the decision there exposed three upstream pre-commitments, all **filed,
+none fixed** (consolidation §B.6e — they want deciding together, and each has a
+test behind it):
+
+- `rs.core.assemble.psm1` — `Encoding` is not in `$alwaysExcluded`, so a
+  run-level constant rides into every entry bag and counts as a fully-present
+  element in `Header.Elements`. Header is its home while it stays constant.
+- `processors/file-read.ps1` — the `Encoding` stamp is a decode policy, not a
+  detection: UTF-8 unconditionally, no BOM sniff. Also noted that UTF-16
+  sources are caught by the NUL binary guard, but incidentally and under a
+  misleading `BinaryOrNulContent` reason.
+- `processors/rs-attributes.ps1` — byte figures are **canonical UTF-8 by
+  convention**, now stated outright. Deliberate: attributes must be invariant
+  to writer knobs to stay comparable across runs. Layer 2 is consequently never
+  a proxy for layer 3, which the codec inflates.
+
+**Correction, same day — no packing adjudication after all.** This entry
+originally raised "which byte layer does shard packing target?" as an open
+question for the user. Withdrawn: it conflated planning with measurement
+(user). Shard packing *plans* against layer 2 and that is correct —
+`MaxShardSpanBytes` is a policy budget and escape inflation is negligible at
+shard granularity. Tree-manifest offsets are *measured off the written file*
+after the fact, so nothing upstream forecasts encoded bytes and codec inflation
+has nothing to corrupt. Recorded in assemble-design §"Planning vs measurement"
+and as a conflation hotspot in AGENTS.md, since the wrong reading invites a
+pointless "fix" to the packer.
+
 ## 2026-07-28 — Phase 1 consolidation: ItemDescriptor identity seam + colonel AST validation
 
 Plan: `issues/v3/v3-consolidation-plan.md` · contracts: `issues/v3/rs.core.assemble-design.md`.

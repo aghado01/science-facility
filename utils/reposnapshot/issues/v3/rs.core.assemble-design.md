@@ -347,14 +347,52 @@ wire naming belongs to writers).
    **processed content**: the payload-description number, same semantics
    family as the tree manifest's byte spans and the precise-span read
    tooling (fetch pure content without container overhead). Also the
-   natural packing input. (LTS conflated layers 1–2: its
-   `attributes.size_bytes` was the on-disk size.) Naming reconciliation
-   queued for the writer phase: `Partition-Files` currently probes a
-   `ByteSpan` property — align to `SpanBytes`/`Attributes.SpanBytes` when
-   the writers land.
+   natural packing input — see *planning vs measurement* below.
+   (LTS conflated layers 1–2: its `attributes.size_bytes` was the on-disk
+   size.) Naming reconciliation queued for the writer phase:
+   `Partition-Files` currently probes a `ByteSpan` property — align to
+   `SpanBytes`/`Attributes.SpanBytes` when the writers land.
 3. Rendered row `length` field — writer-side span of the **encoded**
-   content, computed at render time (selective encoding changes it). Never
-   a pipeline value.
+   content, computed at render time (the codec changes it). Never a
+   pipeline value.
+
+**Encoding and codec are serializer declarations (user, 2026-08-09).** Which
+character encoding the artifact is emitted in, and which escape regime the
+content span carries, are decided at the serializer stage and declared in the
+manifest (ledger #16, #17). Two look-back consequences upstream:
+
+- **Layer 2's UTF-8 is a pre-commitment.** Processed content in memory is a
+  .NET UTF-16 string; it has no byte span at all until an encoding is chosen,
+  and rs-attributes chooses one three stages before the stage that owns the
+  choice. Today the number is right by monoculture, not by contract.
+  **Resolution: keep it, and declare it** — `SpanBytes` is a *canonical
+  UTF-8 measure of content*, deliberately invariant to emission settings,
+  because an attribute that shifts when a writer knob moves is useless for
+  cross-run comparison and ranking. It is not "the encoding," and nothing
+  downstream may read it as one.
+- **Layer 3 is not layer 2 plus container overhead.** The codec rewrites the
+  content bytes themselves — a newline emitted as `\n` is one byte becoming
+  two. So layer 2 is not a *substitute* for the encoded span where exactness
+  is the requirement; the two are different numbers and neither is derivable
+  from the other by arithmetic.
+
+**Planning vs measurement — two concerns, no reconciliation needed (user,
+2026-08-09).** The layer 2/3 distinction is about semantics, not a defect, and
+specifically **does not** make shard packing wrong:
+
+- **Packing is planning.** `MaxShardSpanBytes` is a *policy budget*, and layer 2
+  is the right input for it. Escape inflation at shard granularity is
+  negligible against the budget, and a packer does not need — and should not
+  wait for — exact serialized bytes to decide which entries go in which shard.
+  Layer 2 is correct here by design, not by approximation-with-apology.
+- **Final byte spans are measured, never predicted.** The tree manifest's
+  `row_offset / row_meta_end / row_content_begin / row_content_end` are
+  computed from the artifact **after it is written**. Nothing upstream forecasts
+  layer 3, so codec inflation has nothing to corrupt: the offsets are ground
+  truth taken off the file itself.
+
+The one live rule that follows is narrow: don't *publish* a layer 2 number where
+a reader will spend it as an offset or an exact length. Packing is not that.
 
 **Lean payload, diagnostics sidecar:** reposnapshot payloads are as lean as
 possible, with options ensuring high visibility and auditability — through

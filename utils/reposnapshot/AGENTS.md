@@ -47,6 +47,20 @@ Same construct can play different roles per relationship: `#Requires` is
   eligibility only) · `Attributes.SpanBytes` (UTF-8 span of processed
   content — payload semantics) · rendered row `length` (encoded span,
   writer-side). See `issues/v3/rs.core.assemble-design.md` §Payload doctrine.
+- **Encoding and codec belong to the serializer** (2026-08-09). Upstream
+  stages measure in *canonical UTF-8 by convention* — deliberately invariant
+  to what a writer emits, so attributes stay comparable across runs. Both
+  declarations are owed to the reader —
+  `issues/v3/payload-manifest-ledger.md` #16/#17; open look-back items in
+  consolidation §B.6e.
+- **Planning is not measurement** — the trap the layer 2/3 distinction sets.
+  Shard packing *plans* against `Attributes.SpanBytes`, and that is correct:
+  `MaxShardSpanBytes` is a policy budget, and escape inflation is negligible
+  at shard granularity. Tree-manifest offsets are *measured off the written
+  file*, after the fact. Nothing forecasts encoded bytes, so nothing is
+  corrupted by not knowing them. Do not "fix" packing to chase serialized
+  exactness — the only real rule is narrower: never publish a layer 2 number
+  where a reader will spend it as an offset or an exact length.
 - **PowerShell ingesting PowerShell**: pipeline code vs ingested code —
   always ask which role a construct is playing.
 

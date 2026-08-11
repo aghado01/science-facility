@@ -25,6 +25,20 @@
 #     span read tooling. (LTS conflated these: its attributes.size_bytes was
 #     the on-disk size.) The rendered row 'length' field is a third value —
 #     the writer-side span of the ENCODED content — computed at render time.
+#   - CANONICAL UTF-8 (user, 2026-08-09): encoding and codec are SERIALIZER
+#     declarations (assemble-design §Payload doctrine; ledger #16/#17). This
+#     processor runs three stages upstream of that decision, and content in
+#     memory is a UTF-16 .NET string with no byte span until an encoding is
+#     picked — so every byte figure here (SpanBytes, and the CompressionRatio
+#     input) is measured in UTF-8 BY CONVENTION, deliberately invariant to
+#     whatever the serializer later emits. That invariance is the point:
+#     attributes exist for ranking and cross-run comparison, and a metric
+#     that moves when a writer knob moves cannot do that job. SpanBytes is
+#     NOT a statement about the artifact's encoding, and no downstream
+#     consumer may publish it where a reader will spend it as an offset or an
+#     exact encoded length. It IS the right input for planning-grade uses —
+#     shard packing budgets, ranking, skip decisions; those neither need nor
+#     wait for serialized bytes (assemble-design §"Planning vs measurement").
 #
 # NO-CONTENT CONTRACT: items without a usable Content property pass through
 # unchanged (no Attributes attached). Attributes are optional on IR entries

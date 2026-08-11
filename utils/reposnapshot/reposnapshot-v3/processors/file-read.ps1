@@ -8,6 +8,21 @@
 # read failures _ChainHalt with the exception message. Halted items are
 # routed to Diagnostics by assemble (lean-payload doctrine).
 #
+# ENCODING — this stamp is the SOURCE encoding (what the on-disk bytes were
+# decoded as), an ingest-stage fact. It is NOT the payload's emission
+# encoding, which is a serializer declaration; the two are separate entries
+# in the manifest ledger (#17). Both are owed to a reader: mojibake in the
+# artifact is unattributable without knowing which end introduced it.
+#
+# HONEST STATE: the stamp is a CONSTANT, not a detection. This reader decodes
+# every file as UTF-8 unconditionally — no BOM sniff, no UTF-16 branch — so
+# 'UTF-8' is an assertion about what we did, not a measurement of what the
+# file was. A UTF-16 source survives the NUL guard only if it has no NUL
+# bytes (rare for UTF-16, which is why the guard catches most of them by
+# accident rather than by design) and would otherwise pass through as
+# mojibake wearing a UTF-8 label. Making the stamp truthful means either
+# detecting for real or renaming the field to say it is a decode policy.
+#
 # ISS-load-safe: no #Requires, top-level param contract (interior helpers
 # permitted per colonel AST validation).
 #

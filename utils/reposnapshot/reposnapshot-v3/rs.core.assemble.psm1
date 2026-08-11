@@ -56,6 +56,18 @@ using namespace System.Collections.Generic
       ReadError — routed to Diagnostics under LeanPayload; retained in the
         bag under KeepContentless (a content-less entry must say why).
 
+    NOT excluded, under review — `Encoding` (open item, 2026-08-09): file-read
+      stamps it on every descriptor, nothing excludes it, so it rides into
+      every entry bag and is counted as a fully-present element. But it is
+      currently a CONSTANT decode policy, not a per-file measurement (see
+      processors/file-read.ps1) — a run-level fact repeated once per entry.
+      Header, not entry, is its home while that stays true; per-entry becomes
+      correct only if source-encoding detection lands and files genuinely
+      differ. Deliberately NOT fixed here: the exclusion list is a
+      macro-convention with a golden test behind it, and the disposition is
+      entangled with the serializer's emission-encoding declaration (ledger
+      #17). Filed in the consolidation plan §B.
+
     Input contract (from the absent admiral / interim harness —
     build-against-absent-admiral rule):
       DispatchOutput — @{ Results; Skipped; Errors; Warnings; Budget; Timing }

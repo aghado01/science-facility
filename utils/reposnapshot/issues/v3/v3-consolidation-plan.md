@@ -107,6 +107,31 @@ cross-referenced docs. Update phase status here as work lands.
    comment-ontology language-expansion doctrine: thoughtful-regex processors
    are the default for new languages, native AST on demand). 6c has zero
    open decisions.
+6e. **Encoding/codec look-back** (user, 2026-08-09) — consequence of siting
+   both declarations at the serializer stage (assemble-design §Payload
+   doctrine; ledger #16/#17). Docs, docstrings and planning updated in the
+   same pass; **no code changed yet** — every item below is a live behavior
+   with a test behind it, and they want deciding together, not piecemeal:
+   - `Encoding` rides into every entry bag. file-read stamps it, assemble's
+     `$alwaysExcluded` does not filter it, so a run-level constant repeats
+     once per entry and counts as a fully-present element in
+     `Header.Elements`. Header is its home while it stays constant; per-entry
+     is right only if detection lands. Fixing it edits the macro-convention
+     exclusion list — golden-test-bearing, hence not a drive-by.
+   - **file-read's `Encoding` is an assertion, not a detection** — decodes
+     UTF-8 unconditionally, no BOM sniff, no UTF-16 branch. Either detect for
+     real or rename the field to admit it is a decode policy. Note the
+     incidental behavior: UTF-16 sources are dense in NUL bytes, so the
+     binary guard routes them to Diagnostics as `BinaryOrNulContent` — they
+     are caught, but by accident and under a misleading reason.
+   - **rs-attributes measures in canonical UTF-8 by convention** — now stated
+     in its docstring rather than implied. Content in memory is UTF-16; the
+     byte span only exists once an encoding is chosen, and the processor
+     chooses one upstream of the stage that owns the choice. Keeping UTF-8 is
+     deliberate (attributes must be invariant to writer knobs to stay
+     comparable across runs), but it needed saying out loud.
+   - Rider, already queued: `Partition-Files` probes `ByteSpan`; align to
+     `SpanBytes` when writers land (assemble-design §Payload doctrine).
 
 ### C. Capability gaps (LTS parity, pre-assemble) — ✓ ALL DONE (Phases 1 + 4)
 
@@ -139,6 +164,106 @@ home · all writers/serializers · admiral implementation (brief keeps
 accruing) · thread adapter + corpus first milestone · mutation-ownership
 doctrine beyond copy-on-enrich (waits for admiral state design) ·
 subaddressing.
+
+**Escape regime — spec written ahead of the serializer** (user, 2026-08-09;
+`shard-format-notes.md` §"Escape regime — codec spec"). Written so the writer
+work inherits the requirements rather than rediscovering them.
+
+Scope is set by the length prefix: framing never depends on encoding, so the
+only HARD requirement is the one-record-per-line invariant — LF, CR, VT, FF,
+NEL, LS, PS. Remaining C0 + DEL are soft (reader hygiene, total inverse).
+Coverage target is `ConvertTo-Json`'s set plus DEL, whose measured behavior is
+recorded in the doc as a reference point. Standing requirements: CR encodes
+distinctly from LF (or CRLF stops being recoverable); the codec stays total and
+does not lean on the upstream NUL guard (`format-ws`'s `eof-eot` op deliberately
+puts U+0004 *into* content).
+
+**Sigil — narrowed to two coherent designs, decision open.** The user asked
+whether an invisible code point could replace `\`, and corrected a first-pass
+error worth recording: `strip-zwsp` deleting the invisibles **reserves** them for
+the serializer rather than disqualifying them — the op runs upstream of
+serialization, so collision-freedom is handed over for free, the same structural
+move as ` | ` being safe because `|` is filesystem-invalid. Rider: the codec
+should not *depend* on that (format-ws is opt-in, op list subsettable) — it
+self-escapes by doubling regardless, and the reservation's value is that the
+escape never fires.
+
+**Resolved on token economy: `\` backslash prefix** (user raised token cost,
+2026-08-09; supersedes an interim Control Pictures recommendation). The governing
+insight: **rarity and token-cheapness are the same axis inverted** — a code point
+rare enough to be safe is rare enough to be out-of-vocabulary, so it byte-falls-
+back at ~1 token per UTF-8 byte. Exotic markers of every kind (Control Pictures,
+ligatures, small-punctuation blocks, zero-widths) land at 3-4 bytes ≈ 3-4 tokens
+against a raw newline's ~1. On a 2 MB / ~50k-line shard that is **+100k tokens**.
+`\n` is near-certainly a single merged BPE token — the property of being the most
+common escape sequence in existence is exactly what buys that, and it is
+unavailable to anything chosen for obscurity.
+
+The objection to `\` was never token cost but the self-escape obligation, so it
+was **measured** on the corpus most hostile to it (PowerShell — Windows paths and
+regex): **+3.4%** (16123 newlines, 545 backslashes), and +3.3% on markdown. The
+"unbounded worst case" framing was true in theory, negligible in practice. Same
+scan disqualified alternatives: backtick 64.4% in markdown (and PS's own escape
+char), `@` 7.2% in PS. Tilde is rare (0% PS / 1.4% md) but a rare ASCII prefix
+makes `~n` an uncommon byte pair — likely 2 tokens where `\n` is 1, and newline
+escapes outnumber self-escapes ~30:1, so per-newline cost dominates.
+
+Kept on file rather than discarded: Control Pictures for human-inspection or
+debugging payloads; **RS U+001E** as the one genuinely cheaper option (1 byte, C0
+delimiter by design) — rejected on transport risk, since raw C0 bytes trip the
+binary-classification heuristics external tools apply to `.txt`, which our
+NUL-only guard would not catch.
+
+**Two objections retired by the user (2026-08-09), narrowing this to one number.**
+Renderer behavior is not a concern (IDE display is not the consumption path),
+which drops the ZWSP-break-opportunity and SHY-hyphen points; and
+misinterpretation is handled by shipping the **substitution dictionary in the
+artifact** — tree file or shard header/row-zero — which is where the column schema
+already lives, so it is existing doctrine reused rather than new machinery
+(carrier now recorded on ledger #16). Declaration fixes correctness but not price:
+the dictionary is paid once per shard, the substitute once per line.
+
+**Escape-layer collision (user, 2026-08-09) — the strongest argument against `\`,
+and it is on the primary axis.** `\` is the escape character in exactly the
+languages queued for ingestion (C#, JS/TS, Java, Python, regex — the `TODO.md`
+expansion list), so a backslash codec stacks its escape layer on the source's and
+the two are indistinguishable by inspection. `var s = "C:\\Users\\me\n";` emits as
+`var s = "C:\\\\Users\\\\me\\n";` — and `\\n` reads as *literal backslash-n* under
+language semantics, the inverse of what the source said. The separating invariant:
+**substitution never rewrites a character of the source, it only adds marks at line
+breaks; backslash alters existing characters**, so the payload stops showing the
+reader what the file says. It also reframes the 3.4% figure — that is a frequency,
+which settled the token question correctly, but the ambiguity is concentrated in
+string literals, regexes and paths, the most semantically loaded lines.
+
+**Settled by measurement against a production payload — `\` stands.** Scanned a
+real LTS C# snapshot (`project-snapshots/ThermoMapper/src_20260701_122622`, 70
+shards): `\n` 51617 (87.8%), `\"` 7050 (12.0%), **`\\` 127 (0.22%)**. The
+escape-layer collision is **~1.8 sites per shard, a 0.25% tax** — the collision
+argument was sound in kind and an order of magnitude off in scale, and the 3.4%
+figure was a PowerShell artifact (Windows paths, regex) rather than a property of
+the C-family targets the concern was about.
+
+The consequential finding is the other row: **12% of every escape in that payload
+is `\"`, pure JSON residue that v3 drops by construction** — quotes need no
+escaping under length-prefix framing. That is where the real legibility damage
+lives (`return '\"' + text.Replace(\"\\\"\", \"\\\"\\\"\") + '\"';`), and removing
+it beats any sigil choice. Confirms the length-prefix scoping written above, and
+it is already banked rather than owed.
+
+`\n` also has years of production use behind it in LTS payloads. Control Pictures
+stay on file for human-inspection payloads and as the fallback if a tokenizer
+measurement ever shows the substitute is ~free; no measured evidence asks for the
+switch, so the tokenizer install drops from blocking to optional. Middle options
+dropped as dominated (`~n` self-escapes, ~2 tokens, half-collides).
+
+**Still the user's call: preserve vs normalize EOLs** — doc recommends preserve,
+since `format-ws`'s `lf` op already owns EOL policy (default-on, run-first,
+receipted in `Processing`) and LTS already splits it that way. (Reconciled on
+transfer to canonical, 2026-08-10: this list also carried "a token measurement
+before committing to substitution" as a second open call — stale wording left
+standing when the production-payload scan settled `\`. Per the paragraph above,
+that measurement is now the optional fallback trigger, not a pending decision.)
 
 **Shared ISS-registered helper library** (user, 2026-08-04; deferred). The 6d
 harmonization duplicated the same ~10-line copy-on-enrich / copy-on-mutate clone
