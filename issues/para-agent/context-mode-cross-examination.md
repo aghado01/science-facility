@@ -88,6 +88,61 @@ The old core preserved upstream commit and artifact digests in [`BUILD.json`](..
 
 These are worth preserving in a separate administrative system. They are not reasons to give an ordinary model-visible data-plane server cross-client mutation authority.
 
+## Context-epoch continuity: donor mechanism and generalization
+
+Context-mode's compaction machinery is more important as evidence for a general session feature than as a format to copy. It demonstrates a useful cycle: keep session evidence outside the model context, prepare continuity state before a context boundary, and give the next context epoch a bounded way to recover active work. The native event names and injection envelopes are client-adapter details. MCP does not itself define `PreCompact`, `SessionStart(compact)`, or a guarantee that text emitted by a hook entered model context.
+
+### Three observation planes have different truth domains
+
+Console-native observation, MCP-operation observation, and client/harness observation can be correlated, but none subsumes the others:
+
+| Plane | What it can establish | What it cannot establish by itself |
+|---|---|---|
+| Client/harness | A native lifecycle or tool event reached the adapter; the adapter emitted a particular native response; where supported, the harness later reported a tool result | That a command actually ran in a pane, that an MCP backend reached the claimed terminal state, or that emitted `additionalContext` was admitted to the model rather than merely accepted by the host |
+| MCP operation | A typed request reached the server; the backend accepted, rejected, progressed, or completed it; an operation receipt was produced | Native tool activity that bypassed the server, the client's context epoch, or whether the model saw a returned receipt |
+| Console-native | Input was written to a particular pane; shell/process state, rendered output, cwd, timing, and exit evidence observable at that boundary | Which model turn caused the action, whether compaction occurred, or whether any console receipt survived into the next model context |
+
+The desirable evidence chain is therefore:
+
+```text
+harness request observation
+  -> MCP request/acceptance receipt
+    -> console dispatch and process/output evidence
+  -> MCP completion or partial-result receipt
+-> harness result/delivery observation
+```
+
+Each record needs its own identity and evidence class. A `PostToolUse` event is not process truth, and console persistence is not context continuity. Para-agent can keep a pane alive across compaction while the new model context has forgotten the pane exists; conversely, a hook can restore a pane reference whose process has already died. Reattachment must combine the references and then revalidate the target state.
+
+### What the current adapters actually do
+
+The following behavior is grounded in the current `packages/context-mode` checkout, not assumed to be universal context-mode behavior or a portable client contract:
+
+1. Claude's [`precompact.mjs`](../../../packages/context-mode/hooks/precompact.mjs) reads the events bound to the incoming session, builds a resume snapshot, and upserts it before compaction. The database upsert explicitly resets `consumed` to `0`; see [`src/session/db.ts`](../../../packages/context-mode/src/session/db.ts), around lines 1044–1051.
+2. On Claude `SessionStart` with `source === "compact"`, [`sessionstart.mjs`](../../../packages/context-mode/hooks/sessionstart.mjs), around lines 191–250, retrieves that row and marks it consumed, but does **not** append `resume.snapshot` to `additionalContext`. It rereads durable session events, writes an event file, constructs a fresh session directive, and separately builds an automatic behavioral-state injection. If no events are found, the snapshot can still be marked consumed without either reconstructed payload being added.
+3. Claude directly appends a stored snapshot only on the `source === "resume"` fallback where the incoming session ID has no live events. That path atomically claims the latest unconsumed snapshot belonging to another session and appends it; see the same [`sessionstart.mjs`](../../../packages/context-mode/hooks/sessionstart.mjs), around lines 260–289, and the claim query in [`src/session/db.ts`](../../../packages/context-mode/src/session/db.ts), around lines 1059–1078. This is the fresh-ID `/resume` recovery case, not the ordinary post-compaction path.
+4. Codex differs. Its [`hooks/codex/sessionstart.mjs`](../../../packages/context-mode/hooks/codex/sessionstart.mjs), around lines 66–95, reconstructs a directive from current-session events and, on `source === "compact"`, also appends the stored same-session snapshot before marking it consumed. Its `resume` branch does not implement Claude's cross-session snapshot fallback.
+
+There is consequently no single context-mode checkpoint/restore sequence. Even within one checkout, storage, selection, rendering, claiming, and delivery semantics vary by adapter. That is positive evidence for versioned client lifecycle capabilities and a neutral continuity contract above them.
+
+The Claude compact branch also contains a measurement defect. Its `snapshot-consumed` event says that `snapshotBytes` were injected and records that number as `bytes_returned`, although the stored snapshot is not the payload appended on that path. The actual added material is the always-present routing block plus the reconstructed session directive and, when available, the automatic injection. Only [`auto-injection.mjs`](../../../packages/context-mode/hooks/auto-injection.mjs), around lines 13–22 and 60–101, declares an aggregate target of roughly 500 tokens. [`session-directive.mjs`](../../../packages/context-mode/hooks/session-directive.mjs), around lines 274–499, applies several local truncations and reference windows but no common aggregate budget with the routing block. These payloads and their observed delivery therefore need separate measurements; stored snapshot length is neither their byte count nor proof of model admission.
+
+The single `consumed` bit is also narrower than the general problem. It cannot represent one checkpoint being restored into a resumed epoch, a fork, a handoff, and a second client independently. Marking it before successful delivery can discard the only recovery route after an adapter failure. A general system needs immutable checkpoints and per-target, idempotent delivery receipts rather than global one-shot consumption.
+
+### The architectural feature implied by the donor
+
+The portable abstraction is a configurable **session continuity service** with normalized context-epoch closing and opening semantics. A client adapter maps native events such as Claude's `PreCompact` and `SessionStart(compact)` onto those semantics where the client provides them; other adapters need capability-declared fallbacks. This is a cross-cutting session service, not an MCP hook, not a Console subfeature, and not necessarily an agent-facing tool.
+
+The key separation is between persisted state and injected state:
+
+- a `ContinuityCheckpoint` collects typed, durable provider contributions;
+- a `ContinuityRestorePlan` selects a target-specific projection under configuration, freshness, authority, sensitivity, and token/byte budgets;
+- a `ContinuityDeliveryReceipt` records what a particular target epoch was actually offered or confirmed to have received, with explicit omissions and retrieval paths.
+
+Potential providers include active console panes and observation cursors, pending jobs and talk-back, artifact and mount references, current MCP capability/profile facts, the active objective and unresolved decisions, and canonical references to relevant procedural or metacognitive guidance. Configuration should decide which classes persist, which are re-injected inline versus restored by reference or requery, and which profiles apply to compact, resume, fork, handoff, clear, or crash recovery. Capability and permission facts must be revalidated in the target epoch, and historical guidance must retain provenance rather than acquiring authority merely because it survived compaction.
+
+The canonical types, policies, invariants, and fallback semantics belong in [`session-continuity-contract.md`](../mcp/session-continuity-contract.md). This report supplies the donor evidence and cautions: preserve the pattern of durable state plus bounded reorientation, while avoiding context-mode's adapter-specific payloads, global consumption flag, conflated accounting, and repeated guidance as the design ceiling.
+
 ## Where the design became pathological
 
 ### 1. The “neutral” vocabulary remained Claude-shaped
@@ -560,18 +615,19 @@ Default behavior is read-only planning. Apply stops on drift. Backups are recove
 
 ### Integrate now in the design contracts
 
-1. Provider-neutral guarded artifact references and bounded receipts.
+1. Provider-neutral guarded material references and bounded receipts; immutable `artifact_ref` remains one provider-specific durable identity.
 2. Explicit `run/capture`, `derive`, `index`, and `search` semantics.
 3. Batch commands plus caller-selected projections in one request budget.
 4. A neutral observation and typed policy-decision contract with authority domains.
 5. Granular client capability evidence and explicit `unknown`.
 6. A small open-ended guidance layer with typed, retrievable recipes.
 7. Exact identity quality: native, correlated, or unbound—never PID/latest guessing.
+8. Separate console-native, MCP-operation, and harness truth domains plus the shared [`Session Continuity Contract`](../mcp/session-continuity-contract.md).
 
 ### Adapt after the correctness substrate
 
 1. Context-mode's FTS ranking as an optional rebuildable Artifact provider.
-2. A bounded resume navigator over guarded references.
+2. Client-specific checkpoint and restoration adapters, after the continuity contract and lifecycle capability evidence are testable.
 3. Sparse hook nudges that carry reason codes and guidance references.
 4. Client-native guidance compilation from one semantic source.
 5. Deployment provenance and rollback in a separate privileged project.
@@ -591,20 +647,22 @@ Default behavior is read-only planning. Apply stops on drift. Backups are recove
 
 ## Consequences for the current para-agent roadmap
 
-The near-term roadmap remains contract-first, with two refinements:
+The near-term roadmap remains contract-first, with three refinements:
 
 1. Rename the fourth agent-facing layer to **Guidance**. Specify the Harness Adapter and privileged Control Plane as separate boundaries.
 2. Add a small **routing observation/decision and client capability contract** before implementing hook automation.
+3. Treat context-epoch continuity as a configurable shared session contract; native compaction and resume hooks are adapter bindings to it.
 
 Recommended design artifact order:
 
 1. Console v1 conformance errata and executable invariants.
 2. Backend application/engine boundary and neutral operation result.
-3. Artifact reference/receipt contract, including the three material-handling modes.
+3. Guarded material reference/receipt contract, including the three material-handling modes and the mounted-artifact specialization.
 4. Job Exchange contract.
-5. Harness observation, typed decision, capability evidence, and decision receipt contract.
-6. Minimal semantic guidance source plus two or three typed recipe resources.
-7. Only then, a workload-justified index provider and a separate administrative deployment design.
+5. Shared [`Session Continuity Contract`](../mcp/session-continuity-contract.md), with provider contributions and per-epoch delivery receipts.
+6. Harness observation, typed decision, capability evidence, and decision receipt contract.
+7. Minimal semantic guidance source plus two or three typed recipe resources.
+8. Only then, a workload-justified index provider and a separate administrative deployment design.
 
 This ordering prevents the skill from teaching accidental APIs, prevents adapters from becoming policy engines, and prevents cross-client administration from entering the runtime merely because deployment is eventually necessary.
 

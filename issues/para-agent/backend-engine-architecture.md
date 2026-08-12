@@ -16,7 +16,7 @@ The useful analogy from Codex-Scientiae is:
 
 For para-agent, the target is not a literal Python-engine/PowerShell-client port. It is a stable in-process application facade over Node backend engines. MCP handlers are one adapter to that facade.
 
-This does not add another agent-facing functional plane to Console, Artifact, Job, and Guidance. It places a capability substrate beneath the first three. Guidance explains when to use an agent operation; the backend makes the operation mechanically safe and economical once selected.
+This does not add another agent-facing functional plane to Console, Artifact, Job, and Guidance. It places a capability substrate beneath the first three. Guidance explains when to use an agent operation; the backend makes the operation mechanically safe and economical once selected. Session Continuity is likewise a cross-cutting lifecycle service: it checkpoints typed contributions from those planes and compiles a bounded restoration for a new context epoch without becoming a memory or policy plane.
 
 ## What `jsonl_engine` and its client actually separate
 
@@ -48,6 +48,7 @@ flowchart TB
     Agent["Agent intent"]
     Skill["Skill and retrievable recipes"]
     Harness["Native client harness adapter"]
+    Lifecycle["Session lifecycle port<br/>normalized epoch events · native delivery"]
     MCP["MCP schema + handler + presenter"]
     App["ParaApplication facade"]
     Host["Operation host<br/>IDs • deadline • cancellation • budget"]
@@ -55,12 +56,17 @@ flowchart TB
     Artifact["Artifact engine"]
     Job["Job engine"]
     Projection["Query / projection engine"]
+    Continuity["Session continuity<br/>checkpoints • restore plans • delivery"]
     Kernels["Capability kernels<br/>JSONL • digest • Hashish • selectors"]
     Ports["Ports<br/>mux • artifact • event • projection • coordination"]
     Adapters["Adapters<br/>psmux/tmux • filesystem • future stores"]
 
     Skill -. teaches when and why .-> Agent
-    Harness -. visibility and capability facts .-> MCP
+    Harness -. tool visibility and capability facts .-> MCP
+    Harness -->|native boundary event| Lifecycle
+    Lifecycle -->|normalized lifecycle event| Continuity
+    Continuity -->|compiled restoration| Lifecycle
+    Lifecycle -->|native delivery envelope| Harness
     Agent --> MCP
     MCP --> App
     App --> Host
@@ -68,6 +74,11 @@ flowchart TB
     Host --> Artifact
     Host --> Job
     Host --> Projection
+    Host --> Continuity
+    Continuity -. typed provider state .-> Console
+    Continuity -. guarded artifact refs .-> Artifact
+    Continuity -. pending exchange state .-> Job
+    Continuity -. active projections .-> Projection
     Console --> Ports
     Artifact --> Kernels
     Job --> Ports
@@ -76,6 +87,8 @@ flowchart TB
     Ports --> Adapters
 ```
 
+The lifecycle path deliberately bypasses the MCP schema, handler, and presenter: a native compaction/start event is not an MCP request. The same Continuity service can also be reached through the application/operation host for explicit checkpoint, fork, handoff, or recovery use cases, but the two entry paths share semantic records rather than pretending to share a transport.
+
 The dependency direction is load-bearing:
 
 - only the MCP adapter imports the MCP SDK, tool schemas, or MCP content-block types;
@@ -83,7 +96,8 @@ The dependency direction is load-bearing:
 - engines know the shared contracts and storage ports, not public tool names;
 - storage and mux adapters own platform mechanics;
 - Hashish knows bytes, tokens, models, and signatures only—never MCP, journals, hooks, paths, or governance;
-- native harness adapters remain outside this stack's semantic core and never gain backend store authority merely because they can observe client events.
+- the continuity service owns checkpoint, restore-plan, and delivery semantics but not native hook syntax;
+- native harness adapters remain outside this stack's semantic core, normalize only lifecycle events the client actually exposes, and never gain backend store authority merely because they can observe or inject at a client boundary.
 
 ## Name the middle boundary carefully
 
@@ -127,6 +141,7 @@ Registration, cancellation wiring, stable error conversion, receipt presentation
 | Receipts | Receives one unconditionally | Assembles operation-level result and omissions | Engines supply measured facts; receipt contract checks invariants |
 | MCP content blocks and callable continuations | Sees native tool results | Returns neutral references and continuation intents | MCP presenter maps them to `{tool, input}` |
 | Guidance | Chooses a suitable operation | May consume a client economics profile | Skill/resources and sparse harness guidance |
+| Context-epoch continuity | May pin eligible work state or choose a named profile | Resolves policy, target binding, budget, and restore mode | Session Continuity service checkpoints typed provider contributions; harness adapter performs native delivery |
 
 Correctness policy belongs below the model. “Never silently omit a malformed frame,” “do not publish a stale index,” and “do not commit a poisoned write” are engine invariants. Application policy belongs in the facade: which view serves this request, whether a final report should inline at 12 KB, or whether an optional projection is worth computing. The agent owns material choices such as the task, target, destructive effect, expected evidence, and desired result shape.
 
@@ -199,7 +214,7 @@ Owns session/pane state, the two execution models, per-pane sequencing, dispatch
 
 ### Artifact engine
 
-Owns captured bytes, immutable references, source-generation guards, lifecycle/retention, atomic publication, manifests, and exact integrity. It is the common substrate for console bodies, delegated reports, query results, and imported source material.
+Owns captured bytes, immutable references, source-generation guards, lifecycle/retention, atomic publication, manifests, and exact integrity. It is the common substrate for console bodies, delegated reports, query results, and imported source material. A durable `artifact_ref` remains distinct from an ephemeral validated `mount_ref`; the shared lifecycle and validation rules are specified in the [`Mounted Artifact contract`](../mcp/mounted-artifact-contract.md).
 
 ### Event and journal engine
 
@@ -211,11 +226,17 @@ Owns state transitions, leases/fencing, causal links, talk-back, terminality, re
 
 ### Query and projection engine
 
-Owns bounded selectors, source coordinates, reusable derived views, cache guards, search indexes, and candidate nomination. It chooses capability providers according to a semantic request and a versioned profile.
+Owns bounded selectors, source coordinates, reusable derived views, cache guards, search indexes, and candidate nomination. It chooses capability providers according to a semantic request and a versioned profile. Queries return guarded addresses or bounded values; disposable mounts, projections, and cursors never replace the artifact generation that guards them.
 
 ### Operation host
 
 Provides cross-cutting request identity, cancellation, deadline, cleanup, concurrency control, budgets, and observability. These concerns should not be reimplemented in each MCP handler.
+
+### Session Continuity service
+
+Owns normalized context-epoch transitions, immutable checkpoints, target-specific restore plans, and per-delivery receipts. Console, Artifact, Job, query, task, capability, and Guidance components contribute typed state without controlling reinjection. The service persists richer reference-bearing state than it normally injects; a restore compiler selects a bounded target-client projection after revalidating identity, freshness, capabilities, permissions, and handles.
+
+Native `PreCompact`, `PreCompress`, `SessionStart`, resume, or equivalent hooks are adapter evidence for `context_epoch_closing` and `context_epoch_opened`, not the portable contract itself. Unsupported clients use continuously maintained projections plus a first-call or explicit-resume fallback. The full provider, policy, fork, authority, omission, and delivery rules live in the [`Session Continuity contract`](../mcp/session-continuity-contract.md).
 
 ## Where Hashish belongs
 
@@ -247,7 +268,7 @@ The important transfer from jso-jackson and Codex-Scientiae is ownership:
 
 - one implementation defines framing and parsing policy;
 - safe defaults do not require every caller to understand torn tails or source replacement;
-- indexes are disposable projections bound to exact source generations;
+- indexes are disposable projections bound to an exact frozen artifact generation or component digest plus their projection profile/model; the live source generation remains provenance and freshness evidence;
 - large result sets publish as artifacts rather than accumulating in an MCP response;
 - physical, valid, malformed, matched, emitted, and withheld counts remain explicit;
 - a manifest or terminal receipt publishes last as the operation commit marker.
@@ -303,16 +324,16 @@ The exact filesystem layout can wait, but the dependency shape should be testabl
 
 ```text
 src/
-  contracts/       artifact, receipt, console event, job event, continuation
+  contracts/       artifact, receipt, console event, job event, continuation, continuity
   application/     ParaApplication and use-case services
-  engines/         console, artifact, event, job, query/projection
+  engines/         console, artifact, event, job, query/projection, session continuity
   capabilities/    digest, Hashish-derived projections, JSONL/selectors
   ports/           mux, artifact store, event store, projection store, coordination
   adapters/        psmux/tmux and filesystem implementations
   mcp/             schemas, handlers, presenter, server startup
 ```
 
-Client-harness hooks and their bounded projection publisher should remain an integration outside the stable engine dependency graph. Privileged multi-client administration remains out of band.
+Client-harness hooks remain outside the stable engine dependency graph: they translate native lifecycle envelopes and deliver compiled restorations. The continuity provider/checkpoint/restore contracts and bounded projection publisher belong to the stable semantic core. Privileged multi-client administration remains out of band.
 
 ## What not to copy from the WIP analogue
 
@@ -338,9 +359,10 @@ No source refactor is authorized by this report. If implementation begins later,
 2. introduce a neutral operation context/result and `ParaApplication` facade while existing handlers and tools remain unchanged;
 3. move repeated journal settling, lifecycle, cancellation, budget, and receipt composition behind that facade;
 4. establish Artifact references and storage ports before adding new derived capabilities;
-5. add higher-level operations only where measured workflows show call-chain or misuse savings;
-6. integrate exact digests first, then Hashish-derived projections only for a concrete query or comparison workload;
-7. reconsider a worker or daemon boundary only when isolation, concurrency, or lifecycle requirements justify an actual process boundary.
+5. establish normalized context-epoch identity, continuity contributions, checkpoint publication, and delivery receipts before automating reinjection;
+6. add higher-level operations only where measured workflows show call-chain or misuse savings;
+7. integrate exact digests first, then Hashish-derived projections only for a concrete query or comparison workload;
+8. reconsider a worker or daemon boundary only when isolation, concurrency, or lifecycle requirements justify an actual process boundary.
 
 This lets the internal architecture improve without prematurely deciding the final public tool surface.
 
@@ -354,5 +376,6 @@ This lets the internal architecture improve without prematurely deciding the fin
 6. Should the live event store remain one append-only file per stream, rotate into immutable segments, or use another single-writer layout?
 7. Which operation effects require manifest-last atomic publication, and which projections may be rebuilt after an honestly reported partial commit?
 8. What first demonstrated workload justifies any approximate Hashish projection beyond exact digest and exact lookup?
+9. Which component owns the durable continuity checkpoint store and configuration precedence when several MCP providers, a task service, and a client adapter contribute state?
 
 Two decisions are no longer open: Hashish primitives do not become MCP tools, and the absence of a process boundary does not justify collapsing the application/engine boundary.

@@ -1,7 +1,8 @@
 # claude-jso-markdown-v2.ps1 — Markdown renderer for Claude Code thread exports (exchanges layer)
 #
-# Standalone — no dependencies. Reads the exchanges JSONL produced by
-# Export-ClaudeExchanges and renders a single markdown document.
+# Reads the exchanges JSONL produced by Export-ClaudeExchanges and renders a
+# single markdown document. The shared chat-export final-stage formatter is
+# loaded below so direct renderer calls and orchestrated exports behave alike.
 #
 # This is v2 of claude-jso-markdown.ps1. Same formats and output structure,
 # but consumes the exchanges layer instead of the merged layer: content
@@ -56,6 +57,8 @@
 #   - exchange-markers is a new exclude token with no v1 equivalent
 #   - Frontmatter has exchanges: count instead of turns:, no models: section
 # -----------------------------------------------------------------------
+
+. (Join-Path (Split-Path -Parent $PSScriptRoot) 'chat-export-format-ws.ps1')
 
 function ConvertTo-ClaudeMarkdownV2
 {
@@ -408,7 +411,8 @@ function ConvertTo-ClaudeMarkdownV2
     }
 
     $frontmatter = script:Get-V2Frontmatter $Format $Exclude $fmSessions $fmModels $exchangeCount $fmUserLabel
-    $markdown = $frontmatter + $doc.ToString().TrimEnd() + "`n"
+    $markdown = Format-ChatExportMarkdown `
+        -Markdown ($frontmatter + $doc.ToString().TrimEnd() + "`n")
 
     if ($OutputPath)
     {

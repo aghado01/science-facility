@@ -2,6 +2,8 @@
 
 $ErrorActionPreference = 'Stop'
 
+. (Join-Path (Split-Path -Parent $PSScriptRoot) 'chat-export-format-ws.ps1')
+
 function script:ConvertTo-CodexDisplayJson
 {
     param(
@@ -342,7 +344,8 @@ function ConvertTo-CodexMarkdown
         -Models $models `
         -ExchangeCount $exchangeCount `
         -UserLabel $userLabel
-    $markdown = $frontmatter + $doc.ToString().TrimEnd() + "`n"
+    $markdown = Format-ChatExportMarkdown `
+        -Markdown ($frontmatter + $doc.ToString().TrimEnd() + "`n")
     $encoding = [System.Text.UTF8Encoding]::new($false)
 
     if ($OutputPath)

@@ -14,7 +14,7 @@ The next useful shape has four distinct layers:
 3. **Job-exchange plane:** typed delegation, waiting, report-back, questions, objections, evidence, and completion.
 4. **Guidance layer:** a small platform-agnostic capability map, retrievable typed recipes, and sparse client-specific hook guidance.
 
-Client adapters are not part of that fourth layer. They are cross-cutting boundary compilers that normalize native events, prove identity and effect capabilities, and format native responses. Privileged cross-client deployment is a separate out-of-band control plane, not a fifth agent-facing plane.
+Client adapters are not part of that fourth layer. They are cross-cutting boundary compilers that normalize native events, prove identity and effect capabilities, and format native responses. Session Continuity is another cross-cutting service: it checkpoints typed state from the four layers and restores a bounded navigator across context epochs, while adapters alone own native hook and injection mechanics. Privileged cross-client deployment is a separate out-of-band control plane, not a fifth agent-facing plane.
 
 Beneath Console, Artifact, and Job, para-agent also needs an internal capability substrate: an in-process application facade over engines for capture, storage, serialization, querying, projections, receipts, and lifecycle. That is implementation architecture, not a fifth model-visible layer and not a new family of primitive MCP tools.
 
@@ -33,6 +33,8 @@ This synthesis builds on:
 - the engine/client boundary analysis in [`backend-engine-architecture.md`](backend-engine-architecture.md).
 - the direct Node port analysis for ThermoMapper Hashish, jso-jackson, and cybernetic-copilot in [`node-hashish-port-design.md`](node-hashish-port-design.md).
 - the algorithm-by-algorithm conceptual and application map in [`hashish-capability-inventory.md`](hashish-capability-inventory.md).
+- the reposnapshot, context-mode, hook-layer, JSONL-mount, and shared-corpus ideation in [`grok-science-facility-exploration.md`](../mcp/discussion/grok-science-facility-exploration.md), checked against the local implementations rather than treated as implementation evidence by itself.
+- the resulting shared [`Mounted Artifact contract`](../mcp/mounted-artifact-contract.md) and [`Session Continuity contract`](../mcp/session-continuity-contract.md).
 
 The default `agy` journal contains failed login attempts rather than another completed report, so it was not treated as substantive design evidence.
 
@@ -147,43 +149,50 @@ Required repairs or explicit contract changes include:
 
 ## Proposed contracts
 
-### Artifact reference
+### Guarded material address
 
-Historical version graphs are not required. Current state remains authoritative, while a guard prevents a selector from silently resolving against changed material.
+Historical version graphs are not required for every provider. A guarded address names material within the provider's authoritative current state or one exact immutable generation, while its guard prevents the selector from silently resolving against changed material.
 
 ```json
 {
   "provider": "console|markdown|jsonl|file|job",
-  "artifact_id": "provider-stable identity",
-  "guard": "current material or topology guard",
-  "basis": "provider-defined coordinate system",
+  "subject_ref": {
+    "kind": "provider subject or artifact_ref",
+    "id": "provider-stable identity",
+    "generation": "exact generation or unbound"
+  },
+  "guard": "exact material, generation, or topology guard",
+  "coordinate_space": "provider-defined basis and units",
   "selector": {}
 }
 ```
 
-Identity, coordinate compatibility, and provenance must remain separate. For large mutable artifacts, CDC chunk identifiers may preserve unchanged regions across occurrences without retaining a version history.
+This is a provider-neutral address envelope, not a second meaning for `artifact_ref`. Identity, generation, coordinate compatibility, selection, and provenance remain separate. For large mutable sources, CDC chunk identifiers may preserve unchanged regions across observations without retaining a version history.
 
-Artifact guards use complete cryptographic digests over exact bytes. The current eight-hex `cmd_hash` and `out_hash` fields are convenient display/correlation prefixes, not equality or suppression authorities. Rolling hashes choose anchors or chunk boundaries; profile-compatible signatures nominate similar candidates, with model identity required where applicable; exact verification resolves the candidate.
+For mounted artifacts, `subject_ref` contains an immutable portable `artifact_ref`; the address or selector remains separate. An `artifact_ref` is also not an ephemeral runtime `mount_ref`. Mounts bind and validate one artifact generation for efficient queries; projections and cursors remain disposable. Creation may auto-mount to save a turn, but collaboration, restart, and continuity preserve the artifact reference and reacquire the mount. The full lifecycle, validation, residue, and source-map rules are in the [`Mounted Artifact contract`](../mcp/mounted-artifact-contract.md).
+
+Immutable artifact and component guards use complete cryptographic digests over exact bytes. Live topology guards instead use the strongest typed generation/cursor evidence their provider can establish. The current eight-hex `cmd_hash` and `out_hash` fields are convenient display/correlation prefixes, not equality or suppression authorities. Rolling hashes choose anchors or chunk boundaries; profile-compatible signatures nominate similar candidates, with model identity required where applicable; exact verification resolves the candidate.
 
 ### Receipt
 
 ```json
 {
-  "status": "complete|partial|running|stale|missing|failed",
+  "status": "complete|partial|running|failed",
+  "reason": "stable code such as stale_guard or missing_subject, when applicable",
   "reference": {},
   "counts": {},
   "bytes": { "source": 0, "returned": 0 },
-  "complete": true,
+  "selection_complete": true,
   "omitted": [],
   "continuations": []
 }
 ```
 
-`complete` means that nothing matching the requested selection was omitted. Deferred source material, nonmatching content, and query omissions are separate facts.
+`selection_complete` means that nothing matching the requested selection was omitted. Deferred source material, nonmatching content, and query omissions are separate facts.
 
 ### Delivery record
 
-The exposure ledger records bytes actually delivered into a particular client context, not what the model understood:
+The delivery ledger records bytes selected, rendered, or emitted through a particular client channel and the strongest stage the available evidence supports. It does not assume context admission or model understanding:
 
 ```json
 {
@@ -192,11 +201,25 @@ The exposure ledger records bytes actually delivered into a particular client co
   "reference": {},
   "chunks": [],
   "bytes": 0,
-  "source_call": {}
+  "source_call": {},
+  "delivery_stage": "planned|rendered|adapter_emitted|host_acknowledged|model_visible",
+  "stage_evidence": {}
 }
 ```
 
-Unknown epoch must fail open: do not suppress material merely because it may have been delivered before. Explicit materialization requests should normally be honored; novelty filtering is a requested policy, never silent behavior.
+`model_visible` is valid only when the host explicitly attests context admission; comprehension or compliance is never inferred. Unknown epoch must fail open: do not suppress material merely because it may have been emitted before. Explicit materialization requests should normally be honored; novelty filtering is a requested policy, never silent behavior.
+
+### Context-epoch continuity
+
+Compaction survival should be a standard configurable session feature rather than a fixed context-mode snapshot format. The portable lifecycle normalizes client-native events into `context_epoch_closing` and `context_epoch_opened`, then separates three records:
+
+1. an immutable **checkpoint** containing typed provider contributions and guarded references;
+2. a target-client **restore plan** selected under identity, freshness, capability, permission, sensitivity, and budget policy;
+3. a per-target-epoch **delivery receipt** recording what the adapter rendered or emitted, the strongest evidenced delivery stage, and what remained retrievable.
+
+Console, Artifact, Job, query, task, capability, and Guidance components contribute state without acquiring injection authority. Persisted state may be richer than the restoration: the normal payload is a bounded navigator containing current objective/constraints, active handles, pending exchange state, exact continuations, selected canonical guidance references, and explicit omissions. Raw outputs, full skills, tool schemas already resident in the client, secrets, inferred permissions, and stale historical instructions remain out unless an explicit policy and authority allow them.
+
+Checkpoints are immutable and forkable; a single `consumed` bit cannot represent retry, fork, handoff, or several target clients. Clients without reliable before/after-compaction events use continuously maintained projections plus a first-call or explicit-resume fallback. The [`Session Continuity contract`](../mcp/session-continuity-contract.md) defines provider, configuration, trust, branch, idempotency, fallback, and conformance semantics.
 
 ### Job exchange
 
@@ -219,8 +242,12 @@ The Codex-Scientiae `jsonl_engine` comparison clarifies the implementation bound
 
 ```text
 MCP handler → ParaApplication facade → Console / Artifact / Job engines
-                                      → JSONL, selector, digest, and Hashish capabilities
-                                      → mux and storage adapters
+                                       → JSONL, selector, digest, and Hashish capabilities
+                                       → mux and storage adapters
+
+Harness lifecycle adapter → normalized context-epoch event
+                          → Session Continuity checkpoint / restore compiler
+                          → bounded native delivery + delivery receipt
 ```
 
 One MCP call should cross that boundary once per agent intent. The backend can then perform record-wise framing, capture, locking, sequencing, hashing, projection, publication, and cleanup without extra model turns. The agent chooses the task, target, requested evidence, and material lifecycle; it does not choose scratch paths, sidecars, sentinels, polling mechanics, serialization profiles, or hash primitives.
@@ -228,6 +255,8 @@ One MCP call should cross that boundary once per agent intent. The backend can t
 MCP handlers should be nearly declarative: validate a public request, call one application method, and present its neutral result. The application facade owns operation identity, deadline/cancellation, response budget, retention, composition, typed partial outcomes, and receipt assembly. Engines provide measured facts and source guards. Stores do not know tool names or emit continuation prose; the MCP presenter maps a neutral continuation to the exact exposed `{tool, input}` pair.
 
 Hashish and jso-jackson-derived functionality live below the Artifact query/projection engine. A module, algorithm, or internal CLI verb becomes a public tool only when it represents a distinct agent decision, effect/permission boundary, and result contract. The full responsibility map, current `index.js` pressure points, and design-only migration sequence are in [`backend-engine-architecture.md`](backend-engine-architecture.md).
+
+Mounted Artifact and Session Continuity are shared semantic contracts beneath or across these operations, not new primitive tool families. The former makes derived corpora and indexes safely reopenable and queryable; the latter preserves only the typed work state and navigators required to re-enter them after context loss. Native hooks remain volatile adapters at the client edge.
 
 ## Agent-facing guidance as an explicit layer
 
@@ -243,6 +272,7 @@ The current system has tool descriptions and inherited habits, but no deliberate
 | Receipt/error | What happened and the exact typed continuations available now. |
 | JIT hook guidance | Sparse client-specific correction when a cheaper path is known. |
 | Harness adapter | Normalize native events, retain native evidence, bind identity only when proven, check exact effect support, and format the response. |
+| Session Continuity | Checkpoint eligible typed state, compile a bounded target-specific restore plan, and receipt each evidenced delivery stage across context epochs. |
 | Runtime contract | Schema, authorization, leases, cancellation, deadlines, and resource bounds. |
 | Governance | Independently evaluates observations under its own authority and may intervene; it does not upgrade an advisory decision into an enforcement decision. |
 | Administrative control | Build, deploy, validate, and roll back one explicit client target outside the model-visible data plane. |
@@ -281,7 +311,7 @@ Keep the result classes distinct:
 
 - streaming SHA-256 cryptographically identifies and guards exact captured bytes;
 - Jaccard and Levenshtein exactly compare one declared representation;
-- SimHash and MinHash nominate candidates under compatible preprocessing profiles; a fitted model ID is additionally required only for model-based signatures such as fitted SimHash;
+- SimHash comparisons and MinHash/LSH indexes nominate candidates under compatible preprocessing profiles; a fitted model ID is additionally required only for model-based signatures such as fitted SimHash;
 - Bloom accelerates negative membership and requires exact verification of positives;
 - Count-Min and HyperLogLog produce estimates, never receipt counts;
 - rolling hashes select anchors or CDC boundaries, whose chunks receive cryptographic digests.
@@ -300,7 +330,7 @@ The full port design, jso-jackson integration, cybernetic observation cleanup, a
 | 4 | `job_wait` using a coordinator ingestion cursor or vector cursor until `needs_input|terminal`, returning only new typed events | Replaces repeated screen polling and enables bounded talk-back. |
 | 5 | Console correctness gate and schema-valid steering errors | Prevents expensive retry turns caused by ambiguous or dishonest state. |
 | 6 | Atomic hook projection plus natively verified, semantics-preserving same-tool patches or explicit wrappers | Can reduce returned payload where the exact field behavior is proven; unsupported cases advise or no-op rather than deny/retry. |
-| 7 | Exposure ledger and context epochs | Removes repetition only when paired with an explicit novelty-aware delivery policy; telemetry alone saves no turn. |
+| 7 | Delivery ledger and context epochs | Removes repetition only when paired with an explicit novelty-aware emission policy and appropriately strong stage evidence; telemetry alone saves no turn. |
 | 8 | Full SHA-256 guard → optional CDC chunk manifest → profile-scoped Hashish candidate signatures with model identity where applicable, each on demand | Improves integrity, dedup candidates, and robustness later; approximate stages do not themselves prove equality or remove a turn. |
 
 The default 2 KB inline threshold should become a caller or client-profile decision. A final delegated report is usually the desired evidence and may rationally be returned inline even at 8-16 KB when fetching it later costs another full model turn. Unrequested bulk should remain external.
@@ -358,7 +388,7 @@ The important guidance metrics are not subjective elegance: solo-tool turn rate,
 3. Is Console Journal v1 already externally immutable, or may its sidecar and fidelity claims be corrected in place?
 4. Should the federated driver↔para ledger use a coordinator ingestion cursor or vector cursors, and does any consumer truly require a total order?
 5. Which layer owns agent profiles, worktree policy, auth preflight, and optional caller-supplied verification/postconditions?
-6. What Claude events reliably mark a new context epoch, especially after automatic or manual compaction?
+6. Which client/version/mode combinations reliably expose context-epoch closing and opening events, and which require continuously maintained or first-call continuity fallbacks?
 7. What response budget should the Claude client profile recommend for known-needed final reports?
 8. Which primitive tools remain eagerly exposed after higher-level operations exist, and which schemas can be deferred without making the capabilities unusable in fixed-tool clients?
 9. Should the backend derivation/index providers begin inside para-agent, or become shared packages only after a second real consumer appears?
@@ -367,14 +397,15 @@ The important guidance metrics are not subjective elegance: solo-tool turn rate,
 
 ## Recommended next design artifacts
 
-Before implementation, write six small contracts rather than another umbrella document:
+Keep the pre-implementation contract set small and separable rather than writing another umbrella document:
 
 1. **Console v1 conformance errata** — explicit corrections, compatibility decision, and executable invariant tests.
 2. **Backend application boundary** — neutral operation context/result, cancellation, budgets, retention, errors, and dependency rules for MCP handlers versus engines.
-3. **Artifact reference and receipt contract** — provider-neutral identity, guard, selector, completeness, and structured continuations.
+3. **Guarded reference and receipt contract** — provider-neutral subject identity, generation guard, coordinate space, selector, completeness, and structured continuations; the shared [`Mounted Artifact contract`](../mcp/mounted-artifact-contract.md) supplies the immutable `artifact_ref` and create/open/mount/query/materialize specialization.
 4. **Job exchange contract** — states, typed talk-back, causal links, budgets, and report artifacts.
 5. **Harness routing and capability contract** — native observations, typed decision domains, exact effect support, identity quality, and decision receipts.
-6. **Guidance and observability profile** — one semantic guidance source, adapter-visible projections, measurement basis, and explicit unknowns.
+6. **Session Continuity contract** — the shared [`checkpoint, restore-plan, and delivery semantics`](../mcp/session-continuity-contract.md), with configurable providers, profiles, fork behavior, trust, and fallbacks.
+7. **Guidance and observability profile** — one semantic guidance source, adapter-visible projections, measurement basis, and explicit unknowns.
 
 The skill should then be drafted against those contracts as the teaching interface over them. This ordering prevents guidance from fossilizing accidental details of the current 13-tool prototype while keeping the eventual workflow open-ended.
 

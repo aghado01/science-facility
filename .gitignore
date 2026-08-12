@@ -14,7 +14,7 @@
 .antigravity
 .obsidian
 
-
+**/.snapshot/**
 **__/pycache__/**
 **/.pytest_cache/**
 **/.mypy_cache/**
