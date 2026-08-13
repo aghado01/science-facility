@@ -244,12 +244,19 @@ function Invoke-ClaudeThreadExport
         and stamped on every exchange envelope. Default: Aipithicus.
     .PARAMETER MaxToolInputLength
         Passed to ConvertTo-ClaudeMarkdownV2. Default: 500. $null = no truncation.
+    .PARAMETER NormalizeWhitespace
+        Passed to ConvertTo-ClaudeMarkdownV2. Default: $true. Set to $false to
+        bypass only the final Markdown postprocessor.
+    .PARAMETER OutputEncoding
+        Markdown file encoding passed to ConvertTo-ClaudeMarkdownV2. Default:
+        Utf8. Utf16LE is the code-unit-preserving forensic option.
     .PARAMETER OutputPrefix
         Filename stem for merged, exchanges, and markdown artifacts:
         `{OutputPrefix}-{threadId}.{jsonl|md}`. Default `'thread'`. Batch runs
         pass the project leaf (e.g. `'tools'`).
     .OUTPUTS
-        PSCustomObject { ThreadId, WorkingDir, MergedPath, ExchangesPath, MarkdownPath, Stats }
+        PSCustomObject { ThreadId, WorkingDir, MergedPath, ExchangesPath,
+        MarkdownPath, NormalizeWhitespace, OutputEncoding, Stats }
         Paths for stages not reached are $null.
     #>
     [CmdletBinding(DefaultParameterSetName = 'BySourceDir')]
@@ -286,6 +293,11 @@ function Invoke-ClaudeThreadExport
 
         [AllowNull()]
         [Nullable[int]]$MaxToolInputLength = 500,
+
+        [bool]$NormalizeWhitespace = $true,
+
+        [ValidateSet('Utf8', 'Utf16LE')]
+        [string]$OutputEncoding = 'Utf8',
 
         [string]$OutputPrefix = 'thread'
     )
@@ -331,6 +343,8 @@ function Invoke-ClaudeThreadExport
             MergedPath    = $mergedPath
             ExchangesPath = $null
             MarkdownPath  = $null
+            NormalizeWhitespace = $NormalizeWhitespace
+            OutputEncoding = $OutputEncoding
             Stats         = $threadResult.Stats
             Elapsed       = $timer.Elapsed
         }
@@ -351,6 +365,8 @@ function Invoke-ClaudeThreadExport
             MergedPath    = $mergedPath
             ExchangesPath = $exchangesPath
             MarkdownPath  = $null
+            NormalizeWhitespace = $NormalizeWhitespace
+            OutputEncoding = $OutputEncoding
             Stats         = $threadResult.Stats
             Elapsed       = $timer.Elapsed
         }
@@ -384,7 +400,9 @@ function Invoke-ClaudeThreadExport
         -OutputPath          $resolvedMarkdownPath `
         -Format              $Format `
         -Exclude             $Exclude `
-        -MaxToolInputLength  $MaxToolInputLength
+        -MaxToolInputLength  $MaxToolInputLength `
+        -NormalizeWhitespace $NormalizeWhitespace `
+        -OutputEncoding      $OutputEncoding
 
     $timer.Stop()
     return [PSCustomObject]@{
@@ -393,6 +411,8 @@ function Invoke-ClaudeThreadExport
         MergedPath    = $mergedPath
         ExchangesPath = $exchangesPath
         MarkdownPath  = $resolvedMarkdownPath
+        NormalizeWhitespace = $NormalizeWhitespace
+        OutputEncoding = $OutputEncoding
         Stats         = $threadResult.Stats
         Elapsed       = $timer.Elapsed
     }
@@ -575,8 +595,15 @@ function Invoke-ClaudeThreadExportBatch
         Passed to ConvertTo-ClaudeMarkdownV2 for each thread. Default: model-feeding profile.
     .PARAMETER MaxToolInputLength
         Passed to ConvertTo-ClaudeMarkdownV2. Default: 500. $null = no truncation.
+    .PARAMETER NormalizeWhitespace
+        Passed through to every per-thread renderer. Default: $true. Set to
+        $false to bypass only the final Markdown postprocessor.
+    .PARAMETER OutputEncoding
+        Markdown file encoding passed through to every thread renderer.
+        Default: Utf8. Utf16LE is the code-unit-preserving forensic option.
     .OUTPUTS
-        PSCustomObject { SourceDir, Plan, Results[], Elapsed }
+        PSCustomObject { SourceDir, Plan, Results[], NormalizeWhitespace,
+        OutputEncoding, Elapsed }
     #>
     [CmdletBinding(DefaultParameterSetName = 'BySourceDir')]
     param(
@@ -607,7 +634,12 @@ function Invoke-ClaudeThreadExportBatch
             'subagents', 'synthetic', 'timestamps', 'session-markers', 'exchange-markers'),
 
         [AllowNull()]
-        [Nullable[int]]$MaxToolInputLength = 500
+        [Nullable[int]]$MaxToolInputLength = 500,
+
+        [bool]$NormalizeWhitespace = $true,
+
+        [ValidateSet('Utf8', 'Utf16LE')]
+        [string]$OutputEncoding = 'Utf8'
     )
 
     $batchTimer = [System.Diagnostics.Stopwatch]::StartNew()
@@ -630,6 +662,8 @@ function Invoke-ClaudeThreadExportBatch
             SourceDir = $SourceDir
             Plan      = $plan
             Results   = @()
+            NormalizeWhitespace = $NormalizeWhitespace
+            OutputEncoding = $OutputEncoding
             Elapsed   = $batchTimer.Elapsed
         }
     }
@@ -694,6 +728,8 @@ function Invoke-ClaudeThreadExportBatch
             Format             = $Format
             Exclude            = $Exclude
             MaxToolInputLength = $MaxToolInputLength
+            NormalizeWhitespace = $NormalizeWhitespace
+            OutputEncoding     = $OutputEncoding
             OutputPrefix       = $projectLeaf
             MarkdownDir        = $MarkdownDir
         }
@@ -709,6 +745,8 @@ function Invoke-ClaudeThreadExportBatch
         SourceDir = $SourceDir
         Plan      = $plan
         Results   = $results.ToArray()
+        NormalizeWhitespace = $NormalizeWhitespace
+        OutputEncoding = $OutputEncoding
         Elapsed   = $batchTimer.Elapsed
     }
 }

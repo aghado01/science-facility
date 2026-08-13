@@ -2,7 +2,7 @@
 
 $ErrorActionPreference = 'Stop'
 
-. (Join-Path (Split-Path -Parent $PSScriptRoot) 'chat-export-format-ws.ps1')
+. (Join-Path (Split-Path -Parent $PSScriptRoot) 'chat-export-output.ps1')
 
 function script:ConvertTo-CodexDisplayJson
 {
@@ -120,6 +120,14 @@ function ConvertTo-CodexMarkdown
     <#
     .SYNOPSIS
         Render Codex exchange-envelope JSONL as Markdown.
+    .PARAMETER NormalizeWhitespace
+        Apply the shared final-Markdown whitespace and Unicode normalizer.
+        Default: $true. Set to $false for a pre-postprocessor forensic view;
+        upstream parsing and rendering still apply.
+    .PARAMETER OutputEncoding
+        Markdown file encoding. Utf8 (default) is BOM-less. Utf16LE writes an
+        FF FE BOM and preserves the rendered .NET UTF-16 code units verbatim.
+        This parameter has no effect when OutputPath is omitted.
     #>
     [CmdletBinding()]
     param(
@@ -140,7 +148,12 @@ function ConvertTo-CodexMarkdown
             'exchange-markers'),
 
         [AllowNull()]
-        [Nullable[int]]$MaxToolInputLength = 500
+        [Nullable[int]]$MaxToolInputLength = 500,
+
+        [bool]$NormalizeWhitespace = $true,
+
+        [ValidateSet('Utf8', 'Utf16LE')]
+        [string]$OutputEncoding = 'Utf8'
     )
 
     if (-not [System.IO.File]::Exists($ExchangesJsonlPath))
@@ -344,15 +357,19 @@ function ConvertTo-CodexMarkdown
         -Models $models `
         -ExchangeCount $exchangeCount `
         -UserLabel $userLabel
-    $markdown = Format-ChatExportMarkdown `
-        -Markdown ($frontmatter + $doc.ToString().TrimEnd() + "`n")
-    $encoding = [System.Text.UTF8Encoding]::new($false)
-
+    $markdown = $frontmatter + $doc.ToString().TrimEnd() + "`n"
+    if ($NormalizeWhitespace)
+    {
+        $markdown = Format-ChatExportMarkdown -Markdown $markdown
+    }
     if ($OutputPath)
     {
         $outputDir = [System.IO.Path]::GetDirectoryName($OutputPath)
         if ($outputDir) { [void][System.IO.Directory]::CreateDirectory($outputDir) }
-        [System.IO.File]::WriteAllText($OutputPath, $markdown, $encoding)
+        Write-ChatExportText `
+            -Path $OutputPath `
+            -Text $markdown `
+            -OutputEncoding $OutputEncoding
         return
     }
     return $markdown

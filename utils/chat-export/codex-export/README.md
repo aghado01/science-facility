@@ -31,6 +31,8 @@ RolloutPath
 WorkingDir
 RunStamp
 RunDir
+NormalizeWhitespace
+OutputEncoding
 Stats
 ```
 
@@ -51,6 +53,33 @@ Pass an empty exclusion list to retain every supported component:
 
 ```powershell
 & "$PWD\Export-CodexChat.ps1" -Format House -Exclude @()
+```
+
+Final Markdown normalization defaults to enabled. For forensic comparison,
+bypass only that postprocessor with the boolean option below. Choose another
+output prefix so the unnormalized view does not overwrite the normalized file:
+
+```powershell
+& "$PWD\Export-CodexChat.ps1" `
+    -OutputPrefix Codex-pre-normalization `
+    -NormalizeWhitespace:$false
+```
+
+The opt-out does not bypass parsing or Markdown rendering and does not alter the
+canonical exchanges JSONL.
+
+Markdown files default to BOM-less UTF-8. Pass `-OutputEncoding Utf16LE` for an
+`FF FE` BOM followed by the rendered .NET UTF-16 code units verbatim. This
+changes only the Markdown writer; snapshot and exchange JSONL remain UTF-8.
+
+For a strict normalized/pre-normalization pair from one frozen source and one
+renderer invocation, use the shared research wrapper instead of invoking this
+script twice:
+
+```powershell
+& "D:\aghado01\science-facility\utils\chat-export\Export-ChatWhitespacePair.ps1" `
+    -Provider Codex `
+    -OutputEncoding Utf16LE
 ```
 
 Supported formats:
@@ -90,7 +119,9 @@ Invoke-CodexThreadExport `
 Invoke-CodexThreadExport `
     -ThreadId $env:CODEX_THREAD_ID `
     -MarkdownDir D:\aghado01\.discussion `
-    -Format Structural
+    -Format Structural `
+    -NormalizeWhitespace:$false `
+    -OutputEncoding Utf16LE
 ```
 
 ## Exchange-envelope IR

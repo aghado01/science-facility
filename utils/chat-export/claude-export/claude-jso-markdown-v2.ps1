@@ -58,7 +58,7 @@
 #   - Frontmatter has exchanges: count instead of turns:, no models: section
 # -----------------------------------------------------------------------
 
-. (Join-Path (Split-Path -Parent $PSScriptRoot) 'chat-export-format-ws.ps1')
+. (Join-Path (Split-Path -Parent $PSScriptRoot) 'chat-export-output.ps1')
 
 function ConvertTo-ClaudeMarkdownV2
 {
@@ -85,6 +85,14 @@ function ConvertTo-ClaudeMarkdownV2
         to include everything.
     .PARAMETER MaxToolInputLength
         Truncate tool_use input JSON at this many characters. $null = no truncation.
+    .PARAMETER NormalizeWhitespace
+        Apply the shared final-Markdown whitespace and Unicode normalizer.
+        Default: $true. Set to $false for a pre-postprocessor forensic view;
+        upstream parsing and rendering still apply.
+    .PARAMETER OutputEncoding
+        Markdown file encoding. Utf8 (default) is BOM-less. Utf16LE writes an
+        FF FE BOM and preserves the rendered .NET UTF-16 code units verbatim.
+        This parameter has no effect when OutputPath is omitted.
     #>
     [CmdletBinding()]
     param(
@@ -102,7 +110,12 @@ function ConvertTo-ClaudeMarkdownV2
             'subagents', 'synthetic', 'timestamps', 'session-markers', 'exchange-markers'),
 
         [AllowNull()]
-        [Nullable[int]]$MaxToolInputLength = 500
+        [Nullable[int]]$MaxToolInputLength = 500,
+
+        [bool]$NormalizeWhitespace = $true,
+
+        [ValidateSet('Utf8', 'Utf16LE')]
+        [string]$OutputEncoding = 'Utf8'
     )
 
     if (-not [System.IO.File]::Exists($ExchangesJsonlPath))
@@ -120,7 +133,7 @@ function ConvertTo-ClaudeMarkdownV2
     $fmUserLabel = $null
     $exchangeCount = 0
 
-    $encoding = [System.Text.UTF8Encoding]::new($false)
+    $inputEncoding = [System.Text.UTF8Encoding]::new($false)
     $doc = [System.Text.StringBuilder]::new()
     [string]$lastSessionUuid = $null
     [int]$lastDepth = -1
@@ -132,7 +145,7 @@ function ConvertTo-ClaudeMarkdownV2
         [System.IO.FileAccess]::Read,
         [System.IO.FileShare]::Read
     )
-    $sr = [System.IO.StreamReader]::new($fs, $encoding)
+    $sr = [System.IO.StreamReader]::new($fs, $inputEncoding)
 
     try
     {
@@ -411,8 +424,11 @@ function ConvertTo-ClaudeMarkdownV2
     }
 
     $frontmatter = script:Get-V2Frontmatter $Format $Exclude $fmSessions $fmModels $exchangeCount $fmUserLabel
-    $markdown = Format-ChatExportMarkdown `
-        -Markdown ($frontmatter + $doc.ToString().TrimEnd() + "`n")
+    $markdown = $frontmatter + $doc.ToString().TrimEnd() + "`n"
+    if ($NormalizeWhitespace)
+    {
+        $markdown = Format-ChatExportMarkdown -Markdown $markdown
+    }
 
     if ($OutputPath)
     {
@@ -421,7 +437,10 @@ function ConvertTo-ClaudeMarkdownV2
         {
             [void][System.IO.Directory]::CreateDirectory($outDir)
         }
-        [System.IO.File]::WriteAllText($OutputPath, $markdown, $encoding)
+        Write-ChatExportText `
+            -Path $OutputPath `
+            -Text $markdown `
+            -OutputEncoding $OutputEncoding
         return
     }
     return $markdown

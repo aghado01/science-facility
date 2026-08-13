@@ -38,8 +38,19 @@
 .PARAMETER OutputPrefix
     Output filename prefix - the file is {OutputPrefix}-{threadId}.md. Default value is'Claude'.
 
+.PARAMETER NormalizeWhitespace
+    Controls the shared final-Markdown whitespace and Unicode postprocessor.
+    Defaults to $true. Use -NormalizeWhitespace:$false for forensic comparison
+    with the renderer's pre-postprocessor Markdown. Canonical JSONL is unaffected.
+
+.PARAMETER OutputEncoding
+    Markdown file encoding. Utf8 (default) preserves the existing BOM-less
+    output. Utf16LE is an opt-in code-unit-preserving forensic format with an
+    FF FE byte-order mark. Canonical JSONL remains UTF-8.
+
 .OUTPUTS
-    PSCustomObject { MarkdownPath, SessionId, ProjectName, ThreadId }
+    PSCustomObject { MarkdownPath, SessionId, ProjectName, ThreadId,
+    NormalizeWhitespace, OutputEncoding }
     Report the returned path. Do not read the generated transcript back into the
     conversation; avoiding that redundant context load is part of this command's
     contract.
@@ -56,7 +67,12 @@ param(
     [string[]]$Exclude = @('thinking', 'synthetic', 'timestamps', 'session-markers',
         'exchange-markers', 'tool-calls', 'tool-results', 'subagents'),
 
-    [string]$OutputPrefix = 'Claude'
+    [string]$OutputPrefix = 'Claude',
+
+    [bool]$NormalizeWhitespace = $true,
+
+    [ValidateSet('Utf8', 'Utf16LE')]
+    [string]$OutputEncoding = 'Utf8'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -83,7 +99,9 @@ $result = Invoke-ClaudeThreadExport `
     -MarkdownDir  $MarkdownDir `
     -OutputPrefix $OutputPrefix `
     -Format       'Structural' `
-    -Exclude      $Exclude
+    -Exclude      $Exclude `
+    -NormalizeWhitespace $NormalizeWhitespace `
+    -OutputEncoding $OutputEncoding
 
 Write-Host "`nExported → $($result.MarkdownPath)" -ForegroundColor Green
 
@@ -92,4 +110,6 @@ return [PSCustomObject]@{
     SessionId    = $SessionId
     ProjectName  = $resolved.ProjectName
     ThreadId     = $result.ThreadId
+    NormalizeWhitespace = $result.NormalizeWhitespace
+    OutputEncoding = $result.OutputEncoding
 }

@@ -40,6 +40,11 @@ function Invoke-CodexThreadExport
         [AllowNull()]
         [Nullable[int]]$MaxToolInputLength = 500,
 
+        [bool]$NormalizeWhitespace = $true,
+
+        [ValidateSet('Utf8', 'Utf16LE')]
+        [string]$OutputEncoding = 'Utf8',
+
         [string]$OutputPrefix = 'thread'
     )
 
@@ -99,6 +104,8 @@ function Invoke-CodexThreadExport
             SnapshotPath  = $snapshot.SnapshotPath
             ExchangesPath = $exchangeResult.ExchangesPath
             MarkdownPath  = $null
+            NormalizeWhitespace = $NormalizeWhitespace
+            OutputEncoding = $OutputEncoding
             Stats         = $stats
             Elapsed       = $timer.Elapsed
         }
@@ -129,7 +136,9 @@ function Invoke-CodexThreadExport
         -OutputPath $resolvedMarkdownPath `
         -Format $Format `
         -Exclude $Exclude `
-        -MaxToolInputLength $MaxToolInputLength
+        -MaxToolInputLength $MaxToolInputLength `
+        -NormalizeWhitespace $NormalizeWhitespace `
+        -OutputEncoding $OutputEncoding
 
     $timer.Stop()
     return [pscustomobject]@{
@@ -141,6 +150,8 @@ function Invoke-CodexThreadExport
         SnapshotPath  = $snapshot.SnapshotPath
         ExchangesPath = $exchangeResult.ExchangesPath
         MarkdownPath  = $resolvedMarkdownPath
+        NormalizeWhitespace = $NormalizeWhitespace
+        OutputEncoding = $OutputEncoding
         Stats         = $stats
         Elapsed       = $timer.Elapsed
     }

@@ -72,6 +72,65 @@ function Assert-NormalizedDocument
     Assert-True (-not $Markdown.EndsWith("`n`n")) "$Label has exactly one terminal LF"
 }
 
+function Assert-NormalizationParameterContract
+{
+    param(
+        [string]$Path,
+        [string]$FunctionName,
+        [string]$ForwardedCommand
+    )
+
+    $tokens = $null
+    $parseErrors = $null
+    $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+        (Resolve-Path $Path), [ref]$tokens, [ref]$parseErrors)
+    Assert-Equal $parseErrors.Count 0 "$Path parses for contract inspection"
+
+    $body = $ast
+    $paramBlock = $ast.ParamBlock
+    if ($FunctionName)
+    {
+        $functions = @($ast.FindAll({
+                    param($node)
+                    $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                    $node.Name -eq $FunctionName
+                }, $true))
+        Assert-Equal $functions.Count 1 "$FunctionName has one definition"
+        $body = $functions[0].Body
+        $paramBlock = $functions[0].Body.ParamBlock
+    }
+
+    $parameters = @($paramBlock.Parameters | Where-Object {
+            $_.Name.VariablePath.UserPath -eq 'NormalizeWhitespace'
+        })
+    $contractLabel = if ($FunctionName) { $FunctionName } else { Split-Path -Leaf $Path }
+    Assert-Equal $parameters.Count 1 "$contractLabel exposes NormalizeWhitespace"
+    Assert-Equal $parameters[0].StaticType ([bool]) `
+        "$contractLabel exposes NormalizeWhitespace as bool"
+    Assert-Equal $parameters[0].DefaultValue.Extent.Text '$true' `
+        "$contractLabel defaults NormalizeWhitespace to true"
+
+    if ($ForwardedCommand)
+    {
+        $calls = @($body.FindAll({
+                    param($node)
+                    $node -is [System.Management.Automation.Language.CommandAst] -and
+                    $node.GetCommandName() -eq $ForwardedCommand
+                }, $true))
+        Assert-True ($calls.Count -ge 1) "$contractLabel calls $ForwardedCommand"
+        $forwardedParameters = @($calls | ForEach-Object {
+                $_.CommandElements | Where-Object {
+                    $_ -is [System.Management.Automation.Language.CommandParameterAst] -and
+                    $_.ParameterName -eq 'NormalizeWhitespace'
+                }
+            })
+        $splatForwardsParameter = $body.Extent.Text -match
+            '(?m)^\s*NormalizeWhitespace\s*=\s*\$NormalizeWhitespace\s*$'
+        Assert-True ($forwardedParameters.Count -ge 1 -or $splatForwardsParameter) `
+            "$contractLabel forwards NormalizeWhitespace to $ForwardedCommand"
+    }
+}
+
 function Get-FirstJsonFencePayload
 {
     param([string]$Markdown)
@@ -128,6 +187,33 @@ try
     $tick = [char]0x0060
     $ticks3 = [string]::new($tick, 3)
     $ticks4 = [string]::new($tick, 4)
+
+    # Lock the public default-true contract and every forwarding seam from the
+    # agent wrappers through runners to the standalone renderers.
+    Assert-NormalizationParameterContract `
+        -Path "$PSScriptRoot\..\claude-export\Export-ClaudeChat.ps1" `
+        -ForwardedCommand 'Invoke-ClaudeThreadExport'
+    Assert-NormalizationParameterContract `
+        -Path "$PSScriptRoot\..\codex-export\Export-CodexChat.ps1" `
+        -ForwardedCommand 'Invoke-CodexThreadExport'
+    Assert-NormalizationParameterContract `
+        -Path "$PSScriptRoot\..\claude-export\claude-jso-run.ps1" `
+        -FunctionName 'Invoke-ClaudeThreadExport' `
+        -ForwardedCommand 'ConvertTo-ClaudeMarkdownV2'
+    Assert-NormalizationParameterContract `
+        -Path "$PSScriptRoot\..\claude-export\claude-jso-run.ps1" `
+        -FunctionName 'Invoke-ClaudeThreadExportBatch' `
+        -ForwardedCommand 'Invoke-ClaudeThreadExport'
+    Assert-NormalizationParameterContract `
+        -Path "$PSScriptRoot\..\codex-export\codex-jso-run.ps1" `
+        -FunctionName 'Invoke-CodexThreadExport' `
+        -ForwardedCommand 'ConvertTo-CodexMarkdown'
+    Assert-NormalizationParameterContract `
+        -Path "$PSScriptRoot\..\claude-export\claude-jso-markdown-v2.ps1" `
+        -FunctionName 'ConvertTo-ClaudeMarkdownV2'
+    Assert-NormalizationParameterContract `
+        -Path "$PSScriptRoot\..\codex-export\codex-jso-markdown.ps1" `
+        -FunctionName 'ConvertTo-CodexMarkdown'
 
     # Shared helper: mirror the reposnapshot operation family while retaining
     # whitespace that is structural in Markdown or literal payloads.
@@ -258,6 +344,34 @@ try
         Assert-Equal $toolInput.markup '<tag attr="x">' `
             "Claude $format tool-input JSON retains printable markup"
     }
+    $claudeForensic = ConvertTo-ClaudeMarkdownV2 `
+        -ExchangesJsonlPath $claudePath `
+        -Format Structural `
+        -Exclude @() `
+        -MaxToolInputLength $null `
+        -NormalizeWhitespace:$false
+    Assert-True $claudeForensic.Contains("`r") `
+        'Claude forensic view retains pre-postprocessor CR characters'
+    Assert-True $claudeForensic.Contains([string]$zwsp) `
+        'Claude forensic view retains pre-postprocessor invisible characters'
+    Assert-True $claudeForensic.Contains("pro${zwsp}mpt   body`r`nnext") `
+        'Claude forensic view retains prompt whitespace'
+    Assert-True $claudeForensic.Contains("Cafe${combiningAcute}   final") `
+        'Claude forensic view retains decomposed response text and inner spaces'
+    Assert-True $claudeForensic.Contains('\uFEFF') `
+        'Claude forensic view retains escaped tool JSON invisibles'
+
+    $claudeExplicitNormalized = ConvertTo-ClaudeMarkdownV2 `
+        -ExchangesJsonlPath $claudePath `
+        -Format Structural `
+        -Exclude @() `
+        -MaxToolInputLength $null `
+        -NormalizeWhitespace:$true
+    Assert-NormalizedDocument $claudeExplicitNormalized `
+        'Claude explicit normalized view'
+    Assert-True ($claudeExplicitNormalized -cne $claudeForensic) `
+        'Claude enabled and disabled views differ'
+
     Assert-Equal (Get-FileHashText -Path $claudePath) $claudeSourceHash `
         'Claude exchange JSONL is not mutated by Markdown normalization'
 
@@ -276,6 +390,18 @@ try
         'Claude Markdown file is UTF-8 without BOM'
     Assert-Equal $claudeBytes[$claudeBytes.Length - 1] ([byte]0x0A) `
         'Claude Markdown file ends in LF'
+
+    $claudeForensicPath = Join-Path $tempRoot 'claude-pre-normalization.md'
+    ConvertTo-ClaudeMarkdownV2 `
+        -ExchangesJsonlPath $claudePath `
+        -OutputPath $claudeForensicPath `
+        -Format Structural `
+        -Exclude @() `
+        -MaxToolInputLength $null `
+        -NormalizeWhitespace:$false
+    $claudeForensicFile = [System.IO.File]::ReadAllText($claudeForensicPath)
+    Assert-True $claudeForensicFile.Contains("`r") `
+        'Claude file-writing path honors disabled normalization'
 
     # Codex fixture additionally covers commentary and final response phases.
     $codexPath = Join-Path $tempRoot 'codex-exchanges.jsonl'
@@ -356,6 +482,32 @@ try
         Assert-Equal $toolInput.markup '<tag attr="x">' `
             "Codex $format tool-input JSON retains printable markup"
     }
+    $codexForensic = ConvertTo-CodexMarkdown `
+        -ExchangesJsonlPath $codexPath `
+        -Format Structural `
+        -Exclude @() `
+        -MaxToolInputLength $null `
+        -NormalizeWhitespace:$false
+    Assert-True $codexForensic.Contains("`r") `
+        'Codex forensic view retains pre-postprocessor CR characters'
+    Assert-True $codexForensic.Contains([string]$zwsp) `
+        'Codex forensic view retains pre-postprocessor invisible characters'
+    Assert-True $codexForensic.Contains("pro${zwsp}mpt   body`r`nnext") `
+        'Codex forensic view retains prompt whitespace'
+    Assert-True $codexForensic.Contains("Cafe${combiningAcute}   final") `
+        'Codex forensic view retains decomposed response text and inner spaces'
+
+    $codexExplicitNormalized = ConvertTo-CodexMarkdown `
+        -ExchangesJsonlPath $codexPath `
+        -Format Structural `
+        -Exclude @() `
+        -MaxToolInputLength $null `
+        -NormalizeWhitespace:$true
+    Assert-NormalizedDocument $codexExplicitNormalized `
+        'Codex explicit normalized view'
+    Assert-True ($codexExplicitNormalized -cne $codexForensic) `
+        'Codex enabled and disabled views differ'
+
     Assert-Equal (Get-FileHashText -Path $codexPath) $codexSourceHash `
         'Codex exchange JSONL is not mutated by Markdown normalization'
 
@@ -374,6 +526,18 @@ try
         'Codex Markdown file is UTF-8 without BOM'
     Assert-Equal $codexBytes[$codexBytes.Length - 1] ([byte]0x0A) `
         'Codex Markdown file ends in LF'
+
+    $codexForensicPath = Join-Path $tempRoot 'codex-pre-normalization.md'
+    ConvertTo-CodexMarkdown `
+        -ExchangesJsonlPath $codexPath `
+        -OutputPath $codexForensicPath `
+        -Format Structural `
+        -Exclude @() `
+        -MaxToolInputLength $null `
+        -NormalizeWhitespace:$false
+    $codexForensicFile = [System.IO.File]::ReadAllText($codexForensicPath)
+    Assert-True $codexForensicFile.Contains("`r") `
+        'Codex file-writing path honors disabled normalization'
 
     Write-Host "PASS: $script:AssertionCount Markdown whitespace assertions" `
         -ForegroundColor Green

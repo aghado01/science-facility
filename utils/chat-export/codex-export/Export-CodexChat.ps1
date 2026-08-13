@@ -26,6 +26,16 @@
 .PARAMETER Exclude
     Components omitted from Markdown only. The exchanges IR always retains the
     normalized records. Pass @() to render everything.
+
+.PARAMETER NormalizeWhitespace
+    Controls the shared final-Markdown whitespace and Unicode postprocessor.
+    Defaults to $true. Use -NormalizeWhitespace:$false for forensic comparison
+    with the renderer's pre-postprocessor Markdown. Canonical JSONL is unaffected.
+
+.PARAMETER OutputEncoding
+    Markdown file encoding. Utf8 (default) preserves the existing BOM-less
+    output. Utf16LE is an opt-in code-unit-preserving forensic format with an
+    FF FE byte-order mark. Canonical JSONL remains UTF-8.
 #>
 [CmdletBinding()]
 param(
@@ -53,7 +63,12 @@ param(
     [string]$UserLabel = 'Aipithicus',
 
     [AllowNull()]
-    [Nullable[int]]$MaxToolInputLength = 500
+    [Nullable[int]]$MaxToolInputLength = 500,
+
+    [bool]$NormalizeWhitespace = $true,
+
+    [ValidateSet('Utf8', 'Utf16LE')]
+    [string]$OutputEncoding = 'Utf8'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -84,7 +99,9 @@ $result = Invoke-CodexThreadExport `
     -Format $Format `
     -Exclude $Exclude `
     -UserLabel $UserLabel `
-    -MaxToolInputLength $MaxToolInputLength
+    -MaxToolInputLength $MaxToolInputLength `
+    -NormalizeWhitespace $NormalizeWhitespace `
+    -OutputEncoding $OutputEncoding
 
 Write-Host "`nExported Markdown → $($result.MarkdownPath)" -ForegroundColor Green
 Write-Host "Exchange IR      → $($result.ExchangesPath)" -ForegroundColor Green
@@ -97,5 +114,7 @@ return [pscustomobject]@{
     WorkingDir    = $result.WorkingDir
     RunStamp      = $result.RunStamp
     RunDir        = $result.RunDir
+    NormalizeWhitespace = $result.NormalizeWhitespace
+    OutputEncoding = $result.OutputEncoding
     Stats         = $result.Stats
 }
