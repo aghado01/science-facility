@@ -1,0 +1,13 @@
+[project]
+name = "pwsh_exec"
+version = "0.2.0"
+description = "Client-neutral MCP server for executing PowerShell"
+readme = "README.md"
+requires-python = ">=3.10,<4"
+dependencies = [
+    "mcp<2",
+]
+
+[tool.uv]
+link-mode = "copy"
+package = false
