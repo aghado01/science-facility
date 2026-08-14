@@ -1,0 +1,185 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:science-facility:para-agent:schema:transcript-exchange:1",
+  "title": "Para-Agent Transcript Exchange",
+  "description": "The schema for exchange rows (rows 1..N) in a para-agent transcript JSONL file. Each row represents one complete mediated dialogue interaction between Primary and Para agents.",
+  "type": "object",
+  "required": [
+    "record_type",
+    "exchange_id",
+    "exchange_index",
+    "exchange_start",
+    "exchange_end",
+    "sender",
+    "receiver",
+    "status",
+    "records"
+  ],
+  "properties": {
+    "record_type": {
+      "const": "transcript_exchange",
+      "description": "Discriminates transcript exchange rows from the zero-row transcript_header."
+    },
+    "exchange_id": {
+      "type": "string",
+      "description": "Unique identifier for this exchange envelope (e.g. UUID or prefixed slug)."
+    },
+    "exchange_index": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "0-based monotonic sequence index of the exchange within this transcript."
+    },
+    "exchange_start": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when mediation ingress received the prompt."
+    },
+    "exchange_end": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when mediation egress committed the terminal reply."
+    },
+    "sender": {
+      "type": "string",
+      "description": "Client identifier of the primary sending agent (e.g. 'claude', 'primary')."
+    },
+    "receiver": {
+      "type": "string",
+      "description": "Client identifier of the receiving para agent (e.g. 'codex', 'agy')."
+    },
+    "display_name": {
+      "type": "string",
+      "description": "Optional human-readable display label for the exchange or model."
+    },
+    "model": {
+      "type": "string",
+      "description": "The receiver model observed during the exchange (e.g. 'gpt-5.6-sol', 'claude-3-7-sonnet')."
+    },
+    "effort": {
+      "type": "string",
+      "description": "Reasoning or thinking effort level (e.g. 'high', 'medium', 'low')."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["completed", "interrupted", "failed", "timeout"],
+      "description": "Final execution outcome of the exchange."
+    },
+    "native_provenance": {
+      "type": "object",
+      "description": "Raw identifiers from the participating native client sessions when observable.",
+      "properties": {
+        "thread_id": { "type": "string" },
+        "turn_id": { "type": "string" },
+        "session_uuid": { "type": "string" },
+        "source_thread": { "type": "string" },
+        "session_depth": { "type": "integer" }
+      },
+      "additionalProperties": true
+    },
+    "records": {
+      "type": "array",
+      "description": "Chronological stream of internal micro-steps captured during the exchange.",
+      "items": {
+        "oneOf": [
+          { "$ref": "#/$defs/promptRecord" },
+          { "$ref": "#/$defs/thinkingRecord" },
+          { "$ref": "#/$defs/toolCallRecord" },
+          { "$ref": "#/$defs/responseRecord" }
+        ]
+      }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "baseRecord": {
+      "type": "object",
+      "required": ["_type", "_timestamp"],
+      "properties": {
+        "_source_uuid": { "type": "string" },
+        "_timestamp": { "type": "string", "format": "date-time" },
+        "_turn_id": { "type": "string" }
+      }
+    },
+    "promptRecord": {
+      "allOf": [
+        { "$ref": "#/$defs/baseRecord" },
+        {
+          "type": "object",
+          "required": ["_type", "text"],
+          "properties": {
+            "_type": { "const": "prompt" },
+            "text": { "type": "string", "description": "Authoritative prompt delivered from primary." }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "thinkingRecord": {
+      "allOf": [
+        { "$ref": "#/$defs/baseRecord" },
+        {
+          "type": "object",
+          "required": ["_type", "text"],
+          "properties": {
+            "_type": { "const": "thinking" },
+            "text": { "type": "string", "description": "Internal model reasoning or chain-of-thought trace." }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "toolCallRecord": {
+      "allOf": [
+        { "$ref": "#/$defs/baseRecord" },
+        {
+          "type": "object",
+          "required": ["_type", "tool_name", "status"],
+          "properties": {
+            "_type": { "const": "tool_call" },
+            "tool_use_id": { "type": "string" },
+            "tool_name": { "type": "string" },
+            "tool_kind": { "type": "string" },
+            "status": { "type": "string", "enum": ["completed", "failed", "running", "cancelled"] },
+            "input": {
+              "description": "Tool input payload (string or structured object)."
+            },
+            "response": {
+              "type": "object",
+              "properties": {
+                "_timestamp": { "type": "string", "format": "date-time" },
+                "tool_use_id": { "type": "string" },
+                "content": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "type": { "type": "string" },
+                      "text": { "type": "string" }
+                    }
+                  }
+                }
+              },
+              "additionalProperties": true
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "responseRecord": {
+      "allOf": [
+        { "$ref": "#/$defs/baseRecord" },
+        {
+          "type": "object",
+          "required": ["_type", "text"],
+          "properties": {
+            "_type": { "const": "response" },
+            "phase": { "type": "string", "enum": ["commentary", "final", "partial"] },
+            "text": { "type": "string", "description": "Terminal or interim response from receiver." }
+          },
+          "additionalProperties": false
+        }
+      ]
+    }
+  }
+}

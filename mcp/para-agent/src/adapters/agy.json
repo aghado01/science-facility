@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "client_id": "agy",
+  "display_name": "Google Antigravity CLI",
+  "provenance_mappings": {
+    "thread_id": "conversation_id",
+    "turn_id": "turn_id",
+    "model": "model_name",
+    "effort": "reasoning_effort"
+  },
+  "record_mappings": {
+    "prompt": {
+      "native_type": "user_input",
+      "text_path": "content",
+      "timestamp_path": "timestamp"
+    },
+    "thinking": {
+      "native_type": "model_thought",
+      "text_path": "thought",
+      "timestamp_path": "timestamp"
+    },
+    "tool_call": {
+      "native_type": "tool_call",
+      "tool_name_path": "tool_name",
+      "tool_use_id_path": "call_id",
+      "input_path": "arguments",
+      "result_path": "result",
+      "status_path": "status"
+    },
+    "response": {
+      "native_type": "model_response",
+      "text_path": "content",
+      "timestamp_path": "timestamp"
+    }
+  }
+}

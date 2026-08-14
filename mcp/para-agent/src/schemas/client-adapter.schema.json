@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:science-facility:para-agent:schema:client-adapter:1",
+  "title": "Para-Agent Client Adapter Schema",
+  "description": "Defines the canonical structure for adapter declarations that map client-native event streams and transcript rows into the canonical para-agent exchange model.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "client_id",
+    "display_name",
+    "record_mappings",
+    "provenance_mappings"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "description": "The major persisted shape version represented by this schema."
+    },
+    "client_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9_-]+$",
+      "description": "Unique client identifier e.g. 'claude', 'codex', 'agy'."
+    },
+    "display_name": {
+      "type": "string",
+      "description": "Human-readable label for the client, e.g. 'Claude Code', 'OpenAI Codex', 'Antigravity CLI'."
+    },
+    "version_constraint": {
+      "type": "string",
+      "description": "Optional semver pattern or version string supported by this adapter."
+    },
+    "provenance_mappings": {
+      "type": "object",
+      "description": "Property paths or extraction rules for top-level turn/session provenance.",
+      "required": ["thread_id", "turn_id", "model"],
+      "properties": {
+        "thread_id": {
+          "type": "string",
+          "description": "Path or field name for the conversation/thread identifier."
+        },
+        "turn_id": {
+          "type": "string",
+          "description": "Path or field name for the turn identifier."
+        },
+        "model": {
+          "type": "string",
+          "description": "Path or field name for the model identifier."
+        },
+        "effort": {
+          "type": "string",
+          "description": "Path or field name for reasoning/thinking effort level."
+        },
+        "user_label": {
+          "type": "string",
+          "description": "Path or field name for user display name or handle."
+        }
+      },
+      "additionalProperties": false
+    },
+    "record_mappings": {
+      "type": "object",
+      "description": "Declarative rules mapping native client event types to canonical record kinds.",
+      "required": ["prompt", "thinking", "tool_call", "response"],
+      "properties": {
+        "prompt": {
+          "$ref": "#/$defs/eventRule",
+          "description": "Mapping for ingress user/primary prompt events."
+        },
+        "thinking": {
+          "$ref": "#/$defs/eventRule",
+          "description": "Mapping for internal model reasoning/thinking trace events."
+        },
+        "tool_call": {
+          "$ref": "#/$defs/toolCallRule",
+          "description": "Mapping for tool invocations and execution responses."
+        },
+        "response": {
+          "$ref": "#/$defs/eventRule",
+          "description": "Mapping for terminal assistant/receiver output responses."
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "eventRule": {
+      "type": "object",
+      "required": ["native_type", "text_path"],
+      "properties": {
+        "native_type": {
+          "type": "string",
+          "description": "Native event discriminator value or regex."
+        },
+        "text_path": {
+          "type": "string",
+          "description": "Path to extract the primary text payload."
+        },
+        "timestamp_path": {
+          "type": "string",
+          "description": "Path to extract event timestamp (ISO 8601 string)."
+        },
+        "phase_path": {
+          "type": "string",
+          "description": "Optional path for multi-phase response events (e.g. 'commentary', 'final')."
+        }
+      },
+      "additionalProperties": false
+    },
+    "toolCallRule": {
+      "type": "object",
+      "required": ["native_type", "tool_name_path", "input_path"],
+      "properties": {
+        "native_type": {
+          "type": "string",
+          "description": "Native event discriminator value for tool calls."
+        },
+        "tool_name_path": {
+          "type": "string",
+          "description": "Path to extract tool name."
+        },
+        "tool_kind_path": {
+          "type": "string",
+          "description": "Path to extract tool category or kind."
+        },
+        "tool_use_id_path": {
+          "type": "string",
+          "description": "Path to extract unique tool call / invocation ID."
+        },
+        "input_path": {
+          "type": "string",
+          "description": "Path to extract tool input arguments/payload."
+        },
+        "result_path": {
+          "type": "string",
+          "description": "Path to extract tool result or response object."
+        },
+        "status_path": {
+          "type": "string",
+          "description": "Path to extract execution status ('completed', 'failed', etc.)."
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

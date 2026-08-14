@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "client_id": "claude",
+  "display_name": "Claude Code CLI",
+  "provenance_mappings": {
+    "thread_id": "session_id",
+    "turn_id": "turn_id",
+    "model": "model",
+    "effort": "effort"
+  },
+  "record_mappings": {
+    "prompt": {
+      "native_type": "user",
+      "text_path": "message.content[0].text",
+      "timestamp_path": "timestamp"
+    },
+    "thinking": {
+      "native_type": "thinking",
+      "text_path": "thinking",
+      "timestamp_path": "timestamp"
+    },
+    "tool_call": {
+      "native_type": "tool_use",
+      "tool_name_path": "name",
+      "tool_use_id_path": "id",
+      "input_path": "input",
+      "result_path": "tool_result",
+      "status_path": "status"
+    },
+    "response": {
+      "native_type": "assistant",
+      "text_path": "message.content[0].text",
+      "timestamp_path": "timestamp"
+    }
+  }
+}

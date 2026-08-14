@@ -24,8 +24,15 @@ import { waitStable, waitPattern, deltaOf, DEFAULT_DIALECT } from "./framing.js"
 import { Journal } from "./journal.js";
 import { runCaptured, finalizeOpenTurns, requestCancel, CAPTURE_DIALECTS } from "./capture.js";
 import { getNuProfileConfig } from "./profiles.js";
+import { TranscriptStore } from "./transcript.js";
+import { AdapterEngine } from "./adapters.js";
+import { NuEngine } from "./nu.js";
+import { ExchangeAssembler } from "./assembler.js";
 
 const mux = new Mux();
+const adapterEngine = new AdapterEngine();
+const nuEngine = new NuEngine();
+const transcriptStores = new Map();
 
 /** Last capture per target, for delta reads. */
 const lastSeen = new Map();
@@ -39,6 +46,16 @@ const journals = new Map();
 
 /** Session name out of a pane target: `agent-foo:0.1` -> `agent-foo`. */
 const sessionOf = (handle) => String(handle).split(":")[0];
+
+async function transcriptFor(handle) {
+  const stream = sessionOf(handle);
+  if (!transcriptStores.has(stream)) {
+    const store = new TranscriptStore({ workspaceRoot: process.cwd(), sessionId: stream });
+    await store.init();
+    transcriptStores.set(stream, store);
+  }
+  return transcriptStores.get(stream);
+}
 
 async function journalFor(handle) {
   const stream = sessionOf(handle);
@@ -685,6 +702,71 @@ server.registerTool(
       await finalizeOpenTurns(journal);
       const { receipt, hits } = await journal.search({ pattern, flags, from, maxHits, maxPerTurn, context });
       return reply({ ...receipt, hits });
+    } catch (err) {
+      return fail(err);
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Transcript & Exchange Scrutiny (Progressive Disclosure)
+// ---------------------------------------------------------------------------
+
+server.registerTool(
+  "scrutinize",
+  {
+    title: "Inspect exchange details (Progressive Disclosure)",
+    description:
+      "Inspect the internal execution trace (thinking, tool calls, and responses) of a completed exchange. " +
+      "Provides progressive disclosure without cluttering the primary agent context upfront.",
+    inputSchema: {
+      handle: z.string().describe("Pane target or session name."),
+      xid: z.string().optional().describe("Specific exchange ID (_xid) to scrutinize. If omitted, returns exchange summaries."),
+      filter: z.enum(["all", "thinking", "tools", "failures", "summary"]).default("summary")
+        .describe("Filter internal exchange records: 'summary', 'tools', 'thinking', 'failures', or 'all'."),
+      step: z.number().int().min(0).optional().describe("Inspect a single specific 0-based step index."),
+    },
+  },
+  async ({ handle, xid, filter = "summary", step }) => {
+    try {
+      const store = await transcriptFor(handle);
+      if (!xid) {
+        // Return summary of all exchanges
+        const pipeline = `where record_type == "transcript_exchange" | select exchange_id exchange_index exchange_start duration_ms model status records | each { |row| { xid: $row.exchange_id, xidx: $row.exchange_index, model: $row.model, status: $row.status, steps: ($row.records | length), tools: ($row.records | where _type == "tool_call" | length), thinking: ($row.records | where _type == "thinking" | length) } }`;
+        const summaries = await store.query(nuEngine, pipeline);
+        return reply({ session: sessionOf(handle), exchanges: summaries ?? [] });
+      }
+
+      if (step !== undefined) {
+        // Inspect single step
+        const pipeline = `where record_type == "transcript_exchange" and exchange_id == "${xid}" | get 0?.records? | get ${step}`;
+        const stepRecord = await store.query(nuEngine, pipeline);
+        return reply({ xid, step, record: stepRecord });
+      }
+
+      let filterNu = "";
+      switch (filter) {
+        case "tools":
+          filterNu = `| where _type == "tool_call"`;
+          break;
+        case "thinking":
+          filterNu = `| where _type == "thinking"`;
+          break;
+        case "failures":
+          filterNu = `| where _type == "tool_call" and status != "completed"`;
+          break;
+        case "summary":
+          filterNu = `| each { |r| { type: $r._type, name: ($r.tool_name? | default $r.phase?), timestamp: $r._timestamp } }`;
+          break;
+        case "all":
+        default:
+          filterNu = "";
+          break;
+      }
+
+      const pipeline = `where record_type == "transcript_exchange" and exchange_id == "${xid}" | get 0?.records? ${filterNu}`;
+      const records = await store.query(nuEngine, pipeline);
+      return reply({ xid, filter, count: Array.isArray(records) ? records.length : 1, records });
     } catch (err) {
       return fail(err);
     }
