@@ -416,26 +416,6 @@
       },
       "additionalProperties": false
     },
-    "egressEvidence": {
-      "type": "object",
-      "required": ["stage", "observed_at", "reply_sha256"],
-      "properties": {
-        "stage": {
-          "enum": ["constructed", "transport_returned", "host_acknowledged"]
-        },
-        "observed_at": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "reply_sha256": {
-          "$ref": "#/$defs/sha256"
-        },
-        "evidence_ref": {
-          "$ref": "#/$defs/nonEmptyString"
-        }
-      },
-      "additionalProperties": false
-    },
     "deliveryState": {
       "type": "object",
       "required": ["events"],
@@ -445,9 +425,6 @@
           "items": {
             "$ref": "#/$defs/deliveryEvidence"
           }
-        },
-        "egress": {
-          "$ref": "#/$defs/egressEvidence"
         }
       },
       "additionalProperties": false

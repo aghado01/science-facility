@@ -22,12 +22,26 @@ function Test-RunnerCase {
         [string] $Name,
         [string] $Fixture,
         [int] $ExpectedExit,
-        [bool] $ExpectAbort
+        [bool] $ExpectAbort,
+        [switch] $Live,
+        [string] $Suite
     )
 
     $counts.discovered += 1
     $manifest = Join-Path (Join-Path $fixtureRoot $Fixture) 'manifest.json'
-    $caseOutput = @(& $pwsh -NoProfile -ExecutionPolicy Bypass -File $runner -ManifestPath $manifest 2>&1)
+    $runnerArguments = @(
+        '-NoProfile',
+        '-ExecutionPolicy', 'Bypass',
+        '-File', $runner,
+        '-ManifestPath', $manifest
+    )
+    if ($Live) {
+        $runnerArguments += '-Live'
+    }
+    if (-not [string]::IsNullOrWhiteSpace($Suite)) {
+        $runnerArguments += @('-Suite', $Suite)
+    }
+    $caseOutput = @(& $pwsh @runnerArguments 2>&1)
     $caseExit = $LASTEXITCODE
     $text = $caseOutput -join "`n"
     $hasAbort = $text.Contains('SUITE-ABORTED', [StringComparison]::Ordinal)
@@ -50,6 +64,14 @@ Test-RunnerCase -Name 'child nonzero' -Fixture 'nonzero' -ExpectedExit 1 -Expect
 Test-RunnerCase -Name 'missing summary' -Fixture 'no-summary' -ExpectedExit 1 -ExpectAbort $true
 Test-RunnerCase -Name 'count mismatch' -Fixture 'count-mismatch' -ExpectedExit 1 -ExpectAbort $true
 Test-RunnerCase -Name 'aborted child' -Fixture 'abort' -ExpectedExit 1 -ExpectAbort $true
+Test-RunnerCase -Name 'live skip fails closed' -Fixture 'skip' -ExpectedExit 1 -ExpectAbort $true -Live
+Test-RunnerCase -Name 'live selection accepts a live suite' -Fixture 'selection' -ExpectedExit 0 -ExpectAbort $false -Live -Suite 'live-pass'
+Test-RunnerCase -Name 'live selection rejects bounded-only suite' -Fixture 'selection' -ExpectedExit 1 -ExpectAbort $true -Live -Suite 'bounded-pass'
+Test-RunnerCase -Name 'missing skipped count' -Fixture 'missing-count' -ExpectedExit 1 -ExpectAbort $true
+Test-RunnerCase -Name 'negative count' -Fixture 'negative-count' -ExpectedExit 1 -ExpectAbort $true
+Test-RunnerCase -Name 'fractional count' -Fixture 'fractional-count' -ExpectedExit 1 -ExpectAbort $true
+Test-RunnerCase -Name 'string count' -Fixture 'string-count' -ExpectedExit 1 -ExpectAbort $true
+Test-RunnerCase -Name 'completed accounting mismatch' -Fixture 'accounting-mismatch' -ExpectedExit 1 -ExpectAbort $true
 
 [Console]::Out.WriteLine("PARA_TEST_SUMMARY $($counts | ConvertTo-Json -Compress)")
 if ($counts.failed -ne 0) {

@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const suiteDir = path.dirname(fileURLToPath(import.meta.url));
 
-test("authoritative manifest lists every top-level node:test suite exactly once", async () => {
+test("authoritative manifest lists every top-level test suite exactly once with the correct runner", async () => {
   const manifest = JSON.parse(await fs.readFile(path.join(suiteDir, "test-manifest.json"), "utf8"));
   assert.equal(manifest.schema_version, 1);
   const entries = [...manifest.bounded, ...manifest.live];
@@ -15,13 +15,28 @@ test("authoritative manifest lists every top-level node:test suite exactly once"
   assert.equal(new Set(ids).size, ids.length, "suite ids must be unique");
   assert.equal(new Set(paths).size, paths.length, "suite paths must be unique");
 
-  const discovered = (await fs.readdir(suiteDir, { withFileTypes: true }))
-    .filter((entry) => entry.isFile() && entry.name.endsWith(".test.js"))
-    .map((entry) => entry.name)
+  const files = (await fs.readdir(suiteDir, { withFileTypes: true }))
+    .filter((entry) => entry.isFile())
+    .map((entry) => entry.name);
+  const discoveredNode = files
+    .filter((name) => name.endsWith(".test.js"))
     .sort();
-  const listed = entries
+  const listedNode = entries
     .filter((entry) => entry.runner === "node-test")
     .map((entry) => entry.path)
     .sort();
-  assert.deepEqual(listed, discovered, "unlisted or stale test files would make the manifest false-green");
+  assert.deepEqual(listedNode, discoveredNode, "unlisted or stale node:test files would make the manifest false-green");
+
+  const discoveredPowerShell = files
+    .filter((name) => name.endsWith(".tests.ps1"))
+    .sort();
+  const listedPowerShell = entries
+    .filter((entry) => entry.runner === "powershell")
+    .map((entry) => entry.path)
+    .sort();
+  assert.deepEqual(
+    listedPowerShell,
+    discoveredPowerShell,
+    "unlisted or stale PowerShell test files would make the manifest false-green",
+  );
 });

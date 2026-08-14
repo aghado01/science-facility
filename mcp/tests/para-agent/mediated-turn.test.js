@@ -27,17 +27,20 @@ async function adapterEngine() {
 class MemoryStore {
   constructor() {
     this.accepted = [];
+    this.acceptanceRows = new Map();
     this.committed = [];
+    this.markers = [];
   }
 
   async acceptExchange(input) {
     this.accepted.push(structuredClone(input));
     const exchangeId = `xid-${this.accepted.length}`;
-    return {
+    const acceptance = {
       record_type: "exchange_acceptance",
       schema_version: 1,
       exchange_id: exchangeId,
       accepted_at: "2026-08-14T02:00:00.000Z",
+      ...(input.requestId ? { request_id: input.requestId } : {}),
       sender_participant_id: input.senderParticipantId,
       receiver_participant_id: input.receiverParticipantId,
       conversation_key: input.conversationKey,
@@ -50,6 +53,8 @@ class MemoryStore {
         record_id: `prompt-${this.accepted.length}`,
       },
     };
+    this.acceptanceRows.set(exchangeId, structuredClone(acceptance));
+    return acceptance;
   }
 
   getRecoveryNotices() {
@@ -58,30 +63,45 @@ class MemoryStore {
 
   async commitExchange(payload) {
     this.committed.push(structuredClone(payload));
-    const accepted = this.accepted.at(-1);
+    const acceptance = this.acceptanceRows.get(payload.exchange_id);
     const exchange = {
       record_type: "transcript_exchange",
       schema_version: 1,
       exchange_index: this.committed.length - 1,
       exchange_start: "2026-08-14T02:00:00.000Z",
-      sender_participant_id: accepted.senderParticipantId,
-      receiver_participant_id: accepted.receiverParticipantId,
-      adapter: structuredClone(accepted.adapter),
+      ...(acceptance.request_id ? { request_id: acceptance.request_id } : {}),
+      sender_participant_id: acceptance.sender_participant_id,
+      receiver_participant_id: acceptance.receiver_participant_id,
+      adapter: structuredClone(acceptance.adapter),
       ...structuredClone(payload),
       records: [
         {
           _type: "prompt",
-          record_id: "ingress",
-          observed_at: "2026-08-14T02:00:00.000Z",
-          text: this.accepted.at(-1).prompt,
-          content_sha256: digest(Buffer.from(this.accepted.at(-1).prompt, "utf8")),
+          record_id: acceptance.prompt.record_id,
+          observed_at: acceptance.accepted_at,
+          text: acceptance.prompt.text,
+          content_sha256: acceptance.prompt.sha256,
           source: { kind: "mediation_ingress" },
         },
         ...structuredClone(payload.records),
       ],
     };
     assertExchange(exchange);
-    return exchange;
+    const marker = {
+      record_type: "exchange_terminal_marker",
+      schema_version: 1,
+      exchange_id: exchange.exchange_id,
+      exchange_index: exchange.exchange_index,
+      terminal_status: exchange.status,
+      terminal_at: new Date(Date.parse(exchange.exchange_end) + 1).toISOString(),
+      exchange_sha256: digest(Buffer.from(JSON.stringify(exchange), "utf8")),
+      writer: { writer_id: "memory-writer", fence: "memory-fence" },
+    };
+    this.markers.push(structuredClone(marker));
+    return {
+      exchange: structuredClone(exchange),
+      marker: structuredClone(marker),
+    };
   }
 }
 
@@ -219,7 +239,11 @@ function emitJsonl(call, events, { split = true } = {}) {
   return raw;
 }
 
-async function harness(handler, { gate = new ConversationGate(), assembler = new ExchangeAssembler() } = {}) {
+async function harness(handler, {
+  gate = new ConversationGate(),
+  assembler = new ExchangeAssembler(),
+  clock = testClock(),
+} = {}) {
   const store = new MemoryStore();
   const sinks = [];
   const nativeClient = new ScenarioNativeClient(handler);
@@ -230,7 +254,7 @@ async function harness(handler, { gate = new ConversationGate(), assembler = new
     nativeClient,
     assembler,
     gate,
-    clock: testClock(),
+    clock,
     traceSinkFactory: async ({ exchangeId, adapter }) => {
       factoryCalls++;
       const sink = new MemoryTraceSink({ exchangeId, adapter });
@@ -283,9 +307,74 @@ test("completed mediation preserves exact prompt, native bytes, source refs, and
   assert.equal("application_id" in h.store.committed[0].trace.raw, false);
   assert.equal(h.store.committed[0].native.receiver.application_id, "fake-native");
   assert.match(h.store.committed[0].delivery.events.at(-1).evidence.ref, /#frame=0$/);
-  assert.match(h.store.committed[0].delivery.egress.evidence_ref, /#frame=3$/);
+  assert.equal("egress" in h.store.committed[0].delivery, false);
+  assert.equal(result.receipt.egress.stage, "constructed");
+  assert.equal(result.receipt.egress.reply_sha256, digest(Buffer.from(result.reply, "utf8")));
+  assert.ok(Date.parse(result.receipt.egress.observed_at) >= Date.parse(h.store.committed[0].exchange_end));
+  assert.ok(Date.parse(result.receipt.egress.observed_at) >= Date.parse(h.store.markers[0].terminal_at));
   assert.equal(h.store.committed[0].records.filter((record) => record.phase === "final").length, 1);
   assert.ok(h.store.committed[0].records.every((record) => record.source.trace_ref === result.receipt.trace.ref));
+});
+
+test("post-commit result construction failure preserves the terminal exchange and releases the lane", async () => {
+  const delegate = new ExchangeAssembler();
+  const assembler = {
+    assembleCommit: (input) => delegate.assembleCommit(input),
+    assembleReceipt: (input) => delegate.assembleReceipt(input),
+    assembleCompletedResult() {
+      throw new Error("synthetic post-commit result construction failure");
+    },
+  };
+  const h = await harness(async (call) => {
+    const delivery = JSON.parse(call.prompt.trim());
+    return transportResult("completed", emitJsonl(call, completedEvents(delivery)));
+  }, { assembler });
+
+  const error = await errorOf(h.service.delegate({
+    handle: "agent-egress-failure:0.0",
+    application: "fake-native",
+    prompt: "work",
+  }));
+  assert.match(error.message, /post-commit result construction failure/);
+  assert.equal(h.store.committed.length, 1);
+  assert.equal(h.store.committed[0].status, "completed");
+  assert.equal(h.nativeClient.calls.length, 1);
+  assert.deepEqual(h.gate.status("fake-native:agent-egress-failure:0.0"), {
+    active: false,
+    quarantined: null,
+  });
+});
+
+test("a self-consistent but wrong commit receipt is ambiguous and cannot authorize MCP egress", async () => {
+  const h = await harness(async (call) => {
+    const delivery = JSON.parse(call.prompt.trim());
+    return transportResult("completed", emitJsonl(call, completedEvents(delivery)));
+  });
+  const commitExchange = h.store.commitExchange.bind(h.store);
+  h.store.commitExchange = async (payload) => {
+    const result = await commitExchange(payload);
+    result.exchange.status = "failed";
+    result.exchange.outcome = {
+      code: "SYNTHETIC_WRONG_COMMIT",
+      message: "the returned exchange differs from the intended completed transaction",
+      retryable: false,
+      native_stop_confirmed: true,
+    };
+    result.marker.terminal_status = result.exchange.status;
+    result.marker.exchange_sha256 = digest(Buffer.from(JSON.stringify(result.exchange), "utf8"));
+    return result;
+  };
+  const handle = "agent-wrong-commit-receipt:0.0";
+  const error = await errorOf(h.service.delegate({
+    handle,
+    application: "fake-native",
+    prompt: "work",
+  }));
+  assert.equal(error.code, "MEDIATED_COMMIT_FAILED");
+  assert.equal(h.store.committed.length, 1);
+  assert.equal(h.store.committed[0].status, "completed");
+  assert.equal(h.nativeClient.calls.length, 1);
+  assert.equal(h.gate.status(`fake-native:${handle}`).quarantined.exchangeId, "xid-1");
 });
 
 test("conversation gate rejects concurrent work before a second acceptance", async () => {
@@ -455,8 +544,8 @@ test("pure assembly rejection still yields one minimal durable terminal envelope
   const assembler = {
     assembleCommit(input) {
       commitCalls++;
-      if (commitCalls === 1) throw new Error("synthetic normal-projection rejection");
-      return delegate.assembleCommit(input);
+      assert.equal(input.status, "completed");
+      throw null;
     },
     assembleReceipt: (input) => delegate.assembleReceipt(input),
     assembleCompletedResult: (input) => delegate.assembleCompletedResult(input),
@@ -472,13 +561,39 @@ test("pure assembly rejection still yields one minimal durable terminal envelope
     prompt: "work",
   }));
   assert.equal(error.code, "EXCHANGE_ASSEMBLY_FAILED");
-  assert.equal(commitCalls, 2);
+  assert.equal(commitCalls, 1, "the injected projector cannot defeat the built-in terminal fallback");
   assert.equal(h.store.committed.length, 1);
   assert.equal(h.store.committed[0].status, "failed");
   assert.equal(h.store.committed[0].trace.complete, false);
   assert.ok(h.store.committed[0].trace.raw, "already-durable raw evidence remains linked");
   assert.equal(h.store.committed[0].trace.omissions[0].code, "EXCHANGE_ASSEMBLY_FAILED");
+  assert.equal(typeof h.store.committed[0].outcome.message, "string");
+  assert.ok(h.store.committed[0].outcome.message.length > 0);
   assert.equal(h.store.committed[0].records.length, 0);
+});
+
+test("a regressed service clock cannot strand a durable acceptance or active lane", async () => {
+  const h = await harness(async (call) => {
+    const delivery = JSON.parse(call.prompt.trim());
+    const raw = emitJsonl(call, completedEvents(delivery));
+    return transportResult("completed", raw);
+  }, {
+    clock: () => new Date("2026-08-13T00:00:00.000Z"),
+  });
+  const handle = "agent-clock-regression:0.0";
+  const error = await errorOf(h.service.delegate({
+    handle,
+    application: "fake-native",
+    prompt: "work",
+  }));
+  assert.equal(error.code, "EXCHANGE_ASSEMBLY_FAILED");
+  assert.equal(h.store.accepted.length, 1);
+  assert.equal(h.store.committed.length, 1);
+  assert.equal(h.store.committed[0].exchange_end, "2026-08-14T02:00:00.000Z");
+  assert.deepEqual(h.gate.status(`fake-native:${handle}`), {
+    active: false,
+    quarantined: null,
+  });
 });
 
 test("restart recovery restores durable quarantine before another acceptance", async () => {
@@ -488,17 +603,19 @@ test("restart recovery restores durable quarantine before another acceptance", a
     return transportResult("completed", raw);
   });
   const key = "fake-native:agent-recovered:0.0";
-  h.store.getRecoveryNotices = () => [{
+  const recovery = {
     exchange_id: "xid-recovered",
     conversation_key: key,
     terminal_status: "interrupted",
+    reason: "PROCESS_RESTART_RECOVERY: native stop could not be confirmed across restart",
     observed_at: "2026-08-14T02:00:00.000Z",
     outcome: {
       code: "PROCESS_RESTART_RECOVERY",
       message: "native stop could not be confirmed across restart",
       native_stop_confirmed: false,
     },
-  }];
+  };
+  h.store.getRecoveryNotices = () => [recovery];
   const error = await errorOf(h.service.delegate({
     handle: "agent-recovered:0.0",
     application: "fake-native",
@@ -509,7 +626,15 @@ test("restart recovery restores durable quarantine before another acceptance", a
   assert.equal(h.nativeClient.calls.length, 0);
   assert.equal(h.gate.status(key).quarantined.exchangeId, "xid-recovered");
 
-  assert.equal(h.gate.reconcile(key), true);
+  assert.deepEqual(h.gate.reconcile(key, {
+    exchangeId: recovery.exchange_id,
+    reason: recovery.reason,
+    observedAt: recovery.observed_at,
+  }), {
+    exchangeId: recovery.exchange_id,
+    reason: recovery.reason,
+    observedAt: recovery.observed_at,
+  });
   const result = await h.service.delegate({
     handle: "agent-recovered:0.0",
     application: "fake-native",
@@ -554,7 +679,11 @@ test("unconfirmed native stop quarantines exactly that application-handle lane",
   const request = { handle: "agent-quarantine:0.0", application: "fake-native", prompt: "work" };
   const first = await errorOf(h.service.delegate(request));
   assert.equal(first.receipt.status, "timeout");
-  assert.ok(gate.status("fake-native:agent-quarantine:0.0").quarantined);
+  assert.deepEqual(gate.status("fake-native:agent-quarantine:0.0").quarantined, {
+    exchangeId: "xid-1",
+    reason: `${h.store.committed[0].outcome.code}: ${h.store.committed[0].outcome.message}`,
+    observedAt: h.store.committed[0].exchange_end,
+  });
 
   const second = await errorOf(h.service.delegate(request));
   assert.equal(second.code, "CONVERSATION_QUARANTINED");

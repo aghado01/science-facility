@@ -18,6 +18,7 @@ import {
   assertHeader,
   sha256Utf8,
 } from "./schema-validation.js";
+import { AMBIGUOUS_COMMIT_QUARANTINE_REASON } from "./quarantine-contract.js";
 
 const HEADER_SCHEMA_ID = "urn:science-facility:para-agent:schema:transcript-header:1";
 const EXCHANGE_SCHEMA_ID = "urn:science-facility:para-agent:schema:transcript-exchange:1";
@@ -95,6 +96,27 @@ async function exists(filePath) {
   }
 }
 
+async function writeSyncAndClose(handle, content) {
+  let failure = null;
+  let synced = false;
+  try {
+    await handle.writeFile(content, "utf8");
+    await handle.sync();
+    synced = true;
+  } catch (error) {
+    failure = error;
+  }
+  try {
+    await handle.close();
+  } catch (error) {
+    // Once sync succeeds, the durable transaction authority is settled. A
+    // close-only failure must not turn a committed marker into an ambiguity
+    // that cannot be reconstructed from the append-only files on restart.
+    if (!synced) failure ??= error;
+  }
+  if (failure) throw failure;
+}
+
 function isProcessAlive(pid) {
   if (!Number.isSafeInteger(pid) || pid <= 0) return false;
   try {
@@ -111,23 +133,49 @@ function terminalTime(clock, acceptedAt) {
   return new Date(Math.max(now, Date.parse(acceptedAt))).toISOString();
 }
 
-function recoveryNoticesOf(state) {
-  const notices = [];
-  for (const exchange of state.exchangeRows ?? []) {
-    if (exchange.outcome?.native_stop_confirmed !== false) continue;
-    const acceptance = state.acceptances.get(exchange.exchange_id);
-    if (!acceptance) continue;
-    notices.push({
+function quarantineReasonOf(exchange) {
+  return `${exchange.outcome.code}: ${exchange.outcome.message}`;
+}
+
+function quarantineTupleKey({ conversation_key: conversationKey, exchange_id: exchangeId, reason, observed_at: observedAt }) {
+  return JSON.stringify([conversationKey, exchangeId, reason, observedAt]);
+}
+
+function recoveryNoticeOf(acceptance, exchange, marker) {
+  if (exchange.outcome?.native_stop_confirmed === false) {
+    return {
       exchange_id: exchange.exchange_id,
       conversation_key: acceptance.conversation_key,
       terminal_status: exchange.status,
+      reason: quarantineReasonOf(exchange),
       observed_at: exchange.exchange_end,
       outcome: {
         code: exchange.outcome.code,
         message: exchange.outcome.message,
         native_stop_confirmed: false,
       },
-    });
+    };
+  }
+  if (marker?.recovery?.kind !== "missing_terminal_marker_repaired") return null;
+  return {
+    exchange_id: exchange.exchange_id,
+    conversation_key: acceptance.conversation_key,
+    terminal_status: exchange.status,
+    reason: marker.recovery.quarantine_reason,
+    observed_at: marker.recovery.observed_at,
+  };
+}
+
+function recoveryNoticesOf(state) {
+  const notices = [];
+  for (const exchange of state.exchangeRows ?? []) {
+    const acceptance = state.acceptances.get(exchange.exchange_id);
+    if (!acceptance) continue;
+    const marker = state.markers.get(exchange.exchange_id);
+    const notice = recoveryNoticeOf(acceptance, exchange, marker);
+    if (!notice) continue;
+    if (state.reconciliations?.has(quarantineTupleKey(notice))) continue;
+    notices.push(notice);
   }
   return notices;
 }
@@ -386,6 +434,7 @@ export class TranscriptStore {
     });
   }
 
+  /** Return `{ exchange, marker }` only after both persisted rows are synced. */
   async commitExchange(payload) {
     await this._ensureWritableOpen();
     assertKnownKeys(payload, new Set([
@@ -427,12 +476,18 @@ export class TranscriptStore {
             `exchange '${exchangeId}' is already terminal with different content`,
           );
         }
-        if (!state.markers.has(exchangeId)) {
-          const marker = this._terminalMarker(existing, state.exchangeDigests.get(exchangeId));
+        let marker = state.markers.get(exchangeId);
+        if (!marker) {
+          marker = this._terminalMarker(existing, state.exchangeDigests.get(exchangeId), { repaired: true });
           await this._appendRow(this.walPath, marker, state.walNeedsFraming);
+          state.markers.set(exchangeId, marker);
+          this._recoveryNotices = recoveryNoticesOf(state);
         }
         this.nextIndex = state.nextIndex;
-        return existing;
+        return {
+          exchange: structuredClone(existing),
+          marker: structuredClone(marker),
+        };
       }
 
       const exchange = this._buildExchangeRow(
@@ -445,7 +500,151 @@ export class TranscriptStore {
       const marker = this._terminalMarker(exchange, exchangeDigest);
       await this._appendRow(this.walPath, marker, state.walNeedsFraming);
       this.nextIndex = exchange.exchange_index + 1;
-      return exchange;
+      return {
+        exchange: structuredClone(exchange),
+        marker: structuredClone(marker),
+      };
+    });
+  }
+
+  async reconcileQuarantine(input) {
+    await this._ensureWritableOpen();
+    assertKnownKeys(input, new Set(["conversationKey", "exchangeId", "expected", "basis"]), "reconcileQuarantine input");
+    const { conversationKey, exchangeId, expected, basis } = input;
+    requireString(conversationKey, "conversationKey");
+    requireString(exchangeId, "exchangeId");
+    assertKnownKeys(expected, new Set(["reason", "observedAt"]), "reconcileQuarantine expected");
+    assertKnownKeys(basis, new Set(["kind", "evidenceRef"]), "reconcileQuarantine basis");
+    const reason = requireString(expected.reason, "expected.reason");
+    const observedAt = requireString(expected.observedAt, "expected.observedAt");
+    if (!Number.isFinite(Date.parse(observedAt))) {
+      throw new TranscriptStoreError(
+        "TRANSCRIPT_ARGUMENT_INVALID",
+        "expected.observedAt must be an ISO date-time string",
+      );
+    }
+    const basisKind = requireString(basis.kind, "basis.kind");
+    const evidenceRef = requireString(basis.evidenceRef, "basis.evidenceRef");
+    if (evidenceRef.trim().length === 0) {
+      throw new TranscriptStoreError(
+        "RECONCILIATION_EVIDENCE_REQUIRED",
+        "basis.evidenceRef must be a non-blank evidence reference",
+      );
+    }
+    if (!new Set(["terminal_commit_verified", "operator_attested_native_stop"]).has(basisKind)) {
+      throw new TranscriptStoreError(
+        "RECONCILIATION_BASIS_UNSUPPORTED",
+        `unsupported quarantine reconciliation basis '${basisKind}'`,
+      );
+    }
+
+    const requestedTuple = {
+      conversation_key: conversationKey,
+      exchange_id: exchangeId,
+      reason,
+      observed_at: observedAt,
+    };
+    const tupleKey = quarantineTupleKey(requestedTuple);
+
+    return this._withWriteLane(async () => {
+      const state = await this._scanState();
+      const prior = state.reconciliations.get(tupleKey);
+      if (prior) {
+        if (prior.basis.kind === basisKind && prior.basis.evidence_ref === evidenceRef) {
+          return structuredClone(prior);
+        }
+        throw new TranscriptStoreError(
+          "RECONCILIATION_CONFLICT",
+          "the exact quarantine tuple was already reconciled with different evidence",
+          { reconciliation_id: prior.reconciliation_id },
+        );
+      }
+
+      if (basisKind === "operator_attested_native_stop") {
+        const notice = recoveryNoticesOf(state).find(
+          (candidate) => quarantineTupleKey(candidate) === tupleKey,
+        );
+        if (!notice) {
+          throw new TranscriptStoreError(
+            "RECONCILIATION_STALE_TUPLE",
+            "the requested quarantine tuple is not the exact current durable quarantine",
+            { conversation_key: conversationKey, exchange_id: exchangeId },
+          );
+        }
+      }
+
+      const acceptance = state.acceptances.get(exchangeId);
+      const exchange = state.exchanges.get(exchangeId);
+      const marker = state.markers.get(exchangeId);
+      if (!acceptance || !exchange || !marker) {
+        throw new TranscriptStoreError(
+          "RECONCILIATION_TERMINAL_UNVERIFIED",
+          "quarantine reconciliation requires a verified terminal exchange and marker",
+        );
+      }
+      if (acceptance.conversation_key !== conversationKey) {
+        throw new TranscriptStoreError(
+          "RECONCILIATION_STALE_TUPLE",
+          "the requested conversation does not own the accepted exchange",
+          { conversation_key: conversationKey, exchange_id: exchangeId },
+        );
+      }
+
+      if (basisKind === "terminal_commit_verified") {
+        if (exchange.outcome?.native_stop_confirmed === false) {
+          throw new TranscriptStoreError(
+            "RECONCILIATION_BASIS_UNSAFE",
+            "terminal_commit_verified cannot clear a quarantine whose terminal exchange records native_stop_confirmed:false",
+          );
+        }
+        if (reason !== AMBIGUOUS_COMMIT_QUARANTINE_REASON) {
+          throw new TranscriptStoreError(
+            "RECONCILIATION_REASON_MISMATCH",
+            "terminal_commit_verified requires the canonical ambiguous-commit quarantine reason",
+          );
+        }
+        if (Date.parse(observedAt) < Date.parse(marker.terminal_at)) {
+          throw new TranscriptStoreError(
+            "RECONCILIATION_OBSERVATION_PRETERMINAL",
+            "ambiguous-commit quarantine observation precedes the verified terminal marker",
+          );
+        }
+        const notice = recoveryNoticeOf(acceptance, exchange, marker);
+        if (!notice || tupleKey !== quarantineTupleKey(notice)) {
+          throw new TranscriptStoreError(
+            "RECONCILIATION_STALE_TUPLE",
+            "terminal_commit_verified requires the exact current repaired-marker quarantine tuple",
+            { conversation_key: conversationKey, exchange_id: exchangeId },
+          );
+        }
+      }
+
+      const reconciliation = {
+        record_type: "conversation_reconciliation",
+        schema_version: 1,
+        reconciliation_id: `rid-${crypto.randomUUID()}`,
+        conversation_key: conversationKey,
+        exchange_id: exchangeId,
+        expected: {
+          reason,
+          observed_at: observedAt,
+        },
+        basis: {
+          kind: basisKind,
+          evidence_ref: evidenceRef,
+        },
+        reconciled_at: terminalTime(
+          this.clock,
+          Date.parse(marker.terminal_at) > Date.parse(observedAt) ? marker.terminal_at : observedAt,
+        ),
+        authority: { kind: "local_operator" },
+        writer: this._writerEvidence(),
+      };
+      assertAcceptanceWalRow(reconciliation);
+      await this._appendRow(this.walPath, reconciliation, state.walNeedsFraming);
+      state.reconciliations.set(tupleKey, reconciliation);
+      this._recoveryNotices = recoveryNoticesOf(state);
+      return structuredClone(reconciliation);
     });
   }
 
@@ -545,7 +744,8 @@ export class TranscriptStore {
     const header = this._buildHeader(headerData);
     await this._assertFence();
     try {
-      await fs.writeFile(this.filePath, `${JSON.stringify(header)}\n`, { encoding: "utf8", flag: "wx" });
+      const handle = await fs.open(this.filePath, "wx", 0o600);
+      await writeSyncAndClose(handle, `${JSON.stringify(header)}\n`);
     } catch (error) {
       if (error?.code !== "EEXIST") throw error;
     }
@@ -594,15 +794,23 @@ export class TranscriptStore {
     return assertExchange(exchange, this._header);
   }
 
-  _terminalMarker(exchange, exchangeDigest) {
+  _terminalMarker(exchange, exchangeDigest, { repaired = false } = {}) {
+    const terminalAt = terminalTime(this.clock, exchange.exchange_end);
     const marker = {
       record_type: "exchange_terminal_marker",
       schema_version: 1,
       exchange_id: exchange.exchange_id,
       exchange_index: exchange.exchange_index,
       terminal_status: exchange.status,
-      terminal_at: terminalTime(this.clock, exchange.exchange_end),
+      terminal_at: terminalAt,
       exchange_sha256: exchangeDigest,
+      ...(repaired ? {
+        recovery: {
+          kind: "missing_terminal_marker_repaired",
+          observed_at: terminalAt,
+          quarantine_reason: AMBIGUOUS_COMMIT_QUARANTINE_REASON,
+        },
+      } : {}),
       writer: this._writerEvidence(),
     };
     return assertAcceptanceWalRow(marker);
@@ -642,6 +850,7 @@ export class TranscriptStore {
         acceptances: new Map(),
         acceptanceOrder: [],
         markers: new Map(),
+        reconciliations: new Map(),
         idempotency: new Map(),
         nextIndex: 0,
         transcriptNeedsFraming: false,
@@ -686,6 +895,8 @@ export class TranscriptStore {
     const acceptances = new Map();
     const acceptanceOrder = [];
     const markers = new Map();
+    const reconciliations = new Map();
+    const reconciliationIds = new Set();
     const idempotency = new Map();
     for (const row of wal?.rows ?? []) {
       assertAcceptanceWalRow(row);
@@ -703,7 +914,7 @@ export class TranscriptStore {
         acceptances.set(row.exchange_id, row);
         acceptanceOrder.push(row.exchange_id);
         if (row.idempotency_key) idempotency.set(row.idempotency_key, row.exchange_id);
-      } else {
+      } else if (row.record_type === "exchange_terminal_marker") {
         if (!acceptances.has(row.exchange_id)) {
           throw new TranscriptStoreError("ACCEPTANCE_MARKER_ORPHANED", `terminal marker precedes or lacks acceptance '${row.exchange_id}'`);
         }
@@ -711,6 +922,75 @@ export class TranscriptStore {
           throw new TranscriptStoreError("ACCEPTANCE_MARKER_DUPLICATE", `duplicate terminal marker '${row.exchange_id}'`);
         }
         markers.set(row.exchange_id, row);
+      } else {
+        if (reconciliationIds.has(row.reconciliation_id)) {
+          throw new TranscriptStoreError(
+            "RECONCILIATION_ID_DUPLICATE",
+            `duplicate reconciliation_id '${row.reconciliation_id}'`,
+          );
+        }
+        const acceptance = acceptances.get(row.exchange_id);
+        const exchange = exchanges.get(row.exchange_id);
+        const marker = markers.get(row.exchange_id);
+        if (!acceptance || !exchange || !marker) {
+          throw new TranscriptStoreError(
+            "RECONCILIATION_TERMINAL_UNVERIFIED",
+            `reconciliation '${row.reconciliation_id}' precedes or lacks a verified terminal exchange and marker`,
+          );
+        }
+        const tupleKey = quarantineTupleKey({
+          conversation_key: row.conversation_key,
+          exchange_id: row.exchange_id,
+          reason: row.expected.reason,
+          observed_at: row.expected.observed_at,
+        });
+        if (row.conversation_key !== acceptance.conversation_key) {
+          throw new TranscriptStoreError(
+            "RECONCILIATION_STALE_TUPLE",
+            `reconciliation '${row.reconciliation_id}' does not match its accepted conversation`,
+          );
+        }
+        if (row.basis.kind === "terminal_commit_verified") {
+          if (exchange.outcome?.native_stop_confirmed === false) {
+            throw new TranscriptStoreError(
+              "RECONCILIATION_BASIS_UNSAFE",
+              "terminal_commit_verified cannot clear a quarantine whose terminal exchange records native_stop_confirmed:false",
+            );
+          }
+          if (row.expected.reason !== AMBIGUOUS_COMMIT_QUARANTINE_REASON) {
+            throw new TranscriptStoreError(
+              "RECONCILIATION_REASON_MISMATCH",
+              `reconciliation '${row.reconciliation_id}' does not use the canonical ambiguous-commit reason`,
+            );
+          }
+          if (Date.parse(row.expected.observed_at) < Date.parse(marker.terminal_at)) {
+            throw new TranscriptStoreError(
+              "RECONCILIATION_OBSERVATION_PRETERMINAL",
+              `reconciliation '${row.reconciliation_id}' claims ambiguity before its terminal marker`,
+            );
+          }
+        }
+        const notice = recoveryNoticeOf(acceptance, exchange, marker);
+        if (!notice || tupleKey !== quarantineTupleKey(notice)) {
+          throw new TranscriptStoreError(
+            "RECONCILIATION_STALE_TUPLE",
+            `reconciliation '${row.reconciliation_id}' does not exactly match its durable quarantine tuple`,
+          );
+        }
+        if (Date.parse(row.reconciled_at) < Date.parse(marker.terminal_at)) {
+          throw new TranscriptStoreError(
+            "RECONCILIATION_TIME_ORDER",
+            `reconciliation '${row.reconciliation_id}' precedes its terminal marker`,
+          );
+        }
+        if (reconciliations.has(tupleKey)) {
+          throw new TranscriptStoreError(
+            "RECONCILIATION_CONFLICT",
+            "the same quarantine tuple has more than one reconciliation record",
+          );
+        }
+        reconciliationIds.add(row.reconciliation_id);
+        reconciliations.set(tupleKey, row);
       }
     }
 
@@ -752,6 +1032,12 @@ export class TranscriptStore {
       ) {
         throw new TranscriptStoreError("ACCEPTANCE_MARKER_MISMATCH", `terminal marker '${exchangeId}' does not bind the persisted exchange`);
       }
+      if (Date.parse(marker.terminal_at) < Date.parse(exchange.exchange_end)) {
+        throw new TranscriptStoreError(
+          "ACCEPTANCE_MARKER_TIME",
+          `terminal marker '${exchangeId}' precedes its terminal exchange end`,
+        );
+      }
     }
 
     return {
@@ -763,6 +1049,7 @@ export class TranscriptStore {
       acceptances,
       acceptanceOrder,
       markers,
+      reconciliations,
       idempotency,
       nextIndex: exchangeRows.length === 0
         ? 0
@@ -778,7 +1065,7 @@ export class TranscriptStore {
       const existing = state.exchanges.get(exchangeId);
       if (existing) {
         if (!state.markers.has(exchangeId)) {
-          const marker = this._terminalMarker(existing, state.exchangeDigests.get(exchangeId));
+          const marker = this._terminalMarker(existing, state.exchangeDigests.get(exchangeId), { repaired: true });
           await this._appendRow(this.walPath, marker, state.walNeedsFraming);
           state.walNeedsFraming = false;
           state.markers.set(exchangeId, marker);
@@ -821,7 +1108,8 @@ export class TranscriptStore {
   async _appendRow(filePath, row, needsFraming) {
     await this._assertFence();
     const serialized = JSON.stringify(row);
-    await fs.appendFile(filePath, `${needsFraming ? "\n" : ""}${serialized}\n`, "utf8");
+    const handle = await fs.open(filePath, "a", 0o600);
+    await writeSyncAndClose(handle, `${needsFraming ? "\n" : ""}${serialized}\n`);
     return sha256Utf8(serialized);
   }
 
@@ -878,11 +1166,7 @@ export class TranscriptStore {
       };
       try {
         const handle = await fs.open(this.lockPath, "wx", 0o600);
-        try {
-          await handle.writeFile(`${JSON.stringify(lease)}\n`, "utf8");
-        } finally {
-          await handle.close();
-        }
+        await writeSyncAndClose(handle, `${JSON.stringify(lease)}\n`);
         this._lease = lease;
         ACTIVE_LEASES.set(this.lockPath, lease.fence);
         return;

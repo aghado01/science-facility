@@ -83,11 +83,14 @@ function completedDelivery() {
         evidence: { kind: "adapter_receipt", ref: "transport:stdin" },
       },
     ],
-    egress: {
-      stage: "constructed",
-      observed_at: "2026-08-14T10:00:03.000Z",
-      reply_sha256: sha256(reply),
-    },
+  };
+}
+
+function completedEgress() {
+  return {
+    stage: "constructed",
+    observed_at: "2026-08-14T10:00:04.000Z",
+    reply_sha256: sha256(reply),
   };
 }
 
@@ -157,6 +160,8 @@ test("ExchangeAssembler is a pure commit projector with no identity, time, store
   assert.deepEqual(commit.model, input.model);
   assert.deepEqual(commit.records, [finalResponse()]);
   assert.ok(commit.records.every((record) => record._type !== "prompt"), "store retains ingress ownership");
+  assert.deepEqual(commit.delivery, completedDelivery());
+  assert.ok(!Object.hasOwn(commit.delivery, "egress"), "durable commit excludes primary-directed egress");
 
   const failed = assembler.assembleCommit({
     acceptance: acceptance(),
@@ -179,11 +184,14 @@ test("completed result exposes the exact receiver reply plus a bounded evidence 
   const assembler = new ExchangeAssembler();
   const accepted = acceptance();
   const exchange = committedExchange();
-  const before = structuredClone(exchange);
-  const result = assembler.assembleCompletedResult({ acceptance: accepted, exchange });
+  const egress = completedEgress();
+  const input = { acceptance: accepted, exchange, egress };
+  const before = structuredClone(input);
+  const result = assembler.assembleCompletedResult(input);
 
   assert.equal(result.reply, reply);
-  assert.deepEqual(exchange, before, "egress projection must not mutate the committed row");
+  assert.deepEqual(input, before, "egress projection must not mutate caller-owned evidence");
+  assert.ok(!Object.hasOwn(exchange.delivery, "egress"), "return-only egress does not leak into the commit");
   assert.deepEqual(result.receipt, {
     exchange_id: "xid-accepted",
     exchange_index: 7,
@@ -205,9 +213,13 @@ test("completed result exposes the exact receiver reply plus a bounded evidence 
     delivery_stages: ["rendered", "adapter_emitted"],
     records_count: 2,
     reply: { sha256: sha256(reply), bytes: Buffer.byteLength(reply, "utf8") },
+    egress: completedEgress(),
   });
   assert.ok(!Object.hasOwn(result.receipt, "prompt_text"));
   assert.ok(!Object.hasOwn(result.receipt, "reply_text"));
+
+  const durableReceipt = assembler.assembleReceipt({ acceptance: accepted, exchange });
+  assert.ok(!Object.hasOwn(durableReceipt, "egress"), "base receipt reflects durable state only");
 });
 
 test("non-completed assembly carries a durable receipt but cannot expose a reply", () => {
@@ -243,13 +255,58 @@ test("non-completed assembly carries a durable receipt but cannot expose a reply
   assert.deepEqual(receipt.outcome, failedInput.outcome);
   assert.ok(!("reply" in receipt));
   assert.throws(
-    () => assembler.assembleCompletedResult({ acceptance: accepted, exchange }),
+    () => assembler.assembleCompletedResult({
+      acceptance: accepted,
+      exchange,
+      egress: completedEgress(),
+    }),
     (error) => {
       assert.equal(assertAssemblyError("ASSEMBLY_NONCOMPLETED_RESULT")(error), true);
       assert.deepEqual(error.receipt, receipt);
       assert.ok(!("reply" in error));
       return true;
     },
+  );
+});
+
+test("completed result rejects invalid or pre-terminal return-only egress", async (t) => {
+  const assembler = new ExchangeAssembler();
+  const accepted = acceptance();
+  const exchange = committedExchange();
+  const cases = [
+    ["missing egress", "ASSEMBLY_INVALID_INPUT", undefined],
+    ["wrong stage", "ASSEMBLY_EGRESS_INVALID", { ...completedEgress(), stage: "transport_returned" }],
+    ["pre-terminal timestamp", "ASSEMBLY_EGRESS_TIME", {
+      ...completedEgress(),
+      observed_at: "2026-08-14T10:00:02.999Z",
+    }],
+    ["reply digest mismatch", "ASSEMBLY_EGRESS_DIGEST", {
+      ...completedEgress(),
+      reply_sha256: "0".repeat(64),
+    }],
+    ["undeclared egress evidence", "ASSEMBLY_UNKNOWN_FIELD", {
+      ...completedEgress(),
+      evidence_ref: "receiver:frame:2",
+    }],
+  ];
+
+  for (const [name, code, egress] of cases) {
+    await t.test(name, () => {
+      assert.throws(
+        () => assembler.assembleCompletedResult({ acceptance: accepted, exchange, egress }),
+        assertAssemblyError(code),
+      );
+    });
+  }
+
+  assert.throws(
+    () => assembler.assembleCompletedResult({
+      acceptance: accepted,
+      exchange,
+      egress: completedEgress(),
+      retry: true,
+    }),
+    assertAssemblyError("ASSEMBLY_UNKNOWN_FIELD"),
   );
 });
 
@@ -264,7 +321,6 @@ test("assembly fails closed at authority and terminal-state boundaries", async (
     ["invented terminal reply on failure", "ASSEMBLY_NONCOMPLETED_REPLY", (input) => {
       input.status = "failed";
       input.outcome = { code: "FAILED", retryable: false, native_stop_confirmed: true };
-      delete input.delivery.egress;
     }],
     ["model without native source", "ASSEMBLY_PROVENANCE_INVALID", (input) => {
       input.model.source = { kind: "mediation_ingress" };
@@ -284,6 +340,9 @@ test("assembly fails closed at authority and terminal-state boundaries", async (
     }],
     ["unacknowledged adapter emission", "ASSEMBLY_DELIVERY_INVALID", (input) => {
       input.delivery.events = input.delivery.events.filter((event) => event.stage !== "adapter_emitted");
+    }],
+    ["persisted MCP egress", "ASSEMBLY_DELIVERY_INVALID", (input) => {
+      input.delivery.egress = completedEgress();
     }],
     ["caller-supplied index", "ASSEMBLY_UNKNOWN_FIELD", (input) => {
       input.exchangeIndex = 99;

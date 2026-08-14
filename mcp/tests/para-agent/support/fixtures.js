@@ -108,11 +108,6 @@ export function validExchange(overrides = {}) {
           evidence: { kind: "native_event", ref: "frame-0" },
         },
       ],
-      egress: {
-        stage: "constructed",
-        observed_at: "2026-08-14T12:00:02.000Z",
-        reply_sha256: sha256Utf8(reply),
-      },
     },
     records: [
       {
@@ -185,11 +180,6 @@ export function completedCommit(acceptance, {
           evidence: { kind: "native_event", ref: `frame-${acceptance.exchange_id}` },
         },
       ],
-      egress: {
-        stage: "constructed",
-        observed_at: end,
-        reply_sha256: sha256Utf8(reply),
-      },
     },
     records: [
       {

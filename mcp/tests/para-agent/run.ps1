@@ -30,8 +30,16 @@ try {
     if ($suites.Count -eq 0) {
         throw 'manifest selected zero suites'
     }
+    if ($Live) {
+        $liveIds = @($liveSuites | ForEach-Object { [string]$_.id })
+        $selectedLive = @($suites | Where-Object { $liveIds -contains [string]$_.id })
+        if ($selectedLive.Count -eq 0) {
+            throw 'live mode selected zero manifest.live suites'
+        }
+    }
 
     $seen = @{}
+    $countFields = @('discovered', 'completed', 'passed', 'failed', 'skipped', 'cancelled')
     $aggregate = [ordered]@{
         schema_version = 1
         suites = 0
@@ -100,19 +108,47 @@ try {
         if ($summary.schema_version -ne 1) {
             throw "suite '$($suiteCase.id)' emitted an unsupported summary"
         }
-        if ([int]$summary.discovered -le 0) {
+        $counts = @{}
+        foreach ($field in $countFields) {
+            $property = $summary.PSObject.Properties[$field]
+            if ($null -eq $property) {
+                throw "suite '$($suiteCase.id)' summary is missing required count '$field'"
+            }
+            $value = $property.Value
+            if ($value -is [bool] -or -not ($value -is [ValueType])) {
+                throw "suite '$($suiteCase.id)' summary count '$field' is not an integer"
+            }
+            try {
+                $number = [decimal]$value
+            }
+            catch {
+                throw "suite '$($suiteCase.id)' summary count '$field' is not an integer"
+            }
+            if ($number -lt 0 -or $number -ne [decimal]::Truncate($number) -or $number -gt [long]::MaxValue) {
+                throw "suite '$($suiteCase.id)' summary count '$field' must be a nonnegative integer"
+            }
+            $counts[$field] = [long]$number
+        }
+        if ($counts.discovered -le 0) {
             throw "suite '$($suiteCase.id)' discovered zero tests"
         }
-        if ([int]$summary.discovered -ne [int]$summary.completed) {
-            throw "suite '$($suiteCase.id)' discovered/completed mismatch: $($summary.discovered)/$($summary.completed)"
+        if ($counts.discovered -ne $counts.completed) {
+            throw "suite '$($suiteCase.id)' discovered/completed mismatch: $($counts.discovered)/$($counts.completed)"
         }
-        if ([int]$summary.failed -ne 0 -or [int]$summary.cancelled -ne 0) {
+        $accounted = $counts.passed + $counts.failed + $counts.skipped + $counts.cancelled
+        if ($accounted -ne $counts.completed) {
+            throw "suite '$($suiteCase.id)' completed/accounted mismatch: $($counts.completed)/$accounted"
+        }
+        if ($counts.failed -ne 0 -or $counts.cancelled -ne 0) {
             throw "suite '$($suiteCase.id)' reported failed or cancelled tests"
+        }
+        if ($Live -and $counts.skipped -ne 0) {
+            throw "live-mode suite '$($suiteCase.id)' reported $($counts.skipped) skipped tests"
         }
 
         $aggregate.suites += 1
-        foreach ($field in @('discovered', 'completed', 'passed', 'failed', 'skipped', 'cancelled')) {
-            $aggregate[$field] += [int]$summary.$field
+        foreach ($field in $countFields) {
+            $aggregate[$field] += $counts[$field]
         }
     }
 

@@ -52,7 +52,7 @@ test("semantic validation rejects fabricated or mismatched prompt and model prov
   assert.throws(() => assertExchange(badModel, validHeader()), { code: "EXCHANGE_SOURCE_TRACE_MISMATCH" });
 });
 
-test("incomplete traces disclose omissions and completed egress matches receiver reply", () => {
+test("incomplete traces disclose omissions and persisted schema rejects return-only egress", () => {
   const incomplete = validExchange({
     status: "failed",
     outcome: { code: "CLIENT_FAILED", retryable: true, native_stop_confirmed: true },
@@ -62,9 +62,19 @@ test("incomplete traces disclose omissions and completed egress matches receiver
   });
   assert.throws(() => assertExchange(incomplete, validHeader()), { code: "EXCHANGE_TRACE_OMISSION_REQUIRED" });
 
-  const badEgress = validExchange();
-  badEgress.delivery.egress.reply_sha256 = "0".repeat(64);
-  assert.throws(() => assertExchange(badEgress, validHeader()), { code: "EXCHANGE_EGRESS_DIGEST" });
+  const legacyEgress = validExchange();
+  legacyEgress.delivery.egress = {
+    stage: "constructed",
+    observed_at: legacyEgress.exchange_end,
+    reply_sha256: legacyEgress.records.at(-1).content_sha256,
+  };
+  assert.equal(validateExchangeSchema(legacyEgress), false);
+  assert.ok(validateExchangeSchema.errors.some((error) => (
+    error.keyword === "additionalProperties"
+      && error.instancePath === "/delivery"
+      && error.params.additionalProperty === "egress"
+  )));
+  assert.throws(() => assertExchange(legacyEgress, validHeader()), { code: "EXCHANGE_SCHEMA_INVALID" });
 });
 
 test("acceptance WAL validation binds prompt digest and byte count", () => {

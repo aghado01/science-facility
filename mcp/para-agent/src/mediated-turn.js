@@ -1,8 +1,10 @@
 import { createHash } from "node:crypto";
-import { TextDecoder } from "node:util";
+import { isDeepStrictEqual, TextDecoder } from "node:util";
 
 import { ExchangeAssembler } from "./assembler.js";
 import { ConversationGate } from "./conversation-gate.js";
+import { AMBIGUOUS_COMMIT_QUARANTINE_REASON } from "./quarantine-contract.js";
+import { deriveConversationKey } from "./quarantine-reconciliation.js";
 
 const UTF8_FATAL = new TextDecoder("utf-8", { fatal: true });
 const REQUEST_KEYS = new Set([
@@ -33,6 +35,17 @@ function nonEmpty(value, label) {
     throw new MediatedTurnError("DELEGATE_INVALID_REQUEST", `${label} must be a non-empty string`);
   }
   return value;
+}
+
+function thrownMessage(value, fallback) {
+  if (typeof value?.message === "string" && value.message.length > 0) return value.message;
+  if (typeof value === "string" && value.length > 0) return value;
+  try {
+    const serialized = JSON.stringify(value);
+    if (typeof serialized === "string" && serialized.length > 0) return serialized;
+  } catch {}
+  const rendered = String(value ?? "");
+  return rendered.length > 0 ? rendered : fallback;
 }
 
 function isWellFormedUnicode(text) {
@@ -80,8 +93,82 @@ function nowIso(clock) {
   return date.toISOString();
 }
 
-function conversationKey(application, handle) {
-  return `${application}:${handle}`;
+function nowIsoAtOrAfter(clock, floor) {
+  const floorTime = Date.parse(floor);
+  if (!Number.isFinite(floorTime)) {
+    throw new MediatedTurnError(
+      "TRANSCRIPT_COMMIT_RECEIPT_INVALID",
+      "terminal marker time is not a valid date-time",
+    );
+  }
+  const observed = nowIso(clock);
+  return Date.parse(observed) < floorTime ? new Date(floorTime).toISOString() : observed;
+}
+
+function validateCommitResult(value, acceptance, intended) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new MediatedTurnError(
+      "TRANSCRIPT_COMMIT_RECEIPT_INVALID",
+      "commitExchange() did not return a terminal exchange and marker",
+    );
+  }
+  const { exchange, marker } = value;
+  const exchangeDigest = exchange && typeof exchange === "object"
+    ? sha256(Buffer.from(JSON.stringify(exchange), "utf8"))
+    : null;
+  const returnedPayload = exchange && typeof exchange === "object" && Array.isArray(exchange.records)
+    ? {
+        exchange_id: exchange.exchange_id,
+        status: exchange.status,
+        exchange_end: exchange.exchange_end,
+        ...(Object.hasOwn(exchange, "application") ? { application: exchange.application } : {}),
+        ...(Object.hasOwn(exchange, "model") ? { model: exchange.model } : {}),
+        ...(Object.hasOwn(exchange, "native") ? { native: exchange.native } : {}),
+        ...(Object.hasOwn(exchange, "outcome") ? { outcome: exchange.outcome } : {}),
+        trace: exchange.trace,
+        delivery: exchange.delivery,
+        records: exchange.records.slice(1),
+        ...(Object.hasOwn(exchange, "extensions") ? { extensions: exchange.extensions } : {}),
+      }
+    : null;
+  const prompt = exchange?.records?.[0];
+  if (
+    !exchange
+    || typeof exchange !== "object"
+    || Array.isArray(exchange)
+    || !marker
+    || typeof marker !== "object"
+    || Array.isArray(marker)
+    || exchange.exchange_id !== acceptance.exchange_id
+    || !Number.isSafeInteger(exchange.exchange_index)
+    || exchange.exchange_index < 0
+    || exchange.exchange_start !== acceptance.accepted_at
+    || exchange.sender_participant_id !== acceptance.sender_participant_id
+    || exchange.receiver_participant_id !== acceptance.receiver_participant_id
+    || !isDeepStrictEqual(exchange.adapter, acceptance.adapter)
+    || exchange.request_id !== acceptance.request_id
+    || exchange.idempotency_key !== acceptance.idempotency_key
+    || prompt?._type !== "prompt"
+    || prompt.record_id !== acceptance.prompt?.record_id
+    || prompt.observed_at !== acceptance.accepted_at
+    || prompt.text !== acceptance.prompt?.text
+    || prompt.content_sha256 !== acceptance.prompt?.sha256
+    || !isDeepStrictEqual(returnedPayload, intended)
+    || marker.record_type !== "exchange_terminal_marker"
+    || marker.exchange_id !== exchange.exchange_id
+    || marker.exchange_index !== exchange.exchange_index
+    || marker.terminal_status !== exchange.status
+    || marker.exchange_sha256 !== exchangeDigest
+    || !Number.isFinite(Date.parse(exchange.exchange_end))
+    || !Number.isFinite(Date.parse(marker.terminal_at))
+    || Date.parse(marker.terminal_at) < Date.parse(exchange.exchange_end)
+  ) {
+    throw new MediatedTurnError(
+      "TRANSCRIPT_COMMIT_RECEIPT_INVALID",
+      "commitExchange() returned terminal evidence that is not bound to the accepted exchange",
+    );
+  }
+  return { exchange, marker };
 }
 
 function adapterBinding(profile) {
@@ -350,6 +437,7 @@ export class MediatedTurnService {
     this.nativeClient = nativeClient;
     this.traceSinkFactory = traceSinkFactory;
     this.assembler = assembler;
+    this.fallbackAssembler = new ExchangeAssembler();
     this.gate = gate;
     this.clock = clock;
     this.recoveryStores = new WeakSet();
@@ -377,14 +465,14 @@ export class MediatedTurnService {
       for (const notice of notices) {
         this.gate.restoreQuarantine(notice.conversation_key, {
           exchangeId: notice.exchange_id,
-          reason: `${notice.outcome.code}: ${notice.outcome.message}`,
+          reason: notice.reason,
           observedAt: notice.observed_at,
         });
       }
       this.recoveryStores.add(store);
     }
 
-    const key = conversationKey(application, handle);
+    const key = deriveConversationKey({ application, handle });
     const gateLease = this.gate.acquire(key);
     const adapter = adapterBinding(profile);
     let acceptance;
@@ -512,8 +600,8 @@ export class MediatedTurnService {
           } catch (error) {
             fault = {
               status: "failed",
-              code: error.code ?? "NATIVE_EVENT_PROJECTION_FAILED",
-              message: error.message,
+              code: error?.code ?? "NATIVE_EVENT_PROJECTION_FAILED",
+              message: thrownMessage(error, "native event projection failed"),
               retryable: false,
             };
             break;
@@ -623,8 +711,8 @@ export class MediatedTurnService {
     } catch (error) {
       fault ??= {
         status: "failed",
-        code: error.code ?? "MEDIATED_TURN_FAILED",
-        message: error.message,
+        code: error?.code ?? "MEDIATED_TURN_FAILED",
+        message: thrownMessage(error, "mediated turn processing failed"),
         retryable: false,
       };
     }
@@ -642,13 +730,16 @@ export class MediatedTurnService {
       } catch (error) {
         fault = {
           status: "failed",
-          code: error.code ?? "RAW_TRACE_FINALIZE_FAILED",
-          message: error.message,
+          code: error?.code ?? "RAW_TRACE_FINALIZE_FAILED",
+          message: thrownMessage(error, "raw trace finalization failed"),
           retryable: true,
         };
         trace = {
           complete: false,
-          omissions: [{ code: "RAW_TRACE_FINALIZE_FAILED", detail: error.message }],
+          omissions: [{
+            code: "RAW_TRACE_FINALIZE_FAILED",
+            detail: thrownMessage(error, "raw trace finalization failed"),
+          }],
         };
         reply = null;
       }
@@ -678,36 +769,24 @@ export class MediatedTurnService {
       reply = null;
     }
 
-    let records = projectedRecords;
-    if (status === "completed") {
-      records = enrichFinalResponse(records, terminalProjection, reply);
-    } else {
-      records = records.map((record) => record._type === "response" ? { ...record, phase: "partial" } : record);
-    }
-
-    const end = nowIso(this.clock);
-    const nativeReceiver = bestNativeObservation && applicationObservation
-      ? {
-          application_id: applicationObservation.id,
-          adapter_id: adapter.id,
-          ...(bestNativeObservation.conversation_id ? { conversation_id: bestNativeObservation.conversation_id } : {}),
-          ...(bestNativeObservation.turn_id ? { turn_id: bestNativeObservation.turn_id } : {}),
-          source: bestNativeObservation.source,
-        }
-      : null;
-    const delivery = {
-      events: deliveryEvents,
-      ...(status === "completed" ? {
-        egress: {
-          stage: "constructed",
-          observed_at: end,
-          reply_sha256: sha256(Buffer.from(reply, "utf8")),
-          evidence_ref: sourceLocator(terminalProjection.source_ref),
-        },
-      } : {}),
-    };
+    let records;
     let commitPayload;
     try {
+      records = status === "completed"
+        ? enrichFinalResponse(projectedRecords, terminalProjection, reply)
+        : projectedRecords.map(
+            (record) => record._type === "response" ? { ...record, phase: "partial" } : record,
+          );
+      const end = nowIso(this.clock);
+      const nativeReceiver = bestNativeObservation && applicationObservation
+        ? {
+            application_id: applicationObservation.id,
+            adapter_id: adapter.id,
+            ...(bestNativeObservation.conversation_id ? { conversation_id: bestNativeObservation.conversation_id } : {}),
+            ...(bestNativeObservation.turn_id ? { turn_id: bestNativeObservation.turn_id } : {}),
+            source: bestNativeObservation.source,
+          }
+        : null;
       commitPayload = this.assembler.assembleCommit({
         acceptance,
         status,
@@ -724,7 +803,7 @@ export class MediatedTurnService {
           },
         } : {}),
         trace,
-        delivery,
+        delivery: { events: deliveryEvents },
         records,
       });
     } catch (error) {
@@ -732,54 +811,90 @@ export class MediatedTurnService {
       fault = {
         status,
         code: "EXCHANGE_ASSEMBLY_FAILED",
-        message: error.message,
+        message: thrownMessage(error, "terminal exchange assembly failed"),
         retryable: false,
       };
       reply = null;
       records = [];
-      commitPayload = this.assembler.assembleCommit({
-        acceptance,
-        status,
-        exchangeEnd: end,
-        outcome: {
-          code: fault.code,
-          message: fault.message,
-          retryable: false,
-          native_stop_confirmed: stopConfirmed,
-        },
-        trace: {
-          complete: false,
-          ...(trace?.raw ? { raw: trace.raw } : {}),
-          omissions: [{
-            code: "EXCHANGE_ASSEMBLY_FAILED",
-            detail: "normal projection was rejected; the terminal row records a minimal failure envelope",
-            ...(trace?.raw?.relative_ref ? { source_ref: trace.raw.relative_ref } : {}),
-          }],
-        },
-        delivery: { events: [] },
-        records,
-      });
+      try {
+        commitPayload = this.fallbackAssembler.assembleCommit({
+          acceptance,
+          status,
+          exchangeEnd: acceptance.accepted_at,
+          outcome: {
+            code: fault.code,
+            message: fault.message,
+            retryable: false,
+            native_stop_confirmed: stopConfirmed,
+          },
+          trace: {
+            complete: false,
+            ...(trace?.raw ? { raw: trace.raw } : {}),
+            omissions: [{
+              code: "EXCHANGE_ASSEMBLY_FAILED",
+              detail: "normal projection was rejected; the terminal row records a minimal failure envelope",
+              ...(trace?.raw?.relative_ref ? { source_ref: trace.raw.relative_ref } : {}),
+            }],
+          },
+          delivery: { events: [] },
+          records,
+        });
+      } catch (fallbackError) {
+        const quarantine = gateLease.quarantine(
+          "durably accepted exchange could not be projected for terminal commit",
+        );
+        throw new MediatedTurnError(
+          "MEDIATED_TERMINALIZATION_FAILED",
+          "durably accepted exchange could not be projected for terminal commit",
+          {
+            cause: fallbackError,
+            details: {
+              conversation_key: key,
+              exchange_id: acceptance.exchange_id,
+              quarantine,
+            },
+          },
+        );
+      }
     }
 
     let committed;
+    let terminalMarker;
     try {
-      committed = await store.commitExchange(commitPayload);
+      ({ exchange: committed, marker: terminalMarker } = validateCommitResult(
+        await store.commitExchange(commitPayload),
+        acceptance,
+        commitPayload,
+      ));
     } catch (error) {
-      gateLease.quarantine(
-        stopConfirmed
-          ? "terminal transcript commit is ambiguous and requires store reconciliation"
-          : "native stop is unconfirmed and terminal transcript commit failed",
-      );
+      const quarantine = gateLease.quarantine(stopConfirmed
+        ? AMBIGUOUS_COMMIT_QUARANTINE_REASON
+        : "native stop is unconfirmed and terminal transcript commit failed");
       throw new MediatedTurnError("MEDIATED_COMMIT_FAILED", "terminal exchange commit failed", {
         cause: error,
-        details: { exchange_id: acceptance.exchange_id, intended_status: status },
+        details: {
+          conversation_key: key,
+          exchange_id: acceptance.exchange_id,
+          intended_status: status,
+          quarantine,
+        },
       });
     }
 
-    if (!stopConfirmed) gateLease.quarantine("native stop is unconfirmed");
+    if (!stopConfirmed) {
+      gateLease.quarantine(
+        `${committed.outcome.code}: ${committed.outcome.message}`,
+        committed.exchange_end,
+      );
+    }
     else gateLease.release();
     if (status === "completed") {
-      return this.assembler.assembleCompletedResult({ acceptance, exchange: committed });
+      const egress = {
+        stage: "constructed",
+        observed_at: nowIsoAtOrAfter(this.clock, terminalMarker.terminal_at),
+        reply_sha256: sha256(Buffer.from(reply, "utf8")),
+      };
+      return this.assembler.assembleCompletedResult({ acceptance, exchange: committed, egress });
     }
     const receipt = this.assembler.assembleReceipt({ acceptance, exchange: committed });
     throw new MediatedTurnError(fault.code, fault.message, { receipt });

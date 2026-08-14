@@ -14,7 +14,9 @@ const COMMIT_KEYS = new Set([
   "records",
   "extensions",
 ]);
-const EGRESS_KEYS = new Set(["acceptance", "exchange"]);
+const RECEIPT_KEYS = new Set(["acceptance", "exchange"]);
+const COMPLETED_RESULT_KEYS = new Set(["acceptance", "exchange", "egress"]);
+const EGRESS_KEYS = new Set(["stage", "observed_at", "reply_sha256"]);
 
 export class ExchangeAssemblyError extends Error {
   constructor(code, message, { details, receipt } = {}) {
@@ -138,17 +140,32 @@ function validateDelivery(delivery, status) {
   if (!Array.isArray(delivery.events)) {
     fail("ASSEMBLY_DELIVERY_INVALID", "delivery.events must be an array");
   }
+  if (Object.hasOwn(delivery, "egress")) {
+    fail(
+      "ASSEMBLY_DELIVERY_INVALID",
+      "durable delivery cannot contain return-only MCP egress evidence",
+    );
+  }
   const stages = delivery.events.map((event) => event?.stage);
-  if (status === "completed") {
-    if (!stages.includes("adapter_emitted")) {
-      fail("ASSEMBLY_DELIVERY_INVALID", "completed assembly requires adapter emission evidence");
-    }
-    assertObject(delivery.egress, "delivery.egress");
-    if (delivery.egress.stage !== "constructed") {
-      fail("ASSEMBLY_DELIVERY_INVALID", "completed assembly egress must begin at constructed");
-    }
-  } else if (delivery.egress !== undefined) {
-    fail("ASSEMBLY_DELIVERY_INVALID", "non-completed assembly cannot construct reply egress");
+  if (status === "completed" && !stages.includes("adapter_emitted")) {
+    fail("ASSEMBLY_DELIVERY_INVALID", "completed assembly requires adapter emission evidence");
+  }
+}
+
+function validateEgress(egress, exchange) {
+  assertObject(egress, "egress");
+  assertExactKeys(egress, EGRESS_KEYS, "egress");
+  if (egress.stage !== "constructed") {
+    fail("ASSEMBLY_EGRESS_INVALID", "completed result egress stage must be constructed");
+  }
+  const observed = parseDateTime(egress.observed_at, "egress.observed_at");
+  const terminal = parseDateTime(exchange.exchange_end, "exchange.exchange_end");
+  if (observed < terminal) {
+    fail("ASSEMBLY_EGRESS_TIME", "result egress construction cannot precede the terminal exchange");
+  }
+  const final = exchange.records.at(-1);
+  if (egress.reply_sha256 !== final.content_sha256) {
+    fail("ASSEMBLY_EGRESS_DIGEST", "result egress digest differs from receiver terminal reply");
   }
 }
 
@@ -276,8 +293,8 @@ export class ExchangeAssembler {
   }
 
   assembleReceipt(input) {
-    assertObject(input, "egress input");
-    assertExactKeys(input, EGRESS_KEYS, "egress input");
+    assertObject(input, "receipt input");
+    assertExactKeys(input, RECEIPT_KEYS, "receipt input");
     const { acceptance, exchange } = input;
     validateAcceptance(acceptance);
     validateTerminalExchange(acceptance, exchange);
@@ -311,16 +328,21 @@ export class ExchangeAssembler {
   }
 
   assembleCompletedResult(input) {
-    const receipt = this.assembleReceipt(input);
-    if (input.exchange.status !== "completed") {
+    assertObject(input, "completed result input");
+    assertExactKeys(input, COMPLETED_RESULT_KEYS, "completed result input");
+    const { acceptance, exchange, egress } = input;
+    const receipt = this.assembleReceipt({ acceptance, exchange });
+    if (exchange.status !== "completed") {
       throw new ExchangeAssemblyError(
         "ASSEMBLY_NONCOMPLETED_RESULT",
         "only a completed terminal exchange can expose a receiver reply",
         { receipt },
       );
     }
+    validateEgress(egress, exchange);
+    receipt.egress = clone(egress);
     return {
-      reply: input.exchange.records.at(-1).text,
+      reply: exchange.records.at(-1).text,
       receipt,
     };
   }

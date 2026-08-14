@@ -50,6 +50,11 @@ test("MCP wire exposes thin delegate/scrutiny semantics and preserves console sc
           prompt: { sha256: "b".repeat(64), bytes: Buffer.byteLength(request.prompt) },
           reply: { sha256: "c".repeat(64), bytes: 28 },
           trace: { complete: true, ref: "traces/fake/xid-completed.trace" },
+          egress: {
+            stage: "constructed",
+            observed_at: "2026-08-14T12:00:03.000Z",
+            reply_sha256: "c".repeat(64),
+          },
         },
       };
     },
@@ -60,16 +65,20 @@ test("MCP wire exposes thin delegate/scrutiny semantics and preserves console sc
   await server.connect(pair.server);
   const client = new Client({ name: "para-agent-mcp-test", version: "1.0.0" });
   await client.connect(pair.client);
+  let statusStore = null;
+  const cleanupPaths = [];
 
   try {
     const listed = await client.listTools();
     const tools = new Map(listed.tools.map((tool) => [tool.name, tool]));
     for (const required of [
-      "delegate", "scrutinize", "spawn", "send", "wait", "read", "run", "log", "body", "find", "cancel", "kill", "skills",
+      "delegate", "quarantine_status", "scrutinize", "spawn", "send", "wait", "read", "run", "log", "body", "find", "cancel", "kill", "skills",
     ]) {
       assert.ok(tools.has(required), `missing tool ${required}`);
     }
     assert.deepEqual(new Set(tools.get("delegate").inputSchema.required), new Set(["handle", "application", "prompt"]));
+    assert.deepEqual(new Set(tools.get("quarantine_status").inputSchema.required), new Set(["application", "handle"]));
+    assert.equal(tools.has("quarantine_reconcile"), false, "ordinary MCP must not expose quarantine mutation");
     assert.ok("input" in tools.get("send").inputSchema.properties);
     assert.ok(!("text" in tools.get("send").inputSchema.properties));
     assert.ok("stableForMs" in tools.get("wait").inputSchema.properties);
@@ -89,6 +98,7 @@ test("MCP wire exposes thin delegate/scrutiny semantics and preserves console sc
     const completedPayload = parsedResult(completed);
     assert.equal(completedPayload.reply, "receiver-authoritative reply");
     assert.equal(completedPayload.receipt.exchange_id, "xid-completed");
+    assert.equal(completedPayload.receipt.egress.stage, "constructed");
     assert.equal(calls[0].prompt, "exact λ 雪 prompt");
 
     const failed = await client.callTool({
@@ -108,6 +118,17 @@ test("MCP wire exposes thin delegate/scrutiny semantics and preserves console sc
       mode: "read-only",
     });
     await assert.rejects(fs.access(probe.filePath));
+    const unknownQuarantine = await client.callTool({
+      name: "quarantine_status",
+      arguments: { application: "claude", handle: unknownSession },
+    });
+    assert.notEqual(unknownQuarantine.isError, true);
+    assert.deepEqual(parsedResult(unknownQuarantine), {
+      found: false,
+      blocked: false,
+      gate: { active: false, quarantined: null },
+      durable_notices: [],
+    });
     const scrutiny = await client.callTool({
       name: "scrutinize",
       arguments: { handle: unknownSession },
@@ -122,10 +143,103 @@ test("MCP wire exposes thin delegate/scrutiny semantics and preserves console sc
     await assert.rejects(fs.access(probe.walPath));
     await assert.rejects(fs.access(probe.lockPath));
 
+    const statusSession = `quarantine-mcp-${process.pid}-${Date.now()}`;
+    const statusHandle = `${statusSession}:0.0`;
+    statusStore = await TranscriptStore.openWritable({
+      workspaceRoot: process.cwd(),
+      sessionId: statusSession,
+    });
+    cleanupPaths.push(statusStore.filePath, statusStore.walPath, statusStore.lockPath);
+    const acceptance = await statusStore.acceptExchange({
+      prompt: "Status target prompt.",
+      senderParticipantId: "primary",
+      receiverParticipantId: "para",
+      conversationKey: `claude:${statusHandle}`,
+      adapter: { id: "status-test", version: "1" },
+      requestId: "status-target-request",
+      selectedApplicationId: "claude",
+    });
+    const exchangeEnd = new Date(Date.parse(acceptance.accepted_at) + 1000).toISOString();
+    await statusStore.commitExchange({
+      exchange_id: acceptance.exchange_id,
+      status: "failed",
+      exchange_end: exchangeEnd,
+      outcome: {
+        code: "CLIENT_FAILED",
+        message: "The receiver did not produce a terminal reply.",
+        retryable: true,
+        native_stop_confirmed: false,
+      },
+      trace: {
+        complete: false,
+        omissions: [{ code: "TRACE_UNAVAILABLE", detail: "No validated receiver-native frame was observed." }],
+      },
+      delivery: { events: [] },
+      records: [],
+    });
+    const unrelated = await statusStore.acceptExchange({
+      prompt: "Unrelated lane prompt.",
+      senderParticipantId: "primary",
+      receiverParticipantId: "para",
+      conversationKey: `codex:${statusHandle}`,
+      adapter: { id: "status-test", version: "1" },
+      requestId: "status-unrelated-request",
+      selectedApplicationId: "codex",
+    });
+    await statusStore.commitExchange({
+      exchange_id: unrelated.exchange_id,
+      status: "failed",
+      exchange_end: new Date(Date.parse(unrelated.accepted_at) + 1000).toISOString(),
+      outcome: {
+        code: "UNRELATED_FAILURE",
+        message: "This notice belongs to another application lane.",
+        retryable: true,
+        native_stop_confirmed: false,
+      },
+      trace: {
+        complete: false,
+        omissions: [{ code: "TRACE_UNAVAILABLE", detail: "No validated receiver-native frame was observed." }],
+      },
+      delivery: { events: [] },
+      records: [],
+    });
+    await statusStore.close();
+    statusStore = null;
+    const transcriptBeforeStatus = await fs.readFile(cleanupPaths[0]);
+    const walBeforeStatus = await fs.readFile(cleanupPaths[1]);
+
+    const quarantine = await client.callTool({
+      name: "quarantine_status",
+      arguments: { application: "claude", handle: statusHandle },
+    });
+    assert.notEqual(quarantine.isError, true);
+    assert.deepEqual(parsedResult(quarantine), {
+      found: true,
+      blocked: true,
+      gate: { active: false, quarantined: null },
+      durable_notices: [{
+        exchange_id: acceptance.exchange_id,
+        conversation_key: `claude:${statusHandle}`,
+        terminal_status: "failed",
+        reason: "CLIENT_FAILED: The receiver did not produce a terminal reply.",
+        observed_at: exchangeEnd,
+        outcome: {
+          code: "CLIENT_FAILED",
+          message: "The receiver did not produce a terminal reply.",
+          native_stop_confirmed: false,
+        },
+      }],
+    });
+    assert.deepEqual(await fs.readFile(cleanupPaths[0]), transcriptBeforeStatus);
+    assert.deepEqual(await fs.readFile(cleanupPaths[1]), walBeforeStatus);
+    await assert.rejects(fs.access(cleanupPaths[2]), { code: "ENOENT" });
+
     const skills = parsedResult(await client.callTool({ name: "skills", arguments: {} }));
     assert.ok(skills.availableSkills.some((skill) => skill.name === "primary"));
   } finally {
+    await statusStore?.close();
     await client.close();
     await pair.server.close();
+    for (const filePath of cleanupPaths) await fs.rm(filePath, { force: true });
   }
 });

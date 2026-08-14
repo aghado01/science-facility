@@ -137,13 +137,22 @@ The physical write order is:
 
 1. validate request, adapter profile, target, and conversation gate;
 2. acquire the transcript writer lease;
-3. append a durable acceptance WAL row and assign `exchange_id`;
+3. append and file-sync a durable acceptance WAL row, then assign/return its
+   `exchange_id`;
 4. deliver the prompt and append raw native bytes as observed;
 5. normalize correlated records with exact raw source references;
-6. append exactly one terminal exchange row, assigning `exchange_index` inside
-   the writer lane;
-7. append the WAL terminal marker;
+6. append and file-sync exactly one terminal exchange row, assigning
+   `exchange_index` inside the writer lane;
+7. append and file-sync the WAL terminal marker;
 8. construct the MCP result.
+
+Each durable append opens an append handle, writes the complete framed row,
+calls `FileHandle.sync()`, and attempts to close the handle before resolving.
+Successful sync is the commit authority; a close-only error after sync does not
+reclassify a durable marker as ambiguous. The terminal row sync completes before
+the marker write begins, and result construction sees the exact synced marker
+returned by the store. Newly created transcript headers and writer-lease
+contents are likewise synced before use.
 
 For a completed turn, step 6 includes exactly one correlated final receiver
 response. It does not include `delivery.egress`: receiver-directed delivery
@@ -168,10 +177,21 @@ not rewrite the terminal outcome.
 
 On restart, recovery scans acceptance rows without terminal markers:
 
-- if a terminal exchange already exists, append the missing WAL terminal marker;
+- if a terminal exchange already exists, append the missing WAL terminal marker
+  with bounded recovery evidence
+  `{ kind: "missing_terminal_marker_repaired", observed_at,
+  quarantine_reason }`;
 - otherwise append an `interrupted` exchange with explicit restart omission and
   incomplete trace state, then mark the WAL terminal;
 - never publish a second terminal exchange for the same `exchange_id`.
+
+A repaired marker for a terminal row whose native stop is not recorded as
+unconfirmed creates an exact durable ambiguous-commit quarantine tuple. Its
+`conversation_key` comes from acceptance, its `exchange_id` from the marker,
+and its `reason` and `observed_at` from the marker recovery evidence. Startup
+restores that quarantine until an exact `terminal_commit_verified`
+reconciliation suppresses it. A normal, unrepaired terminal marker is not
+evidence that an ambiguous-commit quarantine ever existed.
 
 ## Quarantine reconciliation
 
@@ -210,11 +230,13 @@ writer
 ```
 
 `terminal_commit_verified` is admitted only when the store verifies the
-terminal exchange and its marker and the exchange does not record
-`native_stop_confirmed: false`; it cannot clear an unknown-native-stop
-quarantine. `operator_attested_native_stop` is an explicit privileged
-attestation with a non-empty evidence reference; it is not a model inference.
-There is no generic force mode.
+terminal exchange, a repaired-marker recovery tuple that exactly matches the
+request, and an exchange that does not record `native_stop_confirmed: false`.
+A normal terminal marker cannot be promoted into invented ambiguity evidence,
+and this basis cannot clear an unknown-native-stop quarantine.
+`operator_attested_native_stop` is an explicit privileged attestation with a
+non-empty evidence reference; it is not a model inference. There is no generic
+force mode.
 
 An identical retry returns the existing reconciliation receipt. A different
 resolution for the same quarantine tuple fails closed. Recovery suppresses a

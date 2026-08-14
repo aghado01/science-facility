@@ -39,6 +39,35 @@ function observedAtOf(value) {
   return observedAt;
 }
 
+function reconciliationExpectationOf(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new ConversationGateError(
+      "CONVERSATION_GATE_ARGUMENT_INVALID",
+      "expected quarantine evidence must be an object",
+    );
+  }
+  const unknown = Object.keys(value).filter(
+    (key) => !new Set(["exchangeId", "reason", "observedAt"]).has(key),
+  );
+  if (unknown.length > 0) {
+    throw new ConversationGateError(
+      "CONVERSATION_GATE_ARGUMENT_INVALID",
+      `expected quarantine evidence has unsupported fields: ${unknown.join(", ")}`,
+    );
+  }
+  return {
+    exchangeId: nonEmptyString(value.exchangeId, "expected.exchangeId"),
+    reason: nonEmptyString(value.reason, "expected.reason"),
+    observedAt: observedAtOf(nonEmptyString(value.observedAt, "expected.observedAt")),
+  };
+}
+
+function sameQuarantine(left, right) {
+  return left.exchangeId === right.exchangeId
+    && left.reason === right.reason
+    && left.observedAt === right.observedAt;
+}
+
 export class ConversationGate {
   #active = new Map();
   #quarantined = new Map();
@@ -107,17 +136,19 @@ export class ConversationGate {
         if (current?.token === token) this.#active.delete(key);
         return true;
       },
-      quarantine: (reason = "native stop is unconfirmed") => {
+      quarantine: (reason = "native stop is unconfirmed", observedAt = undefined) => {
         if (!settled) {
           settled = true;
           const current = this.#active.get(key);
           if (current?.token === token) this.#active.delete(key);
         }
-        this.#quarantined.set(key, {
+        const quarantine = {
           exchangeId: boundExchangeId,
-          reason: String(reason),
-          observedAt: new Date().toISOString(),
-        });
+          reason: nonEmptyString(String(reason), "reason"),
+          observedAt: observedAtOf(observedAt),
+        };
+        this.#quarantined.set(key, quarantine);
+        return structuredClone(quarantine);
       },
     };
   }
@@ -159,15 +190,53 @@ export class ConversationGate {
     return true;
   }
 
-  reconcile(conversationKey) {
-    return this.#quarantined.delete(String(conversationKey));
+  assertReconciliation(conversationKey, expected) {
+    const key = conversationKeyOf(conversationKey);
+    const expectation = reconciliationExpectationOf(expected);
+    if (this.#active.has(key)) {
+      throw new ConversationGateError(
+        "CONVERSATION_BUSY",
+        `conversation '${key}' has an active mediated turn and cannot be reconciled`,
+        { conversationKey: key },
+      );
+    }
+
+    const quarantine = this.#quarantined.get(key);
+    if (!quarantine) {
+      throw new ConversationGateError(
+        "CONVERSATION_QUARANTINE_NOT_FOUND",
+        `conversation '${key}' has no quarantine matching the administrative request`,
+        { conversationKey: key },
+      );
+    }
+    if (!sameQuarantine(quarantine, expectation)) {
+      throw new ConversationGateError(
+        "CONVERSATION_QUARANTINE_STALE",
+        `conversation '${key}' quarantine changed before reconciliation`,
+        {
+          conversationKey: key,
+          expected: structuredClone(expectation),
+          actual: structuredClone(quarantine),
+        },
+      );
+    }
+    return structuredClone(quarantine);
+  }
+
+  reconcile(conversationKey, expected) {
+    const key = conversationKeyOf(conversationKey);
+    const quarantine = this.assertReconciliation(key, expected);
+    this.#quarantined.delete(key);
+    return quarantine;
   }
 
   status(conversationKey) {
-    const key = String(conversationKey);
+    const key = conversationKeyOf(conversationKey);
     return {
       active: this.#active.has(key),
-      quarantined: this.#quarantined.get(key) ?? null,
+      quarantined: this.#quarantined.has(key)
+        ? structuredClone(this.#quarantined.get(key))
+        : null,
     };
   }
 }

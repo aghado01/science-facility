@@ -6,6 +6,8 @@ import { fileURLToPath } from "node:url";
 import Ajv2020 from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
 
+import { AMBIGUOUS_COMMIT_QUARANTINE_REASON } from "./quarantine-contract.js";
+
 const SCHEMA_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "schemas");
 
 function loadSchema(name) {
@@ -103,6 +105,67 @@ export const acceptanceWalSchema = {
         terminal_status: { enum: ["completed", "failed", "interrupted", "timeout"] },
         terminal_at: { type: "string", format: "date-time" },
         exchange_sha256: { type: "string", pattern: "^[a-f0-9]{64}$" },
+        recovery: {
+          type: "object",
+          required: ["kind", "observed_at", "quarantine_reason"],
+          properties: {
+            kind: { const: "missing_terminal_marker_repaired" },
+            observed_at: { type: "string", format: "date-time" },
+            quarantine_reason: { const: AMBIGUOUS_COMMIT_QUARANTINE_REASON },
+          },
+          additionalProperties: false,
+        },
+        writer: writerEvidence,
+      },
+      additionalProperties: false,
+    },
+    {
+      type: "object",
+      required: [
+        "record_type",
+        "schema_version",
+        "reconciliation_id",
+        "conversation_key",
+        "exchange_id",
+        "expected",
+        "basis",
+        "reconciled_at",
+        "authority",
+        "writer",
+      ],
+      properties: {
+        record_type: { const: "conversation_reconciliation" },
+        schema_version: { const: 1 },
+        reconciliation_id: nonEmptyString,
+        conversation_key: nonEmptyString,
+        exchange_id: nonEmptyString,
+        expected: {
+          type: "object",
+          required: ["reason", "observed_at"],
+          properties: {
+            reason: nonEmptyString,
+            observed_at: { type: "string", format: "date-time" },
+          },
+          additionalProperties: false,
+        },
+        basis: {
+          type: "object",
+          required: ["kind", "evidence_ref"],
+          properties: {
+            kind: { enum: ["terminal_commit_verified", "operator_attested_native_stop"] },
+            evidence_ref: nonEmptyString,
+          },
+          additionalProperties: false,
+        },
+        reconciled_at: { type: "string", format: "date-time" },
+        authority: {
+          type: "object",
+          required: ["kind"],
+          properties: {
+            kind: { const: "local_operator" },
+          },
+          additionalProperties: false,
+        },
         writer: writerEvidence,
       },
       additionalProperties: false,
@@ -365,20 +428,6 @@ export function assertExchange(exchange, header = undefined) {
     }
   }
 
-  if (exchange.delivery.egress) {
-    if (exchange.status !== "completed") {
-      throw new PersistedValidationError("EXCHANGE_FAILED_EGRESS", "non-completed exchange cannot construct a reply egress");
-    }
-    const finalDigest = finalResponses[0].content_sha256;
-    if (exchange.delivery.egress.reply_sha256 !== finalDigest) {
-      throw new PersistedValidationError("EXCHANGE_EGRESS_DIGEST", "egress reply digest differs from receiver terminal reply");
-    }
-    const egressTime = Date.parse(exchange.delivery.egress.observed_at);
-    if (egressTime < started || egressTime > ended) {
-      throw new PersistedValidationError("EXCHANGE_EGRESS_TIME", "egress construction time must fall within the exchange interval");
-    }
-  }
-
   return exchange;
 }
 
@@ -393,6 +442,26 @@ export function assertAcceptanceWalRow(row) {
     }
     if (row.sender_participant_id === row.receiver_participant_id) {
       throw new PersistedValidationError("ACCEPTANCE_PARTICIPANT_ALIAS", "sender and receiver participant IDs must differ");
+    }
+  } else if (row.record_type === "exchange_terminal_marker" && row.recovery) {
+    if (row.recovery.observed_at !== row.terminal_at) {
+      throw new PersistedValidationError(
+        "TERMINAL_MARKER_RECOVERY_TIME",
+        "missing-marker recovery observation must equal the repaired terminal marker time",
+      );
+    }
+  } else if (row.record_type === "conversation_reconciliation") {
+    if (row.basis.evidence_ref.trim().length === 0) {
+      throw new PersistedValidationError(
+        "RECONCILIATION_EVIDENCE_REQUIRED",
+        "quarantine reconciliation requires a non-blank evidence reference",
+      );
+    }
+    if (Date.parse(row.reconciled_at) < Date.parse(row.expected.observed_at)) {
+      throw new PersistedValidationError(
+        "RECONCILIATION_TIME_ORDER",
+        "reconciliation time precedes the quarantine observation",
+      );
     }
   }
   return row;

@@ -29,6 +29,7 @@ import { AdapterEngine } from "./adapters.js";
 import { ConversationGate } from "./conversation-gate.js";
 import { MediatedTurnError, MediatedTurnService } from "./mediated-turn.js";
 import { ProcessNativeClient } from "./native-client.js";
+import { deriveConversationKey } from "./quarantine-reconciliation.js";
 import { RawTraceSink } from "./raw-trace.js";
 
 const mux = new Mux();
@@ -758,6 +759,46 @@ server.registerTool(
 // ---------------------------------------------------------------------------
 // Mediated dialogue and exchange scrutiny
 // ---------------------------------------------------------------------------
+
+server.registerTool(
+  "quarantine_status",
+  {
+    title: "Inspect conversation quarantine status",
+    description:
+      "Read the process gate and durable recovery evidence for one exact application/handle lane. " +
+      "This operation is strictly read-only: it cannot clear quarantine, acquire a writer lease, " +
+      "or create a transcript.",
+    inputSchema: {
+      application: z.string().min(1)
+        .describe("Canonical adapter application id, such as 'claude'."),
+      handle: z.string().min(1)
+        .describe("Logical receiver seat or exclusive target handle."),
+    },
+  },
+  async ({ application, handle }) => {
+    let store = null;
+    try {
+      const conversationKey = deriveConversationKey({ application, handle });
+      const gate = conversationGate.status(conversationKey);
+      store = await readOnlyTranscriptFor(handle);
+      const header = await store.readHeader();
+      const durableNotices = store.getRecoveryNotices().filter(
+        (notice) => notice.conversation_key === conversationKey,
+      );
+      const blocked = gate.active || gate.quarantined !== null || durableNotices.length > 0;
+      return reply({
+        found: header !== null || gate.active || gate.quarantined !== null,
+        blocked,
+        gate,
+        durable_notices: durableNotices,
+      });
+    } catch (err) {
+      return fail(err);
+    } finally {
+      await store?.close();
+    }
+  },
+);
 
 server.registerTool(
   "delegate",

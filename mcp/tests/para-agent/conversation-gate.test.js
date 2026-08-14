@@ -26,7 +26,7 @@ test("an active lease binds exactly one accepted exchange before quarantine", ()
   );
 });
 
-test("durable quarantine restoration is idempotent and fails closed on conflicts", () => {
+test("durable quarantine restoration and status are idempotent snapshots", () => {
   const gate = new ConversationGate();
   const evidence = {
     exchangeId: "xid-recovered-1",
@@ -36,6 +36,11 @@ test("durable quarantine restoration is idempotent and fails closed on conflicts
 
   assert.equal(gate.restoreQuarantine("claude:receiver-2", evidence), true);
   assert.equal(gate.restoreQuarantine("claude:receiver-2", evidence), false);
+  const first = gate.status("claude:receiver-2");
+  const second = gate.status("claude:receiver-2");
+  assert.deepEqual(first, second);
+  assert.deepEqual(first.quarantined, evidence);
+  first.quarantined.reason = "caller mutation must not alter the gate";
   assert.deepEqual(gate.status("claude:receiver-2").quarantined, evidence);
   assert.throws(
     () => gate.restoreQuarantine("claude:receiver-2", {
@@ -44,11 +49,55 @@ test("durable quarantine restoration is idempotent and fails closed on conflicts
     }),
     { code: "CONVERSATION_QUARANTINE_CONFLICT" },
   );
+});
 
-  assert.equal(gate.reconcile("claude:receiver-2"), true);
-  const active = gate.acquire("claude:receiver-2");
+test("reconciliation compare-and-clear requires the exact current quarantine tuple", () => {
+  const gate = new ConversationGate();
+  const key = "claude:receiver-2";
+  const evidence = {
+    exchangeId: "xid-recovered-1",
+    reason: "SERVER_RESTART_RECOVERY: native stop was not confirmed",
+    observedAt: "2026-08-14T12:00:00.000Z",
+  };
+  gate.restoreQuarantine(key, evidence);
+
+  for (const stale of [
+    { ...evidence, exchangeId: "xid-stale" },
+    { ...evidence, reason: "stale reason" },
+    { ...evidence, observedAt: "2026-08-14T12:00:01.000Z" },
+  ]) {
+    assert.throws(
+      () => gate.reconcile(key, stale),
+      (error) => error.code === "CONVERSATION_QUARANTINE_STALE"
+        && error.details.actual.exchangeId === evidence.exchangeId,
+    );
+    assert.deepEqual(gate.status(key).quarantined, evidence);
+  }
   assert.throws(
-    () => gate.restoreQuarantine("claude:receiver-2", evidence),
+    () => gate.reconcile(key, { ...evidence, force: true }),
+    { code: "CONVERSATION_GATE_ARGUMENT_INVALID" },
+  );
+
+  assert.deepEqual(gate.reconcile(key, evidence), evidence);
+  assert.deepEqual(gate.status(key), { active: false, quarantined: null });
+  assert.throws(
+    () => gate.reconcile(key, evidence),
+    { code: "CONVERSATION_QUARANTINE_NOT_FOUND" },
+  );
+});
+
+test("reconciliation refuses an active lane before considering missing quarantine", () => {
+  const gate = new ConversationGate();
+  const key = "claude:receiver-active";
+  const evidence = {
+    exchangeId: "xid-not-current",
+    reason: "not current",
+    observedAt: "2026-08-14T12:00:00.000Z",
+  };
+  const active = gate.acquire(key);
+
+  assert.throws(
+    () => gate.reconcile(key, evidence),
     { code: "CONVERSATION_BUSY" },
   );
   assert.equal(active.release(), true);

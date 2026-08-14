@@ -6,6 +6,8 @@
     { "id": "schema", "runner": "node-test", "path": "schema.test.js" },
     { "id": "transcript-store", "runner": "node-test", "path": "transcript-store.test.js" },
     { "id": "conversation-gate", "runner": "node-test", "path": "conversation-gate.test.js" },
+    { "id": "quarantine-reconciliation", "runner": "node-test", "path": "quarantine-reconciliation.test.js" },
+    { "id": "quarantine-admin", "runner": "node-test", "path": "quarantine-admin.test.js" },
     { "id": "nu", "runner": "node-test", "path": "nu.test.js" },
     { "id": "mux", "runner": "node-test", "path": "mux.test.js" },
     { "id": "adapter-conformance", "runner": "node-test", "path": "adapter-conformance.test.js" },
