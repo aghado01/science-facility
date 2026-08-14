@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "tool": "uv",
+  "version": "0.11.23",
+  "release_url": "https://github.com/astral-sh/uv/releases/tag/0.11.23",
+  "artifacts": {
+    "windows-x64": {
+      "url": "https://releases.astral.sh/github/uv/releases/download/0.11.23/uv-x86_64-pc-windows-msvc.zip",
+      "sha256": "02ad29f07e674d68726ba3bb1ff25b335d83515756e2b1a194bb56c3cc30e07c",
+      "archive": "zip",
+      "executable": "uv.exe",
+      "executable_sha256": "2a406d26f0f696d47314e5940006d99a3c450890383a0463ca776f3e47bbcf22"
+    }
+  }
+}

@@ -60,39 +60,73 @@ Get-ChildItem `
 Those markings can prevent built-in modules and their `.ps1xml` metadata from
 loading under a sandbox even when `pwsh.exe` itself starts successfully.
 
-## Python dependency layout
+## Standalone dependency layout
 
-This directory is a normal uv project:
+`pwsh_exec` owns a complete bootstrap and runtime dependency architecture:
 
-- `pyproject.toml` declares the MCP dependency contract.
-- `uv.lock` locks the complete Python dependency graph and is versioned.
-- `.venv/` is the ignored, project-local environment materialized by uv.
-- uv's cache remains in uv's normal per-user cache location; it is disposable
-  package/download state, not an MCP-owned project dependency.
+```text
+brewery/uv/
+  pin.json
+  restore-uv.ps1
+packages/uv/           # ignored verified bootstrap executable
+.venv/                 # ignored locked project environment
+.python-version        # committed interpreter pin
+pyproject.toml         # committed dependency and uv-version contract
+uv.lock                # committed complete dependency resolution
+```
 
-Do not redirect uv's shared cache into this project or a client-specific
-namespace. Create or refresh the local environment from this directory with:
+The same uv version is enforced independently by `brewery/uv/pin.json`, the
+exact `uv` dependency and `[tool.uv].required-version` in `pyproject.toml`, and
+the resolved `uv` package in `uv.lock`. Contract tests reject drift between
+those layers.
+
+This structure is wholly local to `pwsh_exec`. The bootstrap script does not
+discover or call another project, `PDenv`, or an ambient uv/Python executable.
+It uses uv's normal shared cache and managed-Python storage only as disposable
+upstream storage; neither is treated as project-owned source or configuration.
+
+## Restore
+
+From the project root, run:
 
 ```powershell
-& 'C:\Users\azrie\PDenv\PyenvPython\pyenv-win-3.12.6\versions\3.12.6\Scripts\uv.exe' `
-  sync --locked
+& '.\brewery\uv\restore-uv.ps1'
 ```
+
+The recipe:
+
+1. Selects the pinned artifact for the current platform.
+2. Downloads it from the official uv release and verifies both the archive and
+   extracted bootstrap executable SHA-256 values.
+3. Restores the bootstrap executable under ignored `packages/uv/`.
+4. Installs the exact interpreter from `.python-version` through that bootstrap.
+5. Synchronizes `uv.lock`, verifies the `.venv` uv version, and runs the tests.
+6. Writes an ignored, machine-local registration to
+   `packages/registrations/pwsh_exec.json`.
+
+After restoration, `packages/uv` is not used to launch the MCP. Its only role
+is recreating the project environment.
 
 ## Client configuration
 
-After `uv sync --locked` provisions `.venv`, all clients can launch the same
-project environment and bundled PowerShell directly. This launch path does not
-invoke uv or touch its cache. Only the optional profile path needs to vary by
-client:
+After restoration, all clients launch through the uv executable pinned inside
+the project environment. The generated
+`packages/registrations/pwsh_exec.json` contains resolved paths for this
+checkout and can be copied into a client's MCP configuration. Its shape is:
 
 ```json
 {
   "mcpServers": {
     "pwsh_exec": {
-      "command": "D:/aghado01/science-facility/mcp/pwsh_exec/.venv/Scripts/python.exe",
+      "command": "<pwsh_exec-root>/.venv/Scripts/uv.exe",
       "args": [
+        "run",
+        "--no-cache",
+        "--locked",
+        "--no-sync",
+        "python",
         "-B",
-        "D:/aghado01/science-facility/mcp/pwsh_exec/server.py"
+        "<pwsh_exec-root>/server.py"
       ],
       "env": {
         "MCP_POWERSHELL_PROFILE": "C:/path/to/this-client/mcp-profile.ps1"
@@ -111,9 +145,11 @@ runtime.
 Run from this directory:
 
 ```powershell
-& '.\.venv\Scripts\python.exe' `
-  -B -m unittest discover -s tests -v
+& '.\.venv\Scripts\uv.exe' `
+  run --no-cache --locked --no-sync python -B -W error `
+  -m unittest discover -s tests -v
 ```
 
-The integration tests automatically exercise the bundled runtime when it is
-installed; otherwise those tests are skipped.
+The suite includes dependency-pin contract tests and an MCP stdio round trip
+through `.venv/Scripts/uv.exe`. Runtime integrations are skipped only when the
+corresponding restored artifacts are absent.

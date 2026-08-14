@@ -1,6 +1,5 @@
 import asyncio
 import os
-import sys
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -9,6 +8,9 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 import server
+
+
+RUNTIME_UV_EXECUTABLE = server.MCP_ROOT / ".venv" / "Scripts" / "uv.exe"
 
 
 class PowerShellExecutableTests(unittest.TestCase):
@@ -142,8 +144,9 @@ class PowerShellProfileIntegrationTests(unittest.TestCase):
 
 class PowerShellMcpIntegrationTests(unittest.TestCase):
     @unittest.skipUnless(
-        server.DEFAULT_POWERSHELL_EXECUTABLE.is_file(),
-        "the bundled PowerShell runtime is not installed",
+        server.DEFAULT_POWERSHELL_EXECUTABLE.is_file()
+        and RUNTIME_UV_EXECUTABLE.is_file(),
+        "the bundled PowerShell and project uv runtimes are not installed",
     )
     def test_stdio_server_exposes_and_runs_powershell_tool(self):
         initialization, tools, result = asyncio.run(
@@ -160,8 +163,16 @@ class PowerShellMcpIntegrationTests(unittest.TestCase):
         environment.pop(server.POWERSHELL_EXECUTABLE_ENV_VAR, None)
         environment.pop(server.POWERSHELL_PROFILE_ENV_VAR, None)
         parameters = StdioServerParameters(
-            command=sys.executable,
-            args=["-B", str(server.MCP_ROOT / "server.py")],
+            command=str(RUNTIME_UV_EXECUTABLE),
+            args=[
+                "run",
+                "--no-cache",
+                "--locked",
+                "--no-sync",
+                "python",
+                "-B",
+                str(server.MCP_ROOT / "server.py"),
+            ],
             cwd=server.MCP_ROOT,
             env=environment,
         )
