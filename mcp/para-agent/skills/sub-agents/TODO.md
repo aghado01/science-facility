@@ -1,0 +1,3 @@
+iron out semantic distinction between sub-agent swarms owned by a para-agent from the perspective of the primary agent versus primary agent's own intrinsic sub-agents, with guidance and framing accordingly
+
+- idea with "self" is that from the perspective of either para or primary agent, the 'self' sub-agent skill would describe best practices and guidance for launching sub-agent workflows from themselves. this skill would be exposed to both primary agent and para-agents from a first-person perspective, while the para sub-agents skill would only be exposed to a primary agent with the license to instruct the para-agent on how it should deploy swarms strategically to address specific workflow concerns, token savings, etc.

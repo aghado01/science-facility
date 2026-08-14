@@ -56,6 +56,21 @@ const sleep = (ms, signal) =>
  *      split one across a row boundary.
  */
 export const DIALECTS = {
+  nu: {
+    label: "Nushell 0.80+",
+    encode: (command) => Buffer.from(command, "utf8").toString("base64"),
+    compose({ payload, begin, end, nonce }) {
+      return (
+        `print ('${begin.head}' + '${begin.tail}'); ` +
+        `let __pa_f = ($env.TEMP? | default '/tmp' | path join 'para_cmd_${nonce}.nu'); ` +
+        `'${payload}' | decode base64 | decode utf-8 | save -f $__pa_f; ` +
+        `try { source $__pa_f } catch { |err| print $'PARA-ERR: ($err.msg)' }; ` +
+        `rm -f $__pa_f; ` +
+        `let __pa_ec = ($env.LAST_EXIT_CODE? | default 'none'); ` +
+        `print ('${end.head}' + '${end.tail}' + $' ec=($__pa_ec)')`
+      );
+    },
+  },
   pwsh: {
     label: "PowerShell 7+ / Windows PowerShell",
     encode: (command) => Buffer.from(command, "utf8").toString("base64"),

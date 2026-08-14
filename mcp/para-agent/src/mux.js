@@ -6,25 +6,48 @@
  * here except the default binary search order.
  */
 
+import { fileURLToPath } from "node:url";
 import { execFile, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PACKAGE_ROOT = path.resolve(__dirname, "..");
+
+/**
+ * Resolve relative or absolute path against process.cwd() and package root.
+ */
+export function resolvePath(targetPath) {
+  if (!targetPath) return targetPath;
+  if (path.isAbsolute(targetPath)) return targetPath;
+
+  const cwdResolved = path.resolve(process.cwd(), targetPath);
+  if (existsSync(cwdResolved)) return cwdResolved;
+
+  const pkgResolved = path.resolve(PACKAGE_ROOT, targetPath);
+  if (existsSync(pkgResolved)) return pkgResolved;
+
+  return cwdResolved;
+}
+
 /** Candidate binaries, in preference order, when PARA_MUX_BIN is unset. */
 const BIN_CANDIDATES = [
-  process.platform === "win32" ? "psmux.exe" : null,
   process.platform === "win32" ? "tmux.exe" : null,
+  process.platform === "win32" ? "psmux.exe" : null,
   "tmux",
 ].filter(Boolean);
 
 /** Well-known install locations checked before falling back to PATH lookup. */
 const BIN_HINTS = [
+  path.join(process.cwd(), "mcp", "para-agent", "bin", "mux"),
+  path.join(process.cwd(), "bin", "mux"),
+  path.join(PACKAGE_ROOT, "bin", "mux"),
   process.env.PSMUX_HOME,
   process.env.PORTABLE_ROOT ? path.join(process.env.PORTABLE_ROOT, "psmux") : null,
 ].filter(Boolean);
 
 function resolveBin() {
-  if (process.env.PARA_MUX_BIN) return process.env.PARA_MUX_BIN;
+  if (process.env.PARA_MUX_BIN) return resolvePath(process.env.PARA_MUX_BIN);
   for (const dir of BIN_HINTS) {
     for (const name of BIN_CANDIDATES) {
       const full = path.join(dir, name);
@@ -33,6 +56,22 @@ function resolveBin() {
   }
   // Fall back to bare name and let the OS resolve it via PATH.
   return BIN_CANDIDATES[0];
+}
+
+export function resolveNuBin() {
+  if (process.env.PARA_NU_BIN) return resolvePath(process.env.PARA_NU_BIN);
+  const nuCandidates = [
+    path.join(process.cwd(), "mcp", "para-agent", "bin", "nu", "nu.exe"),
+    path.join(process.cwd(), "bin", "nu", "nu.exe"),
+    path.join(PACKAGE_ROOT, "bin", "nu", "nu.exe"),
+    path.join(process.cwd(), "mcp", "para-agent", "bin", "nu", "nu"),
+    path.join(process.cwd(), "bin", "nu", "nu"),
+    path.join(PACKAGE_ROOT, "bin", "nu", "nu"),
+  ];
+  for (const cand of nuCandidates) {
+    if (existsSync(cand)) return cand;
+  }
+  return "nu";
 }
 
 export class MuxError extends Error {
@@ -45,15 +84,24 @@ export class MuxError extends Error {
   }
 }
 
+function defaultNamespace() {
+  const base = path.basename(process.cwd()).replace(/[^A-Za-z0-9_-]/g, "-").slice(0, 30);
+  return base ? `para-${base}` : "para";
+}
+
 export class Mux {
   constructor(opts = {}) {
     this.bin = opts.bin ?? resolveBin();
-    // -L isolates our sessions from whatever the human is running.
-    this.namespace = opts.namespace ?? process.env.PARA_MUX_NAMESPACE ?? "para";
+    // -L isolates our sessions. Workspace-contextual if PARA_MUX_NAMESPACE is unset.
+    this.namespace = opts.namespace ?? process.env.PARA_MUX_NAMESPACE ?? defaultNamespace();
     this.defaultTimeoutMs = opts.defaultTimeoutMs ?? 15000;
+    
+    const configFile = process.env.PARA_MUX_CONFIG_FILE ?? process.env.PSMUX_CONFIG_FILE;
+    const resolvedConfig = configFile ? resolvePath(configFile) : null;
+
     this.env = {
       ...process.env,
-      ...(process.env.PSMUX_CONFIG_FILE ? { PSMUX_CONFIG_FILE: process.env.PSMUX_CONFIG_FILE } : {}),
+      ...(resolvedConfig ? { PSMUX_CONFIG_FILE: resolvedConfig } : {}),
     };
   }
 

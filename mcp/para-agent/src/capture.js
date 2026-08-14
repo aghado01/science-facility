@@ -116,6 +116,26 @@ async function awaitSentinel(donePath, { timeoutMs, signal, pollMs = 25, deadChe
  * still reports rather than reading as a hang.
  */
 const DIALECTS = {
+  nu: {
+    ext: "nu",
+    invoke: (scriptPath) => `source '${scriptPath}'`,
+    script: ({ payload, outPath, donePath }) =>
+      `let __para_s = (date now)\n` +
+      `let __para_payload = ('${payload}' | decode base64 | decode utf-8)\n` +
+      `let __pa_f = ($env.TEMP? | default '/tmp' | path join $'para_exec_($__para_s | into int).nu')\n` +
+      `$__para_payload | save -f $__pa_f\n` +
+      `let __para_res = (try { source $__pa_f; { code: ($env.LAST_EXIT_CODE? | default 0), ok: true } } catch { |err| { code: 1, ok: false, err: $err.msg } })\n` +
+      `rm -f $__pa_f\n` +
+      `let __para_dur = (((date now) - __para_s) / 1ms | into int)\n` +
+      `{\n` +
+      `    code: $__para_res.code,\n` +
+      `    ok: $__para_res.ok,\n` +
+      `    cwd: (pwd),\n` +
+      `    duration_ms: __para_dur,\n` +
+      `    outcome: 'completed'\n` +
+      `} | to json -c | save -f '${donePath}'\n`,
+  },
+
   pwsh: {
     ext: "ps1",
     invoke: (scriptPath) => `. ${psPath(scriptPath)}`,

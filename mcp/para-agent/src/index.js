@@ -17,8 +17,9 @@ import { z } from "zod";
 
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-import { Mux, MuxError } from "./mux.js";
+import { Mux, MuxError, resolvePath } from "./mux.js";
 import { waitStable, waitPattern, deltaOf, DEFAULT_DIALECT } from "./framing.js";
 import { Journal } from "./journal.js";
 import { runCaptured, finalizeOpenTurns, requestCancel, CAPTURE_DIALECTS } from "./capture.js";
@@ -29,10 +30,10 @@ const mux = new Mux();
 const lastSeen = new Map();
 
 /**
- * One journal per session. Journals are durable on disk, so a supervisor that
- * loses its context can still ask what happened while it was away.
+ * One journal per session. Workspace-contextual if PARA_JOURNAL_ROOT is unset.
  */
-const JOURNAL_ROOT = process.env.PARA_JOURNAL_ROOT ?? path.join(os.homedir(), ".para-agent", "journals");
+const defaultJournalRoot = path.join(process.cwd(), ".para-agent", "journals");
+const JOURNAL_ROOT = process.env.PARA_JOURNAL_ROOT ? resolvePath(process.env.PARA_JOURNAL_ROOT) : defaultJournalRoot;
 const journals = new Map();
 
 /** Session name out of a pane target: `agent-foo:0.1` -> `agent-foo`. */
@@ -687,6 +688,124 @@ function dedupeTurns(turns) {
   });
 }
 
+import fs from "node:fs/promises";
+import { existsSync } from "node:fs";
+
+const SKILLS_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "skills");
+
+async function registerNativeSkills(server) {
+  if (!existsSync(SKILLS_DIR)) return;
+
+  const skillDirs = await fs.readdir(SKILLS_DIR, { withFileTypes: true });
+
+  for (const dir of skillDirs) {
+    if (!dir.isDirectory()) continue;
+    const skillName = dir.name;
+    const skillRoot = path.join(SKILLS_DIR, skillName);
+    const mainSkillPath = path.join(skillRoot, "SKILL.md");
+
+    if (!existsSync(mainSkillPath)) continue;
+
+    const mainContent = await fs.readFile(mainSkillPath, "utf8");
+    const descMatch = mainContent.match(/description:\s*(.+)/i);
+    const description = descMatch ? descMatch[1].trim() : `Skill primer for ${skillName}`;
+
+    // 1. Register main skill index resource (skill://para-agent/{skillName})
+    server.resource(
+      `skill-${skillName}`,
+      `skill://para-agent/${skillName}`,
+      async (uri) => ({
+        contents: [{ uri: uri.href, text: mainContent }],
+      })
+    );
+
+    // 2. Register main skill prompt (slash command)
+    server.prompt(
+      `skill-${skillName}`,
+      { description },
+      async () => ({
+        messages: [{ role: "user", content: { type: "text", text: mainContent } }],
+      })
+    );
+
+    // 3. Scan references/ sub-directory for progressive topic disclosure
+    const refsDir = path.join(skillRoot, "references");
+    if (existsSync(refsDir)) {
+      const refFiles = await fs.readdir(refsDir, { withFileTypes: true });
+      for (const file of refFiles) {
+        if (!file.isFile() || !file.name.endsWith(".md")) continue;
+        const topicName = file.name.replace(/\.md$/, "");
+        const topicPath = path.join(refsDir, file.name);
+        const topicContent = await fs.readFile(topicPath, "utf8");
+
+        server.resource(
+          `skill-${skillName}-${topicName}`,
+          `skill://para-agent/${skillName}/${topicName}`,
+          async (uri) => ({
+            contents: [{ uri: uri.href, text: topicContent }],
+          })
+        );
+      }
+    }
+  }
+
+  // 4. Register unified 'skills' MCP Tool with topic support
+  server.registerTool(
+    "skills",
+    {
+      title: "Query or fetch agent skills",
+      description:
+        "Enumerate available MCP skills or fetch a specific skill primer / sub-topic " +
+        "(e.g., name: 'nu', topic: 'pipelines') for progressive disclosure context guidance.",
+      inputSchema: {
+        name: z.string().optional().describe("Name of the skill (e.g. 'nu'). Omit to list available skills."),
+        topic: z.string().optional().describe("Sub-topic or reference file (e.g. 'pipelines', 'parity', 'posix-cheatsheet')."),
+      },
+    },
+    async ({ name, topic }) => {
+      try {
+        if (!name) {
+          const dirs = await fs.readdir(SKILLS_DIR, { withFileTypes: true });
+          const skillsList = [];
+          for (const d of dirs) {
+            if (!d.isDirectory()) continue;
+            const sPath = path.join(SKILLS_DIR, d.name, "SKILL.md");
+            if (existsSync(sPath)) {
+              const txt = await fs.readFile(sPath, "utf8");
+              const m = txt.match(/description:\s*(.+)/i);
+              const rDir = path.join(SKILLS_DIR, d.name, "references");
+              const topics = existsSync(rDir)
+                ? (await fs.readdir(rDir)).filter((f) => f.endsWith(".md")).map((f) => f.replace(/\.md$/, ""))
+                : [];
+              skillsList.push({
+                name: d.name,
+                description: m ? m[1].trim() : `Skill ${d.name}`,
+                uri: `skill://para-agent/${d.name}`,
+                topics,
+              });
+            }
+          }
+          return reply({ availableSkills: skillsList });
+        }
+
+        const targetPath = topic
+          ? path.join(SKILLS_DIR, name, "references", `${topic}.md`)
+          : path.join(SKILLS_DIR, name, "SKILL.md");
+
+        if (!existsSync(targetPath)) {
+          return fail(new Error(`skill topic '${name}/${topic ?? "index"}' not found at '${targetPath}'`));
+        }
+
+        const content = await fs.readFile(targetPath, "utf8");
+        const uri = topic ? `skill://para-agent/${name}/${topic}` : `skill://para-agent/${name}`;
+        return reply({ skill: name, topic: topic ?? "index", uri }, content);
+      } catch (err) {
+        return fail(err);
+      }
+    }
+  );
+}
+
 // ---------------------------------------------------------------------------
 
 async function main() {
@@ -701,6 +820,7 @@ async function main() {
   }
   process.stderr.write(`para-agent: ${version.split("\n").pop()} | namespace '${mux.namespace}' | ${mux.bin}\n`);
 
+  await registerNativeSkills(server);
   await server.connect(new StdioServerTransport());
 }
 

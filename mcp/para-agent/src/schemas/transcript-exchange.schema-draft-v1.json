@@ -1,0 +1,1016 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:science-facility:para-agent:schema:transcript-exchange:1",
+  "title": "Para-Agent Transcript Exchange",
+  "description": "One complete, immutable prompt-and-reply envelope committed by para-agent as a single JSONL row after the reply is terminal and every tool call has a resolved result. The schema is directionally invariant: direction.sender sends prompt, direction.receiver processes it, and every reply record is produced by that receiver. Primary and para are participant attributes and swap sender/receiver positions without changing the envelope shape. Repository operations enforce cross-value and cross-row invariants such as participant membership, unique and gap-free exchange indexes, record ordering, final_reply being last, timestamp ordering, and an adjacent prompt's source_reply matching the preceding final reply.",
+  "type": "object",
+  "required": [
+    "record_type",
+    "schema_version",
+    "transcript_id",
+    "exchange_id",
+    "exchange_index",
+    "direction",
+    "prompt",
+    "reply",
+    "mediation",
+    "committed_at"
+  ],
+  "properties": {
+    "record_type": {
+      "const": "transcript_exchange"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "transcript_id": {
+      "$ref": "#/$defs/nonEmptyString",
+      "description": "Must equal the transcript_id declared by the zero-row header."
+    },
+    "exchange_id": {
+      "$ref": "#/$defs/nonEmptyString",
+      "description": "Para-agent's canonical identity for this completed envelope."
+    },
+    "exchange_index": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Zero-based position among exchange rows. It is independent of the physical zero-row header and of every client's native turn numbering."
+    },
+    "direction": {
+      "type": "object",
+      "description": "Direction is defined by the prompt. sender emits the prompt; receiver consumes it and produces the entire reply. Their stable primary/para roles do not otherwise change the structure.",
+      "required": ["sender", "receiver"],
+      "properties": {
+        "sender": {
+          "$ref": "#/$defs/clientSnapshot"
+        },
+        "receiver": {
+          "$ref": "#/$defs/clientSnapshot"
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "sender": {
+              "type": "object",
+              "required": ["role"],
+              "properties": {
+                "role": {
+                  "const": "primary"
+                }
+              }
+            },
+            "receiver": {
+              "type": "object",
+              "required": ["role"],
+              "properties": {
+                "role": {
+                  "const": "para"
+                }
+              }
+            }
+          }
+        },
+        {
+          "properties": {
+            "sender": {
+              "type": "object",
+              "required": ["role"],
+              "properties": {
+                "role": {
+                  "const": "para"
+                }
+              }
+            },
+            "receiver": {
+              "type": "object",
+              "required": ["role"],
+              "properties": {
+                "role": {
+                  "const": "primary"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "prompt": {
+      "$ref": "#/$defs/prompt"
+    },
+    "reply": {
+      "$ref": "#/$defs/reply"
+    },
+    "mediation": {
+      "$ref": "#/$defs/mediation"
+    },
+    "committed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When para-agent atomically appended this completed envelope. The row is immutable after this timestamp."
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "application": {
+      "type": "object",
+      "description": "The participant's host client application as observed for this exchange, such as codex, claude, or agy.",
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_.-]*$"
+        },
+        "display_name": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "version": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "description": "The observed client version, or null when the adapter could not determine it."
+        }
+      },
+      "additionalProperties": false
+    },
+    "adapter": {
+      "type": "object",
+      "description": "The application adapter that mediated and interpreted this endpoint for the exchange.",
+      "required": ["id", "version"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "version": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "profile_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      },
+      "additionalProperties": false
+    },
+    "digest": {
+      "type": "object",
+      "required": ["algorithm", "value"],
+      "properties": {
+        "algorithm": {
+          "const": "sha256"
+        },
+        "value": {
+          "type": "string",
+          "pattern": "^[A-Fa-f0-9]{64}$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "nativeSource": {
+      "type": "object",
+      "description": "A stable locator into evidence produced by a client or by the mediation transport. artifact_ref addresses the preserved source; the remaining fields locate the native event, row, or value within it. Paths and line numbers are hints rather than sole identities and may be guarded by a digest.",
+      "required": ["participant_id", "application", "kind", "format", "artifact_ref"],
+      "properties": {
+        "participant_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "application": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_.-]*$"
+        },
+        "kind": {
+          "enum": [
+            "backend_jsonl",
+            "stream_event",
+            "client_api",
+            "cli_output",
+            "pane_capture",
+            "mcp_receipt",
+            "other"
+          ]
+        },
+        "format": {
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "Adapter-defined source format, for example codex-rollout or claude-stream-json."
+        },
+        "artifact_ref": {
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "Stable para-agent artifact reference for the preserved native source."
+        },
+        "record_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "event_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "json_pointer": {
+          "type": "string",
+          "description": "RFC 6901 pointer to the relevant value within the located native record."
+        },
+        "line_number": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "byte_offset": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        }
+      },
+      "additionalProperties": false
+    },
+    "nativeIdentifierBinding": {
+      "type": "object",
+      "description": "A client-agnostic identifier value coupled directly to the client's native term and authoritative evidence. The value appears only once; the normalized concept is supplied by the containing property name, such as conversation or turn.",
+      "required": ["value", "native"],
+      "properties": {
+        "value": {
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "The opaque identifier exactly as exposed by the client. Adapters must not parse or rename its value."
+        },
+        "native": {
+          "type": "object",
+          "required": ["term", "source"],
+          "properties": {
+            "term": {
+              "$ref": "#/$defs/nonEmptyString",
+              "description": "The client's native field or term, such as thread_id or sessionId."
+            },
+            "source": {
+              "$ref": "#/$defs/nativeSource"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "nativeIdentifierSet": {
+      "type": "object",
+      "description": "Normalized client identity concepts. conversation is the client-owned continuity identity even when the native client calls it a session, thread, or conversation. turn and message are native subdivisions; run identifies a concrete client invocation when exposed.",
+      "properties": {
+        "conversation": {
+          "$ref": "#/$defs/nativeIdentifierBinding"
+        },
+        "turn": {
+          "$ref": "#/$defs/nativeIdentifierBinding"
+        },
+        "message": {
+          "$ref": "#/$defs/nativeIdentifierBinding"
+        },
+        "run": {
+          "$ref": "#/$defs/nativeIdentifierBinding"
+        }
+      },
+      "additionalProperties": false
+    },
+    "nativeExtension": {
+      "type": "object",
+      "description": "Client- or adapter-specific attributes that have no portable transcript meaning. schema_id identifies the adapter-owned schema used for a second validation layer.",
+      "required": ["schema_id", "attributes"],
+      "properties": {
+        "schema_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "attributes": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "clientIdentity": {
+      "type": "object",
+      "description": "Observed native identifiers for one endpoint at this exchange boundary. Absence is explicit so a missing client identifier cannot be mistaken for an adapter omission.",
+      "required": ["status", "identifiers"],
+      "properties": {
+        "status": {
+          "enum": ["observed", "partial", "unavailable"]
+        },
+        "identifiers": {
+          "$ref": "#/$defs/nativeIdentifierSet"
+        },
+        "reason": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "observed"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "identifiers": {
+                "type": "object",
+                "minProperties": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "partial"
+              }
+            }
+          },
+          "then": {
+            "required": ["reason"],
+            "properties": {
+              "reason": {
+                "$ref": "#/$defs/nonEmptyString"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "unavailable"
+              }
+            }
+          },
+          "then": {
+            "required": ["reason"],
+            "properties": {
+              "reason": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "identifiers": {
+                "type": "object",
+                "maxProperties": 0
+              }
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "clientSnapshot": {
+      "type": "object",
+      "description": "An exchange-local snapshot of a registered participant and its effective client context. For sender, message and turn identifiers describe prompt emission; for receiver, they describe reply production.",
+      "required": [
+        "participant_id",
+        "role",
+        "application",
+        "adapter",
+        "identity"
+      ],
+      "properties": {
+        "participant_id": {
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "Must resolve to a participant declared by the transcript header."
+        },
+        "role": {
+          "enum": ["primary", "para"]
+        },
+        "application": {
+          "$ref": "#/$defs/application"
+        },
+        "adapter": {
+          "$ref": "#/$defs/adapter"
+        },
+        "identity": {
+          "$ref": "#/$defs/clientIdentity"
+        },
+        "native": {
+          "$ref": "#/$defs/nativeExtension"
+        }
+      },
+      "additionalProperties": false
+    },
+    "contentPart": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["type", "text"],
+          "properties": {
+            "type": {
+              "const": "text"
+            },
+            "text": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["type", "value"],
+          "properties": {
+            "type": {
+              "const": "json"
+            },
+            "value": true
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["type", "artifact_ref"],
+          "properties": {
+            "type": {
+              "const": "artifact"
+            },
+            "artifact_ref": {
+              "$ref": "#/$defs/nonEmptyString"
+            },
+            "name": {
+              "$ref": "#/$defs/nonEmptyString"
+            },
+            "media_type": {
+              "$ref": "#/$defs/nonEmptyString"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "content": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/contentPart"
+      }
+    },
+    "promptSourceReply": {
+      "type": "object",
+      "description": "Causal link used when a preceding exchange's final reply is delivered unchanged as this exchange's prompt. Repository operations enforce message identity and content equality across the two immutable rows.",
+      "required": ["exchange_id", "record_id", "message_id"],
+      "properties": {
+        "exchange_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "record_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "message_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      },
+      "additionalProperties": false
+    },
+    "prompt": {
+      "type": "object",
+      "description": "The exact logical content received by direction.receiver. Psmux control keystrokes and terminal framing are transport operations and never alter this content.",
+      "required": [
+        "message_id",
+        "sent_at",
+        "received_at",
+        "content",
+        "native_provenance"
+      ],
+      "properties": {
+        "message_id": {
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "Para-agent's canonical identity for this logical message. A verbatim final-reply-to-prompt handoff retains the same message_id."
+        },
+        "sent_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "received_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "content": {
+          "$ref": "#/$defs/content"
+        },
+        "source_reply": {
+          "$ref": "#/$defs/promptSourceReply"
+        },
+        "native_provenance": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/nativeSource"
+          }
+        },
+        "native": {
+          "$ref": "#/$defs/nativeExtension"
+        }
+      },
+      "additionalProperties": false
+    },
+    "model": {
+      "type": "object",
+      "description": "The receiver-side model that produced this reply. Values are opaque client observations rather than para-agent aliases or inferred codenames.",
+      "required": ["id", "display_name", "source"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "display_name": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "description": "The client's display name, or null when the client exposes only an identifier."
+        },
+        "source": {
+          "$ref": "#/$defs/nativeSource"
+        },
+        "native": {
+          "$ref": "#/$defs/nativeExtension"
+        }
+      },
+      "additionalProperties": false
+    },
+    "thinkingRecord": {
+      "type": "object",
+      "required": [
+        "record_id",
+        "record_index",
+        "kind",
+        "timestamp",
+        "content",
+        "native_provenance"
+      ],
+      "properties": {
+        "record_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "record_index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "kind": {
+          "const": "thinking"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "phase": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "content": {
+          "$ref": "#/$defs/content"
+        },
+        "native_provenance": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/nativeSource"
+          }
+        },
+        "native": {
+          "$ref": "#/$defs/nativeExtension"
+        }
+      },
+      "additionalProperties": false
+    },
+    "messageRecord": {
+      "type": "object",
+      "required": [
+        "record_id",
+        "record_index",
+        "kind",
+        "message_id",
+        "timestamp",
+        "phase",
+        "content",
+        "native_provenance"
+      ],
+      "properties": {
+        "record_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "record_index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "kind": {
+          "const": "message"
+        },
+        "message_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "phase": {
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "Portable or adapter-declared phase for an intermediate reply message, such as commentary or progress."
+        },
+        "content": {
+          "$ref": "#/$defs/content"
+        },
+        "native_provenance": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/nativeSource"
+          }
+        },
+        "native": {
+          "$ref": "#/$defs/nativeExtension"
+        }
+      },
+      "additionalProperties": false
+    },
+    "toolCall": {
+      "type": "object",
+      "required": ["tool_call_id", "name", "started_at", "input"],
+      "properties": {
+        "tool_call_id": {
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "Para-agent's canonical identity for this tool interaction."
+        },
+        "name": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "kind": {
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "Optional portable or native tool category."
+        },
+        "started_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "input": true,
+        "native_identifier": {
+          "$ref": "#/$defs/nativeIdentifierBinding"
+        }
+      },
+      "additionalProperties": false
+    },
+    "toolError": {
+      "type": "object",
+      "required": ["message"],
+      "properties": {
+        "code": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "data": true
+      },
+      "additionalProperties": false
+    },
+    "toolResult": {
+      "type": "object",
+      "description": "A terminal tool result. Its required presence is what prevents an unresolved tool call from entering a committed exchange.",
+      "required": ["status", "completed_at"],
+      "properties": {
+        "status": {
+          "enum": ["succeeded", "failed", "cancelled"]
+        },
+        "completed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "content": {
+          "$ref": "#/$defs/content"
+        },
+        "structured_content": true,
+        "error": {
+          "$ref": "#/$defs/toolError"
+        }
+      },
+      "additionalProperties": false
+    },
+    "toolRecord": {
+      "type": "object",
+      "required": [
+        "record_id",
+        "record_index",
+        "kind",
+        "call",
+        "result",
+        "native_provenance"
+      ],
+      "properties": {
+        "record_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "record_index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "kind": {
+          "const": "tool"
+        },
+        "call": {
+          "$ref": "#/$defs/toolCall"
+        },
+        "result": {
+          "$ref": "#/$defs/toolResult"
+        },
+        "native_provenance": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/nativeSource"
+          }
+        },
+        "native": {
+          "$ref": "#/$defs/nativeExtension"
+        }
+      },
+      "additionalProperties": false
+    },
+    "finalReplyRecord": {
+      "type": "object",
+      "required": [
+        "record_id",
+        "record_index",
+        "kind",
+        "message_id",
+        "timestamp",
+        "content",
+        "native_provenance"
+      ],
+      "properties": {
+        "record_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "record_index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "kind": {
+          "const": "final_reply"
+        },
+        "message_id": {
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "Para-agent's canonical identity for the logical reply message and, when forwarded verbatim, the next exchange's prompt."
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "content": {
+          "$ref": "#/$defs/content"
+        },
+        "native_provenance": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/nativeSource"
+          }
+        },
+        "native": {
+          "$ref": "#/$defs/nativeExtension"
+        }
+      },
+      "additionalProperties": false
+    },
+    "replyRecord": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/thinkingRecord"
+        },
+        {
+          "$ref": "#/$defs/messageRecord"
+        },
+        {
+          "$ref": "#/$defs/toolRecord"
+        },
+        {
+          "$ref": "#/$defs/finalReplyRecord"
+        }
+      ]
+    },
+    "capture": {
+      "type": "object",
+      "description": "How the receiver-side trace was observed. complete means every event exposed by the declared capture methods was retained; it does not claim that the client exposes private reasoning it never emits.",
+      "required": ["status", "methods"],
+      "properties": {
+        "status": {
+          "enum": ["complete", "partial"]
+        },
+        "methods": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "client_stream",
+              "backend_transcript",
+              "client_api",
+              "pane_capture",
+              "cli_output"
+            ]
+          }
+        },
+        "omissions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nonEmptyString"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "partial"
+              }
+            }
+          },
+          "then": {
+            "required": ["omissions"],
+            "properties": {
+              "omissions": {
+                "type": "array",
+                "minItems": 1
+              }
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "reply": {
+      "type": "object",
+      "description": "The receiver's complete response trace. records are chronological and contain exactly one final_reply; repository finalization additionally requires that final_reply to be the last record and all record_index values to be gap-free.",
+      "required": [
+        "started_at",
+        "completed_at",
+        "model",
+        "capture",
+        "records"
+      ],
+      "properties": {
+        "started_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "completed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "model": {
+          "$ref": "#/$defs/model"
+        },
+        "capture": {
+          "$ref": "#/$defs/capture"
+        },
+        "records": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/replyRecord"
+          },
+          "contains": {
+            "type": "object",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "const": "final_reply"
+              }
+            }
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        "native": {
+          "$ref": "#/$defs/nativeExtension"
+        }
+      },
+      "additionalProperties": false
+    },
+    "workspaceSelection": {
+      "type": "object",
+      "description": "The effective workspace root for this exchange and whether it came from the header default or an explicit tool-call override.",
+      "required": ["root", "source"],
+      "properties": {
+        "root": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "source": {
+          "enum": ["default", "override"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "paneBinding": {
+      "type": "object",
+      "description": "The psmux pane endpoint used for this side of the exchange.",
+      "required": ["namespace", "target"],
+      "properties": {
+        "namespace": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "target": {
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "Fully qualified psmux target in session:window.pane form."
+        }
+      },
+      "additionalProperties": false
+    },
+    "transport": {
+      "type": "object",
+      "description": "The pane-level route that mediated the exchange. Sender and receiver align with direction.sender and direction.receiver.",
+      "required": ["kind", "sender", "receiver"],
+      "properties": {
+        "kind": {
+          "const": "psmux"
+        },
+        "version": {
+          "type": ["string", "null"],
+          "minLength": 1
+        },
+        "sender": {
+          "$ref": "#/$defs/paneBinding"
+        },
+        "receiver": {
+          "$ref": "#/$defs/paneBinding"
+        }
+      },
+      "additionalProperties": false
+    },
+    "mcpRequest": {
+      "type": "object",
+      "description": "Optional protocol-level request provenance contributing to the exchange. One exchange may span several asynchronous MCP calls.",
+      "required": ["request_id", "tool_name", "received_at"],
+      "properties": {
+        "request_id": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "integer"
+            }
+          ]
+        },
+        "tool_call_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "tool_name": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "received_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "completed_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": false
+    },
+    "mediation": {
+      "type": "object",
+      "description": "Para-agent's operational provenance for mediating this envelope. Detailed retries, polling, and diagnostics belong in the separate operational event log rather than the canonical transcript.",
+      "required": [
+        "para_session_id",
+        "job_id",
+        "workspace",
+        "transport"
+      ],
+      "properties": {
+        "para_session_id": {
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "Must equal the para-agent session declared by the transcript header."
+        },
+        "job_id": {
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "The asynchronous para-agent job that assembled this exchange."
+        },
+        "workspace": {
+          "$ref": "#/$defs/workspaceSelection"
+        },
+        "transport": {
+          "$ref": "#/$defs/transport"
+        },
+        "mcp_requests": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/mcpRequest"
+          }
+        },
+        "native": {
+          "$ref": "#/$defs/nativeExtension"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
