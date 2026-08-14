@@ -25,7 +25,7 @@ Program pane:
 }
 ```
 
-The response states the actual `handle`, `session`, and whether the pane is a shell or program.
+Use the `handle` returned by `spawn`; do not derive it from the requested name. The current receipt also identifies the session and whether the pane is a shell or program.
 
 ## Inspect
 
@@ -33,7 +33,7 @@ The response states the actual `handle`, `session`, and whether the pane is a sh
 
 ```json
 {
-  "handle": "agent-worker-1:0.0"
+  "handle": "<returned-handle>"
 }
 ```
 
@@ -51,7 +51,7 @@ Interrupt the foreground work while retaining the pane:
 
 ```json
 {
-  "handle": "agent-worker-1:0.0",
+  "handle": "<returned-handle>",
   "level": "interrupt"
 }
 ```
@@ -60,9 +60,11 @@ Call that object with `cancel`. Destroy an entire session only when its state is
 
 ```json
 {
-  "handle": "agent-worker-1",
+  "handle": "<returned-session>",
   "scope": "session"
 }
 ```
 
-Call that object with `kill`. Destruction is irreversible; it is distinct from cancelling observation of a `run` or `wait` request.
+Call that object with `kill`. Destruction is irreversible.
+
+Cancelling the MCP request only stops observation and leaves pane work running. To affect the work, escalate deliberately: `cancel` with `cooperative` for a turn that checks its cancel file, `interrupt` for pane-scoped C-c, `terminate` for a selected descendant while retaining the shell, and `kill` only to destroy the pane. Session destruction remains a separate `kill({ scope: "session" })` decision.

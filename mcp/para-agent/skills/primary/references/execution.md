@@ -23,7 +23,7 @@ Use `run` only against a shell pane. Output bypasses terminal capture and is rec
 
 ```json
 {
-  "handle": "para-worker-1:0.0",
+  "handle": "<returned-handle>",
   "command": "cargo test -- --nocapture",
   "shell": "nu",
   "timeoutMs": 60000
@@ -38,7 +38,7 @@ Use these for a pane spawned with `command`, where there is no shell prompt or n
 
 ```json
 {
-  "handle": "agent-repl:0.0",
+  "handle": "<returned-handle>",
   "mode": "line",
   "input": "2 + 2"
 }
@@ -46,7 +46,7 @@ Use these for a pane spawned with `command`, where there is no shell prompt or n
 
 ```json
 {
-  "handle": "agent-repl:0.0",
+  "handle": "<returned-handle>",
   "until": "pattern",
   "pattern": "4",
   "timeoutMs": 10000
@@ -55,10 +55,10 @@ Use these for a pane spawned with `command`, where there is no shell prompt or n
 
 ```json
 {
-  "handle": "agent-repl:0.0",
+  "handle": "<returned-handle>",
   "delta": true,
   "scrollback": 1000
 }
 ```
 
-Call the objects with `send`, `wait`, and `read` respectively. Prefer `wait` with `until: "pattern"`; `until: "stable"` is explicitly heuristic. Multi-line `send` input is linewise console typing, so it is not a valid transport for a mediated prompt.
+Call the objects with `send`, `wait`, and `read` respectively. Prefer `wait` with `until: "pattern"`; its response already contains the matching screen. Use a later `read` only to follow subsequent output. `until: "stable"` is explicitly heuristic. Multi-line `send` input is linewise console typing, so it is not a valid transport for a mediated prompt.

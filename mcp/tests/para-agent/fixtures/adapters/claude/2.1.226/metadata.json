@@ -1,0 +1,10 @@
+{
+  "application": { "id": "claude", "version": "2.1.226" },
+  "captured_at": "2026-08-14T08:48:29.002Z",
+  "mode": "plan permission, no tools, no persistence, safe mode",
+  "stdin_prompt": "Reply with exactly PARA_STDIN_OK and do not use tools.",
+  "stdin_writer": "PowerShell Write-Output native pipeline",
+  "expected_terminal_reply": "PARA_STDIN_OK",
+  "known_omissions": ["native_turn_id", "prompt_echo"],
+  "fixture_scope": "Reduced from the live stdout stream to the exact fields exercised by adapter conformance; it is projection evidence, not a substitute for a raw trace."
+}

@@ -75,12 +75,15 @@ export function resolveNuBin() {
 }
 
 export class MuxError extends Error {
-  constructor(message, { argv, code, stderr } = {}) {
+  constructor(message, { argv, code, stdout, stderr, timedOut = false, timeoutMs } = {}) {
     super(message);
     this.name = "MuxError";
     this.argv = argv;
     this.code = code;
+    this.stdout = stdout;
     this.stderr = stderr;
+    this.timedOut = Boolean(timedOut);
+    this.timeoutMs = timeoutMs;
   }
 }
 
@@ -102,6 +105,7 @@ export class Mux {
     this.env = {
       ...process.env,
       ...(resolvedConfig ? { PSMUX_CONFIG_FILE: resolvedConfig } : {}),
+      ...(opts.env ?? {}),
     };
   }
 
@@ -128,6 +132,7 @@ export class Mux {
             stderr: stderr ?? "",
             code: err ? (typeof err.code === "number" ? err.code : 1) : 0,
             timedOut: Boolean(err && err.killed),
+            timeoutMs,
             argv,
           });
         }
@@ -143,9 +148,20 @@ export class Mux {
   async runOrThrow(args, opts) {
     const res = await this.run(args, opts);
     if (res.code !== 0) {
+      const detail = (res.stderr || res.stdout).trim();
+      const summary = res.timedOut
+        ? `mux command timed out after ${res.timeoutMs} ms: ${res.argv.join(" ")}`
+        : `mux command failed (exit ${res.code}): ${res.argv.join(" ")}`;
       throw new MuxError(
-        `mux command failed (exit ${res.code}): ${args.join(" ")}\n${res.stderr || res.stdout}`.trim(),
-        { argv: res.argv, code: res.code, stderr: res.stderr }
+        detail ? `${summary}\n${detail}` : summary,
+        {
+          argv: res.argv,
+          code: res.code,
+          stdout: res.stdout,
+          stderr: res.stderr,
+          timedOut: res.timedOut,
+          timeoutMs: res.timeoutMs,
+        }
       );
     }
     return res;

@@ -11,8 +11,7 @@ List exchange summaries:
 
 ```json
 {
-  "handle": "review-seat",
-  "filter": "summary"
+  "handle": "review-seat"
 }
 ```
 
@@ -44,7 +43,7 @@ Orient with summaries:
 
 ```json
 {
-  "handle": "agent-worker:0.0",
+  "handle": "<returned-handle>",
   "view": "summary"
 }
 ```
@@ -53,7 +52,7 @@ Search before fetching bodies:
 
 ```json
 {
-  "handle": "agent-worker:0.0",
+  "handle": "<returned-handle>",
   "pattern": "FAILED",
   "context": 2
 }
@@ -63,7 +62,7 @@ Fetch a bounded body slice only when needed:
 
 ```json
 {
-  "handle": "agent-worker:0.0",
+  "handle": "<returned-handle>",
   "turn": 4,
   "grep": "FAIL",
   "context": 2,

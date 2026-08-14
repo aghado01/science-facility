@@ -1,16 +1,44 @@
 # para-agent
 
-An MCP server that exposes terminal multiplexer sessions as a supervisory interface, so one agent can spawn, drive, and observe other programs — including other agents — in persistent panes.
+An MCP server with two deliberately separate supervisory surfaces:
+
+- a **Console plane** for spawning, driving, and observing persistent multiplexer panes; and
+- a typed **mediation plane** for one evidence-backed Primary-to-Para turn through a validated native-stream application adapter.
 
 Supervisor-agnostic: any MCP-speaking client can use it. Backend-agnostic: it speaks only the tmux command language, so it runs on [psmux](https://github.com/psmux/psmux) on native Windows and on real tmux elsewhere.
 
-**Status: draft (0.1.0).** The tool surface is exercised end to end over the MCP wire protocol against psmux 3.3.7 — see [Verified behavior](#verified-behavior). Treat the ergonomics as provisional.
+**Status: draft (0.1.0).** The console surface has measured psmux 3.3.7 coverage, while the mediated path has bounded fake-client, store, adapter, raw-trace, service, and MCP-wire tests. Claude and Codex have version-labelled captured-stream fixtures; the AGY profile remains explicitly unverified. The optional live suite is environment- and credential-dependent, so bounded green tests alone are not a release claim. See [Verified behavior](#verified-behavior).
 
 ## Why this exists
 
 An MCP tool call is a fresh process every time. Shell state does not survive between calls, so an agent driving a shell normally cannot set a variable in one turn and read it in the next.
 
 A multiplexer server is a daemon that outlives every command sent to it. Panes therefore keep their shell variables, working directory, environment, and any running program across separate supervisor turns. That turns a stateless tool surface into a genuinely persistent interactive console.
+
+The mediation plane solves a different problem. Para-agent owns a third, mediation-level transcript for prompts actually accepted through `delegate`; it does not export either application's native transcript and it does not infer a dialogue from later console activity. Exact ingress text comes from the typed request. Model identity, exposed reasoning, tool observations, native identifiers, and terminal reply come only from correlated validated native events.
+
+## Architecture boundary
+
+```text
+MCP delegate handler
+  -> MediatedTurnService
+     -> ConversationGate
+     -> ApplicationAdapter
+     -> ProcessNativeClient
+     -> RawTraceSink
+     -> ExchangeAssembler (pure projection seam)
+     -> TranscriptStore
+
+MCP send/read/wait/run/exec
+  -> Mux / capture
+  -> Console Journal
+```
+
+These are separate evidence systems. `send`, `read`, `wait`, `run`, and `exec` remain useful escape hatches, but they never create or imply a mediated exchange boundary. The Console Journal records command/process activity; the transcript ledger records only durably accepted semantic turns.
+
+`ExchangeAssembler` is intentionally pure: it performs no I/O, allocates no ID or index, reads no clock, invokes no adapter, and invents no provenance. `MediatedTurnService` injects it for normal commit projection, durable receipts, and completed reply construction. The store still owns acceptance, the canonical ingress prompt, terminal index allocation, validation, and commit. If normal assembly rejects after durable acceptance, the service terminalizes through a minimal failed-envelope projection with no reply or invented provenance; a regression covers that safety path.
+
+The frozen boundary is [MEDIATED-EXCHANGE-CONTRACT.md](contract/MEDIATED-EXCHANGE-CONTRACT.md). The bundled [primary-agent skill](skills/primary/SKILL.md) teaches the public operations, but it is a downstream guidance projection: live MCP schemas and the frozen contract remain authoritative.
 
 ## Install
 
@@ -63,10 +91,12 @@ The `-L` namespace matters: agent sessions live in their own server namespace, s
 | `find` | Search across every turn's output, returning lines |
 | `cancel` | Stop what a pane is running — cooperative, interrupt, terminate, or kill |
 | `kill` | Destroy a session or a single pane |
+| `delegate` | Execute one exact prompt as a serialized, evidence-backed mediated turn; returns receiver reply plus bounded receipt |
+| `scrutinize` | Query exchange summaries, typed record projections, or an exact zero-based step without mutating the ledger |
 
 A handle is a fully-qualified tmux target: `agent-foo:0.0` (`session:window.pane`).
 
-## Context economy
+## Context economy and scrutiny
 
 The supervising agent's context is the scarce resource, so the read path is built around three rules: default to summaries, defer bodies, and never omit silently.
 
@@ -76,7 +106,9 @@ Every read carries a receipt stating what was scanned, returned and withheld, an
 
 Reach for `find` before `body`: searching every turn at once costs hundreds of tokens, fetching a few bodies to read them yourself costs tens of thousands.
 
-## The two execution models
+`delegate` applies the same economy to mediated dialogue without discarding provenance. A completed call returns the exact receiver-authoritative reply plus a bounded receipt containing digests, observed application/model/native identities when available, delivery stages, trace receipt, and record count. Full normalized records and raw-trace coverage stay durable for typed `scrutinize` calls. Failed, interrupted, and timed-out calls expose a durable receipt as an MCP error and never fabricate a reply.
+
+## The two console execution models
 
 Which one applies depends on what is running in the pane, and getting it wrong is the most common way to misuse this server.
 
@@ -118,6 +150,10 @@ Against psmux 3.3.7 on Windows 11, via the MCP wire protocol (21/21) and against
 - Timeouts return promptly and report that the command is still running.
 - `exec` leaves no session behind.
 - Completion detection overhead is roughly 0.5–0.9s on top of the command's own runtime.
+
+The manifest-driven suite under `mcp/tests/para-agent/` now exercises the frozen mediated boundary separately. Its bounded coverage includes strict JSON Schema and semantic validation, acceptance-WAL recovery and serialized indexes, immutable raw traces, structured Nu failures and typed queries, versioned adapter conformance, exact hostile Unicode stdin, native transport timeout/cancel/buffer outcomes, per-conversation gating, durable terminalization, MCP-wire `delegate`/`scrutinize`, Console regressions, and primary-skill examples. A named `NU-SCRUTINY-FALSE-SUCCESS` regression protects against successful pseudo-JSON errors.
+
+The live Windows suite checks pinned Nu/psmux behavior and includes a real Claude mediation pilot proving stdin, terminal reply, live application/model provenance, and raw digest. A current sandboxed run of that pilot passed against Claude 2.1.226 in about 4.1 seconds. That is evidence for this one versioned pilot, not a claim that the full optional live matrix or every external client currently passes.
 
 ## Limitations
 
@@ -173,6 +209,8 @@ The `-L` namespace confines it to its own sessions, and per-tool permissions are
 Content read from a pane is untrusted input. A program running in a supervised pane can print text designed to look like instructions to whatever agent reads it.
 
 ## Not yet implemented
+
+**Verified AGY mediation.** AGY is present only as a fail-closed, unverified profile. It must not be used for `delegate` until a current version-labelled native stream is captured and passes the common adapter and real-client conformance gates. Transcript or SQLite metadata is not an acceptable model-identity fallback.
 
 **Server-initiated messages.** Everything here is request/response: the supervisor asks, para-agent answers. The server never speaks first, so it cannot announce "the agent you spawned just finished" — the supervisor has to come back and `wait` or `read`. MCP does allow a server to emit progress and log notifications during a long call, and those would let `wait` stream intermediate output instead of returning one lump at the end. Neither is wired up yet. Note the protocol ceiling: a server can *notify*, but it cannot *call* the client, so genuine push-driven supervision needs the supervisor to be sitting in a wait.
 

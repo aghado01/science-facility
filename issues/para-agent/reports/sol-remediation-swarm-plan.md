@@ -1,5 +1,7 @@
 The remediation should be contract-first and vertical-slice driven. The current Nu layer is useful scaffolding, but it is not yet a completed mediation engine.
 
+> **Historical-plan notice (2026-08-14):** The original proposal and the appended Fable review below describe the pre-remediation checkout. They are preserved as planning and audit evidence, including statements such as “no files were changed.” They are not current implementation status. The [Execution and reconciliation](#execution-and-reconciliation-2026-08-14) section appended after the review is the operative status record.
+
 ### What the audit established
 
 - Both Fable bugs reproduce on pinned Nu 0.114.1: runtime errors resolve as successful pseudo-JSON strings, and summary `scrutinize` fails on missing `duration_ms` ([nu.js](D:/aghado01/science-facility/mcp/para-agent/src/nu.js:23), [index.js](D:/aghado01/science-facility/mcp/para-agent/src/index.js:735)).
@@ -150,3 +152,68 @@ The architectural anchors are the right calls, especially the one carrying the m
 The wave structure is sound: contract before code, foundations before the vertical slice, evidence-based client conformance last, with the drift-prone external stream schemas explicitly recaptured in Wave 3 rather than trusted from the earlier notes. One suggestion for the verification contract: the PowerShell runner should carry the SUITE-ABORTED catch pattern from the reposnapshot harness experience, where suites reported PASSING while asserts never ran — the same false-green failure mode this plan is trying to purge from the prose reports.
 
 I changed no files beyond writing a memory note recording this verification, and dispatched nothing — the plan is execution-ready, and whether to launch the swarm (root integrator plus ≤3 workers per wave) or chip through the waves sequentially is your call.
+
+# Execution and reconciliation (2026-08-14)
+
+The user authorized execution after the Fable amendments. This section records what now exists without rewriting the historical audit that motivated it. Source and executable tests outrank this prose if they later diverge.
+
+## Architectural result
+
+The remediation retained the early design's correct ontology and narrowed its implementation claims:
+
+- Para-agent owns a third mediation ledger only for prompts durably accepted through typed `delegate`.
+- The Console Journal remains command/process evidence. `send`, `read`, `wait`, `run`, and `exec` never create or imply exchange boundaries.
+- Exact prompt text is ingress authority. Receiver-native correlated events are authority for observed application/model/native identity, exposed reasoning, tools, and terminal reply. Unknown facts remain absent.
+- Raw native bytes are immutable evidence; normalized records are source-linked projections.
+- Nu is a strict, replaceable typed-query provider rather than schema, storage, provenance, or public-semantics authority.
+- The primary skill is a tested guidance projection over the operation catalog, not a second API definition.
+
+The canonical boundary is now the frozen [Mediated Exchange Contract v1](../../../mcp/para-agent/contract/MEDIATED-EXCHANGE-CONTRACT.md).
+
+## Wave reconciliation
+
+| Wave | Current state | Evidence and honest boundary |
+|---|---|---|
+| **0 — Contract freeze** | Implemented | The frozen contract distinguishes every identity and authority, defines WAL acceptance/terminalization, per-conversation serialization, immutable trace linkage, delivery evidence, typed scrutiny, and false-green runner behavior. |
+| **1 — Foundations** | Implemented with client limits | JSON Schema 2020-12 validation, semantic invariants, writer lease/WAL recovery, raw trace sink, strict Nu execution and typed selectors, and schema-validated adapter profiles now have bounded suites. Claude 2.1.226 and Codex 0.147.0 have version-labelled captured fixtures. AGY is deliberately unverified and fails closed. |
+| **2 — Vertical slice** | Implemented and MCP-wired | `ProcessNativeClient`, `ConversationGate`, injected `ExchangeAssembler`, `MediatedTurnService`, `delegate`, and read-only `scrutinize` form a deterministic fake-client vertical slice. Accepted work terminalizes when the store commits; any ambiguous commit is quarantined for reconciliation, and non-completed outcomes expose no reply. Root obtained a Claude 2.1.226 pilot pass and a separate 2/2 live Windows gate before the final audit-hardening patch. |
+| **3 — Client conformance** | Partial | Claude and Codex captured-stream conformance exists. AGY still requires fresh stream capture and a real-client pilot; the stale architecture report is not evidence of AGY correctness. |
+| **4 — Guidance and release** | Checkpoint green | The primary skill and examples were reconciled. The current manifest-driven bounded gate passed 15 suites / 115 tests with no abort, failure, skip, or cancellation. The live gate passed 2/2 immediately before the final audit-hardening patch; current-source live recertification remains deliberately pending at this stopping point. |
+
+## ExchangeAssembler correction
+
+The pre-remediation [`assembler.js`](../../../mcp/para-agent/src/assembler.js) was not a safe transaction boundary: it generated IDs and timestamps, read `nextIndex` before serialized commit, invoked heuristic adapter normalization, wrote the store, and substituted an application display name for missing live model identity.
+
+It has been replaced by a pure `ExchangeAssembler` projection seam:
+
+- `assembleCommit({ acceptance, ...observations })` produces the receiver-record-only payload expected by `TranscriptStore.commitExchange`;
+- `assembleReceipt({ acceptance, exchange })` produces a bounded durable receipt; and
+- `assembleCompletedResult(...)` exposes a reply only for a validated completed exchange.
+
+The assembler performs no I/O, allocates no identity or index, reads no clock, invokes no adapter, and does not infer provenance. It rejects caller-supplied index fields, prompt records outside store ownership, unbound live model/application observations, fabricated non-completed replies, and success without complete raw-trace and adapter-emission evidence. Its targeted suite is [assembler.test.js](../../../mcp/tests/para-agent/assembler.test.js); 14/14 tests pass at this checkpoint.
+
+[`MediatedTurnService`](../../../mcp/para-agent/src/mediated-turn.js) now injects the assembler and uses it for the normal commit payload, durable receipt, and completed result. Orchestration, adapter interpretation, raw capture, durable acceptance, index allocation, and store commit remain outside the assembler. If normal assembly rejects after acceptance, the service asks the assembler for a minimal `failed` envelope, commits it durably, and exposes no reply; the mediated-turn suite includes a regression for this terminalization fallback.
+
+## Corrections to stale reports
+
+The [Agy architecture report](mediated-transcript-and-nu-engine-architecture.md) remains useful as design-intent history, not as an implementation or verification report. In particular, its legacy `_xid`/`_xidx` and `_timestamp` examples, heuristic `AdapterEngine.normalize`, stateful transactional assembler, direct generated Nu pipelines, bundled-binary claims, and nonexistent `test_transcript_pipeline.js` verification do not describe the current contract.
+
+The original audit and Fable review are also now historical in these specific respects:
+
+- Nu errors no longer return successful pseudo-JSON; structured mode is the default, raw mode is explicit, and `NU-SCRUTINY-FALSE-SUCCESS` is a named regression.
+- Summary duration is computed by the typed store/query projection rather than selected from a nonexistent persisted column.
+- Transcript schemas and rows are now satisfiable and validated in Ajv 2020 strict mode with semantic checks.
+- Exchange indexes are allocated in the serialized writer lane, not read from mutable `nextIndex` by an in-flight assembler.
+- The repository now has an explicit test manifest and package test scripts. The manifest, not prose or discovery globs, defines bounded and live suites.
+- `delegate` is connected through the MCP handler. Lower-level console operations remain intentionally unconnected to mediation.
+
+## Remaining release gates
+
+This work is not permission to declare all clients complete. Release still requires:
+
+1. rerun the optional 2-test live Windows gate against the final checkpoint after the last trace/commit audit hardening;
+2. resolve whether egress construction remains purely post-commit in the returned receipt or needs a separately durable post-commit record;
+3. capture and conform a fresh AGY native stream before enabling its profile; and
+4. isolate and commit the para-agent paths without absorbing unrelated shared-worktree staging.
+
+Hashish, Session Continuity, a general Artifact engine, control-mode transport, model mutation, and post-hoc inference from Console activity remain out of scope.

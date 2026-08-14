@@ -1,0 +1,12 @@
+{
+  "application": { "id": "codex", "version": "0.147.0" },
+  "captured_at": "2026-08-14T00:00:00Z",
+  "mode": "ephemeral read-only JSONL probe",
+  "expected_terminal_reply": "PARA_CONFORMANCE_OK",
+  "observed_native_fields": ["thread_id", "terminal_event", "usage"],
+  "known_omissions": ["native_turn_id", "model.id", "prompt_echo"],
+  "transport_evidence": {
+    "kind": "cli_help",
+    "note": "The live harness probe passed its prompt through argv; codex exec help documents '-' as stdin."
+  }
+}

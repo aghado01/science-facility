@@ -127,19 +127,29 @@ function normalizeRawRef(rawRef) {
   if (!rawRef || typeof rawRef !== "object" || Array.isArray(rawRef)) {
     throw new AdapterError("ADAPTER_RAW_REF_REQUIRED", "a raw trace source reference is required");
   }
+  if (rawRef.kind !== "receiver_native") {
+    throw new AdapterError(
+      "ADAPTER_RAW_REF_INVALID",
+      "rawRef.kind must be 'receiver_native'"
+    );
+  }
   const traceRef = nonEmpty(rawRef.trace_ref, "rawRef.trace_ref");
   const hasFrame = Number.isInteger(rawRef.frame_index) && rawRef.frame_index >= 0;
   const span = rawRef.byte_span;
-  const hasSpan = span && Number.isInteger(span.start) && Number.isInteger(span.end) && span.start >= 0 && span.end >= span.start;
+  const hasSpan = span && Number.isInteger(span.start) && Number.isInteger(span.length) && span.start >= 0 && span.length > 0;
   if (hasFrame === Boolean(hasSpan)) {
     throw new AdapterError(
       "ADAPTER_RAW_REF_INVALID",
       "rawRef must identify exactly one non-negative frame_index or byte_span"
     );
   }
-  return deepFreeze(hasFrame
-    ? { trace_ref: traceRef, frame_index: rawRef.frame_index }
-    : { trace_ref: traceRef, byte_span: { start: span.start, end: span.end } });
+  const normalized = hasFrame
+    ? { kind: "receiver_native", trace_ref: traceRef, frame_index: rawRef.frame_index }
+    : { kind: "receiver_native", trace_ref: traceRef, byte_span: { start: span.start, length: span.length } };
+  if (rawRef.native_event_id !== undefined) {
+    normalized.native_event_id = nonEmpty(rawRef.native_event_id, "rawRef.native_event_id");
+  }
+  return deepFreeze(normalized);
 }
 
 function validateRecordFields(mapping, fields) {

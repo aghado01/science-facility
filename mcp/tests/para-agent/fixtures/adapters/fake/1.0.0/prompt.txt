@@ -1,0 +1,2 @@
+Résumé α/β 加算
+literal '$env.HOME'; "quotes"; `backtick`

@@ -26,9 +26,15 @@ import { runCaptured, finalizeOpenTurns, requestCancel, CAPTURE_DIALECTS } from 
 import { getNuProfileConfig } from "./profiles.js";
 import { TranscriptStore } from "./transcript.js";
 import { AdapterEngine } from "./adapters.js";
+import { ConversationGate } from "./conversation-gate.js";
+import { MediatedTurnError, MediatedTurnService } from "./mediated-turn.js";
+import { ProcessNativeClient } from "./native-client.js";
+import { RawTraceSink } from "./raw-trace.js";
 
 const mux = new Mux();
 const adapterEngine = new AdapterEngine();
+const nativeClient = new ProcessNativeClient();
+const conversationGate = new ConversationGate();
 const transcriptStores = new Map();
 
 /** Last capture per target, for delta reads. */
@@ -55,6 +61,32 @@ async function writableTranscriptFor(handle) {
 
 async function readOnlyTranscriptFor(handle) {
   return TranscriptStore.openReadOnly({ workspaceRoot: process.cwd(), sessionId: sessionOf(handle) });
+}
+
+function createMediatedTurnService() {
+  return new MediatedTurnService({
+    adapterEngine,
+    storeForHandle: writableTranscriptFor,
+    nativeClient,
+    gate: conversationGate,
+    traceSinkFactory: async ({ profile, adapter, exchangeId, store }) => new RawTraceSink({
+      traceDir: path.dirname(store.traceDir),
+      sessionKey: store.sessionKey,
+      exchangeId,
+      format: profile.native_events.format,
+      adapter,
+    }),
+  });
+}
+
+let mediatedTurnService = createMediatedTurnService();
+
+/** Test seam for MCP-wire verification; production uses the application service above. */
+export function setMediatedTurnServiceForTesting(service) {
+  if (!service || typeof service.delegate !== "function") {
+    throw new TypeError("test mediation service must implement delegate()");
+  }
+  mediatedTurnService = service;
 }
 
 async function journalFor(handle) {
@@ -90,6 +122,21 @@ function fail(err) {
   return {
     isError: true,
     content: [{ type: "text", text: JSON.stringify({ error: message }, null, 2) }],
+  };
+}
+
+function failMediated(err) {
+  const code = err?.code ?? "MEDIATED_TURN_FAILED";
+  const message = String(err?.message ?? err);
+  return {
+    isError: true,
+    content: [{
+      type: "text",
+      text: JSON.stringify({
+        error: { code, message },
+        ...(err?.receipt ? { receipt: err.receipt } : {}),
+      }, null, 2),
+    }],
   };
 }
 
@@ -709,8 +756,47 @@ server.registerTool(
 );
 
 // ---------------------------------------------------------------------------
-// Transcript & Exchange Scrutiny (Progressive Disclosure)
+// Mediated dialogue and exchange scrutiny
 // ---------------------------------------------------------------------------
+
+server.registerTool(
+  "delegate",
+  {
+    title: "Delegate one evidence-backed agent turn",
+    description:
+      "Send one exact UTF-8 prompt through a verified structured-stream application adapter. " +
+      "This is the only operation that creates a mediated exchange. Completion requires a " +
+      "correlated receiver-native terminal event and durable transcript commit; console " +
+      "send/wait/read activity is never inferred into this ledger. Non-completed turns return " +
+      "an MCP error with a durable receipt and no fabricated reply.",
+    inputSchema: {
+      handle: z.string().min(1)
+        .describe("Logical receiver seat or exclusive target handle; serialized per application and handle."),
+      application: z.string().min(1)
+        .describe("Verified adapter application id, such as 'claude'. Unverified profiles fail closed."),
+      prompt: z.string()
+        .describe("One exact well-formed Unicode prompt. Control arguments do not belong in this string."),
+      timeoutMs: z.number().int().min(500).max(3600000).optional()
+        .describe("Native turn deadline in milliseconds. Timeout does not imply native stop unless confirmed."),
+    },
+  },
+  async ({ handle, application, prompt, timeoutMs }, extra) => {
+    try {
+      const result = await mediatedTurnService.delegate({
+        handle,
+        application,
+        prompt,
+        timeoutMs,
+        signal: extra?.signal,
+        ...(extra?.requestId !== undefined ? { requestId: String(extra.requestId) } : {}),
+      });
+      return reply(result);
+    } catch (err) {
+      if (err instanceof MediatedTurnError || err?.receipt || err?.code) return failMediated(err);
+      return failMediated(new MediatedTurnError("MEDIATED_TURN_FAILED", String(err?.message ?? err)));
+    }
+  }
+);
 
 server.registerTool(
   "scrutinize",
@@ -728,8 +814,9 @@ server.registerTool(
     },
   },
   async ({ handle, xid, filter = "summary", step }) => {
-    const store = await readOnlyTranscriptFor(handle);
+    let store = null;
     try {
+      store = await readOnlyTranscriptFor(handle);
       if (!xid) {
         const [header, summaries] = await Promise.all([
           store.readHeader(),
@@ -800,7 +887,7 @@ server.registerTool(
     } catch (err) {
       return fail(err);
     } finally {
-      await store.close();
+      await store?.close();
     }
   }
 );
@@ -824,7 +911,7 @@ import { existsSync } from "node:fs";
 
 const SKILLS_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "skills");
 
-async function registerNativeSkills(server) {
+export async function registerNativeSkills(server) {
   if (!existsSync(SKILLS_DIR)) return;
 
   const skillDirs = await fs.readdir(SKILLS_DIR, { withFileTypes: true });
@@ -941,6 +1028,7 @@ async function registerNativeSkills(server) {
 
 export async function main() {
   // Fail loudly at startup rather than on the first tool call.
+  await adapterEngine.init();
   const version = await mux.version().catch(() => null);
   if (!version) {
     process.stderr.write(

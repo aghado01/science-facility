@@ -1,0 +1,127 @@
+{
+  "schema_version": 1,
+  "profile_id": "fake-native/1.0.0-fixture",
+  "adapter": {
+    "id": "para-agent.fake-native",
+    "version": "1.0.0"
+  },
+  "application": {
+    "id": "fake-native",
+    "display_name": "Deterministic Fake Native Client",
+    "verified_versions": ["1.0.0-fixture"]
+  },
+  "verification": {
+    "status": "verified",
+    "evidence": [
+      {
+        "kind": "fixture",
+        "reference": "mcp/tests/para-agent/fixtures/adapters/fake/1.0.0/events.jsonl",
+        "observed_at": "2026-08-14T00:00:00Z"
+      }
+    ]
+  },
+  "capabilities": {
+    "prompt_delivery": true,
+    "prompt_observation": true,
+    "terminal_events": true,
+    "scoped_cancellation": true,
+    "model_identity": true,
+    "reasoning_events": true,
+    "tool_calls": true,
+    "tool_results": true
+  },
+  "transport": {
+    "kind": "jsonl_stdin",
+    "encoding": "utf-8",
+    "framing": "json_lines",
+    "byte_preserving": true,
+    "command": ["fake-native", "--jsonl"]
+  },
+  "native_events": {
+    "format": "jsonl",
+    "discriminator_path": "type",
+    "unknown_event_policy": "preserve_raw"
+  },
+  "correlation_mappings": {
+    "exchange_id_path": "exchange_id",
+    "conversation_id_path": "conversation_id",
+    "turn_id_path": "turn_id"
+  },
+  "provenance_mappings": {
+    "application_id_path": "application.id",
+    "application_version_path": "application.version",
+    "model_id_path": "model.id",
+    "model_display_name_path": "model.display_name",
+    "native_timestamp_path": "timestamp"
+  },
+  "prompt_delivery": {
+    "payload_format": "json",
+    "native_type": "delegate.prompt",
+    "type_path": "type",
+    "prompt_path": "prompt",
+    "exchange_id_path": "exchange_id",
+    "conversation_key_path": "conversation_key"
+  },
+  "prompt_observation": {
+    "native_type": "prompt.observed",
+    "prompt_path": "prompt"
+  },
+  "terminal_events": [
+    {
+      "native_type": "turn.result",
+      "outcome_path": "outcome",
+      "outcome_map": {
+        "ok": "completed",
+        "error": "failed",
+        "cancelled": "interrupted",
+        "deadline": "timeout"
+      },
+      "reply_source": {
+        "strategy": "event_path",
+        "path": "reply"
+      }
+    }
+  ],
+  "cancellation": {
+    "scope": "turn",
+    "native_type": "turn.cancel",
+    "type_path": "type",
+    "exchange_id_path": "exchange_id",
+    "conversation_key_path": "conversation_key",
+    "turn_id_path": "turn_id"
+  },
+  "record_mappings": [
+    {
+      "kind": "prompt_echo",
+      "native_type": "prompt.observed",
+      "fields": { "text": "prompt" }
+    },
+    {
+      "kind": "thinking",
+      "native_type": "thinking.delta",
+      "fields": { "text": "text" }
+    },
+    {
+      "kind": "tool_call",
+      "native_type": "tool.call",
+      "fields": {
+        "tool_use_id": "call.id",
+        "tool_name": "call.name",
+        "input": "call.input"
+      }
+    },
+    {
+      "kind": "tool_result",
+      "native_type": "tool.result",
+      "fields": {
+        "tool_use_id": "call.id",
+        "result": "call.result"
+      }
+    },
+    {
+      "kind": "response",
+      "native_type": "assistant.message",
+      "fields": { "text": "text" }
+    }
+  ]
+}

@@ -2,6 +2,13 @@
 
 Each fenced object is the argument object for the named tool.
 
+## Contents
+
+- Captured shell task
+- Auditable agent turn
+- Interactive REPL
+- Economical failure diagnosis
+
 ## Captured shell task
 
 `spawn`:
@@ -18,7 +25,7 @@ Each fenced object is the argument object for the named tool.
 
 ```json
 {
-  "handle": "agent-build-agent:0.0",
+  "handle": "<returned-handle>",
   "command": "npm test",
   "shell": "nu",
   "timeoutMs": 120000
@@ -29,7 +36,7 @@ Each fenced object is the argument object for the named tool.
 
 ```json
 {
-  "handle": "agent-build-agent",
+  "handle": "<returned-session>",
   "scope": "session"
 }
 ```
@@ -47,7 +54,7 @@ Use a verified adapter rather than driving the client through pane text.
 }
 ```
 
-Call with `delegate`, then use the returned exchange ID with `scrutinize` if the bounded receipt indicates relevant native records or omissions.
+Call with `delegate`, then use `receipt.exchange_id` with `scrutinize` if the bounded receipt indicates relevant native records or omissions. A non-completed call is an MCP error whose payload still carries the durable receipt and does not carry a reply.
 
 ## Interactive REPL
 
@@ -64,7 +71,7 @@ Call with `delegate`, then use the returned exchange ID with `scrutinize` if the
 
 ```json
 {
-  "handle": "agent-repl:0.0",
+  "handle": "<returned-handle>",
   "mode": "line",
   "input": "import math; math.sqrt(256)"
 }
@@ -74,7 +81,7 @@ Call with `delegate`, then use the returned exchange ID with `scrutinize` if the
 
 ```json
 {
-  "handle": "agent-repl:0.0",
+  "handle": "<returned-handle>",
   "until": "pattern",
   "pattern": "16\\.0",
   "timeoutMs": 10000
@@ -85,7 +92,7 @@ Call with `delegate`, then use the returned exchange ID with `scrutinize` if the
 
 ```json
 {
-  "handle": "agent-repl:0.0",
+  "handle": "<returned-handle>",
   "delta": true,
   "scrollback": 1000
 }
@@ -97,11 +104,11 @@ Call with `delegate`, then use the returned exchange ID with `scrutinize` if the
 
 ```json
 {
-  "handle": "agent-worker:0.0",
+  "handle": "<returned-handle>",
   "pattern": "FAILED|ERROR",
   "context": 2,
   "maxHits": 20
 }
 ```
 
-Use `body` only for the turn(s) named by the search receipt. Use `scrutinize` instead only when diagnosing a `delegate` exchange.
+Use `body` only for the turn(s) named by the search receipt. Use `scrutinize` instead only when diagnosing a `delegate` exchange. The `wait` response already contains its matching screen; the later delta `read` is for output produced after that response.

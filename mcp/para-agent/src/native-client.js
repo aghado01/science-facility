@@ -196,6 +196,7 @@ export class ProcessNativeClient {
       let observationIndex = 0;
       let spawned = false;
       let promptWriteCompleted = false;
+      let promptWriteCompletedAt = null;
       let forced = null;
       let settled = false;
       let closed = false;
@@ -227,6 +228,7 @@ export class ProcessNativeClient {
           prompt: {
             bytes: promptBuffer.length,
             writeCompleted: promptWriteCompleted,
+            ...(promptWriteCompletedAt ? { writeCompletedAt: promptWriteCompletedAt } : {}),
           },
           stdout: Buffer.concat(stdoutChunks),
           stderr: Buffer.concat(stderrChunks),
@@ -324,6 +326,7 @@ export class ProcessNativeClient {
         spawned = true;
         child.stdin.once("finish", () => {
           promptWriteCompleted = true;
+          promptWriteCompletedAt = new Date().toISOString();
         });
         child.stdin.once("error", (error) => {
           requestTermination("write_failed", error);
@@ -369,4 +372,3 @@ export class ProcessNativeClient {
     }
   }
 }
-

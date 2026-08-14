@@ -111,6 +111,27 @@ function terminalTime(clock, acceptedAt) {
   return new Date(Math.max(now, Date.parse(acceptedAt))).toISOString();
 }
 
+function recoveryNoticesOf(state) {
+  const notices = [];
+  for (const exchange of state.exchangeRows ?? []) {
+    if (exchange.outcome?.native_stop_confirmed !== false) continue;
+    const acceptance = state.acceptances.get(exchange.exchange_id);
+    if (!acceptance) continue;
+    notices.push({
+      exchange_id: exchange.exchange_id,
+      conversation_key: acceptance.conversation_key,
+      terminal_status: exchange.status,
+      observed_at: exchange.exchange_end,
+      outcome: {
+        code: exchange.outcome.code,
+        message: exchange.outcome.message,
+        native_stop_confirmed: false,
+      },
+    });
+  }
+  return notices;
+}
+
 async function readJsonl(filePath, kind) {
   let bytes;
   try {
@@ -198,6 +219,7 @@ export class TranscriptStore {
     this.initialized = false;
     this.nextIndex = 0;
     this._header = null;
+    this._recoveryNotices = [];
     this._lease = null;
     this._writeTail = Promise.resolve();
   }
@@ -255,6 +277,10 @@ export class TranscriptStore {
     await this._writeTail.catch(() => {});
     if (this._lease) await this._releaseWriterLease();
     this.initialized = false;
+  }
+
+  getRecoveryNotices() {
+    return structuredClone(this._recoveryNotices);
   }
 
   traceRelativeRef(exchangeId) {
@@ -832,6 +858,7 @@ export class TranscriptStore {
   _adoptState(state) {
     this._header = state.header;
     this.nextIndex = state.nextIndex;
+    this._recoveryNotices = recoveryNoticesOf(state);
   }
 
   async _acquireWriterLease() {
