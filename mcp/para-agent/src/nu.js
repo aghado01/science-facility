@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import path from "node:path";
 import { resolveNuBin, resolvePath } from "./mux.js";
+import { getNuProfileConfig } from "./profiles.js";
 
 export class NuEngine {
   constructor(opts = {}) {
@@ -13,9 +14,7 @@ export class NuEngine {
    * Returns parsed JSON result or raw string output.
    */
   async eval(script, inputData = null) {
-    const nuBinDir = path.dirname(this.bin);
-    const muxBinDir = resolvePath(path.join("mcp", "para-agent", "bin", "mux"));
-    const envPath = [nuBinDir, muxBinDir, process.env.PATH].filter(Boolean).join(path.delimiter);
+    const profile = getNuProfileConfig("backend", { workspaceRoot: this.cwd });
 
     const inputNu = inputData !== null
       ? `'${Buffer.from(JSON.stringify(inputData)).toString("base64")}' | decode base64 | decode utf-8 | from json | `
@@ -32,13 +31,13 @@ export class NuEngine {
     return new Promise((resolve, reject) => {
       execFile(
         this.bin,
-        ["--no-config-file", "-c", wrappedScript],
+        [...profile.args, "-c", wrappedScript],
         {
           cwd: this.cwd,
           windowsHide: true,
           env: {
             ...process.env,
-            PATH: envPath,
+            ...profile.env,
             LANG: "en_US.UTF-8",
           },
           maxBuffer: 32 * 1024 * 1024,

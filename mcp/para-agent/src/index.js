@@ -19,10 +19,11 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { Mux, MuxError, resolvePath } from "./mux.js";
+import { Mux, MuxError, resolvePath, resolveNuBin } from "./mux.js";
 import { waitStable, waitPattern, deltaOf, DEFAULT_DIALECT } from "./framing.js";
 import { Journal } from "./journal.js";
 import { runCaptured, finalizeOpenTurns, requestCancel, CAPTURE_DIALECTS } from "./capture.js";
+import { getNuProfileConfig } from "./profiles.js";
 
 const mux = new Mux();
 
@@ -155,40 +156,56 @@ server.registerTool(
       "Create a detached session and return its pane handle. The session outlives this call and " +
       "every later one — its shell state, cwd and any running program persist until killed.\n\n" +
       "Two shapes:\n" +
-      "  • Omit `command` to get a shell pane. Drive it with `run` (framed, returns exit codes).\n" +
+      "  • Omit `command` to get a shell pane (defaults to Nushell with the selected profile). Drive it with `run`.\n" +
       "  • Pass `command` to launch a program directly in the pane (an interactive agent, a REPL, " +
       "a TUI). There is no shell, so `run` will not work — drive it with `send` / `wait` / `read`.",
     inputSchema: {
       name: z.string().describe("Short name for the session. Sanitized; ':' and '.' are not allowed."),
       command: z.array(z.string()).optional()
         .describe("Program and args to run instead of a shell, e.g. [\"python\",\"-i\"]."),
+      shell: z.enum(["nu", "pwsh", "bash"]).default("nu").describe("Shell substrate when command is omitted (default 'nu')."),
+      profile: z.enum(["para-agent", "primary-agent"]).default("para-agent")
+        .describe("Nushell profile for nu shell panes: 'para-agent' (worker) or 'primary-agent' (supervisor)."),
       cwd: z.string().optional().describe("Working directory for the pane."),
       env: z.record(z.string()).optional().describe("Environment variables for the pane."),
       width: z.number().int().min(20).max(500).optional().describe("Pane width in columns (default 120)."),
       height: z.number().int().min(5).max(200).optional().describe("Pane height in rows (default 40)."),
     },
   },
-  async ({ name, command, cwd, env, width, height }) => {
+  async ({ name, command, shell = "nu", profile = "para-agent", cwd, env, width, height }) => {
     try {
       const session = SESSION_PREFIX + sanitizeName(name);
       if (await mux.hasSession(session)) {
         return fail(new Error(`session '${session}' already exists — use it, or kill it first`));
       }
+
+      let spawnCommand = command;
+      let spawnEnv = { ...(env ?? {}) };
+
+      if (!spawnCommand && shell === "nu") {
+        const nuBin = resolveNuBin();
+        const prof = getNuProfileConfig(profile, { workspaceRoot: cwd ?? process.cwd() });
+        spawnCommand = [nuBin, ...prof.args];
+        spawnEnv = { ...prof.env, ...spawnEnv };
+      }
+
       const handle = await mux.newSession({
         session,
         cwd,
-        env: env ?? {},
+        env: spawnEnv,
         width: width ?? 120,
         height: height ?? 40,
-        command,
+        command: spawnCommand,
       });
       return reply({
         handle,
         session,
+        shell: command ? null : shell,
+        profile: command ? null : (shell === "nu" ? profile : null),
         mode: command ? "program" : "shell",
         hint: command
           ? "Program pane: use send/wait/read. `run` is not applicable — there is no shell prompt."
-          : `Shell pane: use run for framed commands (dialect '${DEFAULT_DIALECT}').`,
+          : `Shell pane: use run for framed commands (dialect '${shell}').`,
       });
     } catch (err) {
       return fail(err);

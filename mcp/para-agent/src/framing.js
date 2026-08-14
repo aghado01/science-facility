@@ -100,7 +100,7 @@ export const DIALECTS = {
   },
 };
 
-export const DEFAULT_DIALECT = process.platform === "win32" ? "pwsh" : "bash";
+export const DEFAULT_DIALECT = "nu";
 
 function makeMarkers() {
   const nonce = randomBytes(4).toString("hex");
