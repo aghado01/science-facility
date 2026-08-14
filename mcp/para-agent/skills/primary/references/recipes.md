@@ -1,77 +1,107 @@
 # Primary Agent Workflows & Recipes
 
----
+Each fenced object is the argument object for the named tool.
 
-## Recipe 1: Spawning an Agent Worker & Running a Task
+## Captured shell task
 
-```json
-// Step 1: Spawn a persistent Nushell worker pane
-spawn({ "name": "build-agent", "shell": "nu", "profile": "para-agent" })
-
-// Step 2: Execute command turn
-run({
-  "handle": "para-build-agent:0.0",
-  "command": "npm test"
-})
-
-// Step 3: Check status if long-running
-status({ "handle": "para-build-agent:0.0" })
-
-// Step 4: Cleanup when done
-killSession({ "session": "para-build-agent" })
-```
-
----
-
-## Recipe 2: Driving an External Agent CLI (`agy`, `codex`, `claude`)
+`spawn`:
 
 ```json
-// Step 1: Spawn Nushell pane
-spawn({ "name": "agy-runner" })
-
-// Step 2: Dispatch external agent command
-run({
-  "handle": "para-agy-runner:0.0",
-  "command": "agy run 'Audit sql queries in db/'"
-})
-
-// Step 3: Inspect tool traces if needed
-scrutinize({
-  "handle": "para-agy-runner:0.0",
-  "filter": "tools"
-})
+{
+  "name": "build-agent",
+  "shell": "nu",
+  "profile": "para-agent"
+}
 ```
 
----
-
-## Recipe 3: Driving Interactive TUI / REPL Processes
+`run`:
 
 ```json
-// Step 1: Spawn process directly
-spawn({ "name": "repl", "command": ["python", "-i"] })
-
-// Step 2: Send input
-send({ "handle": "para-repl:0.0", "text": "import math; math.sqrt(256)", "enter": true })
-
-// Step 3: Wait for output to settle
-wait({ "handle": "para-repl:0.0", "stableMs": 300 })
-
-// Step 4: Read incremental response
-read({ "handle": "para-repl:0.0" })
+{
+  "handle": "agent-build-agent:0.0",
+  "command": "npm test",
+  "shell": "nu",
+  "timeoutMs": 120000
+}
 ```
 
----
-
-## Recipe 4: Diagnosing Failures without Token Waste
+`kill`:
 
 ```json
-// 1. Identify failure from receipt code != 0
-run({ "handle": "para-worker:0.0", "command": "pytest" })
-// Receipt shows code: 1, ok: false
-
-// 2. Search specifically for failing lines across turns
-find({ "handle": "para-worker:0.0", "pattern": "FAILED", "context": 2 })
-
-// 3. Or scrutinize exchange failure records
-scrutinize({ "handle": "para-worker:0.0", "filter": "failures" })
+{
+  "handle": "agent-build-agent",
+  "scope": "session"
+}
 ```
+
+## Auditable agent turn
+
+Use a verified adapter rather than driving the client through pane text.
+
+```json
+{
+  "handle": "security-review",
+  "application": "claude",
+  "prompt": "Audit the SQL boundary. Return two findings and cite the files inspected.",
+  "timeoutMs": 180000
+}
+```
+
+Call with `delegate`, then use the returned exchange ID with `scrutinize` if the bounded receipt indicates relevant native records or omissions.
+
+## Interactive REPL
+
+`spawn`:
+
+```json
+{
+  "name": "repl",
+  "command": ["python", "-i"]
+}
+```
+
+`send`:
+
+```json
+{
+  "handle": "agent-repl:0.0",
+  "mode": "line",
+  "input": "import math; math.sqrt(256)"
+}
+```
+
+`wait`:
+
+```json
+{
+  "handle": "agent-repl:0.0",
+  "until": "pattern",
+  "pattern": "16\\.0",
+  "timeoutMs": 10000
+}
+```
+
+`read`:
+
+```json
+{
+  "handle": "agent-repl:0.0",
+  "delta": true,
+  "scrollback": 1000
+}
+```
+
+## Diagnose a failed shell command economically
+
+`find`:
+
+```json
+{
+  "handle": "agent-worker:0.0",
+  "pattern": "FAILED|ERROR",
+  "context": 2,
+  "maxHits": 20
+}
+```
+
+Use `body` only for the turn(s) named by the search receipt. Use `scrutinize` instead only when diagnosing a `delegate` exchange.

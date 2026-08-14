@@ -26,12 +26,9 @@ import { runCaptured, finalizeOpenTurns, requestCancel, CAPTURE_DIALECTS } from 
 import { getNuProfileConfig } from "./profiles.js";
 import { TranscriptStore } from "./transcript.js";
 import { AdapterEngine } from "./adapters.js";
-import { NuEngine } from "./nu.js";
-import { ExchangeAssembler } from "./assembler.js";
 
 const mux = new Mux();
 const adapterEngine = new AdapterEngine();
-const nuEngine = new NuEngine();
 const transcriptStores = new Map();
 
 /** Last capture per target, for delta reads. */
@@ -47,14 +44,17 @@ const journals = new Map();
 /** Session name out of a pane target: `agent-foo:0.1` -> `agent-foo`. */
 const sessionOf = (handle) => String(handle).split(":")[0];
 
-async function transcriptFor(handle) {
+async function writableTranscriptFor(handle) {
   const stream = sessionOf(handle);
   if (!transcriptStores.has(stream)) {
-    const store = new TranscriptStore({ workspaceRoot: process.cwd(), sessionId: stream });
-    await store.init();
+    const store = await TranscriptStore.openWritable({ workspaceRoot: process.cwd(), sessionId: stream });
     transcriptStores.set(stream, store);
   }
   return transcriptStores.get(stream);
+}
+
+async function readOnlyTranscriptFor(handle) {
+  return TranscriptStore.openReadOnly({ workspaceRoot: process.cwd(), sessionId: sessionOf(handle) });
 }
 
 async function journalFor(handle) {
@@ -93,7 +93,7 @@ function fail(err) {
   };
 }
 
-const server = new McpServer({ name: "para-agent", version: "0.1.0" });
+export const server = new McpServer({ name: "para-agent", version: "0.1.0" });
 
 // ---------------------------------------------------------------------------
 // Discovery
@@ -728,47 +728,79 @@ server.registerTool(
     },
   },
   async ({ handle, xid, filter = "summary", step }) => {
+    const store = await readOnlyTranscriptFor(handle);
     try {
-      const store = await transcriptFor(handle);
       if (!xid) {
-        // Return summary of all exchanges
-        const pipeline = `where record_type == "transcript_exchange" | select exchange_id exchange_index exchange_start duration_ms model status records | each { |row| { xid: $row.exchange_id, xidx: $row.exchange_index, model: $row.model, status: $row.status, steps: ($row.records | length), tools: ($row.records | where _type == "tool_call" | length), thinking: ($row.records | where _type == "thinking" | length) } }`;
-        const summaries = await store.query(nuEngine, pipeline);
-        return reply({ session: sessionOf(handle), exchanges: summaries ?? [] });
+        const [header, summaries] = await Promise.all([
+          store.readHeader(),
+          store.select({ kind: "summary" }),
+        ]);
+        return reply({
+          session: sessionOf(handle),
+          found: header !== null,
+          exchanges: summaries,
+        });
       }
+
+      const exchange = await store.select({ kind: "exchange", exchangeId: xid });
+      if (!exchange) return reply({ xid, found: false, record: null, records: [] });
 
       if (step !== undefined) {
-        // Inspect single step
-        const pipeline = `where record_type == "transcript_exchange" and exchange_id == "${xid}" | get 0?.records? | get ${step}`;
-        const stepRecord = await store.query(nuEngine, pipeline);
-        return reply({ xid, step, record: stepRecord });
+        const stepRecord = await store.select({ kind: "step", exchangeId: xid, step });
+        return reply({
+          xid,
+          found: true,
+          step,
+          record: stepRecord,
+          trace: exchange.trace,
+        });
       }
 
-      let filterNu = "";
+      let records;
       switch (filter) {
         case "tools":
-          filterNu = `| where _type == "tool_call"`;
+          records = (await store.select({ kind: "records", exchangeId: xid }))
+            .filter((record) => record._type === "tool_call" || record._type === "tool_result");
           break;
         case "thinking":
-          filterNu = `| where _type == "thinking"`;
+          records = await store.select({ kind: "records", exchangeId: xid, recordKind: "thinking" });
           break;
         case "failures":
-          filterNu = `| where _type == "tool_call" and status != "completed"`;
+          records = (await store.select({ kind: "records", exchangeId: xid }))
+            .filter((record) => ["tool_call", "tool_result"].includes(record._type) && record.status !== "completed");
           break;
         case "summary":
-          filterNu = `| each { |r| { type: $r._type, name: ($r.tool_name? | default $r.phase?), timestamp: $r._timestamp } }`;
+          records = (await store.select({ kind: "records", exchangeId: xid })).map((record, index) => ({
+            step: index,
+            type: record._type,
+            name: record.tool_name ?? record.phase,
+            observed_at: record.observed_at,
+            source: record.source ?? record.source_ref,
+          }));
           break;
         case "all":
         default:
-          filterNu = "";
+          records = await store.select({ kind: "records", exchangeId: xid });
           break;
       }
 
-      const pipeline = `where record_type == "transcript_exchange" and exchange_id == "${xid}" | get 0?.records? ${filterNu}`;
-      const records = await store.query(nuEngine, pipeline);
-      return reply({ xid, filter, count: Array.isArray(records) ? records.length : 1, records });
+      return reply({
+        xid,
+        found: true,
+        filter,
+        status: exchange.status,
+        application: exchange.application,
+        model: exchange.model,
+        native: exchange.native,
+        trace: exchange.trace,
+        delivery: exchange.delivery,
+        count: records.length,
+        records,
+      });
     } catch (err) {
       return fail(err);
+    } finally {
+      await store.close();
     }
   }
 );
@@ -907,7 +939,7 @@ async function registerNativeSkills(server) {
 
 // ---------------------------------------------------------------------------
 
-async function main() {
+export async function main() {
   // Fail loudly at startup rather than on the first tool call.
   const version = await mux.version().catch(() => null);
   if (!version) {
@@ -923,7 +955,9 @@ async function main() {
   await server.connect(new StdioServerTransport());
 }
 
-main().catch((err) => {
-  process.stderr.write(`para-agent: fatal: ${err?.stack ?? err}\n`);
-  process.exit(1);
-});
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((err) => {
+    process.stderr.write(`para-agent: fatal: ${err?.stack ?? err}\n`);
+    process.exit(1);
+  });
+}

@@ -1,51 +1,68 @@
 # Session Lifecycle & Pane Allocation
 
-The primary agent coordinates sub-agent worker processes via isolated, persistent tmux panes managed by `para-agent`.
+Sessions are persistent multiplexer resources. The default server prefix is `agent-`, but deployments may override it; always use returned handles rather than constructing them.
 
-## Tools
+## Spawn
 
-### 1. `spawn`
-Creates a detached, persistent multiplexer session. The session and its environment outlive individual tool calls.
-
-```json
-// Shell Worker Pane (Default: Nushell with para-agent profile)
-spawn({ "name": "worker-1", "shell": "nu", "profile": "para-agent" })
-
-// Program / TUI Pane (Runs binary directly, no shell)
-spawn({ "name": "agy-runner", "command": ["agy"] })
-```
-
-* **`name`**: Short session identifier. Automatically prefixed as `para-<name>`.
-* **`shell`**: `nu` (preferred default), `pwsh`, or `bash`.
-* **`profile`**: Nushell profile — `para-agent` (worker) or `primary-agent` (supervisor).
-* **`cwd`**: Optional working directory (defaults to workspace root).
-* **Returns**: `{ "handle": "para-worker-1:0.0", "status": "ready" }`.
-
----
-
-### 2. `status`
-Inspects live pane state without reading scrollback text. Zero context cost.
+Shell pane:
 
 ```json
-status({ "handle": "para-worker-1:0.0" })
+{
+  "name": "worker-1",
+  "shell": "nu",
+  "profile": "para-agent"
+}
 ```
-* **Returns**: `pid`, `command`, `cwd`, `dead` (boolean exit flag), `scrollbackLines`, `width`, `height`.
 
----
-
-### 3. `list`
-Enumerates all active sessions, windows, and panes within the workspace multiplexer.
+Program pane:
 
 ```json
-list({})
+{
+  "name": "python-repl",
+  "command": ["python", "-i"],
+  "width": 120,
+  "height": 40
+}
 ```
-* **Returns**: Array of active sessions and attached pane handles.
 
----
+The response states the actual `handle`, `session`, and whether the pane is a shell or program.
 
-### 4. `kill` / `killSession`
-Terminates a specific pane or kills an entire session and all associated processes.
+## Inspect
+
+`status`:
 
 ```json
-killSession({ "session": "para-worker-1" })
+{
+  "handle": "agent-worker-1:0.0"
+}
 ```
+
+`list`:
+
+```json
+{}
+```
+
+Use `status` when you need process state without pane text. Use `read` only when screen content matters.
+
+## Stop work or destroy a resource
+
+Interrupt the foreground work while retaining the pane:
+
+```json
+{
+  "handle": "agent-worker-1:0.0",
+  "level": "interrupt"
+}
+```
+
+Call that object with `cancel`. Destroy an entire session only when its state is no longer needed:
+
+```json
+{
+  "handle": "agent-worker-1",
+  "scope": "session"
+}
+```
+
+Call that object with `kill`. Destruction is irreversible; it is distinct from cancelling observation of a `run` or `wait` request.

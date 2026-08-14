@@ -1,56 +1,74 @@
 # Progressive Disclosure & Scrutiny
 
-`para-agent` enforces strict context window conservation. Work performed by sub-agents is durably committed to JSONL transcripts, allowing the primary agent to inspect execution traces on demand without upfront context bloat.
+There are two evidence stores. Do not merge them conceptually.
 
----
+- The mediated transcript contains only accepted `delegate` exchanges projected from correlated native events.
+- The Console Journal contains `run` turns and optional interactive capture. It cannot establish mediated exchange boundaries.
 
-## The Progressive Disclosure Ladder
+## Mediated transcript: `scrutinize`
 
-| Level | Content Returned | Primary Token Cost | Tool Call |
-| :--- | :--- | :---: | :--- |
-| **0** | Conversational Reply | ~50–150 tokens | Default turn response |
-| **1** | Turn Receipt (`_xid`, tool count, duration) | ~30 tokens | Attached to turn output |
-| **2** | Filtered Record Slice (tools, thinking, errors) | ~100–300 tokens | `scrutinize({ handle, xid, filter })` |
-| **3** | Single Micro-Step Deep Inspection | Targeted | `scrutinize({ handle, xid, step })` |
-
----
-
-## The `scrutinize` Tool
-
-Inspects the structured `.jsonl` transcript of an active or past session via `NuEngine`:
+List exchange summaries:
 
 ```json
-// 1. List all exchange summaries for a session
-scrutinize({ "handle": "para-worker:0.0" })
-
-// 2. Inspect all tool calls in an exchange
-scrutinize({ "handle": "para-worker:0.0", "xid": "xid-001", "filter": "tools" })
-
-// 3. Inspect internal reasoning / thinking trace
-scrutinize({ "handle": "para-worker:0.0", "xid": "xid-001", "filter": "thinking" })
-
-// 4. Surface only failing steps or errors
-scrutinize({ "handle": "para-worker:0.0", "xid": "xid-001", "filter": "failures" })
-
-// 5. Deep forensic inspection of a specific micro-step index
-scrutinize({ "handle": "para-worker:0.0", "xid": "xid-001", "step": 3 })
+{
+  "handle": "review-seat",
+  "filter": "summary"
+}
 ```
 
----
+Inspect receiver-native tool records for one exchange:
 
-## Log & Body Search Tools
+```json
+{
+  "handle": "review-seat",
+  "xid": "xid-001",
+  "filter": "tools"
+}
+```
 
-For traditional shell output and bulk stdout retrieval:
+Inspect one zero-based record step:
 
-* **`log`**: Summary of commands executed in the session.
-  ```json
-  log({ "handle": "para-worker:0.0", "view": "summary" })
-  ```
-* **`body`**: Selective retrieval of turn output (supports `grep`, `context`, `offsetLines`).
-  ```json
-  body({ "handle": "para-worker:0.0", "turn": 4, "grep": "FAIL" })
-  ```
-* **`find`**: Regex search across all turns simultaneously returning matching lines.
-  ```json
-  find({ "handle": "para-worker:0.0", "pattern": "error:\\[E0" })
-  ```
+```json
+{
+  "handle": "review-seat",
+  "xid": "xid-001",
+  "step": 3
+}
+```
+
+Call these objects with `scrutinize`. An unknown session returns an empty/not-found result without creating files. `thinking` means only reasoning material exposed by the native client. Check trace completeness and omissions before treating a slice as comprehensive.
+
+## Console Journal: `log`, `body`, `find`
+
+Orient with summaries:
+
+```json
+{
+  "handle": "agent-worker:0.0",
+  "view": "summary"
+}
+```
+
+Search before fetching bodies:
+
+```json
+{
+  "handle": "agent-worker:0.0",
+  "pattern": "FAILED",
+  "context": 2
+}
+```
+
+Fetch a bounded body slice only when needed:
+
+```json
+{
+  "handle": "agent-worker:0.0",
+  "turn": 4,
+  "grep": "FAIL",
+  "context": 2,
+  "limitLines": 100
+}
+```
+
+Call these objects with `log`, `find`, and `body` respectively. Read each receipt’s `complete`, `withheld`, and `deferredBodies` fields.

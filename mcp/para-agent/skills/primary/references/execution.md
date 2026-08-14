@@ -1,60 +1,64 @@
-# Execution Modes
+# Execution Paths
 
-`para-agent` provides two execution modes depending on whether the target pane runs a structured shell or an interactive program.
+`para-agent` has three deliberately separate paths.
 
----
+## Mediated turn: `delegate`
 
-## Mode A: Turn-by-Turn Structured Execution (`run`)
-
-Use `run` against **shell panes** (e.g. `nu`). Each turn executes with byte-exact framing, automatic duration timing, exit code capture, and transcript journaling.
+Use `delegate` when the reply and provenance must come from a verified native structured stream.
 
 ```json
-run({
+{
+  "handle": "review-seat",
+  "application": "claude",
+  "prompt": "Review the boundary and return the two highest-risk findings.",
+  "timeoutMs": 120000
+}
+```
+
+Call this object with `delegate`. The prompt is one exact UTF-8 string; controls are separate. A successful result requires a correlated receiver-native terminal event and durable terminal commit. Failed, interrupted, and timed-out exchanges return an MCP error with a receipt and no fabricated reply.
+
+## Captured shell turn: `run`
+
+Use `run` only against a shell pane. Output bypasses terminal capture and is recorded in the Console Journal.
+
+```json
+{
   "handle": "para-worker-1:0.0",
   "command": "cargo test -- --nocapture",
+  "shell": "nu",
   "timeoutMs": 60000
-})
+}
 ```
 
-### Turn Receipt Properties
-* **`code`**: Integer exit code (`0` = success).
-* **`ok`**: Boolean success flag.
-* **`duration_ms`**: Measured command runtime in milliseconds.
-* **`inline`**: Captured output text (if <= inlining threshold).
-* **`bytes` / `lines`**: Total output volume.
-* **`out_hash`**: SHA-256 slice for deduplication.
+The receipt reports `code`, `ok`, `outcome`, `duration_ms`, output size, hash, completeness, and a retrieval call when the body is deferred. A timeout abandons observation; it does not stop the command.
 
----
+## Interactive console: `send`, `wait`, `read`
 
-## Mode B: Interactive / TUI Program Execution (`send`, `wait`, `read`, `capture`)
+Use these for a pane spawned with `command`, where there is no shell prompt or native mediation adapter.
 
-Use these tools when a pane was spawned with `command: [...]` (an interactive CLI, TUI, or REPL where no shell is present).
-
-### 1. `send`
-Injects keystrokes or input text into the target pane.
 ```json
-send({ "handle": "para-tui:0.0", "text": "y", "enter": true })
+{
+  "handle": "agent-repl:0.0",
+  "mode": "line",
+  "input": "2 + 2"
+}
 ```
 
-### 2. `wait`
-Polls pane output until a regex pattern appears or until the screen stabilizes.
 ```json
-wait({
-  "handle": "para-tui:0.0",
-  "forPattern": "Selection complete",
-  "stableMs": 500,
+{
+  "handle": "agent-repl:0.0",
+  "until": "pattern",
+  "pattern": "4",
   "timeoutMs": 10000
-})
+}
 ```
 
-### 3. `read`
-Fetches the incremental delta of text produced since the last read.
 ```json
-read({ "handle": "para-tui:0.0" })
+{
+  "handle": "agent-repl:0.0",
+  "delta": true,
+  "scrollback": 1000
+}
 ```
 
-### 4. `capture`
-Takes a full snapshot of the pane screen or scrollback buffer.
-```json
-capture({ "handle": "para-tui:0.0", "startLine": -100 })
-```
+Call the objects with `send`, `wait`, and `read` respectively. Prefer `wait` with `until: "pattern"`; `until: "stable"` is explicitly heuristic. Multi-line `send` input is linewise console typing, so it is not a valid transport for a mediated prompt.

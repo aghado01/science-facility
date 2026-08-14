@@ -1,143 +1,444 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:science-facility:para-agent:schema:client-adapter:1",
-  "title": "Para-Agent Client Adapter Schema",
-  "description": "Defines the canonical structure for adapter declarations that map client-native event streams and transcript rows into the canonical para-agent exchange model.",
+  "title": "Para-Agent Versioned Application Adapter Profile",
+  "description": "A fail-closed, versioned declaration for prompt transport and receiver-native event projection. Profiles are registry evidence, not native provenance.",
   "type": "object",
   "required": [
     "schema_version",
-    "client_id",
-    "display_name",
-    "record_mappings",
-    "provenance_mappings"
+    "profile_id",
+    "adapter",
+    "application",
+    "verification",
+    "capabilities",
+    "transport",
+    "native_events"
   ],
   "properties": {
-    "schema_version": {
-      "const": 1,
-      "description": "The major persisted shape version represented by this schema."
-    },
-    "client_id": {
+    "schema_version": { "const": 1 },
+    "profile_id": {
       "type": "string",
-      "pattern": "^[a-z0-9_-]+$",
-      "description": "Unique client identifier e.g. 'claude', 'codex', 'agy'."
+      "pattern": "^[a-z0-9][a-z0-9_.-]*/[a-z0-9][a-z0-9_.-]*$"
     },
-    "display_name": {
-      "type": "string",
-      "description": "Human-readable label for the client, e.g. 'Claude Code', 'OpenAI Codex', 'Antigravity CLI'."
-    },
-    "version_constraint": {
-      "type": "string",
-      "description": "Optional semver pattern or version string supported by this adapter."
-    },
-    "provenance_mappings": {
+    "adapter": {
       "type": "object",
-      "description": "Property paths or extraction rules for top-level turn/session provenance.",
-      "required": ["thread_id", "turn_id", "model"],
+      "required": ["id", "version"],
       "properties": {
-        "thread_id": {
-          "type": "string",
-          "description": "Path or field name for the conversation/thread identifier."
-        },
-        "turn_id": {
-          "type": "string",
-          "description": "Path or field name for the turn identifier."
-        },
-        "model": {
-          "type": "string",
-          "description": "Path or field name for the model identifier."
-        },
-        "effort": {
-          "type": "string",
-          "description": "Path or field name for reasoning/thinking effort level."
-        },
-        "user_label": {
-          "type": "string",
-          "description": "Path or field name for user display name or handle."
+        "id": { "$ref": "#/$defs/id" },
+        "version": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "application": {
+      "type": "object",
+      "required": ["id", "display_name"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "display_name": { "$ref": "#/$defs/nonEmptyString" },
+        "verified_versions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/nonEmptyString" },
+          "minItems": 1,
+          "uniqueItems": true
         }
       },
       "additionalProperties": false
     },
+    "verification": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": { "enum": ["verified", "unverified"] },
+        "reason": { "$ref": "#/$defs/nonEmptyString" },
+        "evidence": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/evidence" },
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "capabilities": { "$ref": "#/$defs/capabilities" },
+    "transport": {
+      "oneOf": [
+        { "$ref": "#/$defs/rawStdinTransport" },
+        { "$ref": "#/$defs/jsonlStdinTransport" },
+        { "$ref": "#/$defs/unsupportedTransport" }
+      ]
+    },
+    "native_events": {
+      "type": "object",
+      "required": ["format", "discriminator_path", "unknown_event_policy"],
+      "properties": {
+        "format": { "enum": ["jsonl", "unknown"] },
+        "discriminator_path": { "$ref": "#/$defs/path" },
+        "unknown_event_policy": { "const": "preserve_raw" }
+      },
+      "additionalProperties": false
+    },
+    "correlation_mappings": { "$ref": "#/$defs/correlationMappings" },
+    "provenance_mappings": { "$ref": "#/$defs/provenanceMappings" },
+    "prompt_delivery": { "$ref": "#/$defs/promptDelivery" },
+    "prompt_observation": { "$ref": "#/$defs/promptObservation" },
+    "terminal_events": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/terminalEvent" },
+      "minItems": 1
+    },
+    "cancellation": { "$ref": "#/$defs/cancellation" },
     "record_mappings": {
-      "type": "object",
-      "description": "Declarative rules mapping native client event types to canonical record kinds.",
-      "required": ["prompt", "thinking", "tool_call", "response"],
-      "properties": {
-        "prompt": {
-          "$ref": "#/$defs/eventRule",
-          "description": "Mapping for ingress user/primary prompt events."
-        },
-        "thinking": {
-          "$ref": "#/$defs/eventRule",
-          "description": "Mapping for internal model reasoning/thinking trace events."
-        },
-        "tool_call": {
-          "$ref": "#/$defs/toolCallRule",
-          "description": "Mapping for tool invocations and execution responses."
-        },
-        "response": {
-          "$ref": "#/$defs/eventRule",
-          "description": "Mapping for terminal assistant/receiver output responses."
-        }
-      },
-      "additionalProperties": false
+      "type": "array",
+      "items": { "$ref": "#/$defs/recordMapping" },
+      "minItems": 1
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "type": "object",
+        "properties": {
+          "verification": {
+            "type": "object",
+            "properties": { "status": { "const": "verified" } },
+            "required": ["status"]
+          }
+        }
+      },
+      "then": {
+        "type": "object",
+        "required": [
+          "correlation_mappings",
+          "provenance_mappings",
+          "prompt_delivery",
+          "terminal_events",
+          "record_mappings"
+        ],
+        "properties": {
+          "correlation_mappings": {},
+          "provenance_mappings": {},
+          "prompt_delivery": {},
+          "terminal_events": {},
+          "record_mappings": {},
+          "application": { "type": "object", "properties": { "verified_versions": {} }, "required": ["verified_versions"] },
+          "verification": { "type": "object", "properties": { "evidence": {} }, "required": ["evidence"] },
+          "capabilities": {
+            "type": "object",
+            "properties": {
+              "prompt_delivery": { "const": true },
+              "terminal_events": { "const": true }
+            }
+          },
+          "transport": {
+            "type": "object",
+            "not": {
+              "type": "object",
+              "properties": { "kind": { "const": "unsupported" } },
+              "required": ["kind"]
+            }
+          },
+          "native_events": {
+            "type": "object",
+            "properties": { "format": { "const": "jsonl" } }
+          }
+        }
+      },
+      "else": {
+        "type": "object",
+        "properties": {
+          "verification": { "type": "object", "properties": { "reason": {} }, "required": ["reason"] },
+          "capabilities": { "type": "object", "const": {
+            "prompt_delivery": false,
+            "prompt_observation": false,
+            "terminal_events": false,
+            "scoped_cancellation": false,
+            "model_identity": false,
+            "reasoning_events": false,
+            "tool_calls": false,
+            "tool_results": false
+          } },
+          "transport": {
+            "type": "object",
+            "properties": { "kind": { "const": "unsupported" } },
+            "required": ["kind"]
+          }
+        },
+        "not": {
+          "anyOf": [
+            { "type": "object", "properties": { "prompt_delivery": {} }, "required": ["prompt_delivery"] },
+            { "type": "object", "properties": { "prompt_observation": {} }, "required": ["prompt_observation"] },
+            { "type": "object", "properties": { "terminal_events": {} }, "required": ["terminal_events"] },
+            { "type": "object", "properties": { "cancellation": {} }, "required": ["cancellation"] },
+            { "type": "object", "properties": { "record_mappings": {} }, "required": ["record_mappings"] }
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "properties": {
+          "capabilities": {
+            "type": "object",
+            "properties": { "prompt_observation": { "const": true } },
+            "required": ["prompt_observation"]
+          }
+        }
+      },
+      "then": { "type": "object", "properties": { "prompt_observation": {} }, "required": ["prompt_observation"] }
+    },
+    {
+      "if": {
+        "type": "object",
+        "properties": {
+          "capabilities": {
+            "type": "object",
+            "properties": { "scoped_cancellation": { "const": true } },
+            "required": ["scoped_cancellation"]
+          }
+        }
+      },
+      "then": { "type": "object", "properties": { "cancellation": {} }, "required": ["cancellation"] }
+    }
+  ],
   "additionalProperties": false,
   "$defs": {
-    "eventRule": {
+    "nonEmptyString": { "type": "string", "minLength": 1 },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_.-]*$"
+    },
+    "path": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*(?:\\.(?:[A-Za-z_][A-Za-z0-9_]*|[0-9]+))*$"
+    },
+    "evidence": {
       "type": "object",
-      "required": ["native_type", "text_path"],
+      "required": ["kind", "reference"],
       "properties": {
-        "native_type": {
-          "type": "string",
-          "description": "Native event discriminator value or regex."
-        },
-        "text_path": {
-          "type": "string",
-          "description": "Path to extract the primary text payload."
-        },
-        "timestamp_path": {
-          "type": "string",
-          "description": "Path to extract event timestamp (ISO 8601 string)."
-        },
-        "phase_path": {
-          "type": "string",
-          "description": "Optional path for multi-phase response events (e.g. 'commentary', 'final')."
-        }
+        "kind": { "enum": ["live_stream_probe", "cli_help", "fixture"] },
+        "reference": { "$ref": "#/$defs/nonEmptyString" },
+        "observed_at": { "type": "string", "format": "date-time" },
+        "note": { "$ref": "#/$defs/nonEmptyString" }
       },
       "additionalProperties": false
     },
-    "toolCallRule": {
+    "capabilities": {
       "type": "object",
-      "required": ["native_type", "tool_name_path", "input_path"],
+      "required": [
+        "prompt_delivery",
+        "prompt_observation",
+        "terminal_events",
+        "scoped_cancellation",
+        "model_identity",
+        "reasoning_events",
+        "tool_calls",
+        "tool_results"
+      ],
       "properties": {
-        "native_type": {
-          "type": "string",
-          "description": "Native event discriminator value for tool calls."
+        "prompt_delivery": { "type": "boolean" },
+        "prompt_observation": { "type": "boolean" },
+        "terminal_events": { "type": "boolean" },
+        "scoped_cancellation": { "type": "boolean" },
+        "model_identity": { "type": "boolean" },
+        "reasoning_events": { "type": "boolean" },
+        "tool_calls": { "type": "boolean" },
+        "tool_results": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "command": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1
+    },
+    "rawStdinTransport": {
+      "type": "object",
+      "required": ["kind", "encoding", "framing", "byte_preserving", "command"],
+      "properties": {
+        "kind": { "const": "raw_stdin" },
+        "encoding": { "const": "utf-8" },
+        "framing": { "const": "eof" },
+        "byte_preserving": { "const": true },
+        "command": { "$ref": "#/$defs/command" }
+      },
+      "additionalProperties": false
+    },
+    "jsonlStdinTransport": {
+      "type": "object",
+      "required": ["kind", "encoding", "framing", "byte_preserving", "command"],
+      "properties": {
+        "kind": { "const": "jsonl_stdin" },
+        "encoding": { "const": "utf-8" },
+        "framing": { "const": "json_lines" },
+        "byte_preserving": { "const": true },
+        "command": { "$ref": "#/$defs/command" }
+      },
+      "additionalProperties": false
+    },
+    "unsupportedTransport": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": { "kind": { "const": "unsupported" } },
+      "additionalProperties": false
+    },
+    "correlationMappings": {
+      "type": "object",
+      "properties": {
+        "exchange_id_path": { "$ref": "#/$defs/path" },
+        "conversation_id_path": { "$ref": "#/$defs/path" },
+        "turn_id_path": { "$ref": "#/$defs/path" }
+      },
+      "additionalProperties": false
+    },
+    "provenanceMappings": {
+      "type": "object",
+      "properties": {
+        "application_id_path": { "$ref": "#/$defs/path" },
+        "application_version_path": { "$ref": "#/$defs/path" },
+        "model_id_path": { "$ref": "#/$defs/path" },
+        "model_display_name_path": { "$ref": "#/$defs/path" },
+        "native_timestamp_path": { "$ref": "#/$defs/path" }
+      },
+      "additionalProperties": false
+    },
+    "promptDelivery": {
+      "type": "object",
+      "required": ["payload_format"],
+      "properties": {
+        "payload_format": { "enum": ["raw_utf8", "json"] },
+        "native_type": { "$ref": "#/$defs/nonEmptyString" },
+        "type_path": { "$ref": "#/$defs/path" },
+        "prompt_path": { "$ref": "#/$defs/path" },
+        "exchange_id_path": { "$ref": "#/$defs/path" },
+        "conversation_key_path": { "$ref": "#/$defs/path" }
+      },
+      "allOf": [
+        {
+          "if": { "type": "object", "properties": { "payload_format": { "const": "json" } } },
+          "then": {
+            "type": "object",
+            "properties": {
+              "native_type": {},
+              "type_path": {},
+              "prompt_path": {},
+              "exchange_id_path": {},
+              "conversation_key_path": {}
+            },
+            "required": ["native_type", "type_path", "prompt_path", "exchange_id_path", "conversation_key_path"]
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "condition": {
+      "type": "object",
+      "required": ["path", "equals"],
+      "properties": {
+        "path": { "$ref": "#/$defs/path" },
+        "equals": {}
+      },
+      "additionalProperties": false
+    },
+    "conditions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/condition" }
+    },
+    "promptObservation": {
+      "type": "object",
+      "required": ["native_type", "prompt_path"],
+      "properties": {
+        "native_type": { "$ref": "#/$defs/nonEmptyString" },
+        "prompt_path": { "$ref": "#/$defs/path" },
+        "conditions": { "$ref": "#/$defs/conditions" }
+      },
+      "additionalProperties": false
+    },
+    "replySource": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["strategy", "path"],
+          "properties": {
+            "strategy": { "const": "event_path" },
+            "path": { "$ref": "#/$defs/path" }
+          },
+          "additionalProperties": false
         },
-        "tool_name_path": {
-          "type": "string",
-          "description": "Path to extract tool name."
+        {
+          "type": "object",
+          "required": ["strategy", "record_kind", "field"],
+          "properties": {
+            "strategy": { "const": "latest_record" },
+            "record_kind": { "const": "response" },
+            "field": { "const": "text" }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "terminalEvent": {
+      "type": "object",
+      "required": ["native_type", "reply_source"],
+      "properties": {
+        "native_type": { "$ref": "#/$defs/nonEmptyString" },
+        "conditions": { "$ref": "#/$defs/conditions" },
+        "outcome": { "enum": ["completed", "failed", "interrupted", "timeout"] },
+        "outcome_path": { "$ref": "#/$defs/path" },
+        "outcome_map": {
+          "type": "object",
+          "additionalProperties": { "enum": ["completed", "failed", "interrupted", "timeout"] },
+          "minProperties": 1
         },
-        "tool_kind_path": {
-          "type": "string",
-          "description": "Path to extract tool category or kind."
+        "reply_source": { "$ref": "#/$defs/replySource" }
+      },
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": { "outcome": {} },
+          "required": ["outcome"],
+          "not": { "type": "object", "properties": { "outcome_path": {} }, "required": ["outcome_path"] }
         },
-        "tool_use_id_path": {
-          "type": "string",
-          "description": "Path to extract unique tool call / invocation ID."
-        },
-        "input_path": {
-          "type": "string",
-          "description": "Path to extract tool input arguments/payload."
-        },
-        "result_path": {
-          "type": "string",
-          "description": "Path to extract tool result or response object."
-        },
-        "status_path": {
-          "type": "string",
-          "description": "Path to extract execution status ('completed', 'failed', etc.)."
+        {
+          "type": "object",
+          "properties": { "outcome_path": {}, "outcome_map": {} },
+          "required": ["outcome_path", "outcome_map"],
+          "not": { "type": "object", "properties": { "outcome": {} }, "required": ["outcome"] }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "cancellation": {
+      "type": "object",
+      "required": [
+        "scope",
+        "native_type",
+        "type_path",
+        "exchange_id_path",
+        "conversation_key_path",
+        "turn_id_path"
+      ],
+      "properties": {
+        "scope": { "const": "turn" },
+        "native_type": { "$ref": "#/$defs/nonEmptyString" },
+        "type_path": { "$ref": "#/$defs/path" },
+        "exchange_id_path": { "$ref": "#/$defs/path" },
+        "conversation_key_path": { "$ref": "#/$defs/path" },
+        "turn_id_path": { "$ref": "#/$defs/path" }
+      },
+      "additionalProperties": false
+    },
+    "recordMapping": {
+      "type": "object",
+      "required": ["kind", "native_type", "fields"],
+      "properties": {
+        "kind": { "enum": ["prompt_echo", "thinking", "tool_call", "tool_result", "response"] },
+        "native_type": { "$ref": "#/$defs/nonEmptyString" },
+        "conditions": { "$ref": "#/$defs/conditions" },
+        "fields": {
+          "type": "object",
+          "propertyNames": { "pattern": "^[a-z][a-z0-9_]*$" },
+          "additionalProperties": { "$ref": "#/$defs/path" },
+          "minProperties": 1
         }
       },
       "additionalProperties": false

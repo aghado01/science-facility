@@ -1,185 +1,656 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:science-facility:para-agent:schema:transcript-exchange:1",
-  "title": "Para-Agent Transcript Exchange",
-  "description": "The schema for exchange rows (rows 1..N) in a para-agent transcript JSONL file. Each row represents one complete mediated dialogue interaction between Primary and Para agents.",
+  "title": "Para-Agent Terminal Mediated Exchange",
+  "description": "One terminal projection of a durably accepted mediated turn. Acceptance is recorded first in the paired acceptance WAL; exchange_index is terminal commit order.",
   "type": "object",
   "required": [
     "record_type",
+    "schema_version",
     "exchange_id",
     "exchange_index",
     "exchange_start",
     "exchange_end",
-    "sender",
-    "receiver",
+    "sender_participant_id",
+    "receiver_participant_id",
+    "adapter",
     "status",
+    "trace",
+    "delivery",
     "records"
   ],
   "properties": {
     "record_type": {
-      "const": "transcript_exchange",
-      "description": "Discriminates transcript exchange rows from the zero-row transcript_header."
+      "const": "transcript_exchange"
+    },
+    "schema_version": {
+      "const": 1
     },
     "exchange_id": {
-      "type": "string",
-      "description": "Unique identifier for this exchange envelope (e.g. UUID or prefixed slug)."
+      "$ref": "#/$defs/nonEmptyString"
     },
     "exchange_index": {
       "type": "integer",
       "minimum": 0,
-      "description": "0-based monotonic sequence index of the exchange within this transcript."
+      "description": "Monotonic terminal commit order within this transcript."
     },
     "exchange_start": {
       "type": "string",
       "format": "date-time",
-      "description": "ISO 8601 timestamp when mediation ingress received the prompt."
+      "description": "Durable acceptance time."
     },
     "exchange_end": {
       "type": "string",
       "format": "date-time",
-      "description": "ISO 8601 timestamp when mediation egress committed the terminal reply."
+      "description": "Terminal transcript commit observation time."
     },
-    "sender": {
-      "type": "string",
-      "description": "Client identifier of the primary sending agent (e.g. 'claude', 'primary')."
+    "request_id": {
+      "$ref": "#/$defs/nonEmptyString"
     },
-    "receiver": {
-      "type": "string",
-      "description": "Client identifier of the receiving para agent (e.g. 'codex', 'agy')."
+    "idempotency_key": {
+      "$ref": "#/$defs/nonEmptyString"
     },
-    "display_name": {
-      "type": "string",
-      "description": "Optional human-readable display label for the exchange or model."
+    "sender_participant_id": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "receiver_participant_id": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "application": {
+      "$ref": "#/$defs/applicationObservation"
+    },
+    "adapter": {
+      "$ref": "#/$defs/adapterBinding"
     },
     "model": {
-      "type": "string",
-      "description": "The receiver model observed during the exchange (e.g. 'gpt-5.6-sol', 'claude-3-7-sonnet')."
+      "$ref": "#/$defs/modelObservation"
     },
-    "effort": {
-      "type": "string",
-      "description": "Reasoning or thinking effort level (e.g. 'high', 'medium', 'low')."
+    "native": {
+      "$ref": "#/$defs/nativeBindings"
     },
     "status": {
-      "type": "string",
-      "enum": ["completed", "interrupted", "failed", "timeout"],
-      "description": "Final execution outcome of the exchange."
+      "enum": ["completed", "failed", "interrupted", "timeout"]
     },
-    "native_provenance": {
-      "type": "object",
-      "description": "Raw identifiers from the participating native client sessions when observable.",
-      "properties": {
-        "thread_id": { "type": "string" },
-        "turn_id": { "type": "string" },
-        "session_uuid": { "type": "string" },
-        "source_thread": { "type": "string" },
-        "session_depth": { "type": "integer" }
-      },
-      "additionalProperties": true
+    "outcome": {
+      "$ref": "#/$defs/outcome"
+    },
+    "trace": {
+      "$ref": "#/$defs/traceState"
+    },
+    "delivery": {
+      "$ref": "#/$defs/deliveryState"
     },
     "records": {
       "type": "array",
-      "description": "Chronological stream of internal micro-steps captured during the exchange.",
+      "minItems": 1,
       "items": {
         "oneOf": [
-          { "$ref": "#/$defs/promptRecord" },
-          { "$ref": "#/$defs/thinkingRecord" },
-          { "$ref": "#/$defs/toolCallRecord" },
-          { "$ref": "#/$defs/responseRecord" }
+          {
+            "$ref": "#/$defs/promptRecord"
+          },
+          {
+            "$ref": "#/$defs/thinkingRecord"
+          },
+          {
+            "$ref": "#/$defs/toolCallRecord"
+          },
+          {
+            "$ref": "#/$defs/toolResultRecord"
+          },
+          {
+            "$ref": "#/$defs/responseRecord"
+          }
         ]
       }
+    },
+    "extensions": {
+      "$ref": "#/$defs/extensions"
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "completed"
+          }
+        },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "trace": {
+            "type": "object",
+            "required": ["raw"],
+            "properties": {
+              "raw": true
+            }
+          },
+          "records": {
+            "type": "array",
+            "contains": {
+              "type": "object",
+              "required": ["_type", "phase"],
+              "properties": {
+                "_type": {
+                  "const": "response"
+                },
+                "phase": {
+                  "const": "final"
+                }
+              }
+            },
+            "minContains": 1,
+            "maxContains": 1
+          }
+        }
+      },
+      "else": {
+        "type": "object",
+        "required": ["outcome"],
+        "properties": {
+          "outcome": true
+        }
+      }
+    }
+  ],
   "additionalProperties": false,
   "$defs": {
-    "baseRecord": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "adapterBinding": {
       "type": "object",
-      "required": ["_type", "_timestamp"],
+      "required": ["id", "version"],
       "properties": {
-        "_source_uuid": { "type": "string" },
-        "_timestamp": { "type": "string", "format": "date-time" },
-        "_turn_id": { "type": "string" }
-      }
-    },
-    "promptRecord": {
-      "allOf": [
-        { "$ref": "#/$defs/baseRecord" },
-        {
-          "type": "object",
-          "required": ["_type", "text"],
-          "properties": {
-            "_type": { "const": "prompt" },
-            "text": { "type": "string", "description": "Authoritative prompt delivered from primary." }
-          },
-          "additionalProperties": false
+        "id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "version": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "profile_id": {
+          "$ref": "#/$defs/nonEmptyString"
         }
-      ]
+      },
+      "additionalProperties": false
     },
-    "thinkingRecord": {
-      "allOf": [
-        { "$ref": "#/$defs/baseRecord" },
-        {
+    "rawSourceReference": {
+      "type": "object",
+      "required": ["kind", "trace_ref"],
+      "properties": {
+        "kind": {
+          "const": "receiver_native"
+        },
+        "trace_ref": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "frame_index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "byte_span": {
           "type": "object",
-          "required": ["_type", "text"],
+          "required": ["start", "length"],
           "properties": {
-            "_type": { "const": "thinking" },
-            "text": { "type": "string", "description": "Internal model reasoning or chain-of-thought trace." }
-          },
-          "additionalProperties": false
-        }
-      ]
-    },
-    "toolCallRecord": {
-      "allOf": [
-        { "$ref": "#/$defs/baseRecord" },
-        {
-          "type": "object",
-          "required": ["_type", "tool_name", "status"],
-          "properties": {
-            "_type": { "const": "tool_call" },
-            "tool_use_id": { "type": "string" },
-            "tool_name": { "type": "string" },
-            "tool_kind": { "type": "string" },
-            "status": { "type": "string", "enum": ["completed", "failed", "running", "cancelled"] },
-            "input": {
-              "description": "Tool input payload (string or structured object)."
+            "start": {
+              "type": "integer",
+              "minimum": 0
             },
-            "response": {
-              "type": "object",
-              "properties": {
-                "_timestamp": { "type": "string", "format": "date-time" },
-                "tool_use_id": { "type": "string" },
-                "content": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "type": { "type": "string" },
-                      "text": { "type": "string" }
-                    }
-                  }
-                }
-              },
-              "additionalProperties": true
+            "length": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        "native_event_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      },
+      "oneOf": [
+        {
+          "required": ["frame_index"],
+          "properties": {
+            "frame_index": true,
+            "byte_span": false
+          }
+        },
+        {
+          "required": ["byte_span"],
+          "properties": {
+            "frame_index": false,
+            "byte_span": true
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "applicationObservation": {
+      "type": "object",
+      "required": ["id", "source"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_.-]*$"
+        },
+        "version": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "display_name": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "source": {
+          "$ref": "#/$defs/rawSourceReference"
+        }
+      },
+      "additionalProperties": false
+    },
+    "modelObservation": {
+      "type": "object",
+      "required": ["id", "source"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "display_name": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "source": {
+          "$ref": "#/$defs/rawSourceReference"
+        }
+      },
+      "additionalProperties": false
+    },
+    "nativeIdentity": {
+      "type": "object",
+      "required": ["application_id", "adapter_id", "source"],
+      "properties": {
+        "application_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "adapter_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "conversation_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "turn_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "source": {
+          "$ref": "#/$defs/rawSourceReference"
+        }
+      },
+      "anyOf": [
+        {
+          "required": ["conversation_id"],
+          "properties": {
+            "conversation_id": true
+          }
+        },
+        {
+          "required": ["turn_id"],
+          "properties": {
+            "turn_id": true
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "nativeBindings": {
+      "type": "object",
+      "properties": {
+        "sender": {
+          "$ref": "#/$defs/nativeIdentity"
+        },
+        "receiver": {
+          "$ref": "#/$defs/nativeIdentity"
+        }
+      },
+      "minProperties": 1,
+      "additionalProperties": false
+    },
+    "omission": {
+      "type": "object",
+      "required": ["code", "detail"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]*$"
+        },
+        "detail": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "source_ref": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      },
+      "additionalProperties": false
+    },
+    "rawTraceDescriptor": {
+      "type": "object",
+      "required": ["relative_ref", "sha256", "bytes", "format", "adapter"],
+      "properties": {
+        "relative_ref": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "format": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "application_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "application_version": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "adapter": {
+          "$ref": "#/$defs/adapterBinding"
+        },
+        "frame_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "malformed_frame_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "traceState": {
+      "type": "object",
+      "required": ["complete", "omissions"],
+      "properties": {
+        "complete": {
+          "type": "boolean"
+        },
+        "raw": {
+          "$ref": "#/$defs/rawTraceDescriptor"
+        },
+        "omissions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/omission"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "deliveryEvidence": {
+      "type": "object",
+      "required": ["stage", "observed_at", "evidence"],
+      "properties": {
+        "stage": {
+          "enum": ["rendered", "adapter_emitted", "host_acknowledged", "receiver_observed", "model_visible"]
+        },
+        "observed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "evidence": {
+          "type": "object",
+          "required": ["kind", "ref"],
+          "properties": {
+            "kind": {
+              "enum": ["mediation_observation", "adapter_receipt", "host_receipt", "native_event"]
+            },
+            "ref": {
+              "$ref": "#/$defs/nonEmptyString"
             }
           },
           "additionalProperties": false
         }
-      ]
+      },
+      "additionalProperties": false
     },
-    "responseRecord": {
+    "egressEvidence": {
+      "type": "object",
+      "required": ["stage", "observed_at", "reply_sha256"],
+      "properties": {
+        "stage": {
+          "enum": ["constructed", "transport_returned", "host_acknowledged"]
+        },
+        "observed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "reply_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "evidence_ref": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      },
+      "additionalProperties": false
+    },
+    "deliveryState": {
+      "type": "object",
+      "required": ["events"],
+      "properties": {
+        "events": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/deliveryEvidence"
+          }
+        },
+        "egress": {
+          "$ref": "#/$defs/egressEvidence"
+        }
+      },
+      "additionalProperties": false
+    },
+    "outcome": {
+      "type": "object",
+      "required": ["code", "retryable", "native_stop_confirmed"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]*$"
+        },
+        "message": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "native_stop_confirmed": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "baseRecord": {
+      "type": "object",
+      "required": ["_type", "record_id", "observed_at"],
+      "properties": {
+        "_type": {
+          "type": "string"
+        },
+        "record_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "observed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "native_timestamp": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "promptRecord": {
+      "type": "object",
       "allOf": [
-        { "$ref": "#/$defs/baseRecord" },
+        {
+          "$ref": "#/$defs/baseRecord"
+        },
         {
           "type": "object",
-          "required": ["_type", "text"],
+          "required": ["_type", "text", "content_sha256", "source"],
           "properties": {
-            "_type": { "const": "response" },
-            "phase": { "type": "string", "enum": ["commentary", "final", "partial"] },
-            "text": { "type": "string", "description": "Terminal or interim response from receiver." }
-          },
-          "additionalProperties": false
+            "_type": {
+              "const": "prompt"
+            },
+            "text": {
+              "type": "string"
+            },
+            "content_sha256": {
+              "$ref": "#/$defs/sha256"
+            },
+            "source": {
+              "type": "object",
+              "required": ["kind"],
+              "properties": {
+                "kind": {
+                  "const": "mediation_ingress"
+                },
+                "request_id": {
+                  "$ref": "#/$defs/nonEmptyString"
+                }
+              },
+              "additionalProperties": false
+            }
+          }
         }
-      ]
+      ],
+      "unevaluatedProperties": false
+    },
+    "thinkingRecord": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "#/$defs/baseRecord"
+        },
+        {
+          "type": "object",
+          "required": ["_type", "text", "source"],
+          "properties": {
+            "_type": {
+              "const": "thinking"
+            },
+            "text": {
+              "type": "string"
+            },
+            "source": {
+              "$ref": "#/$defs/rawSourceReference"
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "toolCallRecord": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "#/$defs/baseRecord"
+        },
+        {
+          "type": "object",
+          "required": ["_type", "tool_name", "tool_use_id", "status", "input", "source"],
+          "properties": {
+            "_type": {
+              "const": "tool_call"
+            },
+            "tool_name": {
+              "$ref": "#/$defs/nonEmptyString"
+            },
+            "tool_kind": {
+              "$ref": "#/$defs/nonEmptyString"
+            },
+            "tool_use_id": {
+              "$ref": "#/$defs/nonEmptyString"
+            },
+            "status": {
+              "enum": ["pending", "running", "completed", "failed", "cancelled"]
+            },
+            "input": {},
+            "source": {
+              "$ref": "#/$defs/rawSourceReference"
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "toolResultRecord": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "#/$defs/baseRecord"
+        },
+        {
+          "type": "object",
+          "required": ["_type", "tool_use_id", "status", "result", "source"],
+          "properties": {
+            "_type": {
+              "const": "tool_result"
+            },
+            "tool_use_id": {
+              "$ref": "#/$defs/nonEmptyString"
+            },
+            "status": {
+              "enum": ["completed", "failed", "cancelled"]
+            },
+            "result": {},
+            "source": {
+              "$ref": "#/$defs/rawSourceReference"
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "responseRecord": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "#/$defs/baseRecord"
+        },
+        {
+          "type": "object",
+          "required": ["_type", "phase", "text", "content_sha256", "source"],
+          "properties": {
+            "_type": {
+              "const": "response"
+            },
+            "phase": {
+              "enum": ["commentary", "partial", "final"]
+            },
+            "text": {
+              "type": "string"
+            },
+            "content_sha256": {
+              "$ref": "#/$defs/sha256"
+            },
+            "source": {
+              "$ref": "#/$defs/rawSourceReference"
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "extensions": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_.-]*$"
+      },
+      "additionalProperties": true
     }
   }
 }

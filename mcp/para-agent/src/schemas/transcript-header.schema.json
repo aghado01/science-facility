@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:science-facility:para-agent:schema:transcript-header:1",
   "title": "Para-Agent Transcript Header",
-  "description": "The immutable first physical row of a para-agent transcript JSONL file. It declares the transcript identity, schema bindings, para-agent session, default workspace, and stable participant registrations. Facts that can change during the session, including native client conversation identifiers, application versions observed at runtime, models, panes, and effective workspace overrides, belong on transcript exchange rows instead.",
+  "description": "The immutable first physical row of a para-agent mediation transcript. Participants are stable logical seats. Client bindings in this row are defaults only; exchange-time native observations remain authoritative.",
   "type": "object",
   "required": [
     "record_type",
@@ -17,25 +17,20 @@
   ],
   "properties": {
     "record_type": {
-      "const": "transcript_header",
-      "description": "Discriminates the zero-row header from transcript exchange rows."
+      "const": "transcript_header"
     },
     "schema_version": {
-      "const": 1,
-      "description": "The major persisted shape version represented by this schema."
+      "const": 1
     },
     "transcript_id": {
-      "$ref": "#/$defs/nonEmptyString",
-      "description": "Para-agent's canonical identity for this transcript."
+      "$ref": "#/$defs/nonEmptyString"
     },
     "created_at": {
       "type": "string",
-      "format": "date-time",
-      "description": "When para-agent created and committed this header."
+      "format": "date-time"
     },
     "schemas": {
       "type": "object",
-      "description": "Schema identifiers a reader uses to validate this header and every following exchange row.",
       "required": ["header", "exchange"],
       "properties": {
         "header": {
@@ -49,7 +44,6 @@
     },
     "producer": {
       "type": "object",
-      "description": "The para-agent MCP implementation that owns and writes the transcript.",
       "required": ["name", "version"],
       "properties": {
         "name": {
@@ -59,15 +53,14 @@
           "$ref": "#/$defs/nonEmptyString"
         },
         "instance_id": {
-          "$ref": "#/$defs/nonEmptyString",
-          "description": "Optional identity of the concrete server process or durable backend instance."
+          "$ref": "#/$defs/nonEmptyString"
         }
       },
       "additionalProperties": false
     },
     "session": {
       "type": "object",
-      "description": "The stable para-agent session that owns the transcript. This is distinct from either client's native conversation or session identifier.",
+      "description": "The stable para-agent ledger session, distinct from all native client conversations.",
       "required": ["session_id"],
       "properties": {
         "session_id": {
@@ -78,23 +71,20 @@
     },
     "workspace": {
       "type": "object",
-      "description": "The session's default workspace convention. An exchange may explicitly record an override without changing this header.",
       "required": ["default_root", "selection_policy"],
       "properties": {
         "default_root": {
-          "$ref": "#/$defs/nonEmptyString",
-          "description": "Absolute workspace root inherited from the primary participant when no exchange-level override is requested."
+          "$ref": "#/$defs/nonEmptyString"
         },
         "selection_policy": {
-          "const": "primary_workspace",
-          "description": "Declares that the normal launch root is inherited from the primary participant."
+          "const": "primary_workspace"
         }
       },
       "additionalProperties": false
     },
     "participants": {
       "type": "array",
-      "description": "Stable participant registrations addressable by exchange rows. Runtime client state is deliberately not stored here. Participant identifiers must be unique; the repository enforces that cross-item invariant.",
+      "description": "Stable logical seats referenced by terminal exchange rows. Uniqueness is enforced by repository semantic validation.",
       "minItems": 2,
       "items": {
         "$ref": "#/$defs/participant"
@@ -102,7 +92,6 @@
     },
     "labels": {
       "type": "object",
-      "description": "Optional user-facing labels that are fixed when the transcript is created.",
       "propertyNames": {
         "pattern": "^[a-z][a-z0-9_.-]*$"
       },
@@ -157,29 +146,23 @@
       "type": "string",
       "minLength": 1
     },
-    "application": {
+    "applicationSelection": {
       "type": "object",
-      "description": "A client application declaration, such as codex, claude, or agy. Names remain open so adding a client does not require changing transcript semantics.",
-      "required": ["name"],
+      "description": "A configured default client selection. It is not exchange-time provenance.",
+      "required": ["id"],
       "properties": {
-        "name": {
+        "id": {
           "type": "string",
           "pattern": "^[a-z][a-z0-9_.-]*$"
         },
         "display_name": {
           "$ref": "#/$defs/nonEmptyString"
-        },
-        "version": {
-          "type": ["string", "null"],
-          "minLength": 1,
-          "description": "The declared application version, or null when it was not observable at registration time."
         }
       },
       "additionalProperties": false
     },
-    "adapter": {
+    "adapterBinding": {
       "type": "object",
-      "description": "The client-specific adapter selected for this participant.",
       "required": ["id", "version"],
       "properties": {
         "id": {
@@ -189,42 +172,47 @@
           "$ref": "#/$defs/nonEmptyString"
         },
         "profile_id": {
-          "$ref": "#/$defs/nonEmptyString",
-          "description": "Optional client configuration profile used to register the participant."
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      },
+      "additionalProperties": false
+    },
+    "defaultBinding": {
+      "type": "object",
+      "required": ["application", "adapter"],
+      "properties": {
+        "application": {
+          "$ref": "#/$defs/applicationSelection"
+        },
+        "adapter": {
+          "$ref": "#/$defs/adapterBinding"
         }
       },
       "additionalProperties": false
     },
     "participant": {
       "type": "object",
-      "required": ["participant_id", "role", "application", "adapter"],
+      "required": ["participant_id", "role"],
       "properties": {
         "participant_id": {
-          "$ref": "#/$defs/nonEmptyString",
-          "description": "Para-agent's stable identity for this participant within the transcript."
+          "$ref": "#/$defs/nonEmptyString"
         },
         "role": {
-          "enum": ["primary", "para"],
-          "description": "The stable relationship role. It does not determine exchange direction; either role may send a prompt."
+          "enum": ["primary", "para"]
         },
         "registration_id": {
-          "$ref": "#/$defs/nonEmptyString",
-          "description": "Optional reference to the backend's durable client registration or seat."
+          "$ref": "#/$defs/nonEmptyString"
         },
-        "application": {
-          "$ref": "#/$defs/application"
-        },
-        "adapter": {
-          "$ref": "#/$defs/adapter"
+        "default_binding": {
+          "$ref": "#/$defs/defaultBinding"
         }
       },
       "additionalProperties": false
     },
     "extensions": {
       "type": "object",
-      "description": "Namespaced transcript-level extension values. Portable semantics must be promoted into the common schema rather than placed here.",
       "propertyNames": {
-        "minLength": 1
+        "pattern": "^[a-z][a-z0-9_.-]*$"
       },
       "additionalProperties": true
     }

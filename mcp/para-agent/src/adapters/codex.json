@@ -1,39 +1,92 @@
 {
   "schema_version": 1,
-  "client_id": "codex",
-  "display_name": "OpenAI Codex CLI",
-  "provenance_mappings": {
-    "thread_id": "_thread_id",
-    "turn_id": "_turn_id",
-    "model": "_model",
-    "effort": "_effort",
-    "user_label": "_user_label"
+  "profile_id": "codex/0.147.0",
+  "adapter": {
+    "id": "para-agent.codex",
+    "version": "1.0.0"
   },
-  "record_mappings": {
-    "prompt": {
-      "native_type": "prompt",
-      "text_path": "text",
-      "timestamp_path": "_timestamp"
-    },
-    "thinking": {
-      "native_type": "thinking",
-      "text_path": "text",
-      "timestamp_path": "_timestamp"
-    },
-    "tool_call": {
-      "native_type": "tool_call",
-      "tool_name_path": "tool_name",
-      "tool_kind_path": "tool_kind",
-      "tool_use_id_path": "tool_use_id",
-      "input_path": "input",
-      "result_path": "response",
-      "status_path": "status"
-    },
-    "response": {
-      "native_type": "response",
-      "text_path": "text",
-      "timestamp_path": "_timestamp",
-      "phase_path": "phase"
+  "application": {
+    "id": "codex",
+    "display_name": "OpenAI Codex CLI",
+    "verified_versions": ["0.147.0"]
+  },
+  "verification": {
+    "status": "verified",
+    "evidence": [
+      {
+        "kind": "live_stream_probe",
+        "reference": "mcp/tests/para-agent/fixtures/adapters/codex/0.147.0/stdout.jsonl",
+        "observed_at": "2026-08-14T00:00:00Z",
+        "note": "Ephemeral read-only JSONL probe; stderr warnings were kept outside the native event stream."
+      },
+      {
+        "kind": "cli_help",
+        "reference": "codex exec --help",
+        "observed_at": "2026-08-14T00:00:00Z",
+        "note": "The dash prompt argument is documented as reading the prompt from stdin; the live probe itself used the harness argv path."
+      }
+    ]
+  },
+  "capabilities": {
+    "prompt_delivery": true,
+    "prompt_observation": false,
+    "terminal_events": true,
+    "scoped_cancellation": false,
+    "model_identity": false,
+    "reasoning_events": false,
+    "tool_calls": false,
+    "tool_results": false
+  },
+  "transport": {
+    "kind": "raw_stdin",
+    "encoding": "utf-8",
+    "framing": "eof",
+    "byte_preserving": true,
+    "command": [
+      "codex",
+      "exec",
+      "-",
+      "--json",
+      "--sandbox",
+      "read-only",
+      "--ephemeral",
+      "--ignore-rules"
+    ]
+  },
+  "native_events": {
+    "format": "jsonl",
+    "discriminator_path": "type",
+    "unknown_event_policy": "preserve_raw"
+  },
+  "correlation_mappings": {
+    "conversation_id_path": "thread_id"
+  },
+  "provenance_mappings": {},
+  "prompt_delivery": {
+    "payload_format": "raw_utf8"
+  },
+  "terminal_events": [
+    {
+      "native_type": "turn.completed",
+      "outcome": "completed",
+      "reply_source": {
+        "strategy": "latest_record",
+        "record_kind": "response",
+        "field": "text"
+      }
     }
-  }
+  ],
+  "record_mappings": [
+    {
+      "kind": "response",
+      "native_type": "item.completed",
+      "conditions": [
+        { "path": "item.type", "equals": "agent_message" }
+      ],
+      "fields": {
+        "native_item_id": "item.id",
+        "text": "item.text"
+      }
+    }
+  ]
 }

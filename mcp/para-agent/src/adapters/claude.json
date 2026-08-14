@@ -1,36 +1,97 @@
 {
   "schema_version": 1,
-  "client_id": "claude",
-  "display_name": "Claude Code CLI",
-  "provenance_mappings": {
-    "thread_id": "session_id",
-    "turn_id": "turn_id",
-    "model": "model",
-    "effort": "effort"
+  "profile_id": "claude/2.1.226",
+  "adapter": {
+    "id": "para-agent.claude",
+    "version": "1.0.0"
   },
-  "record_mappings": {
-    "prompt": {
-      "native_type": "user",
-      "text_path": "message.content[0].text",
-      "timestamp_path": "timestamp"
-    },
-    "thinking": {
-      "native_type": "thinking",
-      "text_path": "thinking",
-      "timestamp_path": "timestamp"
-    },
-    "tool_call": {
-      "native_type": "tool_use",
-      "tool_name_path": "name",
-      "tool_use_id_path": "id",
-      "input_path": "input",
-      "result_path": "tool_result",
-      "status_path": "status"
-    },
-    "response": {
-      "native_type": "assistant",
-      "text_path": "message.content[0].text",
-      "timestamp_path": "timestamp"
+  "application": {
+    "id": "claude",
+    "display_name": "Claude Code CLI",
+    "verified_versions": ["2.1.226"]
+  },
+  "verification": {
+    "status": "verified",
+    "evidence": [
+      {
+        "kind": "live_stream_probe",
+        "reference": "mcp/tests/para-agent/fixtures/adapters/claude/2.1.226/stdout.reduced.jsonl",
+        "observed_at": "2026-08-14T00:00:00Z",
+        "note": "Read-only no-tools stream-json probe with exact prompt supplied on native stdin; the checked-in fixture contains only the evidenced fields used by this adapter."
+      }
+    ]
+  },
+  "capabilities": {
+    "prompt_delivery": true,
+    "prompt_observation": false,
+    "terminal_events": true,
+    "scoped_cancellation": false,
+    "model_identity": true,
+    "reasoning_events": false,
+    "tool_calls": false,
+    "tool_results": false
+  },
+  "transport": {
+    "kind": "raw_stdin",
+    "encoding": "utf-8",
+    "framing": "eof",
+    "byte_preserving": true,
+    "command": [
+      "claude",
+      "-p",
+      "--output-format",
+      "stream-json",
+      "--verbose",
+      "--permission-mode",
+      "plan",
+      "--tools",
+      "",
+      "--no-session-persistence",
+      "--safe-mode"
+    ]
+  },
+  "native_events": {
+    "format": "jsonl",
+    "discriminator_path": "type",
+    "unknown_event_policy": "preserve_raw"
+  },
+  "correlation_mappings": {
+    "conversation_id_path": "session_id"
+  },
+  "provenance_mappings": {
+    "application_version_path": "claude_code_version",
+    "model_id_path": "message.model",
+    "native_timestamp_path": "timestamp"
+  },
+  "prompt_delivery": {
+    "payload_format": "raw_utf8"
+  },
+  "terminal_events": [
+    {
+      "native_type": "result",
+      "conditions": [
+        { "path": "subtype", "equals": "success" },
+        { "path": "is_error", "equals": false },
+        { "path": "terminal_reason", "equals": "completed" }
+      ],
+      "outcome": "completed",
+      "reply_source": {
+        "strategy": "event_path",
+        "path": "result"
+      }
     }
-  }
+  ],
+  "record_mappings": [
+    {
+      "kind": "response",
+      "native_type": "assistant",
+      "conditions": [
+        { "path": "message.content.0.type", "equals": "text" }
+      ],
+      "fields": {
+        "native_message_id": "message.id",
+        "text": "message.content.0.text"
+      }
+    }
+  ]
 }

@@ -1,36 +1,32 @@
 {
   "schema_version": 1,
-  "client_id": "agy",
-  "display_name": "Google Antigravity CLI",
-  "provenance_mappings": {
-    "thread_id": "conversation_id",
-    "turn_id": "turn_id",
-    "model": "model_name",
-    "effort": "reasoning_effort"
+  "profile_id": "agy/unverified-v1",
+  "adapter": {
+    "id": "para-agent.agy",
+    "version": "1.0.0"
   },
-  "record_mappings": {
-    "prompt": {
-      "native_type": "user_input",
-      "text_path": "content",
-      "timestamp_path": "timestamp"
-    },
-    "thinking": {
-      "native_type": "model_thought",
-      "text_path": "thought",
-      "timestamp_path": "timestamp"
-    },
-    "tool_call": {
-      "native_type": "tool_call",
-      "tool_name_path": "tool_name",
-      "tool_use_id_path": "call_id",
-      "input_path": "arguments",
-      "result_path": "result",
-      "status_path": "status"
-    },
-    "response": {
-      "native_type": "model_response",
-      "text_path": "content",
-      "timestamp_path": "timestamp"
-    }
+  "application": {
+    "id": "agy",
+    "display_name": "Google Antigravity CLI"
+  },
+  "verification": {
+    "status": "unverified",
+    "reason": "The legacy mapping was not tied to a current version-labelled native stream capture."
+  },
+  "capabilities": {
+    "prompt_delivery": false,
+    "prompt_observation": false,
+    "terminal_events": false,
+    "scoped_cancellation": false,
+    "model_identity": false,
+    "reasoning_events": false,
+    "tool_calls": false,
+    "tool_results": false
+  },
+  "transport": { "kind": "unsupported" },
+  "native_events": {
+    "format": "unknown",
+    "discriminator_path": "type",
+    "unknown_event_policy": "preserve_raw"
   }
 }
