@@ -16,11 +16,11 @@ Quarantine recovery is likewise closed. Missing-marker repair creates durable, r
 
 The authoritative bounded gate passed 17 suites / 165 tests, including regressions that reject whitespace aliases and ill-formed Unicode before gate or transcript routing. The exact-current live Windows gate then passed 2/2 against Nu 0.114.1, psmux 3.3.7, and Claude 2.1.226. Its first sandboxed substrate attempt timed out starting a detached ConPTY while the Claude pilot passed; the identical isolated rerun outside the sandbox passed both tests.
 
-AGY remains a client-conformance item rather than a release blocker for the verified clients. The single post-checkpoint probe found AGY 1.1.13 but produced zero native-stream bytes while its authentication wait expired. No fixture, transport capability, or model identity was inferred, and no repeat login cycle was attempted.
+AGY remains a client-conformance item rather than a release blocker for the verified clients. The post-checkpoint probe found AGY 1.1.13 but produced zero native-stream bytes and surfaced an authentication-wait timeout. Operator diagnosis now points to an AGY launch/configuration problem — possibly specific to launching through Nu — rather than an authentication failure; the timeout is recorded only as the observed symptom. No fixture, transport capability, or model identity was inferred, and no repeat launch was attempted pending that investigation.
 
 Remaining work
 
-- Capture a fresh authenticated AGY stream, conform a version-labelled fixture, and pass its real-client pilot before enabling the adapter.
+- Resolve the AGY launch/configuration issue, capture a fresh native stream, conform a version-labelled fixture, and pass its real-client pilot before enabling the adapter.
 - Keep public `delegate` idempotency unsupported until retries can suppress duplicate native execution.
 
 The execution record is in [sol-remediation-swarm-plan.md](D:/aghado01/science-facility/issues/para-agent/reports/sol-remediation-swarm-plan.md), with the boundary in [MEDIATED-EXCHANGE-CONTRACT.md](D:/aghado01/science-facility/mcp/para-agent/contract/MEDIATED-EXCHANGE-CONTRACT.md).
