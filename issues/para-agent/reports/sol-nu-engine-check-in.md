@@ -17,3 +17,7 @@ Capture a fresh authenticated AGY stream before enabling its adapter.
 Keep public idempotency unsupported until retries can suppress duplicate native execution.
 The execution record is in [sol-remediation-swarm-plan.md](D:/aghado01/science-facility/issues/para-agent/reports/sol-remediation-swarm-plan.md), with the boundary in [MEDIATED-EXCHANGE-CONTRACT.md](D:/aghado01/science-facility/mcp/para-agent/contract/MEDIATED-EXCHANGE-CONTRACT.md).
 Committed as 2672376 (complete para-agent mediated vertical slice). The earlier foundation is 37383a6. main is now nine commits ahead of origin; nothing was pushed. The unrelated staged pwsh-exec work remains staged and untouched.
+
+# Additional note
+
+the 2/2 live Windows gate (isolated psmux + real Claude mediation) passed before those final audit-hardening changes landed, so live recertification against the exact current checkpoint is intentionally still pending. That's the main thing standing between "verified in tests" and "verified end-to-end on current source."
