@@ -80,6 +80,22 @@ test("offline quarantine status derives the internal key without attaching a liv
   });
 });
 
+test("conversation-key derivation rejects noncanonical target aliases", () => {
+  for (const target of [
+    { ...TARGET, application: ` ${TARGET.application}` },
+    { ...TARGET, application: `${TARGET.application} ` },
+    { ...TARGET, handle: ` ${TARGET.handle}` },
+    { ...TARGET, handle: `${TARGET.handle} ` },
+    { ...TARGET, application: `${TARGET.application}\ud800` },
+    { ...TARGET, handle: `${TARGET.handle}\ud801` },
+  ]) {
+    assert.throws(
+      () => deriveConversationKey(target),
+      { code: "QUARANTINE_RECONCILIATION_INVALID" },
+    );
+  }
+});
+
 test("offline reconciliation delegates exact CAS and repeated retries to the durable store", async () => {
   const calls = [];
   const durableReceipt = receipt("reconcile-1");
@@ -160,6 +176,10 @@ test("invalid and force-like requests fail before durable-store access", async (
   const cases = [
     ["force field", { ...request(), force: true }],
     ["noncanonical application", { ...request(), application: "Claude Desktop" }],
+    ["leading application whitespace", { ...request(), application: ` ${TARGET.application}` }],
+    ["trailing application whitespace", { ...request(), application: `${TARGET.application} ` }],
+    ["leading handle whitespace", { ...request(), handle: ` ${TARGET.handle}` }],
+    ["trailing handle whitespace", { ...request(), handle: `${TARGET.handle} ` }],
     ["missing expected tuple", { ...request(), expected: undefined }],
     ["unsupported basis", { ...request(), basis: { ...BASIS, kind: "force" } }],
   ];

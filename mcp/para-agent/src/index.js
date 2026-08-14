@@ -27,6 +27,7 @@ import { getNuProfileConfig } from "./profiles.js";
 import { TranscriptStore } from "./transcript.js";
 import { AdapterEngine } from "./adapters.js";
 import { ConversationGate } from "./conversation-gate.js";
+import { isWellFormedUnicode } from "./identity.js";
 import { MediatedTurnError, MediatedTurnService } from "./mediated-turn.js";
 import { ProcessNativeClient } from "./native-client.js";
 import { deriveConversationKey } from "./quarantine-reconciliation.js";
@@ -139,6 +140,18 @@ function failMediated(err) {
       }, null, 2),
     }],
   };
+}
+
+function canonicalIdentityInput(label) {
+  return z.string().min(1)
+    .refine(
+      (value) => value === value.trim(),
+      { message: `${label} must not contain leading or trailing whitespace` },
+    )
+    .refine(
+      isWellFormedUnicode,
+      { message: `${label} must be well-formed Unicode` },
+    );
 }
 
 export const server = new McpServer({ name: "para-agent", version: "0.1.0" });
@@ -769,9 +782,9 @@ server.registerTool(
       "This operation is strictly read-only: it cannot clear quarantine, acquire a writer lease, " +
       "or create a transcript.",
     inputSchema: {
-      application: z.string().min(1)
+      application: canonicalIdentityInput("application")
         .describe("Canonical adapter application id, such as 'claude'."),
-      handle: z.string().min(1)
+      handle: canonicalIdentityInput("handle")
         .describe("Logical receiver seat or exclusive target handle."),
     },
   },
@@ -811,9 +824,9 @@ server.registerTool(
       "send/wait/read activity is never inferred into this ledger. Non-completed turns return " +
       "an MCP error with a durable receipt and no fabricated reply.",
     inputSchema: {
-      handle: z.string().min(1)
+      handle: canonicalIdentityInput("handle")
         .describe("Logical receiver seat or exclusive target handle; serialized per application and handle."),
-      application: z.string().min(1)
+      application: canonicalIdentityInput("application")
         .describe("Verified adapter application id, such as 'claude'. Unverified profiles fail closed."),
       prompt: z.string()
         .describe("One exact well-formed Unicode prompt. Control arguments do not belong in this string."),
@@ -847,7 +860,7 @@ server.registerTool(
       "Inspect the internal execution trace (thinking, tool calls, and responses) of a completed exchange. " +
       "Provides progressive disclosure without cluttering the primary agent context upfront.",
     inputSchema: {
-      handle: z.string().describe("Pane target or session name."),
+      handle: canonicalIdentityInput("handle").describe("Pane target or session name."),
       xid: z.string().optional().describe("Specific exchange ID (_xid) to scrutinize. If omitted, returns exchange summaries."),
       filter: z.enum(["all", "thinking", "tools", "failures", "summary"]).default("summary")
         .describe("Filter internal exchange records: 'summary', 'tools', 'thinking', 'failures', or 'all'."),

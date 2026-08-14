@@ -93,6 +93,53 @@ test("status uses a read-only store and does not create an unknown transcript", 
   assert.deepEqual(await fs.readdir(root), before);
 });
 
+test("status and reconcile reject noncanonical identities before any transcript store opens", async (t) => {
+  const root = await tempWorkspace(t);
+  const cases = [
+    ["status", "--application", ` ${APPLICATION}`, "--application must not contain leading or trailing whitespace"],
+    ["status", "--application", `${APPLICATION} `, "--application must not contain leading or trailing whitespace"],
+    ["status", "--handle", ` ${HANDLE}`, "--handle must not contain leading or trailing whitespace"],
+    ["status", "--handle", `${HANDLE} `, "--handle must not contain leading or trailing whitespace"],
+    ["status", "--application", `${APPLICATION}\ud800`, "--application must be well-formed Unicode"],
+    ["status", "--handle", `${HANDLE}\ud801`, "--handle must be well-formed Unicode"],
+    ["reconcile", "--application", ` ${APPLICATION}`, "--application must not contain leading or trailing whitespace"],
+    ["reconcile", "--application", `${APPLICATION} `, "--application must not contain leading or trailing whitespace"],
+    ["reconcile", "--handle", ` ${HANDLE}`, "--handle must not contain leading or trailing whitespace"],
+    ["reconcile", "--handle", `${HANDLE} `, "--handle must not contain leading or trailing whitespace"],
+    ["reconcile", "--application", `${APPLICATION}\ud800`, "--application must be well-formed Unicode"],
+    ["reconcile", "--handle", `${HANDLE}\ud801`, "--handle must be well-formed Unicode"],
+  ];
+
+  for (const [command, option, value, message] of cases) {
+    const argv = command === "status" ? commonArgs(command, root) : reconcileArgs(root);
+    argv[argv.indexOf(option) + 1] = value;
+    let storeCalls = 0;
+    const result = await invoke(argv, {
+      env: { PARA_AGENT_ENABLE_QUARANTINE_ADMIN: "1" },
+      openReadOnly: async () => {
+        storeCalls++;
+        assert.fail("noncanonical identity must fail before read-only store open");
+      },
+      openWritable: async () => {
+        storeCalls++;
+        assert.fail("noncanonical identity must fail before writable store open");
+      },
+    });
+
+    assert.equal(result.code, 1, `${command} ${option}=${JSON.stringify(value)}`);
+    assert.equal(result.stdout.text(), "");
+    assert.deepEqual(result.stderr.json(), {
+      ok: false,
+      error: {
+        code: "QUARANTINE_ADMIN_ARGUMENT_INVALID",
+        name: "QuarantineAdminError",
+        message,
+      },
+    });
+    assert.equal(storeCalls, 0);
+  }
+});
+
 test("reconcile preflights the header, then delegates under the writable lease", async () => {
   const root = path.resolve("test-workspace");
   const calls = [];

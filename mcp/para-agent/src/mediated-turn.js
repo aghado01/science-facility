@@ -4,6 +4,7 @@ import { isDeepStrictEqual, TextDecoder } from "node:util";
 import { ExchangeAssembler } from "./assembler.js";
 import { ConversationGate } from "./conversation-gate.js";
 import { AMBIGUOUS_COMMIT_QUARANTINE_REASON } from "./quarantine-contract.js";
+import { isWellFormedUnicode } from "./identity.js";
 import { deriveConversationKey } from "./quarantine-reconciliation.js";
 
 const UTF8_FATAL = new TextDecoder("utf-8", { fatal: true });
@@ -48,20 +49,6 @@ function thrownMessage(value, fallback) {
   return rendered.length > 0 ? rendered : fallback;
 }
 
-function isWellFormedUnicode(text) {
-  for (let index = 0; index < text.length; index++) {
-    const unit = text.charCodeAt(index);
-    if (unit >= 0xd800 && unit <= 0xdbff) {
-      const next = text.charCodeAt(index + 1);
-      if (!(next >= 0xdc00 && next <= 0xdfff)) return false;
-      index++;
-    } else if (unit >= 0xdc00 && unit <= 0xdfff) {
-      return false;
-    }
-  }
-  return true;
-}
-
 function validateRequest(request) {
   if (!request || typeof request !== "object" || Array.isArray(request)) {
     throw new MediatedTurnError("DELEGATE_INVALID_REQUEST", "delegate request must be an object");
@@ -70,8 +57,19 @@ function validateRequest(request) {
   if (unknown.length > 0) {
     throw new MediatedTurnError("DELEGATE_INVALID_REQUEST", `unknown delegate fields: ${unknown.join(", ")}`);
   }
-  nonEmpty(request.handle, "handle");
-  nonEmpty(request.application, "application");
+  let conversationKey;
+  try {
+    conversationKey = deriveConversationKey({
+      application: request.application,
+      handle: request.handle,
+    });
+  } catch (error) {
+    throw new MediatedTurnError(
+      "DELEGATE_INVALID_REQUEST",
+      thrownMessage(error, "application and handle must identify one canonical conversation lane"),
+      { cause: error },
+    );
+  }
   if (typeof request.prompt !== "string" || !isWellFormedUnicode(request.prompt)) {
     throw new MediatedTurnError("DELEGATE_INVALID_REQUEST", "prompt must be one well-formed Unicode string");
   }
@@ -82,6 +80,7 @@ function validateRequest(request) {
   if (request.signal?.aborted) {
     throw new MediatedTurnError("DELEGATE_CANCELLED_BEFORE_ACCEPTANCE", "delegate request was cancelled before durable acceptance");
   }
+  return conversationKey;
 }
 
 function nowIso(clock) {
@@ -444,7 +443,7 @@ export class MediatedTurnService {
   }
 
   async delegate(request) {
-    validateRequest(request);
+    const key = validateRequest(request);
     const { handle, application, prompt, timeoutMs, signal, requestId } = request;
     const profile = this.adapterEngine.assertCapability(application, "terminal_events");
     this.adapterEngine.assertCapability(application, "prompt_delivery");
@@ -472,7 +471,6 @@ export class MediatedTurnService {
       this.recoveryStores.add(store);
     }
 
-    const key = deriveConversationKey({ application, handle });
     const gateLease = this.gate.acquire(key);
     const adapter = adapterBinding(profile);
     let acceptance;

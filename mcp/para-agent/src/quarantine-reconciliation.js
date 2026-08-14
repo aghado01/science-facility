@@ -1,3 +1,5 @@
+import { isWellFormedUnicode } from "./identity.js";
+
 const APPLICATION_ID = /^[a-z][a-z0-9_.-]*$/;
 const BASIS_KINDS = new Set([
   "terminal_commit_verified",
@@ -35,15 +37,11 @@ function exactKeys(value, allowed, label) {
   }
 }
 
-function nonEmptyString(value, label, { trim = false } = {}) {
+function nonEmptyString(value, label) {
   if (typeof value !== "string" || value.length === 0) {
     fail("QUARANTINE_RECONCILIATION_INVALID", `${label} must be a non-empty string`);
   }
-  const normalized = trim ? value.trim() : value;
-  if (normalized.length === 0) {
-    fail("QUARANTINE_RECONCILIATION_INVALID", `${label} must be a non-empty string`);
-  }
-  return normalized;
+  return value;
 }
 
 function dateTime(value, label) {
@@ -56,14 +54,32 @@ function dateTime(value, label) {
 
 function targetOf(value) {
   plainObject(value, "request");
-  const application = nonEmptyString(value.application, "application", { trim: true });
+  const application = nonEmptyString(value.application, "application");
+  if (application !== application.trim()) {
+    fail(
+      "QUARANTINE_RECONCILIATION_INVALID",
+      "application must not contain leading or trailing whitespace",
+    );
+  }
+  if (!isWellFormedUnicode(application)) {
+    fail("QUARANTINE_RECONCILIATION_INVALID", "application must be well-formed Unicode");
+  }
   if (!APPLICATION_ID.test(application)) {
     fail(
       "QUARANTINE_RECONCILIATION_INVALID",
       "application must be a canonical lowercase application id",
     );
   }
-  const handle = nonEmptyString(value.handle, "handle", { trim: true });
+  const handle = nonEmptyString(value.handle, "handle");
+  if (handle !== handle.trim()) {
+    fail(
+      "QUARANTINE_RECONCILIATION_INVALID",
+      "handle must not contain leading or trailing whitespace",
+    );
+  }
+  if (!isWellFormedUnicode(handle)) {
+    fail("QUARANTINE_RECONCILIATION_INVALID", "handle must be well-formed Unicode");
+  }
   if (/\p{Cc}/u.test(handle)) {
     fail("QUARANTINE_RECONCILIATION_INVALID", "handle cannot contain control characters");
   }

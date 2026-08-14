@@ -15,7 +15,15 @@ const Ajv = packageRequire("ajv");
 const { Client } = await import(pathToFileURL(packageRequire.resolve("@modelcontextprotocol/sdk/client/index.js")).href);
 const expected = new Map([
   ["references/execution.md", ["delegate", "run", "send", "wait", "read"]],
-  ["references/scrutiny.md", ["scrutinize", "scrutinize", "scrutinize", "log", "find", "body"]],
+  ["references/scrutiny.md", [
+    "scrutinize",
+    "scrutinize",
+    "scrutinize",
+    "quarantine_status",
+    "log",
+    "find",
+    "body",
+  ]],
   ["references/recipes.md", ["spawn", "run", "kill", "delegate", "spawn", "send", "wait", "read", "find"]],
   ["references/lifecycle.md", ["spawn", "spawn", "status", "list", "cancel", "kill"]],
 ]);

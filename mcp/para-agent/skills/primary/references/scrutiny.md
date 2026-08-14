@@ -37,6 +37,19 @@ Inspect one zero-based record step:
 
 Call these objects with `scrutinize`. An unknown session returns an empty/not-found result without creating files. `thinking` means only reasoning material exposed by the native client. Check trace completeness and omissions before treating a slice as comprehensive.
 
+## Read-only quarantine status
+
+Inspect one exact mediation lane without opening a writer or creating a transcript:
+
+```json
+{
+  "application": "claude",
+  "handle": "review-seat"
+}
+```
+
+Call this object with `quarantine_status`. Treat `blocked: true` as authoritative for refusing another mediated turn until an operator completes the separate offline recovery procedure. This public tool only reads the process gate and matching durable notices; it cannot clear quarantine.
+
 ## Console Journal: `log`, `body`, `find`
 
 Orient with summaries:

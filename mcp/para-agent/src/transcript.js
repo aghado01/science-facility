@@ -19,6 +19,7 @@ import {
   sha256Utf8,
 } from "./schema-validation.js";
 import { AMBIGUOUS_COMMIT_QUARANTINE_REASON } from "./quarantine-contract.js";
+import { isWellFormedUnicode } from "./identity.js";
 
 const HEADER_SCHEMA_ID = "urn:science-facility:para-agent:schema:transcript-header:1";
 const EXCHANGE_SCHEMA_ID = "urn:science-facility:para-agent:schema:transcript-exchange:1";
@@ -246,6 +247,12 @@ export class TranscriptStore {
     clock = () => new Date(),
   }) {
     requireString(sessionId, "sessionId");
+    if (!isWellFormedUnicode(sessionId)) {
+      throw new TranscriptStoreError(
+        "TRANSCRIPT_ARGUMENT_INVALID",
+        "sessionId must be well-formed Unicode",
+      );
+    }
     if (!new Set(["writable", "read-only"]).has(mode)) {
       throw new TranscriptStoreError("TRANSCRIPT_MODE_INVALID", "mode must be 'writable' or 'read-only'");
     }

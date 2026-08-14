@@ -122,6 +122,13 @@ valid mediated prompt transports.
 - The first implementation fails fast with `CONVERSATION_BUSY`; it does not
   queue an unbounded backlog.
 - Different conversation keys may execute concurrently.
+- `application` and `handle` have one exact canonical spelling across adapter
+  lookup, gate identity, transcript routing, status, and offline administration.
+  Leading or trailing whitespace is rejected before any transcript store is
+  opened; it is never silently trimmed into a gate alias. Identity strings must
+  also be well-formed Unicode so UTF-8 replacement cannot collapse distinct
+  spellings onto one durable hash. Case and well-formed codepoint sequences are
+  otherwise exact; they are not case-folded or normalization-folded.
 - An adapter must provide a stable conversation key before delivery, or prove
   that the target pane/process exclusively represents one conversation.
 - Completion requires a turn-correlated native terminal event. Screen stability,

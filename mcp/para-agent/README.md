@@ -7,7 +7,7 @@ An MCP server with two deliberately separate supervisory surfaces:
 
 Supervisor-agnostic: any MCP-speaking client can use it. Backend-agnostic: it speaks only the tmux command language, so it runs on [psmux](https://github.com/psmux/psmux) on native Windows and on real tmux elsewhere.
 
-**Status: draft (0.1.0).** The console surface has measured psmux 3.3.7 coverage, while the mediated path has bounded fake-client, store, adapter, raw-trace, service, and MCP-wire tests. Claude and Codex have version-labelled captured-stream fixtures; the AGY profile remains explicitly unverified. The optional live suite is environment- and credential-dependent, so bounded green tests alone are not a release claim. See [Verified behavior](#verified-behavior).
+**Status: draft (0.1.0).** The console surface has measured psmux 3.3.7 coverage, while the mediated path passes the manifest's 17 bounded suites / 165 tests across fake clients, persistence, adapters, raw traces, service orchestration, MCP wiring, recovery, and runner contracts. Claude and Codex have version-labelled captured-stream fixtures; the AGY profile remains explicitly unverified. The optional live suite is environment- and credential-dependent, so bounded green tests alone are not a release claim. See [Verified behavior](#verified-behavior).
 
 ## Why this exists
 
@@ -36,11 +36,13 @@ MCP send/read/wait/run/exec
 
 These are separate evidence systems. `send`, `read`, `wait`, `run`, and `exec` remain useful escape hatches, but they never create or imply a mediated exchange boundary. The Console Journal records command/process activity; the transcript ledger records only durably accepted semantic turns.
 
-`ExchangeAssembler` is intentionally pure: it performs no I/O, allocates no ID or index, reads no clock, invokes no adapter, and invents no provenance. `MediatedTurnService` injects it for normal commit projection, durable receipts, and completed reply construction. The store still owns acceptance, the canonical ingress prompt, terminal index allocation, validation, and commit. If normal assembly rejects after durable acceptance, the service terminalizes through a minimal failed-envelope projection with no reply or invented provenance; a regression covers that safety path.
+`ExchangeAssembler` is intentionally pure: it performs no I/O, allocates no ID or index, reads no clock, invokes no adapter, and invents no provenance. The mediated transaction stays open while the native client and adapter collect the complete receiver-authoritative final reply or terminal outcome. Only then does `MediatedTurnService` ask the assembler for a commit projection. The store owns acceptance, the canonical ingress prompt, terminal index allocation, validation, and commit; it file-syncs the terminal row before its terminal marker and returns those exact persisted authorities. Only after that receipt exists does the assembler construct the MCP result. Its `egress` evidence is therefore return-only and is never smuggled into the already-committed exchange. If normal assembly rejects after durable acceptance, the service terminalizes through a minimal failed-envelope projection with no reply or invented provenance; a regression covers that safety path.
 
 The frozen boundary is [MEDIATED-EXCHANGE-CONTRACT.md](contract/MEDIATED-EXCHANGE-CONTRACT.md). The bundled [primary-agent skill](skills/primary/SKILL.md) teaches the public operations, but it is a downstream guidance projection: live MCP schemas and the frozen contract remain authoritative.
 
 ## Install
+
+Node.js 20 or newer is required.
 
 ```bash
 npm install
@@ -91,10 +93,14 @@ The `-L` namespace matters: agent sessions live in their own server namespace, s
 | `find` | Search across every turn's output, returning lines |
 | `cancel` | Stop what a pane is running — cooperative, interrupt, terminate, or kill |
 | `kill` | Destroy a session or a single pane |
+| `quarantine_status` | Read process-gate state and durable recovery notices for one exact application/handle lane; never mutates or creates a transcript |
 | `delegate` | Execute one exact prompt as a serialized, evidence-backed mediated turn; returns receiver reply plus bounded receipt |
 | `scrutinize` | Query exchange summaries, typed record projections, or an exact zero-based step without mutating the ledger |
+| `skills` | List or fetch bundled agent guidance and its topic resources |
 
 A handle is a fully-qualified tmux target: `agent-foo:0.0` (`session:window.pane`).
+
+Public `delegate` idempotency remains unsupported. A caller must not retry as though para-agent can suppress duplicate native execution.
 
 ## Context economy and scrutiny
 
@@ -106,7 +112,7 @@ Every read carries a receipt stating what was scanned, returned and withheld, an
 
 Reach for `find` before `body`: searching every turn at once costs hundreds of tokens, fetching a few bodies to read them yourself costs tens of thousands.
 
-`delegate` applies the same economy to mediated dialogue without discarding provenance. A completed call returns the exact receiver-authoritative reply plus a bounded receipt containing digests, observed application/model/native identities when available, delivery stages, trace receipt, and record count. Full normalized records and raw-trace coverage stay durable for typed `scrutinize` calls. Failed, interrupted, and timed-out calls expose a durable receipt as an MCP error and never fabricate a reply.
+`delegate` applies the same economy to mediated dialogue without discarding provenance. A completed call returns the exact receiver-authoritative reply plus a bounded receipt containing digests, observed application/model/native identities when available, durable delivery stages, trace receipt, record count, and a separate return-only egress digest/time. Full normalized records and raw-trace coverage stay durable for typed `scrutinize` calls. Failed, interrupted, and timed-out calls expose a durable receipt as an MCP error and never fabricate a reply.
 
 ## The two console execution models
 
@@ -137,6 +143,19 @@ Stopping things separates into two independent questions, and conflating them is
 
 Propagation is narrower than the ConPTY documentation implies. Measured: C-c sent to one pane stopped its foreground program while a sibling pane's process kept running, and a second session was entirely unaffected. Each pane gets its own ConPTY, so the "reaches every process sharing the console" caveat is scoped to a single pane. The only real imprecision is that C-c hits the pane's shell as well as the program — which is why `terminate` exists, for when you need to end one child and keep the shell.
 
+## Quarantine inspection and recovery
+
+`quarantine_status` is the ordinary MCP surface. It reads the current process gate and the exact lane's durable recovery notices, but it cannot create a transcript, obtain a writer lease, or clear anything. Use it before deciding whether an operational recovery is needed.
+
+Mutation is deliberately outside MCP. The `para-agent-quarantine` CLI has read-only `status` and offline `reconcile` commands. Reconciliation is disabled unless `PARA_AGENT_ENABLE_QUARANTINE_ADMIN=1`, preflights the transcript read-only, then requires the normal writer to be stopped so it can obtain the exclusive durable lease. The operator must supply the exact conversation, exchange, reason, observation time, evidence reference, and one admitted basis: `terminal_commit_verified` for the exact repaired missing-marker quarantine, or `operator_attested_native_stop` for an exact unconfirmed-stop notice. There is no force path; stale or conflicting tuples fail closed, and an identical successful retry returns the same durable receipt. Restart the normal server after reconciliation so its process gate is rebuilt from the reconciled ledger.
+
+```powershell
+para-agent-quarantine status --workspace-root '<root>' --application claude --handle agent-review:0.0
+
+$env:PARA_AGENT_ENABLE_QUARANTINE_ADMIN = "1"
+para-agent-quarantine reconcile --workspace-root '<root>' --application claude --handle agent-review:0.0 --exchange-id '<xid>' --reason '<exact-reason>' --observed-at '<iso-time>' --basis terminal_commit_verified --evidence-ref '<audit-ref>'
+```
+
 ## Verified behavior
 
 Against psmux 3.3.7 on Windows 11, via the MCP wire protocol (21/21) and against the internals directly (30/32; the two failures are the trailing-whitespace and sliding-window limitations documented below, both since accounted for):
@@ -151,9 +170,9 @@ Against psmux 3.3.7 on Windows 11, via the MCP wire protocol (21/21) and against
 - `exec` leaves no session behind.
 - Completion detection overhead is roughly 0.5–0.9s on top of the command's own runtime.
 
-The manifest-driven suite under `mcp/tests/para-agent/` now exercises the frozen mediated boundary separately. Its bounded coverage includes strict JSON Schema and semantic validation, acceptance-WAL recovery and serialized indexes, immutable raw traces, structured Nu failures and typed queries, versioned adapter conformance, exact hostile Unicode stdin, native transport timeout/cancel/buffer outcomes, per-conversation gating, durable terminalization, MCP-wire `delegate`/`scrutinize`, Console regressions, and primary-skill examples. A named `NU-SCRUTINY-FALSE-SUCCESS` regression protects against successful pseudo-JSON errors.
+The manifest-driven suite under `mcp/tests/para-agent/` now exercises the frozen mediated boundary separately. The exact-current bounded gate passed 17 suites / 165 tests with zero failures, skips, cancellations, or aborted suites. Coverage includes strict JSON Schema and semantic validation, acceptance-WAL recovery and serialized indexes, file-synced terminal row/marker ordering, immutable raw traces, exact-tuple quarantine reconciliation across restart, canonical identity rejection before transcript routing, read-only MCP status and the separate admin boundary, structured Nu failures and typed queries, versioned adapter conformance, exact hostile Unicode stdin, native transport timeout/cancel/buffer outcomes, per-conversation gating, durable terminalization, MCP-wire `delegate`/`scrutinize`, Console regressions, primary-skill examples, and runner false-green enforcement. A named `NU-SCRUTINY-FALSE-SUCCESS` regression protects against successful pseudo-JSON errors.
 
-The live Windows suite checks pinned Nu/psmux behavior and includes a real Claude mediation pilot proving stdin, terminal reply, live application/model provenance, and raw digest. A current sandboxed run of that pilot passed against Claude 2.1.226 in about 4.1 seconds. That is evidence for this one versioned pilot, not a claim that the full optional live matrix or every external client currently passes.
+The live Windows suite checks pinned Nu/psmux behavior and includes a real Claude mediation pilot proving stdin, terminal reply, live application/model provenance, and raw digest. The exact-current isolated gate passed 2/2 on 2026-08-14 against Nu 0.114.1, psmux 3.3.7, and Claude 2.1.226. That is evidence for this one versioned pilot, not a claim that the full optional live matrix or every external client currently passes.
 
 ## Limitations
 
@@ -210,7 +229,7 @@ Content read from a pane is untrusted input. A program running in a supervised p
 
 ## Not yet implemented
 
-**Verified AGY mediation.** AGY is present only as a fail-closed, unverified profile. It must not be used for `delegate` until a current version-labelled native stream is captured and passes the common adapter and real-client conformance gates. Transcript or SQLite metadata is not an acceptable model-identity fallback.
+**Verified AGY mediation.** AGY is present only as a fail-closed, unverified profile. A single native-stream probe against installed AGY 1.1.13 on 2026-08-14 produced zero stream bytes while its authentication wait expired, so no fixture or capability was inferred. This is pending operator authentication, not an architectural failure. AGY must not be used for `delegate` until a current version-labelled native stream is captured and passes the common adapter and real-client conformance gates. Transcript or SQLite metadata is not an acceptable model-identity fallback.
 
 **Server-initiated messages.** Everything here is request/response: the supervisor asks, para-agent answers. The server never speaks first, so it cannot announce "the agent you spawned just finished" — the supervisor has to come back and `wait` or `read`. MCP does allow a server to emit progress and log notifications during a long call, and those would let `wait` stream intermediate output instead of returning one lump at the end. Neither is wired up yet. Note the protocol ceiling: a server can *notify*, but it cannot *call* the client, so genuine push-driven supervision needs the supervisor to be sitting in a wait.
 

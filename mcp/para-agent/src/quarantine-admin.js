@@ -7,6 +7,7 @@ import {
   QuarantineReconciliationService,
   deriveConversationKey,
 } from "./quarantine-reconciliation.js";
+import { isWellFormedUnicode } from "./identity.js";
 import { TranscriptStore } from "./transcript.js";
 
 const COMMON_OPTIONS = new Set(["workspace-root", "application", "handle"]);
@@ -41,6 +42,23 @@ function nonBlank(value, label) {
     fail("QUARANTINE_ADMIN_ARGUMENT_INVALID", `${label} must be a non-blank string`);
   }
   return value;
+}
+
+function canonicalIdentityOption(value, label) {
+  const candidate = nonBlank(value, label);
+  if (candidate !== candidate.trim()) {
+    fail(
+      "QUARANTINE_ADMIN_ARGUMENT_INVALID",
+      `${label} must not contain leading or trailing whitespace`,
+    );
+  }
+  if (!isWellFormedUnicode(candidate)) {
+    fail(
+      "QUARANTINE_ADMIN_ARGUMENT_INVALID",
+      `${label} must be well-formed Unicode`,
+    );
+  }
+  return candidate;
 }
 
 // Keep transcript ownership aligned with the MCP server: a pane target such as
@@ -117,8 +135,8 @@ function parseArguments(argv) {
   const options = parseOptions(argv, allowed);
   requireOptions(options, [...allowed]);
 
-  const application = options.application.trim();
-  const handle = options.handle.trim();
+  const application = canonicalIdentityOption(options.application, "--application");
+  const handle = canonicalIdentityOption(options.handle, "--handle");
   const conversationKey = deriveConversationKey({ application, handle });
   const workspaceRoot = path.resolve(options["workspace-root"]);
   const sessionId = sessionOf(handle);

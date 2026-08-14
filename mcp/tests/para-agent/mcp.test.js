@@ -129,6 +129,52 @@ test("MCP wire exposes thin delegate/scrutiny semantics and preserves console sc
       gate: { active: false, quarantined: null },
       durable_notices: [],
     });
+
+    const originalOpenReadOnly = TranscriptStore.openReadOnly;
+    let invalidTargetStoreOpens = 0;
+    TranscriptStore.openReadOnly = async (...args) => {
+      invalidTargetStoreOpens++;
+      return originalOpenReadOnly.call(TranscriptStore, ...args);
+    };
+    try {
+      const invalidTargets = [
+        ["leading application whitespace", { application: " claude", handle: unknownSession }],
+        ["trailing application whitespace", { application: "claude ", handle: unknownSession }],
+        ["leading handle whitespace", { application: "claude", handle: ` ${unknownSession}` }],
+        ["trailing handle whitespace", { application: "claude", handle: `${unknownSession} ` }],
+        ["ill-formed application", { application: "claude\ud800", handle: unknownSession }],
+        ["ill-formed handle", { application: "claude", handle: `${unknownSession}\ud801` }],
+      ];
+      for (const [name, target] of invalidTargets) {
+        const invalid = await client.callTool({ name: "quarantine_status", arguments: target });
+        assert.equal(invalid.isError, true, name);
+        assert.match(
+          invalid.content[0]?.text ?? "",
+          name.startsWith("ill-formed")
+            ? /must be well-formed Unicode/
+            : /must not contain leading or trailing whitespace/,
+          name,
+        );
+      }
+      const callsBeforeInvalidDelegate = calls.length;
+      for (const [name, target] of invalidTargets) {
+        const invalid = await client.callTool({
+          name: "delegate",
+          arguments: { ...target, prompt: "must fail before service dispatch" },
+        });
+        assert.equal(invalid.isError, true, `delegate ${name}`);
+      }
+      assert.equal(calls.length, callsBeforeInvalidDelegate, "invalid delegate identity must fail before service dispatch");
+
+      for (const handle of [` ${unknownSession}`, `${unknownSession} `, `${unknownSession}\ud800`]) {
+        const invalid = await client.callTool({ name: "scrutinize", arguments: { handle } });
+        assert.equal(invalid.isError, true, `scrutinize ${JSON.stringify(handle)}`);
+      }
+    } finally {
+      TranscriptStore.openReadOnly = originalOpenReadOnly;
+    }
+    assert.equal(invalidTargetStoreOpens, 0, "invalid identity spelling must fail before store open");
+
     const scrutiny = await client.callTool({
       name: "scrutinize",
       arguments: { handle: unknownSession },

@@ -1,3 +1,5 @@
+import { isWellFormedUnicode } from "./identity.js";
+
 export class ConversationGateError extends Error {
   constructor(code, message, details = {}) {
     super(message);
@@ -8,14 +10,25 @@ export class ConversationGateError extends Error {
 }
 
 function conversationKeyOf(value) {
-  const key = String(value ?? "").trim();
-  if (!key) {
+  if (typeof value !== "string" || value.length === 0) {
     throw new ConversationGateError(
       "CONVERSATION_KEY_REQUIRED",
       "the adapter must provide a stable conversation key before acceptance",
     );
   }
-  return key;
+  if (value !== value.trim()) {
+    throw new ConversationGateError(
+      "CONVERSATION_KEY_INVALID",
+      "conversation key must not contain leading or trailing whitespace",
+    );
+  }
+  if (!isWellFormedUnicode(value)) {
+    throw new ConversationGateError(
+      "CONVERSATION_KEY_INVALID",
+      "conversation key must be well-formed Unicode",
+    );
+  }
+  return value;
 }
 
 function nonEmptyString(value, label) {

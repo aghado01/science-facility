@@ -3,6 +3,17 @@ import assert from "node:assert/strict";
 
 import { ConversationGate } from "../../para-agent/src/conversation-gate.js";
 
+test("conversation keys reject noncanonical aliases instead of trimming them", () => {
+  const gate = new ConversationGate();
+  for (const key of [" claude:receiver", "claude:receiver ", "claude:receiver\ud800", "", null, 7]) {
+    assert.throws(
+      () => gate.acquire(key),
+      (error) => new Set(["CONVERSATION_KEY_INVALID", "CONVERSATION_KEY_REQUIRED"]).has(error.code),
+    );
+  }
+  assert.deepEqual(gate.status("claude:receiver"), { active: false, quarantined: null });
+});
+
 test("an active lease binds exactly one accepted exchange before quarantine", () => {
   const gate = new ConversationGate();
   const lease = gate.acquire("codex:receiver-1");

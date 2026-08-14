@@ -77,6 +77,14 @@ test("contained session keys prevent raw session labels from becoming paths", as
   const composed = new TranscriptStore({ workspaceRoot: root, sessionId: "caf\u00e9" });
   const decomposed = new TranscriptStore({ workspaceRoot: root, sessionId: "cafe\u0301" });
   assert.notEqual(composed.sessionKey, decomposed.sessionKey, "distinct exact session IDs must not alias after display normalization");
+  for (const sessionId of ["broken-\ud800", "broken-\ud801"]) {
+    assert.throws(
+      () => new TranscriptStore({ workspaceRoot: root, sessionId }),
+      { code: "TRANSCRIPT_ARGUMENT_INVALID" },
+      "ill-formed identities must fail before UTF-8 replacement can collapse their durable hashes",
+    );
+  }
+  assert.doesNotThrow(() => new TranscriptStore({ workspaceRoot: root, sessionId: "replacement-\ufffd" }));
 });
 
 test("acceptance precedes terminal commit and typed selectors preserve exact exchange semantics", async (t) => {

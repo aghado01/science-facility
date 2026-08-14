@@ -248,9 +248,13 @@ async function harness(handler, {
   const sinks = [];
   const nativeClient = new ScenarioNativeClient(handler);
   let factoryCalls = 0;
+  let storeCalls = 0;
   const service = new MediatedTurnService({
     adapterEngine: await adapterEngine(),
-    storeForHandle: async () => store,
+    storeForHandle: async () => {
+      storeCalls++;
+      return store;
+    },
     nativeClient,
     assembler,
     gate,
@@ -262,7 +266,15 @@ async function harness(handler, {
       return sink;
     },
   });
-  return { service, store, sinks, nativeClient, gate, factoryCalls: () => factoryCalls };
+  return {
+    service,
+    store,
+    sinks,
+    nativeClient,
+    gate,
+    factoryCalls: () => factoryCalls,
+    storeCalls: () => storeCalls,
+  };
 }
 
 async function errorOf(promise) {
@@ -642,6 +654,49 @@ test("restart recovery restores durable quarantine before another acceptance", a
   });
   assert.equal(result.reply, "receiver reply λ");
   assert.equal(h.store.accepted.length, 1, "one store generation applies each recovery notice only once");
+});
+
+test("noncanonical target aliases cannot route around a restarted canonical quarantine", async () => {
+  const h = await harness(async () => assert.fail("quarantined or invalid lanes must not execute natively"));
+  const handle = "agent-canonical-recovery:0.0";
+  const key = `fake-native:${handle}`;
+  const recovery = {
+    exchange_id: "xid-canonical-recovery",
+    conversation_key: key,
+    terminal_status: "interrupted",
+    reason: "PROCESS_RESTART_RECOVERY: native stop could not be confirmed across restart",
+    observed_at: "2026-08-14T02:00:00.000Z",
+    outcome: {
+      code: "PROCESS_RESTART_RECOVERY",
+      message: "native stop could not be confirmed across restart",
+      native_stop_confirmed: false,
+    },
+  };
+  h.store.getRecoveryNotices = () => [recovery];
+
+  for (const request of [
+    { handle: ` ${handle}`, application: "fake-native", prompt: "alias by handle" },
+    { handle, application: "fake-native ", prompt: "alias by application" },
+    { handle: `${handle}\ud800`, application: "fake-native", prompt: "ill-formed handle" },
+    { handle, application: "fake-native\ud801", prompt: "ill-formed application" },
+  ]) {
+    const error = await errorOf(h.service.delegate(request));
+    assert.equal(error.code, "DELEGATE_INVALID_REQUEST");
+  }
+  assert.equal(h.storeCalls(), 0, "noncanonical aliases fail before transcript routing");
+  assert.equal(h.store.accepted.length, 0);
+  assert.equal(h.nativeClient.calls.length, 0);
+
+  const canonicalError = await errorOf(h.service.delegate({
+    handle,
+    application: "fake-native",
+    prompt: "canonical retry after restart",
+  }));
+  assert.equal(canonicalError.code, "CONVERSATION_QUARANTINED");
+  assert.equal(h.storeCalls(), 1);
+  assert.equal(h.store.accepted.length, 0);
+  assert.equal(h.nativeClient.calls.length, 0);
+  assert.equal(h.gate.status(key).quarantined.exchangeId, recovery.exchange_id);
 });
 
 test("ambiguous terminal commit quarantines even after confirmed native close", async () => {
