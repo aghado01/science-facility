@@ -1,8 +1,16 @@
-# Mediated Exchange Contract v1
+# Mediated Exchange Contract v1.1
 
-**Status:** frozen for para-agent remediation  
+**Status:** frozen for para-agent continuation remediation
 **Schema dialect:** JSON Schema 2020-12  
 **Scope:** one typed Primary-to-Para mediated turn and its durable evidence
+
+Version 1.1 preserves the version-1 persisted header and terminal-exchange
+dialects while resolving two continuation boundaries:
+
+- the receiver-authoritative final reply is part of the terminal exchange, but
+  MCP-result construction is return-only and occurs after durable commit; and
+- quarantine reconciliation is an explicit, append-only administrative act,
+  not an unguarded deletion from process memory.
 
 This contract defines para-agent's third, mediation-level transcript. It does not
 replace either client's native transcript and it does not extend the Console
@@ -22,10 +30,16 @@ MCP delegate handler
 
 - MCP handlers validate and present. They do not construct Nu source, allocate
   transcript indexes, interpret native events, or write store files.
+- The mediation transaction remains open until a correlated terminal reply or
+  non-completed outcome is known. Only then does `ExchangeAssembler` project a
+  complete terminal payload for `TranscriptStore` to commit.
 - Console operations (`send`, `wait`, `read`, `run`, and `exec`) remain escape
   hatches. Their activity never creates or implies mediated exchange boundaries.
 - Nu is a replaceable typed-query provider. It is not schema, provenance,
   validation, storage, or identity authority.
+- Ordinary MCP may expose quarantine status read-only. Quarantine mutation is a
+  disabled-by-default administrative operation outside the normal agent tool
+  catalog.
 
 ## Identities
 
@@ -62,13 +76,15 @@ name MUST NOT substitute for `model.id`.
 | Model, exposed reasoning, tools, native IDs, terminal reply | Correlated validated receiver-native events |
 | Raw native bytes | RawTraceSink artifact |
 | Normalized records | Adapter projection linked to raw frames |
-| Timings, outcome, omissions, commit and egress construction | para-agent mediation envelope |
+| Timings, outcome, omissions, and terminal commit | Persisted para-agent mediation envelope |
+| MCP-result construction | Post-commit para-agent result projection; return-only |
 | Primary receipt of MCP result | Unknown unless the host supplies separate evidence |
 
-The primary-side MCP result is evidence para-agent constructed an egress packet;
-it is never used to reconstruct the receiver reply. "Thinking" means only
-reasoning material the client actually exposes. Completeness of internal
-reasoning MUST NOT be claimed.
+The returned MCP receipt may record that para-agent constructed an egress packet
+after commit. That fact is not persisted in the terminal exchange and does not
+prove that the primary received it. Egress is never used to reconstruct the
+receiver reply. "Thinking" means only reasoning material the client actually
+exposes. Completeness of internal reasoning MUST NOT be claimed.
 
 ## Public operation
 
@@ -89,6 +105,9 @@ delegate({
   native turn identities.
 - A completed result contains the receiver-authoritative terminal reply and a
   bounded receipt.
+- A completed result is constructed only after the terminal exchange and its
+  WAL marker are durable. Its return-only receipt contains
+  `egress: { stage: "constructed", observed_at, reply_sha256 }`.
 - Failed, interrupted, and timed-out results return an MCP error with the
   durable receipt and no fabricated reply.
 
@@ -126,6 +145,14 @@ The physical write order is:
 7. append the WAL terminal marker;
 8. construct the MCP result.
 
+For a completed turn, step 6 includes exactly one correlated final receiver
+response. It does not include `delivery.egress`: receiver-directed delivery
+evidence and primary-directed MCP egress are different planes. If the process or
+connection fails after step 7 but before the caller receives step 8, the ledger
+remains completed and the primary-delivery outcome remains unknown. Result
+construction failure MUST NOT append another terminal row, quarantine a lane
+whose native stop was confirmed, or trigger another native execution.
+
 Preflight failures occur before acceptance and create no exchange. Every
 durably accepted exchange reaches exactly one terminal outcome:
 
@@ -146,6 +173,55 @@ On restart, recovery scans acceptance rows without terminal markers:
   incomplete trace state, then mark the WAL terminal;
 - never publish a second terminal exchange for the same `exchange_id`.
 
+## Quarantine reconciliation
+
+Quarantine prevents reuse of a conversation lane after an ambiguous terminal
+commit or an unconfirmed native stop. Read-only status is safe for the ordinary
+MCP catalog; clearing quarantine changes execution authority and therefore uses
+a separate administrative boundary.
+
+The initial administrative implementation MUST:
+
+- be disabled by default and absent from the normal agent tool catalog;
+- acquire the transcript writer lease, which requires the normal writable
+  server for that transcript to be stopped;
+- derive `conversation_key` from an application and handle rather than accept an
+  arbitrary internal key from an agent-facing caller;
+- compare the exact current quarantine tuple
+  `{ conversation_key, exchange_id, reason, observed_at }` before append;
+- reject an active lane, a stale tuple, unresolved terminal state, unsupported
+  evidence, or a conflicting prior reconciliation; and
+- append durable evidence before considering the quarantine cleared.
+
+The append-only `conversation_reconciliation` record contains:
+
+```text
+reconciliation_id
+conversation_key
+exchange_id
+expected: { reason, observed_at }
+basis: {
+  kind: terminal_commit_verified | operator_attested_native_stop,
+  evidence_ref
+}
+reconciled_at
+authority: { kind: local_operator }
+writer
+```
+
+`terminal_commit_verified` is admitted only when the store verifies the
+terminal exchange and its marker and the exchange does not record
+`native_stop_confirmed: false`; it cannot clear an unknown-native-stop
+quarantine. `operator_attested_native_stop` is an explicit privileged
+attestation with a non-empty evidence reference; it is not a model inference.
+There is no generic force mode.
+
+An identical retry returns the existing reconciliation receipt. A different
+resolution for the same quarantine tuple fails closed. Recovery suppresses a
+notice only when an exact, schema-valid reconciliation record matches it. A
+later unconfirmed exchange on the same conversation key has a different
+`exchange_id` and creates a new quarantine.
+
 ## Physical ownership
 
 Under `.para-agent/transcripts/` use a contained internal filename derived from
@@ -153,7 +229,7 @@ a sanitized session label plus a SHA-256 suffix. Raw handles are never paths.
 
 ```text
 <session-key>.jsonl              # row-0 header plus terminal exchange rows
-<session-key>.acceptance.jsonl   # append-only acceptance and terminal markers
+<session-key>.acceptance.jsonl   # acceptance, terminal, and reconciliation rows
 <session-key>.writer.lock        # exclusive owner and fencing identity
 traces/<session-key>/<xid>.trace # exact native stream bytes
 ```
@@ -198,7 +274,8 @@ rendered -> adapter_emitted -> host_acknowledged -> receiver_observed -> model_v
 ```
 
 Each stage carries its evidence reference. Construction of an MCP result is a
-separate egress stage. Model comprehension or compliance is never inferable.
+separate, post-commit, return-only egress stage. Persisted exchange delivery does
+not contain that stage. Model comprehension or compliance is never inferable.
 
 ## Persisted schema rules
 
@@ -233,6 +310,17 @@ The PowerShell runner MUST fail when the manifest is empty, a listed file is
 missing, zero tests execute, a child exits nonzero, a suite aborts, discovered
 and completed counts differ, or a machine-readable terminal summary is absent.
 A terminating runner error emits the literal marker `SUITE-ABORTED`.
+A release-mode live run also fails on any skipped test.
+
+The continuation matrix additionally proves:
+
+- terminal rows contain the final receiver reply but no persisted egress claim;
+- MCP egress is constructed after commit and has the same reply digest;
+- post-commit result-construction failure does not duplicate the exchange or
+  quarantine a confirmed-stopped lane;
+- quarantine reconciliation is exact-match, durable, idempotent, and survives
+  restart; and
+- quarantine status and transcript scrutiny remain read-only.
 
 The mandatory named regression `NU-SCRUTINY-FALSE-SUCCESS` proves that a Nu
 runtime/query error becomes MCP `isError: true`, never returns pseudo-JSON as
@@ -243,3 +331,6 @@ data, and leaves transcript bytes unchanged.
 This contract does not add Hashish, Session Continuity, a general Artifact
 engine, control-mode transport, model mutation operations, or post-hoc exchange
 inference from console activity.
+
+Public delegate idempotency also remains unsupported until a repeated key can
+return an accepted or terminal result without invoking the native client again.
