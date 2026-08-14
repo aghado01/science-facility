@@ -181,6 +181,8 @@ try {
                 command = $runtimeUv.Replace('\', '/')
                 args = @(
                     'run'
+                    '--project'
+                    $projectRoot.Replace('\', '/')
                     '--no-cache'
                     '--locked'
                     '--no-sync'

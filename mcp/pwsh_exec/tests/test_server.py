@@ -148,7 +148,7 @@ class PowerShellMcpIntegrationTests(unittest.TestCase):
         and RUNTIME_UV_EXECUTABLE.is_file(),
         "the bundled PowerShell and project uv runtimes are not installed",
     )
-    def test_stdio_server_exposes_and_runs_powershell_tool(self):
+    def test_stdio_server_runs_from_outside_project_directory(self):
         initialization, tools, result = asyncio.run(
             self._call_bundled_powershell_over_stdio()
         )
@@ -162,10 +162,14 @@ class PowerShellMcpIntegrationTests(unittest.TestCase):
         environment = os.environ.copy()
         environment.pop(server.POWERSHELL_EXECUTABLE_ENV_VAR, None)
         environment.pop(server.POWERSHELL_PROFILE_ENV_VAR, None)
+        # MCP clients inherit their workspace directory, so the registration
+        # must select this project explicitly instead of relying on cwd.
         parameters = StdioServerParameters(
             command=str(RUNTIME_UV_EXECUTABLE),
             args=[
                 "run",
+                "--project",
+                str(server.MCP_ROOT),
                 "--no-cache",
                 "--locked",
                 "--no-sync",
@@ -173,7 +177,7 @@ class PowerShellMcpIntegrationTests(unittest.TestCase):
                 "-B",
                 str(server.MCP_ROOT / "server.py"),
             ],
-            cwd=server.MCP_ROOT,
+            cwd=server.MCP_ROOT.parent,
             env=environment,
         )
 

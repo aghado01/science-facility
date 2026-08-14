@@ -121,6 +121,8 @@ checkout and can be copied into a client's MCP configuration. Its shape is:
       "command": "<pwsh_exec-root>/.venv/Scripts/uv.exe",
       "args": [
         "run",
+        "--project",
+        "<pwsh_exec-root>",
         "--no-cache",
         "--locked",
         "--no-sync",

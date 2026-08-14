@@ -98,7 +98,16 @@ class DependencyContractTests(unittest.TestCase):
         self.assertEqual(Path(server["args"][-1]), PROJECT_ROOT / "server.py")
         self.assertEqual(
             server["args"][:-1],
-            ["run", "--no-cache", "--locked", "--no-sync", "python", "-B"],
+            [
+                "run",
+                "--project",
+                PROJECT_ROOT.as_posix(),
+                "--no-cache",
+                "--locked",
+                "--no-sync",
+                "python",
+                "-B",
+            ],
         )
 
 
