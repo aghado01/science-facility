@@ -88,11 +88,11 @@ client:
 ```json
 {
   "mcpServers": {
-    "powershell-exec": {
-      "command": "D:/aghado01/science-facility/mcp/powershell-exec/.venv/Scripts/python.exe",
+    "pwsh_exec": {
+      "command": "D:/aghado01/science-facility/mcp/pwsh_exec/.venv/Scripts/python.exe",
       "args": [
         "-B",
-        "D:/aghado01/science-facility/mcp/powershell-exec/server.py"
+        "D:/aghado01/science-facility/mcp/pwsh_exec/server.py"
       ],
       "env": {
         "MCP_POWERSHELL_PROFILE": "C:/path/to/this-client/mcp-profile.ps1"

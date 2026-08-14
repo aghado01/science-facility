@@ -31,6 +31,7 @@ const sleep = (ms, signal) =>
   });
 
 const psPath = (p) => `'${p.replace(/'/g, "''")}'`;
+const nuPath = (p) => `'${p.replace(/\\/g, "/").replace(/'/g, "''")}'`;
 
 /**
  * Last known working directory per pane.
@@ -58,54 +59,54 @@ async function awaitSentinel(donePath, { timeoutMs, signal, pollMs = 25, deadChe
   if (existsSync(donePath)) return "completed";
 
   const dir = path.dirname(donePath);
-  const base = path.basename(donePath);
-  const startedAt = Date.now();
+  let resolved = false;
 
-  let watcher = null;
-  let hit = false;
-  const onHit = () => { hit = true; };
-  try {
-    watcher = watch(dir, (_event, filename) => {
-      if (!filename || filename === base) { if (existsSync(donePath)) onHit(); }
-    });
-  } catch {
-    // Watching is an accelerator, never a requirement.
-  }
+  return new Promise((resolve) => {
+    let timer;
+    let deadTimer;
+    let watcher;
 
-  try {
-    let lastDeadCheck = Date.now();
-    while (Date.now() - startedAt < timeoutMs) {
-      await sleep(pollMs, signal);
-      if (signal?.aborted) return "cancelled";
-      if (hit || existsSync(donePath)) return "completed";
-      if (Date.now() - lastDeadCheck >= deadCheckMs) {
-        lastDeadCheck = Date.now();
-        if (await isDead()) {
-          // The sentinel may have landed in the same window the pane died.
-          return existsSync(donePath) ? "completed" : "died";
-        }
-      }
+    const finish = (outcome) => {
+      if (resolved) return;
+      resolved = true;
+      clearInterval(timer);
+      clearInterval(deadTimer);
+      try { watcher?.close(); } catch {}
+      resolve(outcome);
+    };
+
+    if (signal?.aborted) return finish("cancelled");
+    signal?.addEventListener("abort", () => finish("cancelled"), { once: true });
+
+    try {
+      watcher = watch(dir, (event, filename) => {
+        if (filename && path.join(dir, filename) === donePath) finish("completed");
+      });
+    } catch {
+      // Some filesystems reject watching a directory we just created; the
+      // polling fallback handles it.
     }
-    return "timeout";
-  } finally {
-    try { watcher?.close(); } catch { /* already closed */ }
-  }
+
+    const startedAt = Date.now();
+    timer = setInterval(() => {
+      if (existsSync(donePath)) return finish("completed");
+      if (Date.now() - startedAt >= timeoutMs) finish("timeout");
+    }, pollMs);
+
+    if (isDead) {
+      deadTimer = setInterval(async () => {
+        try {
+          if (await isDead()) finish("died");
+        } catch {
+          // If the query fails, let the main poll decide.
+        }
+      }, deadCheckMs);
+    }
+  });
 }
 
 /**
- * Wrapper dialects.
- *
- * The wrapper lives in a FILE and the pane is only asked to dot-source it.
- * That matters far more than it looks: typing the wrapper inline cost ~390ms
- * for a command the shell then executed in 5ms, because PSReadLine re-renders
- * and re-highlights the whole input line on every keystroke, so latency scaled
- * with wrapper length. Writing the wrapper to disk (sub-millisecond) and typing
- * ~60 characters instead of ~450 removes almost all of it.
- *
- * The command is still base64-encoded inside the file. Not for escaping —
- * send-keys is byte-exact and a file needs no quoting at all — but for
- * isolation: an encoded payload cannot contain a brace that closes the
- * wrapper's own try/finally early.
+ * Shell dialects for captured command execution.
  *
  * Dot-sourcing is load-bearing in both places. `& scriptblock` would run the
  * caller's command in a child scope, so `$x = 1` or `cd` would not survive to
@@ -118,22 +119,23 @@ async function awaitSentinel(donePath, { timeoutMs, signal, pollMs = 25, deadChe
 const DIALECTS = {
   nu: {
     ext: "nu",
-    invoke: (scriptPath) => `source '${scriptPath}'`,
+    invoke: (scriptPath) => `source ${nuPath(scriptPath)}`,
     script: ({ payload, outPath, donePath }) =>
       `let __para_s = (date now)\n` +
       `let __para_payload = ('${payload}' | decode base64 | decode utf-8)\n` +
-      `let __pa_f = ($env.TEMP? | default '/tmp' | path join $'para_exec_($__para_s | into int).nu')\n` +
-      `$__para_payload | save -f $__pa_f\n` +
-      `let __para_res = (try { source $__pa_f; { code: ($env.LAST_EXIT_CODE? | default 0), ok: true } } catch { |err| { code: 1, ok: false, err: $err.msg } })\n` +
-      `rm -f $__pa_f\n` +
-      `let __para_dur = (((date now) - __para_s) / 1ms | into int)\n` +
+      `let __para_res = (do { nu -c $__para_payload } | complete)\n` +
+      `$__para_res.stdout | save -f ${nuPath(outPath)}\n` +
+      `if ($__para_res.stderr | str length) > 0 {\n` +
+      `    $__para_res.stderr | save -a -f ${nuPath(outPath)}\n` +
+      `}\n` +
+      `let __para_dur = (((date now) - $__para_s) / 1ms | into int)\n` +
       `{\n` +
-      `    code: $__para_res.code,\n` +
-      `    ok: $__para_res.ok,\n` +
+      `    code: $__para_res.exit_code,\n` +
+      `    ok: ($__para_res.exit_code == 0),\n` +
       `    cwd: (pwd),\n` +
-      `    duration_ms: __para_dur,\n` +
+      `    duration_ms: $__para_dur,\n` +
       `    outcome: 'completed'\n` +
-      `} | to json -c | save -f '${donePath}'\n`,
+      `} | to json | save -f ${nuPath(donePath)}\n`,
   },
 
   pwsh: {

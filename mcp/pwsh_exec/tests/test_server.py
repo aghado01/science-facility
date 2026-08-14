@@ -146,8 +146,11 @@ class PowerShellMcpIntegrationTests(unittest.TestCase):
         "the bundled PowerShell runtime is not installed",
     )
     def test_stdio_server_exposes_and_runs_powershell_tool(self):
-        tools, result = asyncio.run(self._call_bundled_powershell_over_stdio())
+        initialization, tools, result = asyncio.run(
+            self._call_bundled_powershell_over_stdio()
+        )
 
+        self.assertEqual(initialization.serverInfo.name, "pwsh_exec")
         self.assertEqual([tool.name for tool in tools.tools], ["run_powershell"])
         self.assertFalse(result.isError)
         self.assertEqual(result.content[0].text.strip(), "7.6.4")
@@ -165,14 +168,14 @@ class PowerShellMcpIntegrationTests(unittest.TestCase):
 
         async with stdio_client(parameters) as (read_stream, write_stream):
             async with ClientSession(read_stream, write_stream) as session:
-                await session.initialize()
+                initialization = await session.initialize()
                 tools = await session.list_tools()
                 result = await session.call_tool(
                     "run_powershell",
                     {"code": "$PSVersionTable.PSVersion.ToString()"},
                 )
 
-        return tools, result
+        return initialization, tools, result
 
 
 if __name__ == "__main__":

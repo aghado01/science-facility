@@ -23,7 +23,7 @@ FastMCPSettings.model_rebuild()
 
 
 # Initialize the MCP server
-mcp = FastMCP("powershell-exec")
+mcp = FastMCP("pwsh_exec")
 
 
 def _bundled_powershell_executable() -> str | None:

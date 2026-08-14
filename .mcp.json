@@ -3,14 +3,13 @@
     "para-agent": {
       "command": "node",
       "args": [
-        "D:\\aghado01\\science-facility\\mcp\\para-agent\\src\\index.js"
+        "./mcp/para-agent/src/index.js"
       ],
       "env": {
         "PSMUX_NO_WARM": "1",
-        "PARA_MUX_NAMESPACE": "para",
-        "PARA_MUX_BIN": "C:\\Users\\azrie\\PDenv\\psmux\\psmux.exe",
-        "PARA_JOURNAL_ROOT": "C:\\Users\\azrie\\.para-agent\\journals",
-        "PSMUX_CONFIG_FILE": "C:\\Users\\azrie\\PDenv\\psmux\\psmux.conf"
+        "PARA_MUX_BIN": "./mcp/para-agent/bin/mux/tmux.exe",
+        "PARA_MUX_CONFIG_FILE": "./mcp/para-agent/bin/mux/mux.conf",
+        "PARA_NU_BIN": "./mcp/para-agent/bin/nu/nu.exe"
       }
     }
   }
