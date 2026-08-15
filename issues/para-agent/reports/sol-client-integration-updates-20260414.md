@@ -1,5 +1,19 @@
 # Para-Agent Client Integration and Grok 1.0.4 Execution Brief
 
+> **SUPERSEDED (2026-08-15) — historical plan, not current status.**
+> Current canon is [../planning/](../planning/): [decisions.md](../planning/decisions.md),
+> [roadmap.md](../planning/roadmap.md), [ledger.md](../planning/ledger.md).
+> Design authority is [CLIENT-INTEGRATION-CONTRACT.md](../../../mcp/para-agent/contract/CLIENT-INTEGRATION-CONTRACT.md),
+> which this document paraphrases lossily — where the two disagree, the contract wins.
+>
+> Known-stale in this file: the reviewed baseline (`d0b7984`, "eight commits ahead") was never
+> refreshed; W0 and W1 read `ready-to-commit` though both landed (`d601288`, `447d03c`); the
+> W2-E gate cites `165` after W1 moved the baseline to `216`, and the true figure at `8fe3643`
+> is `218`; and the version-authority section was rewritten without updating the W2-C fixture
+> gate that depended on the old rule. The Wave 0–4 numbering collides with the identically
+> numbered sequence in [sol-remediation-swarm-plan.md](sol-remediation-swarm-plan.md).
+> Retained as planning and audit evidence.
+
 ## Objective and execution state
 
 - Build a client-agnostic launch, configuration, readiness, and receipt substrate.
@@ -35,7 +49,7 @@ Observed clients:
 - Claude `2.1.232`; its verified profile/fixture is `2.1.226`.
 - AGY `1.1.13`, intentionally unverified.
 
-Claude needs fresh `2.1.232` evidence or a genuinely pinned `2.1.226` executable before W2 can claim live compatibility.
+Claude live tests use the current executable. Bounded fixtures remain `2.1.226`; live-verified claims name the observed version and do not require a configuration pin.
 
 ## Frozen design
 
@@ -224,9 +238,10 @@ Profile workers:
 
 Version authority:
 
-- Integration profiles own executable resolution and preflight constraints.
-- Adapters own evidenced native-protocol compatibility.
-- Registry validation requires a compatible intersection without treating readiness as native provenance.
+- Integration profiles own executable resolution and optional version pins.
+- Host bindings omit `expected_version` unless a caller explicitly pins.
+- Adapter `verified_versions` is evidence, not a launch or projection gate.
+- Readiness records the current observed version. Drift fails only against an explicit pin.
 
 Atomicity:
 

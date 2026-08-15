@@ -1,5 +1,16 @@
 The remediation should be contract-first and vertical-slice driven. The current Nu layer is useful scaffolding, but it is not yet a completed mediation engine.
 
+> **SUPERSEDED (2026-08-15) — historical plan, not current status.**
+> Current canon is [../planning/](../planning/): [decisions.md](../planning/decisions.md),
+> [roadmap.md](../planning/roadmap.md), [ledger.md](../planning/ledger.md).
+> Design authority is the frozen [contracts](../../../mcp/para-agent/contract/).
+> This document's Wave 0–4 numbering collides with the identically numbered sequence in
+> [sol-client-integration-updates-20260414.md](sol-client-integration-updates-20260414.md);
+> the two describe different work. Outstanding items from its release gates are carried into
+> the honesty-gaps track of [roadmap.md](../planning/roadmap.md).
+> The appended `# Fable Review` section is duplicated verbatim in
+> [fable-sol-remediation-plan-review.md](fable-sol-remediation-plan-review.md).
+
 > **Historical-plan notice (2026-08-14):** The original proposal and the appended Fable review below describe the pre-remediation checkout. They are preserved as planning and audit evidence, including statements such as “no files were changed.” They are not current implementation status. The [Execution and reconciliation](#execution-and-reconciliation-2026-08-14) section appended after the review is the operative status record.
 
 ### What the audit established
