@@ -97,10 +97,13 @@
         deprecated mid-file ZWNBSP. Consequence worth knowing: stripping ONLY
         a leading BOM is not expressible.
 
-        NOT addressed here: the bidi controls U+202A-U+202E / U+2066-U+2069
-        (Trojan Source, CVE-2021-42574) are invisible AND make source display
-        differently from how it executes — the failure mode that matters most
-        for a payload meant to be read. Open.
+        Deliberately NOT here: the bidi controls U+202A-U+202E / U+2066-U+2069
+        (Trojan Source). Bidi is a PRESENTATION algorithm — files store logical
+        order and only a renderer reorders, so a model reading the byte
+        sequence sees what the compiler sees. Where they do occur it is i18n
+        resources and mixed-RTL literals, making them load-bearing content like
+        ZWJ/ZWNJ above. Detection is a read-only-tail diagnostic step's job, not
+        a whitespace op's; decisions-ledger #11/#11b.
 
         Default set (what you get with no Operations key):
             lf · nfc · strip-zwsp · strip-wj · strip-zwnbsp · trim-trailing ·
