@@ -11,10 +11,10 @@
 Checkpoints:
 
 - [x] Architecture reviewed and amendments incorporated.
-- [x] Current bounded tree verified: **17 suites / 165 passed / 0 failed, skipped, or cancelled**.
+- [x] Current bounded tree verified: **21 suites / 216 passed / 0 failed, skipped, or cancelled**.
 - [x] User authorized Wave 0; three read-only evidence lanes completed.
 - [x] W0 contract/evidence freeze; the gated Grok pilot is explicitly no-go.
-- [ ] W1 fake-client substrate.
+- [x] W1 fake-client substrate.
 - [ ] W2 atomic existing-client migration.
 - [ ] W3 Grok verification or explicit unverified fallback.
 - [ ] W4 release audit.
@@ -202,7 +202,7 @@ Checkpoints:
 - **W1-A Contracts:** schemas/providers pass against fakes.
 - **W1-B Security:** environment, cwd, secret, carrier, and cleanup suites pass.
 - **W1-C Exit:** complete fake-client layer is bounded-green; production mediation is unchanged.
-- Append W1 status before commit.
+- [x] Append W1 status before commit.
 
 Commit: `para-agent: add client integration substrate`
 
@@ -330,6 +330,30 @@ Root appends after verification and before the wave commit. The containing commi
 - **Failures/deviations:** exact unsandboxed scratch inspection discovered four inherited stdio MCP definitions while `mcp list --json` returned empty; the earlier sandboxed zero-server view was non-authoritative. Current transcript/trace ACL inheritance does not support a strong local confidentiality/immutability claim.
 - **Worktree/unrelated changes:** before the Wave 0 commit, only the three owned paths are in scope; unrelated untracked `issues/reposnapshot/discussion/Claude-987e56e0-c6cc-44f9-9264-338c54bbb9a8.md` remains untouched. The exclusive empty Grok scratch directory was removed after inspection.
 - **Next checkpoint:** obtain explicit Wave 1 authorization, then build the fake-client substrate without changing production mediation.
+
+### W1 fake-client substrate
+
+- **Wave / UTC:** W1 / 2026-08-15T04:28:23Z
+- **State:** ready-to-commit
+- **Base HEAD / prior wave HEAD:** `e197b61` / `d0b7984`
+- **Owned paths:**
+  - `mcp/para-agent/src/client-integration/`
+  - `mcp/para-agent/src/schemas/client-host-binding.schema.json`
+  - `mcp/para-agent/src/schemas/client-integration-profile.schema.json`
+  - `mcp/para-agent/src/schemas/client-session-profile.schema.json`
+  - `mcp/tests/para-agent/client-registry.test.js`
+  - `mcp/tests/para-agent/client-environment.test.js`
+  - `mcp/tests/para-agent/client-invocation.test.js`
+  - `mcp/tests/para-agent/client-integration.test.js`
+  - `mcp/tests/para-agent/fixtures/client-integration/`
+  - `mcp/tests/para-agent/test-manifest.json`
+- **Implemented:** W1 registry/environment/invocation substrate and cross-layer fixtures/tests completed; manifest routing and integration assertions added; test-coverage now includes fake-client readiness/invocation/cleanup hardening.
+- **Bounded verification:** `PARA_MANIFEST_SUMMARY {"schema_version":1,"suites":21,"discovered":216,"completed":216,"passed":216,"skipped":0,"cancelled":0}`
+- **Live verification:** none.
+- **Unverified/deferred:** Grok 1.0.4 integration, existing-client migration, and live Windows enforcement claims.
+- **Failures/deviations:** none within W1 bounded scope.
+- **Worktree/unrelated changes:** unrelated untracked issue and snapshot paths remain.
+- **Next checkpoint:** authorize W2 and migrate Claude/Codex/AGY onto the substrate.
 
 ## Explicitly deferred
 
