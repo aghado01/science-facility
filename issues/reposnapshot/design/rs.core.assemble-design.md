@@ -346,12 +346,14 @@ wire naming belongs to writers).
 2. `Attributes.SpanBytes` (rs-attributes) — UTF-8 byte span of the
    **processed content**: the payload-description number, same semantics
    family as the tree manifest's byte spans and the precise-span read
-   tooling (fetch pure content without container overhead). Also the
-   natural packing input — see *planning vs measurement* below.
+   tooling (fetch pure content without container overhead). ~~Also the
+   natural packing input — see *planning vs measurement* below.~~
+   **SUPERSEDED 2026-08-15 — see §"Attributes does not own shard planning".**
    (LTS conflated layers 1–2: its `attributes.size_bytes` was the on-disk
-   size.) Naming reconciliation queued for the writer phase:
+   size.) ~~Naming reconciliation queued for the writer phase:
    `Partition-Files` currently probes a `ByteSpan` property — align to
-   `SpanBytes`/`Attributes.SpanBytes` when the writers land.
+   `SpanBytes`/`Attributes.SpanBytes` when the writers land.~~ **Retired: that
+   was a semantic downgrade dressed as a rename — see below.**
 3. Rendered row `length` field — writer-side span of the **encoded**
    content, computed at render time (the codec changes it). Never a
    pipeline value.
@@ -393,6 +395,49 @@ specifically **does not** make shard packing wrong:
 
 The one live rule that follows is narrow: don't *publish* a layer 2 number where
 a reader will spend it as an offset or an exact length. Packing is not that.
+
+## Attributes does not own shard planning (user, 2026-08-15)
+
+**Supersedes the "layer 2 is the right packing input" position above.** The
+`Attributes` element is a **reader-facing triage block** — it exists to populate
+the row's `attributes:{char_count word_count whitespace_ratio entropy}` segment
+so a reader can rank or skip rows before fetching. It was never meant to be a
+planning input for the packer. `rs.core.shards` owns its own measurement.
+
+**The argument that settles it, in one line:** the property that makes
+`SpanBytes` good as an attribute — *deliberate invariance to emission settings*,
+so the number stays comparable across runs — is exactly what makes it wrong as a
+packing input, because packing is trying to predict a shard **file's** size,
+which moves with precisely those settings. Invariance is a virtue for the
+attribute and a defect for the budget.
+
+Two further reasons, both structural:
+
+- **It would invert the dependency.** The packer would depend on an optional
+  enrichment processor having run. Shard membership is not `rs-attributes`'
+  business, and a stage should not need a processor's element to do its own job.
+- **The queued `ByteSpan → SpanBytes` alignment was wrong, and checking the code
+  shows why.** LTS stamps `ByteSpan = GetByteCount($line)` — the **full rendered
+  row**: meta prefix, delimiters, encoded content, newline
+  (`RepoSnapshotLts.psm1:2319`) — and `Partition-Files` packs on that
+  (`rs.lts.sharding.psm1:376/454/467/541`, with a content-bytes fallback).
+  That is layer 3, not layer 2. Aligning the *name* would have replaced an exact
+  rendered-row measurement with a content-only canonical measure and silently
+  dropped meta and delimiter bytes from every packing decision. **The
+  reconciliation is retired rather than renamed.** Note the naming was inverted
+  too: LTS's `ByteSpan` is a row *size* under the `Span`/`Size` rule.
+
+Consequences:
+
+- `rs.core.shards` computes or receives its own per-unit planning number and
+  never probes `Attributes`. Whether that number is content-derived (cheap, no
+  dependency, under-counts row overhead) or a measured rendered-row size (exact,
+  needs the renderer) becomes an **internal** question for shards rather than a
+  cross-module coupling — which is the simplification this reframe buys.
+- `Attributes.SpanBytes` remains, unchanged in meaning, as a reader triage
+  signal. It simply stops having a second consumer with opposite requirements.
+- Consolidation plan §B 6e's rider ("`Partition-Files` probes `ByteSpan`; align
+  to `SpanBytes` when writers land") is retired by this entry.
 
 **Naming grade — `Span` measures content, `Size` bounds a container (user,
 2026-08-10).** The naming corollary, and it binds on the modules **not yet
