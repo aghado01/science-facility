@@ -8,7 +8,7 @@
     permitted per colonel AST validation).
 
     Operations is a SET the caller subsets; the implementation applies
-    selected ops in a fixed internal order (lf first … trim-doc last) because
+    selected ops in a fixed internal order (lf first … ensure-final-lf last) because
     application order is a correctness invariant, not a preference. This
     processor is the named precedent for the operation-order doctrine
     ("config selects members, implementation owns sequence" —
@@ -48,15 +48,15 @@
 
         Pipeline suitability per op:
             Op               TP-safe   RS opt-in   Notes
-            lf               yes       yes         EOL -> LF; run first
+            lf               yes       yes         ALL line terminators -> LF; run first
             no-bom           yes       yes         Strip UTF-8 BOM
             nfc              yes       yes         Unicode NFC normalization
             strip-zwsp       yes       yes         Zero-width invisibles
             trim-trailing    yes       yes         Per-line trailing whitespace
             trim-inner       yes       yes         Inline multi-space collapse between words
-            max-blank-2      yes       yes         Keep ≤2 blank lines; collapse 3+ blank lines to 2
             max-blank-1      caution   yes         Keep ≤1 blank line; collapse 2+ blank lines to 1; lossy for prose
             trim-doc         yes       yes         Strip leading/trailing blank lines from document
+            ensure-final-lf  yes       yes         Append a final LF if absent; runs LAST
 #>
 # [CmdletBinding()]
 param(
@@ -66,7 +66,7 @@ param(
     [hashtable]$Config = @{}
 )
 
-$ops = if ($Config.ContainsKey('Operations')) { @($Config['Operations']) } else { @('lf', 'no-bom', 'nfc', 'strip-zwsp', 'trim-trailing', 'trim-inner', 'max-blank-2', 'trim-doc') }
+$ops = if ($Config.ContainsKey('Operations')) { @($Config['Operations']) } else { @('lf', 'no-bom', 'nfc', 'strip-zwsp', 'trim-trailing', 'trim-inner', 'max-blank-1', 'trim-doc', 'ensure-final-lf') }
 $includeMeta = if ($null -ne $Config['IncludeMeta']) { [bool]$Config['IncludeMeta'] } else { $true }
 
 # Content-key resolution — harmonized content-mutator contract (6d), shared by
@@ -79,7 +79,18 @@ $t = $bc.Text
 
 if ('lf' -in $ops)
 {
-    $t = $t -replace "`r`n", "`n" -replace "`r", "`n"
+    # STERILIZES EVERY LINE TERMINATOR, not just CRLF/CR, so everything
+    # downstream can treat LF as the only break character and mean it.
+    # CRLF is folded first — as a character class it would become two breaks.
+    #
+    # Beyond CR: VT U+000B and FF U+000C (C0 layout controls, FF is a page
+    # break in older C sources), NEL U+0085, and LS/PS U+2028/U+2029. The last
+    # three matter most: they are line terminators to a JavaScript reader but
+    # are NOT C0, so nothing downstream would catch them — they would reach the
+    # payload as raw break-capable characters and split a row. The blank-line
+    # ops only match "`n", so an unfolded terminator also defeats run
+    # detection ("`n`u{2028}`n" is not seen as a run).
+    $t = $t -replace "`r`n", "`n" -replace '[\r\u000B\u000C\u0085\u2028\u2029]', "`n"
 }
 
 if ('no-bom' -in $ops)
@@ -110,11 +121,6 @@ if ('trim-inner' -in $ops)
     $t = $t -replace '(?<=\S) {2,}(?=\S)', ' '
 }
 
-if ('max-blank-2' -in $ops)
-{
-    $t = $t -replace "(`n){4,}", "`n`n`n"
-}
-
 if ('max-blank-1' -in $ops)
 {
     $t = $t -replace "(`n){3,}", "`n`n"
@@ -123,6 +129,16 @@ if ('max-blank-1' -in $ops)
 if ('trim-doc' -in $ops)
 {
     $t = $t -replace '^\n+', '' -replace '\n+$', ''
+}
+
+# LAST by contract. Paired with trim-doc (which strips the trailing run) this
+# makes the document ending deterministic: exactly one final LF. Alone it is
+# only additive — an existing trailing run is left as-is, since collapsing runs
+# is max-blank-*'s job, not this op's. Empty content stays empty: a file with
+# no content does not acquire a line.
+if ('ensure-final-lf' -in $ops)
+{
+    if ($t.Length -gt 0 -and -not $t.EndsWith("`n")) { $t += "`n" }
 }
 
 # Copy-on-mutate return — shared Copy-Bag helper. Clones the bag, replaces the

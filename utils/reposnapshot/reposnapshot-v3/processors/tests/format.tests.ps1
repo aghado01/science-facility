@@ -18,14 +18,16 @@ Set-StrictMode -Version Latest
     Coverage:
       1. Item unpacking — string / hashtable / pscustomobject
       2. Default ops applied when Operations omitted
-      3. lf  — CRLF and CR normalized to LF
+      3. lf  — every line terminator normalized to LF (CRLF, CR, VT, FF,
+         NEL, LS, PS), so downstream can treat LF as the only break
       4. no-bom — UTF-8 BOM stripped
       5. strip-zwsp — zero-width space characters removed
       6. trim-trailing — per-line trailing whitespace removed
       7. trim-inner — multi-space runs between words collapsed
-      8. max-blank-2 — 3+ blank lines collapsed to 2
-      9. max-blank-1 — 2+ blank lines collapsed to 1
-     10. trim-doc — leading/trailing blank lines stripped from document
+      8. max-blank-1 — 2+ blank lines collapsed to 1
+      9. trim-doc — leading/trailing blank lines stripped from document
+     10. ensure-final-lf — final LF appended when absent; runs last, and
+         paired with trim-doc makes the document ending deterministic
      11. IncludeMeta = $false — suppresses the Processing record; a bag stays
          a bag (bare-string input still returns a bare string)
      12. Empty Operations — no-op (text passes through unchanged)
@@ -126,7 +128,7 @@ $rDefault = Invoke-Processor -Item "hello   world`r`n`r`n`r`n`r`nend"
 Assert-True ($rDefault -is [pscustomobject]) 'No Operations: returns object'
 Assert-True ($rDefault.Content -notmatch "`r") 'No Operations: lf applied (CRLF gone)'
 Assert-True ($rDefault.Content -notmatch '   ') 'No Operations: trim-inner applied'
-Assert-True ($rDefault.Content -notmatch "`n`n`n`n") 'No Operations: max-blank-2 applied'
+Assert-True ($rDefault.Content -notmatch "`n`n`n") 'No Operations: max-blank-1 applied (at most one blank line survives)'
 Assert-True ($rDefault.Processing[0].Operations.Count -gt 0) 'No Operations: Processing record carries the resolved defaults'
 
 # ============================================================
@@ -142,6 +144,29 @@ $rLf2 = Invoke-Processor -Item $crText -Config @{ Operations = @('lf') }
 
 Assert-True ($rLf1.Content -eq "line1`nline2`nline3") 'lf: CRLF → LF'
 Assert-True ($rLf2.Content -eq "line1`nline2`nline3") 'lf: CR → LF'
+
+# Exotic terminators — sterilized so downstream can trust LF as the only break.
+# NEL/LS/PS are the load-bearing cases: they are NOT C0, so nothing downstream
+# catches them and they would reach the payload able to split a row.
+foreach ($term in @(
+        @{ Name = 'VT  U+000B'; Char = "`u{000B}" }
+        @{ Name = 'FF  U+000C'; Char = "`u{000C}" }
+        @{ Name = 'NEL U+0085'; Char = "`u{0085}" }
+        @{ Name = 'LS  U+2028'; Char = "`u{2028}" }
+        @{ Name = 'PS  U+2029'; Char = "`u{2029}" }
+    ))
+{
+    $r = Invoke-Processor -Item "line1$($term.Char)line2" -Config @{ Operations = @('lf') }
+    Assert-True ($r.Content -eq "line1`nline2") "lf: $($term.Name) → LF"
+}
+
+# CRLF must fold as a UNIT — a bare character class would emit two breaks.
+$rPair = Invoke-Processor -Item "a`r`nb" -Config @{ Operations = @('lf') }
+Assert-True ($rPair.Content -eq "a`nb") 'lf: CRLF folds to ONE break, not two'
+
+# An unfolded terminator would also defeat blank-run detection downstream.
+$rRun = Invoke-Processor -Item "a`n`u{2028}`nb" -Config @{ Operations = @('lf', 'max-blank-1') }
+Assert-True ($rRun.Content -eq "a`n`nb") 'lf + max-blank-1: folded terminator participates in run collapse'
 
 # ============================================================
 # 4. no-bom
@@ -190,20 +215,9 @@ $rIndent = Invoke-Processor -Item $indentText -Config @{ Operations = @('trim-in
 Assert-True ($rIndent.Content -eq '    indented line') 'trim-inner: leading indentation preserved'
 
 # ============================================================
-# 8. max-blank-2
+# 8. max-blank-1
 # ============================================================
-Enter-Section '8. max-blank-2 — 3+ blank lines → 2'
-
-$blank3 = "a`n`n`n`nb"   # 3 blank lines between a and b
-
-$rBlank2 = Invoke-Processor -Item $blank3 -Config @{ Operations = @('max-blank-2') }
-Assert-True ($rBlank2.Content -eq "a`n`n`nb") 'max-blank-2: 3 blank lines → 2'
-Assert-True ($rBlank2.Content -notmatch "`n`n`n`n") 'max-blank-2: no 4+ consecutive newlines remain'
-
-# ============================================================
-# 9. max-blank-1
-# ============================================================
-Enter-Section '9. max-blank-1 — 2+ blank lines → 1'
+Enter-Section '8. max-blank-1 — 2+ blank lines → 1'
 
 $blank2 = "a`n`n`nb"   # 2 blank lines between a and b
 
@@ -211,14 +225,39 @@ $rBlank1 = Invoke-Processor -Item $blank2 -Config @{ Operations = @('max-blank-1
 Assert-True ($rBlank1.Content -eq "a`n`nb") 'max-blank-1: 2 blank lines → 1'
 
 # ============================================================
-# 10. trim-doc
+# 9. trim-doc
 # ============================================================
-Enter-Section '10. trim-doc — document-level leading/trailing blank line strip'
+Enter-Section '9. trim-doc — document-level leading/trailing blank line strip'
 
 $docText = "`n`nhello world`n`n"
 
 $rDoc = Invoke-Processor -Item $docText -Config @{ Operations = @('trim-doc') }
 Assert-True ($rDoc.Content -eq 'hello world') 'trim-doc: leading and trailing blank lines stripped'
+
+# ============================================================
+# 10. ensure-final-lf
+# ============================================================
+Enter-Section '10. ensure-final-lf — final LF, runs last'
+
+$rEnsure = Invoke-Processor -Item 'no trailing newline' -Config @{ Operations = @('ensure-final-lf') }
+Assert-True ($rEnsure.Content -eq "no trailing newline`n") 'ensure-final-lf: LF appended when absent'
+
+$rIdem = Invoke-Processor -Item "already there`n" -Config @{ Operations = @('ensure-final-lf') }
+Assert-True ($rIdem.Content -eq "already there`n") 'ensure-final-lf: idempotent when already present'
+
+$rRun = Invoke-Processor -Item "trailing run`n`n`n" -Config @{ Operations = @('ensure-final-lf') }
+Assert-True ($rRun.Content -eq "trailing run`n`n`n") 'ensure-final-lf: additive only — existing run untouched (collapsing is max-blank-*''s job)'
+
+$rEmpty = Invoke-Processor -Item '' -Config @{ Operations = @('ensure-final-lf') }
+Assert-True ($rEmpty.Content -eq '') 'ensure-final-lf: empty content does not acquire a line'
+
+# The pairing that makes the document ending deterministic: trim-doc strips the
+# trailing run, ensure-final-lf puts exactly one back — in that fixed order.
+$rPair = Invoke-Processor -Item "body text`n`n`n`n" -Config @{ Operations = @('trim-doc', 'ensure-final-lf') }
+Assert-True ($rPair.Content -eq "body text`n") 'trim-doc + ensure-final-lf: exactly one final LF regardless of input run'
+
+$rPairOrder = Invoke-Processor -Item "body text`n`n`n`n" -Config @{ Operations = @('ensure-final-lf', 'trim-doc') }
+Assert-True ($rPairOrder.Content -eq "body text`n") 'implementation owns sequence: caller order does not change the result'
 
 # ============================================================
 # 11. IncludeMeta = $false
