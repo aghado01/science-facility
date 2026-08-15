@@ -71,6 +71,10 @@ as normative when the format is named.
   with no JSON behind the format (see v3 divergence above) there is no external spec
   to infer *from*. Filed as declarations owed: `issues/v3/payload-manifest-ledger.md`
   #16 (codec) and #17 (encoding).
+  **Answered for v3 by §"Content codec — SPEC"** (2026-08-14): the regime is four
+  rules, declared in the tree's Compaction notice. Note the *reduced* form of the
+  obligation — the notice exists so a reader does not mistake the payload for
+  byte-faithful, not so a reader can decode it. Nothing decodes.
 - **Length-prefix (LPAC) element — the framing authority**: field 3 = exact UTF-8 byte
   length of the content span. Pipe delimiting is presentation; it is the length prefix
   that makes the reading frame unambiguous — which is what frees the format from
@@ -89,11 +93,144 @@ as normative when the format is named.
   raw-text treatment and steers agents to low-level reads (stated in the tree's
   Instructions block).
 
-## Escape regime — codec spec (user, 2026-08-09; requirements set, one fork open)
+## Content codec — SPEC (user, 2026-08-14; supersedes the 2026-08-09 litigation below)
 
 The v3 serializer authors this itself (no `ConvertTo-Json` hop — see v3 divergence
-above), so every guarantee below has to be written deliberately. Requirement from
-the user: **handle the different kinds of newline, at least LF and CRLF.**
+above), so every guarantee has to be written deliberately.
+
+### Posture — three changes that collapse the problem
+
+1. **No MCP on v3.** The agent-facing tooling becomes a separate successor
+   implementation (Node); the PowerShell tool stays CLI. So the "MCP is the only
+   real decoder" rider (`mcp-surface.md`) never materializes, and **codec
+   totality has no consumer, present or planned.**
+2. **Round-trip is an ideal that guides ingestion, not a property of the
+   artifact.** The imperative is *don't break code on the way in*. Snapshots are
+   one-way views regenerated on demand — not a currency for rehydrating source.
+3. Therefore the codec **may be lossy, and should be**, wherever loss buys
+   legibility or simplicity.
+
+Finishing v3 still means working these nuances out properly: the port to another
+language inherits whatever is settled here, and every exotic decision is one more
+thing to re-derive.
+
+### The rules
+
+1. **Every line terminator becomes `\n`** — LF, CRLF, CR, NEL U+0085, LS U+2028,
+   PS U+2029, VT U+000B, FF U+000C. One marker; the kind is *not* preserved.
+2. **`\` is never doubled.** Literal backslashes pass through verbatim.
+3. **Remaining C0 controls and DEL are stripped.**
+4. **TAB stays literal.**
+
+### Why rule 2 is the important one
+
+The litigation below identified the invariant separating backslash from
+substitution: *substitution never rewrites a character of the source — it only
+adds marks where line breaks were; backslash escaping alters existing
+characters.* That was the strongest argument against `\`.
+
+Dropping the self-escape dissolves it. `\` now also only adds marks at line
+breaks, so `"C:\Users\me"` renders as itself instead of `"C:\\Users\\me"`. **The
+payload gets substitution's defining virtue at ~1 token instead of 3.**
+
+The cost is decodability at the ambiguous sites: a literal backslash-n in source
+is indistinguishable from an encoded line break. Measured on the production C#
+payload that is the `\\` row — **127 sites across 70 shards, ~1.8 per shard,
+0.22% of escapes.** And most literal `\n` in source sits inside string literals
+where it already *means* a newline, so a reader resolving it as a break is
+usually right; the genuinely wrong reading is Windows paths, and it is rare.
+Under a no-rehydration posture, showing the source verbatim beats reversibility.
+
+### Stage ownership — line breaks are the container's job
+
+The serializer encodes line breaks **unconditionally**, and this is not a
+violation of "the serializer does not perform compaction a content processor
+already owns." Different jobs, same character: `format-ws`'s `lf` op normalizes
+CRLF *within content*; the container must encode whatever line breaks *remain*,
+because a raw newline breaks the one-record-per-line invariant. Delegating it
+would mean a profile without `lf` emits a broken artifact.
+
+Indentation (`rs-indent`) and inner-whitespace shape (`format-ws`) stay upstream,
+per that rule.
+
+**Lane split (user, 2026-08-14).** `format-ws` and `rs-indent` are **code-lane**
+processors, and the inclination is to make them **enforced rather than optional**
+on that lane — with the config surface still exposing *which* operations run. The
+document-ingestion lane gets its own markdown-safe whitespace processor and its
+own default chain, rather than these two accruing prose caveats. Markdown
+semantics (two-trailing-space breaks, fence integrity) therefore stay out of the
+code-side processors entirely.
+
+This does not soften rule 1. Enforced *placement* does not make the op list
+unsubsettable — a caller can still drop `lf` — so the serializer still cannot
+assume any content-stage op ran, which is exactly why line-break encoding is
+unconditional.
+
+### Compaction is now a notice, not a cipher key
+
+It no longer teaches a reader to decode, because nothing decodes. It states what
+was done, so nobody mistakes the payload for byte-faithful:
+
+```
+## Compaction
+
+Line breaks are normalized to LF and encoded as `\n`. Control characters are
+stripped. Tabs and backslashes are literal. Content is a faithful view of the
+source but is not byte-reconstructable from this payload.
+```
+
+Still sited in the tree file ahead of the Tree block (`rs.core.manifest.psm1`),
+for the same structural reason as before: the tree is the exclusive entrypoint
+and is read first.
+
+### Retired by this revision
+
+- **Totality** (old requirement 2) — no consumer, present or planned.
+- **The self-escape obligation** (old requirement 4) — by decision.
+- **CR-distinct-from-LF** (old requirement 1) — moot under normalization.
+- **The preserve-vs-normalize fork** — resolved as *normalize*.
+- **The owed tokenizer measurement** and the Control Pictures fallback — moot.
+- **`format-ws`'s `eof-eot` op — removed from the codebase 2026-08-14.** It
+  appended a U+0004 sentinel, had no consumer, and was the one place the content
+  stage deliberately emitted a C0 control into the stream — which would have
+  collided with rule 3. Deleted rather than exempted (suite 52 → 51 asserts;
+  14-suite battery 722/722 green).
+
+### Open — none in the codec
+
+One adjacent item survives elsewhere and is *not* a codec concern:
+source-encoding detection at ingest (ledger #17a), which is an ingest-correctness
+question rather than a payload declaration.
+
+## Escape regime — the 2026-08-09 litigation (SUPERSEDED — evidence, not guidance)
+
+Retained as receipts. It concluded on `\` **with** self-escaping, a **total**
+codec, and a **preserve-EOL** stance — all three retired above. What survives is
+the measurement record, and it is what makes the revision a narrowing rather than
+a guess. Load-bearing figures:
+
+| finding | measurement |
+|---|---|
+| production C# payload, 70 shards | `\n` 51617 (87.8%) · `\"` 7050 (12.0%) · `\\` **127 (0.22%)** · `\t` 6 |
+| self-escape tax, PowerShell (worst realistic corpus) | 16123 newlines vs 545 backslashes → **+3.4%** |
+| self-escape tax, markdown | 6809 vs 228 → +3.3% |
+| sigils disqualified by frequency | backtick 64.4% in md · `@` 7.2% in PS · `~` 0% PS / 1.4% md |
+| Control Pictures across 114 repo source files | **0 occurrences** |
+| token cost | `\n` ~1 (merged BPE token); any exotic 2–3 byte code point ≈1 token/byte → +2/line ≈ **+100k tokens on a 2 MB shard** |
+
+The `\"` row is the one that still matters going forward: **12% of every escape in
+that payload was JSON quote residue**, which length-prefix framing makes
+unnecessary — v3 drops that entire class by construction, and it is a larger
+legibility win than any sigil choice.
+
+Everything from here to §"Store vs view" is the original analysis, preserved
+verbatim. Read it only for the evidence behind a specific choice; its
+recommendations are not current.
+
+### Original framing (2026-08-09)
+
+Requirement from the user at the time: **handle the different kinds of newline,
+at least LF and CRLF.**
 
 ### What ConvertTo-Json does — measured, not recalled (pwsh 7.6.3)
 
@@ -616,7 +753,16 @@ LaTeX-ish code, where the worst case is unbounded — while substitution taxes e
 line by a fixed amount and is flat regardless of content. Which wins depends on the
 corpus, so measure on real material, not a synthetic file.
 
-### Open fork — does the codec preserve or normalize EOLs?
+### Open fork — does the codec preserve or normalize EOLs? — CLOSED: normalize
+
+**Resolved 2026-08-14 against the recommendation below.** The section argues
+*preserve*, on stage-ownership and losslessness grounds. Both premises were
+retired: losslessness has no consumer once rehydration is off the table, and
+stage ownership was mis-drawn — encoding the line breaks that survive into the
+container is the container's job, distinct from `format-ws`'s job of normalizing
+CRLF within content. Every terminator now folds to `\n`. The reader-noise cost
+this section names as preserve's downside (`\r\n` on every line of
+Windows-origin files) is the concrete win.
 
 - **Preserve** (ConvertTo-Json's policy): CRLF → `\r\n`. Lossless; the codec stays a
   pure transport concern with zero content semantics. Cost: `\r\n` on every line of

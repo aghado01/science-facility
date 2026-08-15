@@ -26,12 +26,11 @@ Set-StrictMode -Version Latest
       8. max-blank-2 — 3+ blank lines collapsed to 2
       9. max-blank-1 — 2+ blank lines collapsed to 1
      10. trim-doc — leading/trailing blank lines stripped from document
-     11. eof-eot — U+0004 sentinel appended
-     12. IncludeMeta = $false — suppresses the Processing record; a bag stays
+     11. IncludeMeta = $false — suppresses the Processing record; a bag stays
          a bag (bare-string input still returns a bare string)
-     13. Empty Operations — no-op (text passes through unchanged)
-     14. Empty text — returns empty string
-     15. Harmonized content-mutator contract (6d) — identity survival,
+     12. Empty Operations — no-op (text passes through unchanged)
+     13. Empty text — returns empty string
+     14. Harmonized content-mutator contract (6d) — identity survival,
          copy-on-mutate, no-content pass-through, Processing trail order
 
 .NOTES
@@ -222,19 +221,9 @@ $rDoc = Invoke-Processor -Item $docText -Config @{ Operations = @('trim-doc') }
 Assert-True ($rDoc.Content -eq 'hello world') 'trim-doc: leading and trailing blank lines stripped'
 
 # ============================================================
-# 11. eof-eot
+# 11. IncludeMeta = $false
 # ============================================================
-Enter-Section '11. eof-eot — U+0004 sentinel'
-
-$eotText = "hello world"
-
-$rEot = Invoke-Processor -Item $eotText -Config @{ Operations = @('eof-eot') }
-Assert-True ($rEot.Content.EndsWith("`n`u{0004}")) 'eof-eot: sentinel appended after trailing newline'
-
-# ============================================================
-# 12. IncludeMeta = $false
-# ============================================================
-Enter-Section '12. IncludeMeta = $false'
+Enter-Section '11. IncludeMeta = $false'
 
 $rBare = Invoke-ProcessorRaw -Item "hello   world" -Config @{ Operations = @('trim-inner'); IncludeMeta = $false }
 Assert-True ($rBare -is [string]) 'IncludeMeta=false: bare string in still returns bare string'
@@ -249,9 +238,9 @@ Assert-Equal $rBagNoMeta.Content 'hello world' 'IncludeMeta=false: op still appl
 Assert-True ($null -eq $rBagNoMeta.PSObject.Properties['Processing']) 'IncludeMeta=false: no Processing record'
 
 # ============================================================
-# 13. Empty Operations — no-op
+# 12. Empty Operations — no-op
 # ============================================================
-Enter-Section '13. Empty Operations — pass-through'
+Enter-Section '12. Empty Operations — pass-through'
 
 $noopText = "hello   world`r`n"
 
@@ -259,18 +248,18 @@ $rNoop = Invoke-Processor -Item $noopText -Config @{ Operations = @() }
 Assert-True ($rNoop.Content -eq $noopText) 'Empty ops: text passes through unchanged'
 
 # ============================================================
-# 14. Empty text
+# 13. Empty text
 # ============================================================
-Enter-Section '14. Empty text'
+Enter-Section '13. Empty text'
 
 $rEmpty = Invoke-Processor -Item '' -Config @{ Operations = @('lf', 'trim-trailing') }
 Assert-True ($rEmpty -is [pscustomobject]) 'Empty text: returns object'
 Assert-Equal $rEmpty.Content '' 'Empty text: Content is empty string'
 
 # ============================================================
-# 15. Harmonized content-mutator contract (consolidation 6d)
+# 14. Harmonized content-mutator contract (consolidation 6d)
 # ============================================================
-Enter-Section '15. Harmonized content-mutator contract (6d)'
+Enter-Section '14. Harmonized content-mutator contract (6d)'
 
 $descriptor = [pscustomobject]@{
     AbsolutePath = 'D:\repo\src\a.txt'

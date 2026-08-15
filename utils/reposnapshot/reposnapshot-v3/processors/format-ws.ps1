@@ -8,7 +8,7 @@
     permitted per colonel AST validation).
 
     Operations is a SET the caller subsets; the implementation applies
-    selected ops in a fixed internal order (lf first … eof-eot last) because
+    selected ops in a fixed internal order (lf first … trim-doc last) because
     application order is a correctness invariant, not a preference. This
     processor is the named precedent for the operation-order doctrine
     ("config selects members, implementation owns sequence" —
@@ -57,7 +57,6 @@
             max-blank-2      yes       yes         Keep ≤2 blank lines; collapse 3+ blank lines to 2
             max-blank-1      caution   yes         Keep ≤1 blank line; collapse 2+ blank lines to 1; lossy for prose
             trim-doc         yes       yes         Strip leading/trailing blank lines from document
-            eof-eot          no        yes         Append U+0004 sentinel; RS pipeline only
 #>
 # [CmdletBinding()]
 param(
@@ -124,11 +123,6 @@ if ('max-blank-1' -in $ops)
 if ('trim-doc' -in $ops)
 {
     $t = $t -replace '^\n+', '' -replace '\n+$', ''
-}
-
-if ('eof-eot' -in $ops)
-{
-    $t = $t.TrimEnd("`r", "`n") + "`n`u{0004}"
 }
 
 # Copy-on-mutate return — shared Copy-Bag helper. Clones the bag, replaces the
