@@ -1,3 +1,40 @@
+**Yes.**
+
+The official PowerShell installer supports a custom install directory via the `GROK_BIN_DIR` environment variable.
+
+### Install to a specific directory
+
+```powershell
+$env:GROK_BIN_DIR = "C:\path\to\your\desired\folder"
+irm https://x.ai/cli/install.ps1 | iex
+```
+
+Example:
+
+```powershell
+$env:GROK_BIN_DIR = "D:\Tools\Grok"
+irm https://x.ai/cli/install.ps1 | iex
+```
+
+### What happens
+
+- The binaries (`grok.exe` and `agent.exe`) are installed into the folder you specified.
+- That folder is automatically added to your **User PATH**.
+- Config, auth, sessions, etc. still live under the normal `%USERPROFILE%\.grok\` directory (this is separate from the binary location).
+
+### Notes
+
+- You still need to **close and reopen** the terminal (or open a new one) after installing so the new PATH takes effect.
+- You can also combine it with a specific version:
+
+```powershell
+$env:GROK_BIN_DIR = "D:\Tools\Grok"
+$env:GROK_VERSION = "0.1.42"
+irm https://x.ai/cli/install.ps1 | iex
+```
+
+That’s the cleanest way to control the install location.
+
 **Yes.** Here are the **canonical environment variables** for Grok Build (from the official docs at [docs.x.ai/build/settings/reference](https://docs.x.ai/build/settings/reference)):
 
 ### Paths & Auth
