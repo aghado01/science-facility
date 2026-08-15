@@ -32,11 +32,43 @@ unconditionally — no BOM sniff, no UTF-16 branch. So the field asserts a polic
 while looking like a measurement, and a reader handed mojibake cannot tell whether
 the source was odd or the pipeline was wrong.
 
-**3. UTF-16 sources are misrouted, correctly, for the wrong reason.** They are
-NUL-dense, so the binary guard routes them to Diagnostics as
-`BinaryOrNulContent`. They are caught — by accident, under a misleading reason.
-Worth weighting: this is a **PowerShell** project, and PowerShell ISE historically
-saved `.ps1` as UTF-16 LE, so this is not a hypothetical corpus.
+**3. UTF-16 sources land in Diagnostics under a misleading reason.** They are
+NUL-dense, so the binary guard halts them as `BinaryOrNulContent`. Note carefully
+what is and is not wrong here — see the pipeline context below. Both filters are
+behaving correctly; only the *reason* misdescribes a text file in another
+encoding. `file-read.ps1`'s own docstring already admits this. Worth weighting:
+this is a **PowerShell** project and PS ISE historically saved `.ps1` as UTF-16
+LE, so the corpus is not hypothetical — though modern PowerShell, VS Code and
+`Set-Content` all default to UTF-8, which makes it a legacy-corpus concern rather
+than a live one.
+
+## Pipeline context — the read budget, and why it constrains this
+
+**The pipeline reads each file exactly once, and answers every question it can
+from metadata first:**
+
+| stage | what it does | I/O |
+|---|---|---|
+| crawler | walk, stamp identity + `SizeBytes` + `LastWriteUtc` from one `FileInfo` | no content read |
+| ignore | size ceiling + **hard extension blacklist** (`.exe .dll .pdb .so .dylib .wasm` …, caller additions additive) | **none** — pure metadata filter |
+| file-read | `[IO.File]::ReadAllBytes` → NUL guard on those bytes → decode | the single read |
+
+Three consequences that bear directly on this work:
+
+- **Binary exclusion is primarily extension-based and costs nothing.** The NUL
+  guard is an *opportunistic fallback* for what slips through — a mislabelled or
+  extensionless blob — inspecting bytes already in memory
+  (`rs.core.ingest.psm1:19-21`). It is not the primary mechanism and should not be
+  redesigned as though it were.
+- **A BOM sniff is free on this budget.** The bytes are already in hand; reading
+  `$bytes[0..3]` adds no I/O. Nothing here argues against detection on cost
+  grounds.
+- **But detection must run BEFORE the NUL guard**, because UTF-16 content is
+  legitimately NUL-dense. That reorders the most load-bearing lines in the file
+  and changes what the guard means: "contains NUL" is evidence of binary only for
+  a byte stream believed to be 8-bit text. Once UTF-16 is admitted, NUL density is
+  expected rather than disqualifying. **This is the real risk in the work — not
+  the decoding.**
 
 **4. Emission encoding (#17b) has no carrier at all.** Ledger #17 splits the
 question in two — (a) *source* encoding per entry, what the ingested bytes decoded
@@ -54,32 +86,45 @@ Item 2 determines item 1, in opposite directions:
 
 That is the whole reason 6e was filed as a set rather than four tickets.
 
-## Recommendation
+## Three options, cheapest first
 
-**Implement bounded detection, and let the two declarations settle into different
-homes.** Concretely:
+**(a) Rename only — no detection.** `Encoding` becomes `DecodePolicy` (or
+`DecodedAs`), admitting it states what the reader *did*, and moves to Header as
+the run-level constant it is. No behavior change, the NUL guard is untouched, and
+the UTF-16 gap is documented rather than closed. Forecloses nothing: detection can
+arrive later and move the field back.
 
-- `file-read` gains a **BOM sniff** (UTF-8, UTF-16 LE/BE, UTF-32 LE/BE) plus a
-  cheap BOM-less UTF-16 heuristic — alternating NUL bytes in a bounded prefix. Not
-  charset detection; no dependency, no statistical guessing beyond that.
-- `Encoding` thereby becomes a real per-entry fact and **stays on the entry**.
-  Item 1 resolves by making the field honest rather than by relocating it.
-- Item 3 resolves as a side effect: UTF-16 files decode instead of being
-  misclassified as binary. Where a file still fails, the diagnostic reason should
-  distinguish "looks like UTF-16" from "binary".
-- **Header carries the *emission* encoding** (#17b) — a genuinely run-level fact,
-  and the natural neighbour of the Compaction notice in the tree file, since both
-  are statements about how to read the artifact. Expect UTF-8 without BOM, which is
-  what LTS emits (`[System.Text.UTF8Encoding]::new($false)`); the work is declaring
-  it, not choosing it.
+**(b) BOM sniff only — recommended.** Inspect the leading bytes; if a BOM is
+present, trust it, decode accordingly, and **skip the NUL guard when the BOM says
+UTF-16/UTF-32**. No heuristic anywhere. A BOM is unambiguous evidence, so the
+guard's semantics change only in the narrow case where something authoritative
+said "this is not 8-bit text" — everything else keeps today's behavior exactly.
+`Encoding` becomes a real measurement for BOM-bearing files and stays on the
+entry.
 
-This gives ledger #17's two declarations **different homes because they are
-different facts**, which is the shape the ledger already implies.
+**(c) BOM sniff plus a BOM-less UTF-16 heuristic** (alternating NULs in a bounded
+prefix). Closes the remaining gap, and buys it by making the binary guard
+conditional on a *guess*. That inverts the current relationship — a fallback guard
+would start deferring to a heuristic — in the file with no dedicated test suite.
+**Not recommended without that suite standing first.**
 
-*Cheaper alternative, if detection is judged out of scope:* rename the field to
-admit what it is (`DecodePolicy` / `DecodedAs`), move it to Header, and leave the
-UTF-16 misrouting documented rather than fixed. Honest, no behavior change, and it
-forecloses nothing — detection can arrive later and move the field back.
+The earlier draft of this brief recommended (c) without weighing the guard
+reordering; (b) is the better trade. Note (b) leaves BOM-less UTF-16 caught by the
+NUL guard exactly as today, which is a real residual gap and an acceptable one —
+it is the case with no evidence to act on.
+
+Independent of the fork, and cheap in all three:
+
+- **Header carries the *emission* encoding** (#17b) — genuinely run-level, and the
+  natural neighbour of the Compaction notice in the tree file, since both state how
+  to read the artifact. Expect UTF-8 without BOM, which is what LTS emits
+  (`[System.Text.UTF8Encoding]::new($false)`); the work is declaring it, not
+  choosing it.
+
+Under (b) or (c), ledger #17's two declarations end up in **different homes
+because they are different facts** — per-entry source encoding measured at ingest,
+run-level emission encoding declared by the serializer — which is the shape #17
+already implies. Under (a) both are run-level and both live in Header.
 
 ## Risk — read before touching code
 
@@ -99,8 +144,17 @@ forecloses nothing — detection can arrive later and move the field back.
 
 ## Exit gate
 
-- A UTF-16 LE source file with a BOM ingests and its content is correct, rather
-  than being routed to Diagnostics as `BinaryOrNulContent`.
+*(Under (b) or (c); option (a)'s gate is just "the field says what it means and
+the battery is green".)*
+
+- A UTF-16 LE source file **with a BOM** ingests and its content is correct,
+  rather than being routed to Diagnostics as `BinaryOrNulContent`.
+- **A genuinely binary file still halts.** This is the assertion that matters —
+  the guard was reordered, so prove it did not weaken. An `.exe`-shaped fixture
+  with no BOM must still produce `BinaryOrNulContent`.
+- **A BOM-less UTF-16 file still halts under (b)**, asserted deliberately rather
+  than left ambiguous, so the residual gap is a recorded choice and not a
+  discovery for whoever reads it later.
 - `Encoding` reflects what was actually detected, per entry, and differs across a
   mixed fixture set.
 - The payload declares its emission encoding somewhere a reader meets before the
@@ -112,16 +166,19 @@ forecloses nothing — detection can arrive later and move the field back.
 
 ## Non-goals
 
-- Charset detection beyond BOM plus the bounded UTF-16 heuristic. No statistical
-  guessing, no dependency — the zero-dependency stance is load-bearing, since a
-  snapshot's content must not vary with the producing machine.
+- Charset detection. No statistical guessing, no dependency — the zero-dependency
+  stance is load-bearing, since a snapshot's content must not vary with the
+  producing machine.
+- **Redesigning binary exclusion.** That is the extension blacklist's job, it
+  costs no I/O, and it works. The NUL guard is a fallback and stays one.
 - Transcoding on emission. The artifact is UTF-8; sources that decode from
   something else are still emitted as UTF-8.
 - Re-opening the codec (#16), which is settled.
 
 ## Open calls
 
-- **Detect or rename** — the fork above. Everything else follows from it.
+- **Which of (a) / (b) / (c)** — the fork above. Everything else follows from it,
+  including whether `Encoding` moves to Header or stays on the entry.
 - **Where the emission declaration goes**: tree file beside Compaction, shard
   header row, or both.
 - **Forward pointer, speculative:** under the per-shard schema idea
