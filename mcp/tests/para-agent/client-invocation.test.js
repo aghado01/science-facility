@@ -147,6 +147,52 @@ test("INVOCATION-RECIPE-IMMUTABLE: private authority and safe descriptor basis r
   assert.equal(Object.isFrozen(descriptor.readiness.version), true);
 });
 
+test("READINESS-CURRENT-VERSION: omitted pins accept the observed executable version", async () => {
+  const versionProbe = {
+    id: "version",
+    dimension: "version",
+    kind: "command",
+    fixed_args: ["--version"],
+    timeout_ms: 1000,
+    max_output_bytes: 4096,
+    parser: { kind: "utf8_text", success_exit_codes: [0] },
+    safe_facts: ["version"],
+  };
+  const modeProfile = {
+    fixed_args: ["--structured"],
+    carrier: { kind: "stdin_utf8" },
+    stdio: { prompt: "stdin", semantic: "stdout", diagnostic: "stderr" },
+    readiness: { required: ["version"], probes: [versionProbe] },
+    backend: "process",
+  };
+  const current = compileInvocationRecipe(invocationInput({
+    modeProfile,
+    resolved: { supportedVersions: [] },
+  }));
+  const readiness = await runReadiness({
+    integrationRevision: "integration-r1",
+    ...current.recipe.readiness,
+    executor: async () => ({
+      exitCode: 0,
+      stdout: Buffer.from("2.1.232\n"),
+      stderr: Buffer.alloc(0),
+    }),
+  });
+  assert.equal(readiness.version.state, "passed");
+  assert.equal(readiness.version.version, "2.1.232");
+
+  const pinned = compileInvocationRecipe(invocationInput({ modeProfile }));
+  await assert.rejects(() => runReadiness({
+    integrationRevision: "integration-r1",
+    ...pinned.recipe.readiness,
+    executor: async () => ({
+      exitCode: 0,
+      stdout: Buffer.from("2.1.232\n"),
+      stderr: Buffer.alloc(0),
+    }),
+  }), { code: "READINESS_VERSION_UNSUPPORTED" });
+});
+
 test("INVOCATION-STDIO-STRICT: mixed streams, unknown fields, and undeclared carrier slots reject", () => {
   for (const input of [
     invocationInput({ modeProfile: {

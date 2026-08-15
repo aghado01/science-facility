@@ -43,19 +43,21 @@ migrated. Current behavior is not evidence that every rule below is implemented.
 - Startup loads a complete immutable snapshot. Invalid present configuration
   fails atomically; a missing optional host binding yields typed unavailability.
 - JSON Schema/JSON is the first provider, not a permanent domain dependency.
-- Integration profiles declare supported executable versions. Host bindings may
-  resolve an executable but cannot widen those constraints.
-- Adapter profiles declare the native-event dialect versions for which their
-  mappings are evidenced.
-- Registry initialization requires a non-empty, unambiguous intersection of the
-  integration and adapter constraints.
-- Preflight-observed executable version is launch evidence only.
+- Integration `supported_versions` and host `expected_version` are optional
+  pins. Omission means launch the current resolved executable.
+- Adapter `verified_versions` is an evidence label for the dialect that was
+  checked. It is not a launch gate and does not reject receiver-native versions.
+- An explicit host pin may only narrow a declared integration list. It cannot
+  invent a version the integration forbade. Adapter evidence never participates
+  in that check.
+- Preflight-observed executable version is launch evidence only. A version
+  probe fails before acceptance only when an explicit pin missed.
 - `exchange.application.id/version` requires an explicit mapping from correlated
   receiver-native evidence. If both preflight and native versions exist and
   disagree, the accepted turn fails with
   `NATIVE_APPLICATION_VERSION_MISMATCH`.
-- Claude `2.1.232` is unavailable for a live-verified claim until its evidence is
-  refreshed or the executable is genuinely pinned to the evidenced `2.1.226`.
+- Live-verified claims name the observed version. They do not require a
+  configuration bump.
 - AGY remains fail closed until its profile is independently evidenced.
 
 ## Policy lattice

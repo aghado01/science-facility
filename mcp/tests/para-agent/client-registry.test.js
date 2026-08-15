@@ -285,8 +285,20 @@ test("registry resolves deterministic fake selections and exact version intersec
   const unpinned = new ClientRegistry(unpinnedSnapshot, { adapterProfiles: [await validAdapter()] });
   assert.deepEqual(
     unpinned.resolve({ application: "fake-client", sessionProfile: "restricted" }).supportedVersions,
-    ["1.0.0-fixture", "2.0.0-fixture"],
+    ["1.0.0-fixture", "2.0.0-fixture", "9.9.9-unsupported"],
   );
+});
+
+test("omitted version pins launch the current executable and keep adapter evidence off the launch path", async () => {
+  const values = await validValues();
+  delete values.integrations[0].executable.supported_versions;
+  delete values.hostBindings[0].executable.expected_version;
+  const snapshot = await new ClientConfigProvider().replace(values);
+  const adapter = await validAdapter();
+  adapter.application.verified_versions = ["0.0.0-incompatible"];
+  const registry = new ClientRegistry(snapshot, { adapterProfiles: [adapter] });
+  const selected = registry.resolve({ application: "fake-client", sessionProfile: "restricted" });
+  assert.deepEqual(selected.supportedVersions, []);
 });
 
 test("surface and mode selection fails closed on unsupported or ambiguous requests", async () => {
@@ -398,13 +410,13 @@ test("registry initialization rejects adapter identity, verification, and versio
 
   const versionMismatch = structuredClone(adapter);
   versionMismatch.application.verified_versions = ["0.0.0-incompatible"];
-  assert.throws(() => new ClientRegistry(snapshot, { adapterProfiles: [versionMismatch] }), {
-    code: "INTEGRATION_ADAPTER_INCOMPATIBLE",
-    safeDetails: { reason: "version_intersection_empty" },
-  });
+  assert.deepEqual(
+    new ClientRegistry(snapshot, { adapterProfiles: [versionMismatch] }).getRegistration("fake-client").supportedVersions,
+    ["1.0.0-fixture"],
+  );
 
   const values = await validValues();
-  values.hostBindings[0].executable.expected_version = "9.9.9-unsupported";
+  values.hostBindings[0].executable.expected_version = "0.0.0-not-declared";
   const hostVersionSnapshot = await new ClientConfigProvider().replace(values);
   assert.throws(() => new ClientRegistry(hostVersionSnapshot, { adapterProfiles: [adapter] }), {
     code: "INTEGRATION_ADAPTER_INCOMPATIBLE",

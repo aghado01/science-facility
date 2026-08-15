@@ -386,7 +386,11 @@ function profileParser({ dimension, parser, safeFacts, effectiveAllowedVersions 
         requiredKeys: safeFacts,
       }));
     }
-    if (dimension === "version" && !effectiveAllowedVersions.has(facts.version)) {
+    if (
+      dimension === "version"
+      && effectiveAllowedVersions.size > 0
+      && !effectiveAllowedVersions.has(facts.version)
+    ) {
       return { state: "failed", facts };
     }
     return { state: "passed", facts };
@@ -454,7 +458,6 @@ export function compileReadinessProfile(profile, {
       }),
     });
   });
-  if (dimensions.has("version") && allowedVersions.size === 0) fail("READINESS_MALFORMED", "version");
   return freeze({ requiredDimensions: [...required], probes });
 }
 

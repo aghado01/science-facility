@@ -2,7 +2,8 @@
  * Deterministic registry joining integration, adapter, host, and session facts.
  *
  * Registry selection returns frozen launch authority. It never treats the
- * public application selector or preflight-compatible versions as provenance.
+ * public application selector, adapter evidence lists, or preflight-observed
+ * versions as provenance. Version pins are optional.
  */
 
 import { ClientIntegrationError } from "./errors.js";
@@ -234,11 +235,9 @@ export class ClientRegistry {
       if (adapterProfile.verification?.status !== "verified") throw incompatible("adapter_unverified");
       if (adapterProfile.application.id !== applicationId) throw incompatible("application_identity_mismatch");
 
-      const adapterVersions = new Set(adapterProfile.application.verified_versions);
-      const compatibleVersions = integration.executable.supported_versions
-        .filter((version) => adapterVersions.has(version))
-        .sort((left, right) => left.localeCompare(right, "en"));
-      if (compatibleVersions.length === 0) throw incompatible("version_intersection_empty");
+      const declaredVersions = Array.isArray(integration.executable.supported_versions)
+        ? [...integration.executable.supported_versions].sort((left, right) => left.localeCompare(right, "en"))
+        : [];
 
       const hostBinding = hostByIntegration.get(integration.id) ?? null;
       if (hostBinding) {
@@ -247,7 +246,8 @@ export class ClientRegistry {
         }
         if (
           hostBinding.executable.expected_version !== undefined
-          && !compatibleVersions.includes(hostBinding.executable.expected_version)
+          && declaredVersions.length > 0
+          && !declaredVersions.includes(hostBinding.executable.expected_version)
         ) {
           throw incompatible("host_version_outside_intersection");
         }
@@ -256,7 +256,7 @@ export class ClientRegistry {
       }
 
       const supportedVersions = hostBinding?.executable.expected_version === undefined
-        ? compatibleVersions
+        ? declaredVersions
         : [hostBinding.executable.expected_version];
 
       entries.set(applicationId, deepFreezeClientConfig({

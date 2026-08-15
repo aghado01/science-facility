@@ -192,10 +192,12 @@ function argvTemplate(modeProfile, kind) {
 }
 
 function effectiveAllowedVersions(resolved) {
-  if (!Array.isArray(resolved.supportedVersions)) fail("INVOCATION_PLAN_INVALID");
+  const declared = resolved.supportedVersions;
+  if (declared !== undefined && !Array.isArray(declared)) fail("INVOCATION_PLAN_INVALID");
+  const versions = Array.isArray(declared) ? [...declared] : [];
   const expected = resolved.hostBinding?.executable?.expected_version;
-  if (expected === undefined) return [...resolved.supportedVersions];
-  if (!resolved.supportedVersions.includes(expected)) fail("INVOCATION_PLAN_INVALID");
+  if (expected === undefined) return versions;
+  if (versions.length > 0 && !versions.includes(expected)) fail("INVOCATION_PLAN_INVALID");
   return [expected];
 }
 

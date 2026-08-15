@@ -215,6 +215,18 @@ test("CLAUDE-2.1.226-CONFORMANCE: stdin, live model, terminal result, and omissi
   }));
 
   assert.deepEqual(projections[0].provenance.application, { id: "claude", version: "2.1.226" });
+  const currentNative = structuredClone(rows[0].event);
+  currentNative.claude_code_version = "2.1.232";
+  assert.deepEqual(
+    engine.projectEvent("claude", currentNative, {
+      observedAt: "2026-08-14T03:00:09.000Z",
+      exchangeId: "xid-claude",
+      conversationKey: "process:claude-probe",
+      nativeConversationId: "0c07bff7-7a08-4247-81bc-401643760e46",
+      rawRef: { kind: "receiver_native", trace_ref: "traces/claude/xid-claude.trace", frame_index: 9 },
+    }).provenance.application,
+    { id: "claude", version: "2.1.232" },
+  );
   assert.deepEqual(projections[1].provenance.model, { id: "claude-opus-5" });
   assert.ok(!("turn_id" in projections[1].native_correlation));
   assert.equal(projections[1].record.text, "PARA_STDIN_OK");

@@ -448,7 +448,6 @@ export class AdapterEngine {
       if (applicationId !== profile.application.id) {
         throw new AdapterError("ADAPTER_APPLICATION_MISMATCH", `expected application '${profile.application.id}', observed '${observedApplicationId}'`);
       }
-      this.assertApplicationVersion(applicationId, observedApplicationVersion);
       result.application = { id: applicationId, version: observedApplicationVersion };
     }
 

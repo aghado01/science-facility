@@ -32,7 +32,7 @@
     },
     "executable": {
       "type": "object",
-      "required": ["id", "supported_versions"],
+      "required": ["id"],
       "properties": {
         "id": { "$ref": "#/$defs/id" },
         "supported_versions": {
