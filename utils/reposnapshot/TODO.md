@@ -1,10 +1,26 @@
+remove set strict-mode latest pester front-matter from module files
+
+- these things should live in the test harness files, not the core code
+
+clean up manifesto doc string essays, codify meaningful but misplaced docstring content elsewhere. docstrings should be minimalist and to the point, not exposition on historical context
+
+reshape reposnapshot-v3 into a powershell module
+
+- not everything needs to be a psm1 file
+- eventually, want a psd1 file
+- separate stage files from underlying dependencies
+  - rename stages to stage names e.g. crawler is really a "crawl" stage
+  - colonel isn't a stage, its a dependency of ingest
+  - internals isn't a stage, its a dependency of the future admiral
+  - numerics is a dependency not a stage
+
 Audit all imports and dot-sourcing paths for broken references due to coping code over from powershellcore (executed 2026-07-28 — sweep in CHANGELOG: format.tests.ps1 retargeted to format-ws.ps1 (29/29); colonel.tests.ps1 retired/replaced; colonel-bench.ps1 is the sole remaining v1-era file, deferred until perf work)
 
 write user convenience script to replace `_rs.scratch.ps1`
 
 Update output filewriting convention to create a runstamped subdirectory with shards
 
-make intermediate json monolith optional (DELIVERED 2026-07-29: the IR exists — `rs.core.assemble.psm1`, golden-validated; optional monolith *emission* is a writer-phase knob)
+make intermediate json monolith optional (DELIVERED 2026-07-29: the IR exists — `rs.core.assemble.psm1`, golden-validated; optional monolith _emission_ is a writer-phase knob)
 
 update ignore-compiler's "antisemantics" to be like ThermoMapper's repo-audit's ignore compiler where positive vs negative semantics are toggled as opposed to having positive/selective semantics toggled by executive override (IMPLEMENTED 2026-07-28 as Design v3 — `-IngestMode` on `New-IgnoreCompiler`; `issues/v3/ignore-selection-inversion.md`; names provisional/renameable)
 

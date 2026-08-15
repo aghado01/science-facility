@@ -8,7 +8,7 @@ using namespace System.Collections.Generic
 param()
 
 $scriptRoot = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
-$enginePath = Join-Path $scriptRoot 'reposnapshot-v3\rs.core.template.ps1'
+$enginePath = Join-Path $scriptRoot 'rs.lts.template.ps1'
 if (Test-Path $enginePath)
 {
     . $enginePath
@@ -18,7 +18,7 @@ else
     Write-Verbose "TOC template engine not found: $enginePath"
 }
 
-$shardingModulePath = Join-Path $scriptRoot 'reposnapshot-v3\rs.core.sharding.psm1'
+$shardingModulePath = Join-Path $scriptRoot 'rs.lts.sharding.psm1'
 if (Test-Path $shardingModulePath)
 {
     Import-Module $shardingModulePath -Force -ErrorAction Stop
@@ -79,7 +79,7 @@ function Norm-Path
 function Import-TocTemplateEngine
 {
     $scriptRoot = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
-    $enginePath = Join-Path $scriptRoot 'reposnapshot-v3\rs.core.template.ps1'
+    $enginePath = Join-Path $scriptRoot 'rs.lts.template.ps1'
     if (-not (Test-Path $enginePath))
     {
         Write-Verbose "TOC template engine not found: $enginePath"
@@ -2354,7 +2354,7 @@ function Shard-SnapshotFile
     {
         if (-not (Get-Command Partition-Files -ErrorAction SilentlyContinue))
         {
-            throw "Partition-Files is not available. Ensure rs.core.sharding is imported."
+            throw "Partition-Files is not available. Ensure rs.lts.sharding is imported."
         }
 
         $partitionResult = Partition-Files -Files $rowManifest -MaxFilesPerShard 100000 -MaxShardSizeKB $MaxShardSizeKB -MaxShardSpanBytes $MaxShardSpanBytes -GroupingStrategy $GroupingStrategy -PackingStrategy $PackingStrategy -AllowOversizedShards:$AllowOversizedShards

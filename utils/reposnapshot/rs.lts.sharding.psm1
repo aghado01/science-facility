@@ -1322,8 +1322,8 @@ function Export-ShardedSnapshot {
     $manifest = [PSCustomObject]@{
         created   = (Get-Date).ToString("o")
         generator = @{
-            module            = "rs.core.sharding"
-            version           = "3.1"
+            module            = "RepoSnapshotLTS"
+            version           = "2.9.0"
             powershellversion = $PSVersionTable.PSVersion.ToString()
         }
         source    = @{
