@@ -66,6 +66,7 @@
             strip-wj         yes       yes         U+2060 WORD JOINER
             strip-zwnbsp     yes       yes         U+FEFF anywhere, BOM included
             trim-trailing    yes       yes         Per-line trailing whitespace
+            ensure-trailing-space yes  yes         One trailing space on NON-EMPTY lines; pairs with trim-trailing
             trim-inner       yes       yes         Inline multi-space collapse between words; NOT DEFAULT
             max-blank-1      caution   yes         Keep ≤1 blank line; collapse 2+ blank lines to 1; lossy for prose
             trim-doc         yes       yes         Strip leading/trailing blank lines from document
@@ -103,7 +104,7 @@
 
         Default set (what you get with no Operations key):
             lf · nfc · strip-zwsp · strip-wj · strip-zwnbsp · trim-trailing ·
-            max-blank-1 · trim-doc · ensure-final-lf
+            ensure-trailing-space · max-blank-1 · trim-doc · ensure-final-lf
 
         `trim-inner` is deliberately OUT of it. Every other default touches
         whitespace at line boundaries and margins, where shape is formatting
@@ -121,7 +122,7 @@ param(
     [hashtable]$Config = @{}
 )
 
-$ops = if ($Config.ContainsKey('Operations')) { @($Config['Operations']) } else { @('lf', 'nfc', 'strip-zwsp', 'strip-wj', 'strip-zwnbsp', 'trim-trailing', 'max-blank-1', 'trim-doc', 'ensure-final-lf') }
+$ops = if ($Config.ContainsKey('Operations')) { @($Config['Operations']) } else { @('lf', 'nfc', 'strip-zwsp', 'strip-wj', 'strip-zwnbsp', 'trim-trailing', 'ensure-trailing-space', 'max-blank-1', 'trim-doc', 'ensure-final-lf') }
 $includeMeta = if ($null -ne $Config['IncludeMeta']) { [bool]$Config['IncludeMeta'] } else { $true }
 
 # Content-key resolution — harmonized content-mutator contract (6d), shared by
@@ -203,6 +204,32 @@ if ('trim-trailing' -in $ops)
     $lines = $t -split "`n"
     for ($i = 0; $i -lt $lines.Count; $i++) { $lines[$i] = $lines[$i].TrimEnd() }
     $t = $lines -join "`n"
+}
+
+# The deliberate inverse of trim-trailing, and they are meant to be read as a
+# pair: trim-trailing removes ALL trailing whitespace, this puts exactly one
+# space back, so together they mean "exactly one trailing space on non-empty
+# lines". Reason is reader tokenization — a serialized row should read
+# `def func() \n` rather than `def func()\n`, so the escape does not butt
+# against a code character and blur the token boundary.
+#
+# NON-EMPTY LINES ONLY, and that is load-bearing twice over: it avoids spamming
+# `\n \n` through collapsed blank lines, and a space on a blank line would stop
+# max-blank-1 matching runs at all, since its pattern needs adjacent newlines.
+#
+# A zero-width insertion, so no split/join pass: `(?<=\S)$` matches the
+# end-of-line position ONLY where a non-space precedes it. Both exclusions fall
+# out of that for free — a blank line has no preceding non-space, and a line
+# already ending in a space likewise fails the lookbehind, so the op is additive
+# and idempotent without testing for either case.
+#
+# (?m) so `$` means end-of-LINE, not end-of-string. Note `$` sits between CR and
+# LF on unfolded CRLF, where the lookbehind sees CR and correctly declines — lf
+# has already folded those in any real chain.
+if ('ensure-trailing-space' -in $ops)
+{
+    $ran += 'ensure-trailing-space'
+    $t = $t -replace '(?m)(?<=\S)$', ' '
 }
 
 if ('trim-inner' -in $ops)

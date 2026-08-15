@@ -24,6 +24,8 @@ Set-StrictMode -Version Latest
       5. strip-zwsp / strip-wj — inert invisibles removed, and ZWJ/ZWNJ
          PRESERVED: they carry meaning, so no op strips them at all
       6. trim-trailing — per-line trailing whitespace removed
+      6b. ensure-trailing-space — one trailing space on NON-EMPTY lines; the
+          empty-line exclusion keeps max-blank-1 able to see runs
       7. trim-inner — multi-space runs between words collapsed
       8. max-blank-1 — 2+ blank lines collapsed to 1
       9. trim-doc — leading/trailing blank lines stripped from document
@@ -205,13 +207,13 @@ Assert-True ($rScope.Content -eq "ab`u{2060}c") 'strip-zwsp: leaves WJ alone (on
 $zwjSeq = "$([char]::ConvertFromUtf32(0x1F468))`u{200D}$([char]::ConvertFromUtf32(0x1F469))`u{200D}$([char]::ConvertFromUtf32(0x1F467))"
 $zwnjText = "mi`u{200C}khaham"
 
-# TrimEnd the final LF: the default chain ends with ensure-final-lf, and this
-# assert is about sequence integrity, not about that op.
+# TrimEnd the line-end furniture the default chain adds — ensure-trailing-space
+# then ensure-final-lf. These asserts are about sequence integrity, not those.
 $rDefaultsZwj = Invoke-Processor -Item $zwjSeq
-Assert-True ($rDefaultsZwj.Content.TrimEnd("`n") -eq $zwjSeq) 'DEFAULT chain: ZWJ emoji sequence survives intact'
+Assert-True ($rDefaultsZwj.Content.TrimEnd(@("`n", ' ')) -eq $zwjSeq) 'DEFAULT chain: ZWJ emoji sequence survives intact'
 
 $rDefaultsZwnj = Invoke-Processor -Item $zwnjText
-Assert-True ($rDefaultsZwnj.Content.TrimEnd("`n") -eq $zwnjText) 'DEFAULT chain: ZWNJ survives intact'
+Assert-True ($rDefaultsZwnj.Content.TrimEnd(@("`n", ' ')) -eq $zwnjText) 'DEFAULT chain: ZWNJ survives intact'
 
 # Not merely absent from the defaults — no op strips them, so selecting the
 # entire surface still leaves them intact.
@@ -230,6 +232,39 @@ $trailText = "line1   `nline2  `nline3"
 
 $rTrail = Invoke-Processor -Item $trailText -Config @{ Operations = @('trim-trailing') }
 Assert-True ($rTrail.Content -eq "line1`nline2`nline3") 'trim-trailing: trailing spaces removed per line'
+
+# ============================================================
+# 6b. ensure-trailing-space
+# ============================================================
+Enter-Section '6b. ensure-trailing-space — non-empty lines only'
+
+$rSpace = Invoke-Processor -Item "def func()`nx = 1" -Config @{ Operations = @('ensure-trailing-space') }
+Assert-True ($rSpace.Content -eq "def func() `nx = 1 ") 'ensure-trailing-space: one space appended per non-empty line'
+
+# The whole point: the escape must not butt against a code character.
+$rTok = Invoke-Processor -Item "def func()" -Config @{ Operations = @('ensure-trailing-space', 'ensure-final-lf') }
+Assert-True ($rTok.Content -eq "def func() `n") 'tokenization: row reads `"def func() \n`", not `"def func()\n`"'
+
+# Empty lines stay empty — no `\n \n` spam.
+$rBlank = Invoke-Processor -Item "a`n`nb" -Config @{ Operations = @('ensure-trailing-space') }
+Assert-True ($rBlank.Content -eq "a `n`nb ") 'ensure-trailing-space: blank line gets NO space'
+
+# Load-bearing: a space on a blank line would make max-blank-1's pattern —
+# which needs ADJACENT newlines — never match, silently disabling the op.
+$rRuns = Invoke-Processor -Item "a`n`n`n`n`nb" -Config @{ Operations = @('ensure-trailing-space', 'max-blank-1') }
+Assert-True ($rRuns.Content -eq "a `n`nb ") 'ensure-trailing-space does not defeat max-blank-1 run collapse'
+
+# Additive, like ensure-final-lf: an existing trailing space is not doubled.
+$rIdem = Invoke-Processor -Item "already there " -Config @{ Operations = @('ensure-trailing-space') }
+Assert-True ($rIdem.Content -eq 'already there ') 'ensure-trailing-space: idempotent when already present'
+
+# Paired with trim-trailing it means EXACTLY one, regardless of input run.
+$rPair = Invoke-Processor -Item "ragged      `nclean" -Config @{ Operations = @('trim-trailing', 'ensure-trailing-space') }
+Assert-True ($rPair.Content -eq "ragged `nclean ") 'trim-trailing + ensure-trailing-space: exactly one trailing space'
+
+# Whitespace-only lines are emptied by trim-trailing first, so they stay bare.
+$rWsOnly = Invoke-Processor -Item "a`n   `nb" -Config @{ Operations = @('trim-trailing', 'ensure-trailing-space') }
+Assert-True ($rWsOnly.Content -eq "a `n`nb ") 'whitespace-only line is emptied, then correctly skipped'
 
 # ============================================================
 # 7. trim-inner
