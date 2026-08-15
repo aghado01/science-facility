@@ -3,6 +3,10 @@
   "bounded": [
     { "id": "runner-contract", "runner": "powershell", "path": "runner-contract.tests.ps1" },
     { "id": "manifest-coverage", "runner": "node-test", "path": "manifest-coverage.test.js" },
+    { "id": "client-registry", "runner": "node-test", "path": "client-registry.test.js" },
+    { "id": "client-environment", "runner": "node-test", "path": "client-environment.test.js" },
+    { "id": "client-invocation", "runner": "node-test", "path": "client-invocation.test.js" },
+    { "id": "client-integration", "runner": "node-test", "path": "client-integration.test.js" },
     { "id": "schema", "runner": "node-test", "path": "schema.test.js" },
     { "id": "transcript-store", "runner": "node-test", "path": "transcript-store.test.js" },
     { "id": "conversation-gate", "runner": "node-test", "path": "conversation-gate.test.js" },

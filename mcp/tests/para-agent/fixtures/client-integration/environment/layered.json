@@ -1,0 +1,26 @@
+{
+  "variables": [
+    { "name": "PATH", "required": true, "secret": false },
+    { "name": "CLIENT_MODE", "required": true, "secret": false },
+    { "name": "OPTIONAL_FLAG", "required": false, "secret": false },
+    { "name": "CLIENT_AUTH", "required": false, "secret": true }
+  ],
+  "sources": {
+    "client-auth": { "kind": "process_env", "name": "PARA_AGENT_TEST_AUTH" }
+  },
+  "layers": [
+    {
+      "entries": [
+        { "name": "PATH", "kind": "inherit" },
+        { "name": "CLIENT_MODE", "kind": "literal", "value": "deterministic-λ" },
+        { "name": "OPTIONAL_FLAG", "kind": "literal", "value": "enabled" },
+        { "name": "CLIENT_AUTH", "kind": "source", "source_id": "client-auth" }
+      ]
+    },
+    {
+      "entries": [
+        { "name": "OPTIONAL_FLAG", "kind": "unset" }
+      ]
+    }
+  ]
+}

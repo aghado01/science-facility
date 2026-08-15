@@ -1,0 +1,388 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:science-facility:para-agent:schema:client-integration-profile:1",
+  "title": "Para-Agent Client Integration Profile",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "id",
+    "revision",
+    "application_id",
+    "adapter",
+    "executable",
+    "default_selection",
+    "surfaces",
+    "policy",
+    "environment"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "id": { "$ref": "#/$defs/id" },
+    "revision": { "$ref": "#/$defs/revision" },
+    "application_id": { "$ref": "#/$defs/id" },
+    "adapter": {
+      "type": "object",
+      "required": ["id", "version", "profile_id"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "version": { "$ref": "#/$defs/revision" },
+        "profile_id": { "$ref": "#/$defs/profileId" }
+      },
+      "additionalProperties": false
+    },
+    "executable": {
+      "type": "object",
+      "required": ["id", "supported_versions"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "supported_versions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/revision" },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "default_selection": {
+      "type": "object",
+      "required": ["surface", "mode"],
+      "properties": {
+        "surface": { "$ref": "#/$defs/id" },
+        "mode": { "$ref": "#/$defs/id" }
+      },
+      "additionalProperties": false
+    },
+    "surfaces": {
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/id" },
+      "additionalProperties": { "$ref": "#/$defs/surface" },
+      "minProperties": 1
+    },
+    "policy": { "$ref": "#/$defs/integrationPolicy" },
+    "environment": { "$ref": "#/$defs/integrationEnvironment" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_.-]*$"
+    },
+    "profileId": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_.-]*/[a-z0-9][a-z0-9_.-]*$"
+    },
+    "revision": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.+-]*$",
+      "maxLength": 128
+    },
+    "envName": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+    },
+    "policyValue": {
+      "oneOf": [
+        { "type": "boolean" },
+        { "type": "string", "minLength": 1, "maxLength": 128 },
+        {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "uniqueItems": true
+        }
+      ]
+    },
+    "orderedDimension": {
+      "type": "object",
+      "required": ["kind", "values"],
+      "properties": {
+        "kind": { "const": "ordered" },
+        "values": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "booleanDimension": {
+      "type": "object",
+      "required": ["kind", "narrower"],
+      "properties": {
+        "kind": { "const": "boolean" },
+        "narrower": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "setDimension": {
+      "type": "object",
+      "required": ["kind", "universe"],
+      "properties": {
+        "kind": { "const": "set" },
+        "universe": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "partialOrderDimension": {
+      "type": "object",
+      "required": ["kind", "values", "narrower_or_equal"],
+      "properties": {
+        "kind": { "const": "partial_order" },
+        "values": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "narrower_or_equal": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1, "maxLength": 128 },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "policyDimension": {
+      "oneOf": [
+        { "$ref": "#/$defs/orderedDimension" },
+        { "$ref": "#/$defs/booleanDimension" },
+        { "$ref": "#/$defs/setDimension" },
+        { "$ref": "#/$defs/partialOrderDimension" }
+      ]
+    },
+    "policyValues": {
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/id" },
+      "additionalProperties": { "$ref": "#/$defs/policyValue" }
+    },
+    "integrationPolicy": {
+      "type": "object",
+      "required": ["dimensions", "ceiling", "defaults"],
+      "properties": {
+        "dimensions": {
+          "type": "object",
+          "propertyNames": { "$ref": "#/$defs/id" },
+          "additionalProperties": { "$ref": "#/$defs/policyDimension" },
+          "minProperties": 1
+        },
+        "ceiling": { "$ref": "#/$defs/policyValues" },
+        "defaults": { "$ref": "#/$defs/policyValues" }
+      },
+      "additionalProperties": false
+    },
+    "environmentVariable": {
+      "type": "object",
+      "required": ["name", "required", "secret"],
+      "properties": {
+        "name": { "$ref": "#/$defs/envName" },
+        "required": { "type": "boolean" },
+        "secret": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "literalEntry": {
+      "type": "object",
+      "required": ["name", "kind", "value"],
+      "properties": {
+        "name": { "$ref": "#/$defs/envName" },
+        "kind": { "const": "literal" },
+        "value": { "type": "string", "pattern": "^[^\\u0000]*$" }
+      },
+      "additionalProperties": false
+    },
+    "inheritEntry": {
+      "type": "object",
+      "required": ["name", "kind"],
+      "properties": {
+        "name": { "$ref": "#/$defs/envName" },
+        "kind": { "const": "inherit" }
+      },
+      "additionalProperties": false
+    },
+    "sourceEntry": {
+      "type": "object",
+      "required": ["name", "kind", "source_id"],
+      "properties": {
+        "name": { "$ref": "#/$defs/envName" },
+        "kind": { "const": "source" },
+        "source_id": { "$ref": "#/$defs/id" }
+      },
+      "additionalProperties": false
+    },
+    "unsetEntry": {
+      "type": "object",
+      "required": ["name", "kind"],
+      "properties": {
+        "name": { "$ref": "#/$defs/envName" },
+        "kind": { "const": "unset" }
+      },
+      "additionalProperties": false
+    },
+    "environmentEntry": {
+      "oneOf": [
+        { "$ref": "#/$defs/literalEntry" },
+        { "$ref": "#/$defs/inheritEntry" },
+        { "$ref": "#/$defs/sourceEntry" },
+        { "$ref": "#/$defs/unsetEntry" }
+      ]
+    },
+    "integrationEnvironment": {
+      "type": "object",
+      "required": ["variables", "entries"],
+      "properties": {
+        "variables": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/environmentVariable" },
+          "uniqueItems": true
+        },
+        "entries": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/environmentEntry" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "readinessDimension": {
+      "enum": [
+        "executable",
+        "version",
+        "configuration",
+        "authentication",
+        "capabilities",
+        "environment_sources",
+        "environment_exact",
+        "workspace",
+        "prompt_carrier",
+        "backend"
+      ]
+    },
+    "probeParser": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {
+        "kind": { "enum": ["exit_code", "utf8_text", "json"] },
+        "success_exit_codes": {
+          "type": "array",
+          "items": { "type": "integer", "minimum": 0, "maximum": 255 },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "readinessProbe": {
+      "type": "object",
+      "required": ["id", "dimension", "kind", "timeout_ms", "max_output_bytes", "parser"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "dimension": { "$ref": "#/$defs/readinessDimension" },
+        "kind": { "enum": ["command", "static"] },
+        "fixed_args": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/argument" }
+        },
+        "timeout_ms": { "type": "integer", "minimum": 1, "maximum": 120000 },
+        "max_output_bytes": { "type": "integer", "minimum": 1, "maximum": 1048576 },
+        "parser": { "$ref": "#/$defs/probeParser" },
+        "safe_facts": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/id" },
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "readiness": {
+      "type": "object",
+      "required": ["required", "probes"],
+      "properties": {
+        "required": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/readinessDimension" },
+          "uniqueItems": true
+        },
+        "probes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/readinessProbe" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "carrier": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["kind"],
+          "properties": { "kind": { "const": "stdin_utf8" } },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["kind", "arg_template"],
+          "properties": {
+            "kind": { "const": "prompt_file" },
+            "arg_template": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/argument" },
+              "minItems": 1
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "stdio": {
+      "type": "object",
+      "required": ["prompt", "semantic", "diagnostic"],
+      "properties": {
+        "prompt": { "enum": ["stdin", "file"] },
+        "semantic": { "const": "stdout" },
+        "diagnostic": { "const": "stderr" }
+      },
+      "additionalProperties": false
+    },
+    "argument": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[^\\u0000]+$"
+    },
+    "mode": {
+      "type": "object",
+      "required": ["backend", "fixed_args", "carrier", "stdio", "readiness"],
+      "properties": {
+        "backend": { "enum": ["process", "managed_mux"] },
+        "fixed_args": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/argument" }
+        },
+        "carrier": { "$ref": "#/$defs/carrier" },
+        "stdio": { "$ref": "#/$defs/stdio" },
+        "readiness": { "$ref": "#/$defs/readiness" }
+      },
+      "additionalProperties": false
+    },
+    "surface": {
+      "type": "object",
+      "required": ["modes"],
+      "properties": {
+        "modes": {
+          "type": "object",
+          "propertyNames": { "$ref": "#/$defs/id" },
+          "additionalProperties": { "$ref": "#/$defs/mode" },
+          "minProperties": 1
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

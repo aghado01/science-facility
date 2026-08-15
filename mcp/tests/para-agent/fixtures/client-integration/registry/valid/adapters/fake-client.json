@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "profile_id": "fake-client/events-v1",
+  "adapter": {
+    "id": "para-agent.fake-client",
+    "version": "1.0.0"
+  },
+  "application": {
+    "id": "fake-client",
+    "display_name": "Fake Registry Client",
+    "verified_versions": ["2.0.0-fixture", "1.0.0-fixture"]
+  },
+  "verification": {
+    "status": "verified",
+    "evidence": [
+      {
+        "kind": "fixture",
+        "reference": "mcp/tests/para-agent/fixtures/client-integration/registry/valid/adapters/fake-client.json"
+      }
+    ]
+  },
+  "capabilities": {
+    "prompt_delivery": true,
+    "prompt_observation": false,
+    "terminal_events": true,
+    "scoped_cancellation": false,
+    "model_identity": false,
+    "reasoning_events": false,
+    "tool_calls": false,
+    "tool_results": false
+  },
+  "transport": {
+    "kind": "raw_stdin",
+    "encoding": "utf-8",
+    "framing": "eof",
+    "byte_preserving": true,
+    "command": ["fake-client"]
+  },
+  "native_events": {
+    "format": "jsonl",
+    "discriminator_path": "type",
+    "unknown_event_policy": "preserve_raw"
+  },
+  "correlation_mappings": {
+    "exchange_id_path": "exchange_id"
+  },
+  "provenance_mappings": {
+    "application_id_path": "application.id",
+    "application_version_path": "application.version"
+  },
+  "prompt_delivery": {
+    "payload_format": "raw_utf8"
+  },
+  "terminal_events": [
+    {
+      "native_type": "turn.result",
+      "outcome": "completed",
+      "reply_source": { "strategy": "event_path", "path": "reply" }
+    }
+  ],
+  "record_mappings": [
+    {
+      "kind": "response",
+      "native_type": "assistant.message",
+      "fields": { "text": "text" }
+    }
+  ]
+}

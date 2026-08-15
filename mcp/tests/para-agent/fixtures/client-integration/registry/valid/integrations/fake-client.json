@@ -1,0 +1,123 @@
+{
+  "schema_version": 1,
+  "id": "fake-client",
+  "revision": "registry-v1",
+  "application_id": "fake-client",
+  "adapter": {
+    "id": "para-agent.fake-client",
+    "version": "1.0.0",
+    "profile_id": "fake-client/events-v1"
+  },
+  "executable": {
+    "id": "fake-client-cli",
+    "supported_versions": ["2.0.0-fixture", "1.0.0-fixture", "9.9.9-unsupported"]
+  },
+  "default_selection": {
+    "surface": "delegate",
+    "mode": "headless"
+  },
+  "surfaces": {
+    "delegate": {
+      "modes": {
+        "headless": {
+          "backend": "process",
+          "fixed_args": ["--stream-json", "--no-tools"],
+          "carrier": { "kind": "stdin_utf8" },
+          "stdio": {
+            "prompt": "stdin",
+            "semantic": "stdout",
+            "diagnostic": "stderr"
+          },
+          "readiness": {
+            "required": ["executable", "version", "environment_exact", "workspace", "prompt_carrier", "backend"],
+            "probes": [
+              {
+                "id": "version",
+                "dimension": "version",
+                "kind": "command",
+                "fixed_args": ["--version"],
+                "timeout_ms": 1000,
+                "max_output_bytes": 4096,
+                "parser": { "kind": "utf8_text", "success_exit_codes": [0] },
+                "safe_facts": ["version"]
+              }
+            ]
+          }
+        }
+      }
+    },
+    "batch": {
+      "modes": {
+        "audit": {
+          "backend": "process",
+          "fixed_args": ["--audit"],
+          "carrier": { "kind": "stdin_utf8" },
+          "stdio": { "prompt": "stdin", "semantic": "stdout", "diagnostic": "stderr" },
+          "readiness": { "required": [], "probes": [] }
+        },
+        "headless": {
+          "backend": "process",
+          "fixed_args": ["--batch"],
+          "carrier": { "kind": "stdin_utf8" },
+          "stdio": { "prompt": "stdin", "semantic": "stdout", "diagnostic": "stderr" },
+          "readiness": { "required": [], "probes": [] }
+        }
+      }
+    },
+    "managed-pane": {
+      "modes": {
+        "console": {
+          "backend": "managed_mux",
+          "fixed_args": ["--console"],
+          "carrier": {
+            "kind": "prompt_file",
+            "arg_template": ["--prompt-file", "{carrier_path}"]
+          },
+          "stdio": { "prompt": "file", "semantic": "stdout", "diagnostic": "stderr" },
+          "readiness": { "required": ["prompt_carrier"], "probes": [] }
+        }
+      }
+    }
+  },
+  "policy": {
+    "dimensions": {
+      "access": { "kind": "ordered", "values": ["none", "read", "write"] },
+      "web": { "kind": "boolean", "narrower": false },
+      "tools": { "kind": "set", "universe": ["read", "edit"] },
+      "sandbox": {
+        "kind": "partial_order",
+        "values": ["isolated", "read-only", "workspace-write"],
+        "narrower_or_equal": [
+          ["isolated", "isolated"],
+          ["isolated", "read-only"],
+          ["isolated", "workspace-write"],
+          ["read-only", "read-only"],
+          ["workspace-write", "workspace-write"]
+        ]
+      }
+    },
+    "ceiling": {
+      "access": "write",
+      "web": true,
+      "tools": ["read", "edit"],
+      "sandbox": "workspace-write"
+    },
+    "defaults": {
+      "access": "read",
+      "web": false,
+      "tools": ["read"],
+      "sandbox": "isolated"
+    }
+  },
+  "environment": {
+    "variables": [
+      { "name": "PATH", "required": true, "secret": false },
+      { "name": "FAKE_TOKEN", "required": true, "secret": true },
+      { "name": "FAKE_OPTIONAL", "required": false, "secret": false }
+    ],
+    "entries": [
+      { "name": "PATH", "kind": "inherit" },
+      { "name": "FAKE_TOKEN", "kind": "source", "source_id": "fake-token" }
+    ]
+  }
+}

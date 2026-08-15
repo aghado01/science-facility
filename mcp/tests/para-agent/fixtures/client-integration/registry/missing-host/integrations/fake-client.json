@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "id": "fake-client",
+  "revision": "registry-v1",
+  "application_id": "fake-client",
+  "adapter": {
+    "id": "para-agent.fake-client",
+    "version": "1.0.0",
+    "profile_id": "fake-client/events-v1"
+  },
+  "executable": {
+    "id": "fake-client-cli",
+    "supported_versions": ["1.0.0-fixture"]
+  },
+  "default_selection": { "surface": "delegate", "mode": "headless" },
+  "surfaces": {
+    "delegate": {
+      "modes": {
+        "headless": {
+          "backend": "process",
+          "fixed_args": [],
+          "carrier": { "kind": "stdin_utf8" },
+          "stdio": { "prompt": "stdin", "semantic": "stdout", "diagnostic": "stderr" },
+          "readiness": { "required": [], "probes": [] }
+        }
+      }
+    }
+  },
+  "policy": {
+    "dimensions": { "access": { "kind": "ordered", "values": ["none", "read"] } },
+    "ceiling": { "access": "read" },
+    "defaults": { "access": "none" }
+  },
+  "environment": { "variables": [], "entries": [] }
+}

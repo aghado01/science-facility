@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "id": "restricted",
+  "revision": "session-v1",
+  "workspace": "fake-workspace",
+  "policy": { "values": { "access": "none" } },
+  "environment": { "entries": [] }
+}

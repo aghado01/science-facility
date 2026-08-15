@@ -1,0 +1,160 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:science-facility:para-agent:schema:client-host-binding:1",
+  "title": "Para-Agent Client Host Binding",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "id",
+    "revision",
+    "platform",
+    "integration_id",
+    "integration_revision",
+    "executable",
+    "policy",
+    "environment",
+    "workspaces"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "id": { "$ref": "#/$defs/id" },
+    "revision": { "$ref": "#/$defs/revision" },
+    "platform": { "enum": ["win32", "linux", "darwin"] },
+    "integration_id": { "$ref": "#/$defs/id" },
+    "integration_revision": { "$ref": "#/$defs/revision" },
+    "executable": {
+      "type": "object",
+      "required": ["path"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1, "pattern": "^[^\\u0000]+$" },
+        "expected_version": { "$ref": "#/$defs/revision" }
+      },
+      "additionalProperties": false
+    },
+    "runtime": {
+      "type": "object",
+      "properties": {
+        "prompt_file_root": { "type": "string", "minLength": 1, "pattern": "^[^\\u0000]+$" }
+      },
+      "additionalProperties": false
+    },
+    "policy": {
+      "type": "object",
+      "required": ["ceiling", "defaults"],
+      "properties": {
+        "ceiling": { "$ref": "#/$defs/policyValues" },
+        "defaults": { "$ref": "#/$defs/policyValues" }
+      },
+      "additionalProperties": false
+    },
+    "environment": {
+      "type": "object",
+      "required": ["sources", "entries"],
+      "properties": {
+        "sources": {
+          "type": "object",
+          "propertyNames": { "$ref": "#/$defs/id" },
+          "additionalProperties": {
+            "type": "object",
+            "required": ["kind", "name"],
+            "properties": {
+              "kind": { "const": "process_env" },
+              "name": { "$ref": "#/$defs/envName" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "entries": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/environmentEntry" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "workspaces": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "root"],
+        "properties": {
+          "id": { "$ref": "#/$defs/id" },
+          "root": { "type": "string", "minLength": 1, "pattern": "^[^\\u0000]+$" }
+        },
+        "additionalProperties": false
+      },
+      "minItems": 1
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9_.-]*$" },
+    "revision": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.+-]*$",
+      "maxLength": 128
+    },
+    "envName": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
+    "policyValue": {
+      "oneOf": [
+        { "type": "boolean" },
+        { "type": "string", "minLength": 1, "maxLength": 128 },
+        {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "uniqueItems": true
+        }
+      ]
+    },
+    "policyValues": {
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/id" },
+      "additionalProperties": { "$ref": "#/$defs/policyValue" }
+    },
+    "literalEntry": {
+      "type": "object",
+      "required": ["name", "kind", "value"],
+      "properties": {
+        "name": { "$ref": "#/$defs/envName" },
+        "kind": { "const": "literal" },
+        "value": { "type": "string", "pattern": "^[^\\u0000]*$" }
+      },
+      "additionalProperties": false
+    },
+    "inheritEntry": {
+      "type": "object",
+      "required": ["name", "kind"],
+      "properties": {
+        "name": { "$ref": "#/$defs/envName" },
+        "kind": { "const": "inherit" }
+      },
+      "additionalProperties": false
+    },
+    "sourceEntry": {
+      "type": "object",
+      "required": ["name", "kind", "source_id"],
+      "properties": {
+        "name": { "$ref": "#/$defs/envName" },
+        "kind": { "const": "source" },
+        "source_id": { "$ref": "#/$defs/id" }
+      },
+      "additionalProperties": false
+    },
+    "unsetEntry": {
+      "type": "object",
+      "required": ["name", "kind"],
+      "properties": {
+        "name": { "$ref": "#/$defs/envName" },
+        "kind": { "const": "unset" }
+      },
+      "additionalProperties": false
+    },
+    "environmentEntry": {
+      "oneOf": [
+        { "$ref": "#/$defs/literalEntry" },
+        { "$ref": "#/$defs/inheritEntry" },
+        { "$ref": "#/$defs/sourceEntry" },
+        { "$ref": "#/$defs/unsetEntry" }
+      ]
+    }
+  }
+}

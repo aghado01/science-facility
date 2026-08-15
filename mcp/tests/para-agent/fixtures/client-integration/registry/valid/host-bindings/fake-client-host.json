@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "id": "fake-client-local",
+  "revision": "host-v1",
+  "platform": "win32",
+  "integration_id": "fake-client",
+  "integration_revision": "registry-v1",
+  "executable": {
+    "path": "D:\\fake-client\\fake-client.exe",
+    "expected_version": "1.0.0-fixture"
+  },
+  "runtime": {
+    "prompt_file_root": "D:\\fake-client\\runtime\\prompts"
+  },
+  "policy": {
+    "ceiling": {
+      "access": "read",
+      "web": false,
+      "tools": ["read"],
+      "sandbox": "read-only"
+    },
+    "defaults": {
+      "access": "read",
+      "web": false,
+      "tools": ["read"],
+      "sandbox": "isolated"
+    }
+  },
+  "environment": {
+    "sources": {
+      "fake-token": { "kind": "process_env", "name": "PARA_FAKE_TOKEN" }
+    },
+    "entries": [
+      { "name": "FAKE_OPTIONAL", "kind": "literal", "value": "fixture" }
+    ]
+  },
+  "workspaces": [
+    { "id": "fake-workspace", "root": "D:\\fake-workspace" }
+  ]
+}
