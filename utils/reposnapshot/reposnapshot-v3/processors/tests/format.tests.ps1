@@ -127,7 +127,7 @@ Enter-Section '2. Default ops (no Operations key in Config)'
 $rDefault = Invoke-Processor -Item "hello   world`r`n`r`n`r`n`r`nend"
 Assert-True ($rDefault -is [pscustomobject]) 'No Operations: returns object'
 Assert-True ($rDefault.Content -notmatch "`r") 'No Operations: lf applied (CRLF gone)'
-Assert-True ($rDefault.Content -notmatch '   ') 'No Operations: trim-inner applied'
+Assert-True ($rDefault.Content -match 'hello   world') 'No Operations: trim-inner NOT applied (opt-in — it rewrites data inside literals)'
 Assert-True ($rDefault.Content -notmatch "`n`n`n") 'No Operations: max-blank-1 applied (at most one blank line survives)'
 Assert-True ($rDefault.Processing[0].Operations.Count -gt 0) 'No Operations: Processing record carries the resolved defaults'
 

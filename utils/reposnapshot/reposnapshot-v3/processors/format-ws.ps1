@@ -53,10 +53,23 @@
             nfc              yes       yes         Unicode NFC normalization
             strip-zwsp       yes       yes         Zero-width invisibles
             trim-trailing    yes       yes         Per-line trailing whitespace
-            trim-inner       yes       yes         Inline multi-space collapse between words
+            trim-inner       yes       yes         Inline multi-space collapse between words; NOT DEFAULT
             max-blank-1      caution   yes         Keep ≤1 blank line; collapse 2+ blank lines to 1; lossy for prose
             trim-doc         yes       yes         Strip leading/trailing blank lines from document
             ensure-final-lf  yes       yes         Append a final LF if absent; runs LAST
+
+        Default set (what you get with no Operations key) — the whitespace-
+        structural ops only:
+            lf · no-bom · nfc · strip-zwsp · trim-trailing · max-blank-1 ·
+            trim-doc · ensure-final-lf
+
+        `trim-inner` is deliberately OUT of it. Every other default touches
+        whitespace at line boundaries and margins, where shape is formatting
+        rather than data; trim-inner reaches INSIDE a line and rewrites spacing
+        that may be content — embedded SQL, fixed-width format templates,
+        aligned output strings, ASCII art. The processor is lexically blind
+        (unlike rs-psstrip/rs-csstrip it has no string masking), so it cannot
+        tell a literal from code. Available on request, not by default.
 #>
 # [CmdletBinding()]
 param(
@@ -66,7 +79,7 @@ param(
     [hashtable]$Config = @{}
 )
 
-$ops = if ($Config.ContainsKey('Operations')) { @($Config['Operations']) } else { @('lf', 'no-bom', 'nfc', 'strip-zwsp', 'trim-trailing', 'trim-inner', 'max-blank-1', 'trim-doc', 'ensure-final-lf') }
+$ops = if ($Config.ContainsKey('Operations')) { @($Config['Operations']) } else { @('lf', 'no-bom', 'nfc', 'strip-zwsp', 'trim-trailing', 'max-blank-1', 'trim-doc', 'ensure-final-lf') }
 $includeMeta = if ($null -ne $Config['IncludeMeta']) { [bool]$Config['IncludeMeta'] } else { $true }
 
 # Content-key resolution — harmonized content-mutator contract (6d), shared by
