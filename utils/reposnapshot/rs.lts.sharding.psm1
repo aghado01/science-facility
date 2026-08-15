@@ -40,7 +40,7 @@ Set-StrictMode -Version Latest
 
 # Numeric core (identity hashing + simhash) — replaces rs.core.hash/lsh
 
-Import-Module (Join-Path $PSScriptRoot 'rs.core.numerics.psm1') -ErrorAction Stop
+Import-Module (Join-Path $PSScriptRoot 'rs.lts.numerics.psm1') -ErrorAction Stop
 
 
 # ═══════════════════════════════════════════════════════════════════════════
