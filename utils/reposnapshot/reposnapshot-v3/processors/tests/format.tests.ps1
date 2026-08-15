@@ -33,6 +33,8 @@ Set-StrictMode -Version Latest
          a bag (bare-string input still returns a bare string)
      12. Empty Operations — no-op (text passes through unchanged)
      13. Empty text — returns empty string
+     15. nfc receipt honesty — Operations lists what RAN, not what was asked
+         for; a declining nfc leaves the list and states why under Skipped
      14. Harmonized content-mutator contract (6d) — identity survival,
          copy-on-mutate, no-content pass-through, Processing trail order
 
@@ -370,6 +372,47 @@ Assert-Equal $pass2.Processing.Count 2 'Processing: two passes recorded (no over
 Assert-Equal $pass2.Processing[0].Operations[0] 'lf' 'Processing: first record keeps its own ops'
 Assert-Equal $pass2.Processing[1].Operations[0] 'trim-inner' 'Processing: second record appended in chain order'
 Assert-Equal $pass2.RelativePath 'src/a.txt' 'Processing: identity survives a two-step chain'
+
+# ============================================================
+# 15. nfc receipt honesty
+# ============================================================
+Enter-Section '15. nfc receipt honesty — Operations reports what RAN'
+
+# Decomposed e + combining acute; NFC composes it to a single U+00E9.
+$decomposed = "cafe`u{0301}"
+$rNfcOk = Invoke-Processor -Item $decomposed -Config @{ Operations = @('nfc') }
+Assert-True ($rNfcOk.Content -eq "caf`u{00E9}") 'nfc: decomposed sequence composed'
+Assert-True ($rNfcOk.Processing[0].Operations -contains 'nfc') 'nfc succeeded: listed in Operations'
+Assert-True ($null -eq $rNfcOk.Processing[0].PSObject.Properties['Skipped']) 'nfc succeeded: no Skipped field — its absence means everything listed ran'
+
+# A lone high surrogate is ill-formed UTF-16; String.Normalize refuses it.
+$illFormed = "a$([char]0xD800)b"
+$rNfcBad = Invoke-Processor -Item $illFormed -Config @{ Operations = @('nfc') }
+
+Assert-True ($rNfcBad.Content -eq $illFormed) 'nfc declined: content passes through untouched (never-fail ingest)'
+Assert-True ($rNfcBad.Processing[0].Operations -notcontains 'nfc') 'nfc declined: NOT listed in Operations — the receipt does not claim a fold that did not happen'
+Assert-True ($null -ne $rNfcBad.Processing[0].PSObject.Properties['Skipped']) 'nfc declined: Skipped field present'
+Assert-Equal $rNfcBad.Processing[0].Skipped[0].Op 'nfc' 'nfc declined: Skipped names the op'
+Assert-Equal $rNfcBad.Processing[0].Skipped[0].Reason 'InvalidUnicode' 'nfc declined: Skipped states the reason'
+
+# The other ops still run and are still reported — one op declining does not
+# silence the receipt for the rest.
+$rMixed = Invoke-Processor -Item "a$([char]0xD800)b   c`r`n" -Config @{ Operations = @('lf', 'nfc', 'trim-inner') }
+Assert-True ($rMixed.Processing[0].Operations -contains 'lf') 'mixed: lf still reported'
+Assert-True ($rMixed.Processing[0].Operations -contains 'trim-inner') 'mixed: trim-inner still reported'
+Assert-True ($rMixed.Processing[0].Operations -notcontains 'nfc') 'mixed: only the declining op leaves the list'
+Assert-True ($rMixed.Content -eq "a$([char]0xD800)b c`n") 'mixed: surviving ops actually applied'
+
+# Operations must stay an ARRAY at every count. A single-element result reached
+# through an if-expression collapses to a scalar string, making Operations[0]
+# the first CHARACTER — the unroll trap assemble already hit once.
+$rOne = Invoke-Processor -Item 'x' -Config @{ Operations = @('lf') }
+Assert-True ($rOne.Processing[0].Operations -is [array]) 'single op: Operations is an array, not a collapsed scalar'
+Assert-Equal $rOne.Processing[0].Operations[0] 'lf' 'single op: Operations[0] is the op, not its first character'
+
+$rOneSkip = Invoke-Processor -Item $illFormed -Config @{ Operations = @('nfc', 'lf') }
+Assert-True ($rOneSkip.Processing[0].Operations -is [array]) 'single op after nfc declines: still an array'
+Assert-Equal $rOneSkip.Processing[0].Operations[0] 'lf' 'single op after nfc declines: survivor intact'
 
 # ============================================================
 # Summary

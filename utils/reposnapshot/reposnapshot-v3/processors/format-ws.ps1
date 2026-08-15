@@ -43,6 +43,12 @@
                 @{ Processor; Operations; <processor-specific extras> }
             Chain order = array order, so a profile that runs the same
             processor twice records both passes instead of overwriting.
+
+            This processor's extra: `Skipped` — present ONLY when an op was
+            requested and declined, as @{ Op; Reason }. Today that is nfc
+            alone (Reason = 'InvalidUnicode'); every other op is an
+            unconditional text transform that cannot fail. Its absence
+            therefore means "everything listed in Operations actually ran".
             Assemble collates it as an ordinary element (open element model —
             no per-element branches, declared in Header.Elements).
 
@@ -136,9 +142,19 @@ if ('lf' -in $ops)
     $t = $t -replace "`r`n", "`n" -replace '[\r\u000B\u000C\u0085\u2028\u2029]', "`n"
 }
 
+# Declared outside the block: the record below reads it unconditionally, and
+# processor bodies must not assume strict-mode-free hosts.
+$nfcSkipped = $null
+
 if ('nfc' -in $ops)
 {
-    try { $t = $t.Normalize([System.Text.NormalizationForm]::FormC) } catch {}
+    # String.Normalize throws on ill-formed UTF-16 (a lone surrogate). Skipping
+    # is the correct degradation under never-fail-ingest — conservative, never
+    # refusing — but the receipt must then SAY so. Recording 'nfc' as applied
+    # when it declined is a lie the reader cannot detect, and a fold nobody can
+    # audit is the inverse of this project's receipts posture.
+    try { $t = $t.Normalize([System.Text.NormalizationForm]::FormC) }
+    catch { $nfcSkipped = 'InvalidUnicode' }
 }
 
 # One op per code point. ZWJ U+200D and ZWNJ U+200C are absent by design \u2014
@@ -197,5 +213,18 @@ if ('ensure-final-lf' -in $ops)
 # resolved content key, passes everything else through so identity fields (and
 # any elements earlier chain steps attached) survive. Bare string in → bare
 # string out. IncludeMeta = $false simply withholds the Processing record.
-$record = if ($includeMeta) { [pscustomobject]@{ Processor = 'format'; Operations = @($ops) } } else { $null }
+# Operations reports what RAN, not what was requested. nfc is the only op that
+# can decline; when it does it leaves the list and states why under Skipped.
+# Two statements, not an if-expression: an if-expression ENUMERATES its output,
+# collapsing a one-element array to a scalar — @('lf') would arrive as the
+# string 'lf' and Operations[0] would be 'l'. Same trap assemble hit.
+$applied = @($ops)
+if ($nfcSkipped) { $applied = @($ops | Where-Object { $_ -ne 'nfc' }) }
+$record = if ($includeMeta)
+{
+    $fields = [ordered]@{ Processor = 'format'; Operations = $applied }
+    if ($nfcSkipped) { $fields['Skipped'] = @([pscustomobject]@{ Op = 'nfc'; Reason = $nfcSkipped }) }
+    [pscustomobject]$fields
+}
+else { $null }
 return Copy-Bag -Item $Item -Resolved $bc -Content $t -Record $record
