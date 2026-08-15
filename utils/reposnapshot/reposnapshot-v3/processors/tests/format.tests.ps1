@@ -414,6 +414,26 @@ $rOneSkip = Invoke-Processor -Item $illFormed -Config @{ Operations = @('nfc', '
 Assert-True ($rOneSkip.Processing[0].Operations -is [array]) 'single op after nfc declines: still an array'
 Assert-Equal $rOneSkip.Processing[0].Operations[0] 'lf' 'single op after nfc declines: survivor intact'
 
+# ── Unknown op names: the same lie in a different costume. A typo matches no
+# block, so it silently transforms nothing — echoing it would claim otherwise.
+$rTypo = Invoke-Processor -Item "a   b`r`n" -Config @{ Operations = @('lf', 'trim-trailng') }
+Assert-True ($rTypo.Processing[0].Operations -contains 'lf') 'typo: the real op still ran and is reported'
+Assert-True ($rTypo.Processing[0].Operations -notcontains 'trim-trailng') 'typo: unknown name NOT reported as applied'
+Assert-Equal $rTypo.Processing[0].Skipped[0].Op 'trim-trailng' 'typo: Skipped names the unrecognized op'
+Assert-Equal $rTypo.Processing[0].Skipped[0].Reason 'UnknownOp' 'typo: Skipped distinguishes UnknownOp from a decline'
+Assert-True ($rTypo.Content -eq "a   b`n") 'typo: ingest is not failed by a config mistake'
+
+# Both skip reasons can coexist, and stay distinguishable.
+$rBoth = Invoke-Processor -Item $illFormed -Config @{ Operations = @('nfc', 'bogus-op') }
+$reasons = @($rBoth.Processing[0].Skipped | ForEach-Object { "$($_.Op)=$($_.Reason)" })
+Assert-True ($reasons -contains 'nfc=InvalidUnicode') 'both: nfc decline keeps its own reason'
+Assert-True ($reasons -contains 'bogus-op=UnknownOp') 'both: unknown name keeps its own reason'
+Assert-True ($rBoth.Processing[0].Operations.Count -eq 0) 'both: nothing ran, so Operations is empty rather than echoing the request'
+
+# A duplicate name must not produce duplicate skip records.
+$rDup = Invoke-Processor -Item 'x' -Config @{ Operations = @('nope', 'nope') }
+Assert-True (@($rDup.Processing[0].Skipped).Count -eq 1) 'duplicate unknown name: recorded once, not per occurrence'
+
 # ============================================================
 # Summary
 # ============================================================

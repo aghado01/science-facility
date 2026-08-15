@@ -44,11 +44,17 @@
             Chain order = array order, so a profile that runs the same
             processor twice records both passes instead of overwriting.
 
-            This processor's extra: `Skipped` — present ONLY when an op was
-            requested and declined, as @{ Op; Reason }. Today that is nfc
-            alone (Reason = 'InvalidUnicode'); every other op is an
-            unconditional text transform that cannot fail. Its absence
-            therefore means "everything listed in Operations actually ran".
+            This processor's extra: `Skipped` — present ONLY when a requested
+            op did not run, as @{ Op; Reason }. Two reasons exist:
+                InvalidUnicode  nfc declined (ill-formed UTF-16). The only op
+                                that can fail; the rest are unconditional
+                                text transforms.
+                UnknownOp       the name matches no op — a typo such as
+                                'trim-trailng' silently transforms nothing.
+            Operations therefore lists ONLY what actually ran, and Skipped's
+            absence means everything listed did run. Note `Operations` is built
+            by the op blocks themselves as they execute; there is no separate
+            roster of valid names to drift out of sync with them.
             Assemble collates it as an ordinary element (open element model —
             no per-element branches, declared in Header.Elements).
 
@@ -126,8 +132,18 @@ if ($null -eq $bc) { return $Item }
 
 $t = $bc.Text
 
+# Receipt state. $ran is built BY THE OPS THEMSELVES as they execute — there is
+# deliberately no separate list of "known ops" to consult, because a second list
+# is a second thing to maintain and the two drift. Anything requested that does
+# not appear in $ran did not run, and the reason is either recorded explicitly
+# (nfc declining) or is simply that no op answers to that name.
+$ran = @()
+$skipped = @()
+
 if ('lf' -in $ops)
 {
+    $ran += 'lf'
+
     # STERILIZES EVERY LINE TERMINATOR, not just CRLF/CR, so everything
     # downstream can treat LF as the only break character and mean it.
     # CRLF is folded first — as a character class it would become two breaks.
@@ -142,10 +158,6 @@ if ('lf' -in $ops)
     $t = $t -replace "`r`n", "`n" -replace '[\r\u000B\u000C\u0085\u2028\u2029]', "`n"
 }
 
-# Declared outside the block: the record below reads it unconditionally, and
-# processor bodies must not assume strict-mode-free hosts.
-$nfcSkipped = $null
-
 if ('nfc' -in $ops)
 {
     # String.Normalize throws on ill-formed UTF-16 (a lone surrogate). Skipping
@@ -153,8 +165,12 @@ if ('nfc' -in $ops)
     # refusing — but the receipt must then SAY so. Recording 'nfc' as applied
     # when it declined is a lie the reader cannot detect, and a fold nobody can
     # audit is the inverse of this project's receipts posture.
-    try { $t = $t.Normalize([System.Text.NormalizationForm]::FormC) }
-    catch { $nfcSkipped = 'InvalidUnicode' }
+    try
+    {
+        $t = $t.Normalize([System.Text.NormalizationForm]::FormC)
+        $ran += 'nfc'
+    }
+    catch { $skipped += [pscustomobject]@{ Op = 'nfc'; Reason = 'InvalidUnicode' } }
 }
 
 # One op per code point. ZWJ U+200D and ZWNJ U+200C are absent by design \u2014
@@ -162,22 +178,27 @@ if ('nfc' -in $ops)
 # irrelevant: none is produced or consumed by NFC or by the others.
 if ('strip-zwsp' -in $ops)
 {
+    $ran += 'strip-zwsp'
     $t = $t -replace '\u200B', ''
 }
 
 if ('strip-wj' -in $ops)
 {
+    $ran += 'strip-wj'
     $t = $t -replace '\u2060', ''
 }
 
 # Unanchored, so this covers a leading BOM as well as any mid-file ZWNBSP.
 if ('strip-zwnbsp' -in $ops)
 {
+    $ran += 'strip-zwnbsp'
     $t = $t -replace '\uFEFF', ''
 }
 
 if ('trim-trailing' -in $ops)
 {
+    $ran += 'trim-trailing'
+
     # Index loop mutating in place — no pipeline, no per-item cmdlet dispatch.
     $lines = $t -split "`n"
     for ($i = 0; $i -lt $lines.Count; $i++) { $lines[$i] = $lines[$i].TrimEnd() }
@@ -186,16 +207,19 @@ if ('trim-trailing' -in $ops)
 
 if ('trim-inner' -in $ops)
 {
+    $ran += 'trim-inner'
     $t = $t -replace '(?<=\S) {2,}(?=\S)', ' '
 }
 
 if ('max-blank-1' -in $ops)
 {
+    $ran += 'max-blank-1'
     $t = $t -replace "(`n){3,}", "`n`n"
 }
 
 if ('trim-doc' -in $ops)
 {
+    $ran += 'trim-doc'
     $t = $t -replace '^\n+', '' -replace '\n+$', ''
 }
 
@@ -206,6 +230,7 @@ if ('trim-doc' -in $ops)
 # no content does not acquire a line.
 if ('ensure-final-lf' -in $ops)
 {
+    $ran += 'ensure-final-lf'
     if ($t.Length -gt 0 -and -not $t.EndsWith("`n")) { $t += "`n" }
 }
 
@@ -213,17 +238,32 @@ if ('ensure-final-lf' -in $ops)
 # resolved content key, passes everything else through so identity fields (and
 # any elements earlier chain steps attached) survive. Bare string in → bare
 # string out. IncludeMeta = $false simply withholds the Processing record.
-# Operations reports what RAN, not what was requested. nfc is the only op that
-# can decline; when it does it leaves the list and states why under Skipped.
-# Two statements, not an if-expression: an if-expression ENUMERATES its output,
-# collapsing a one-element array to a scalar — @('lf') would arrive as the
-# string 'lf' and Operations[0] would be 'l'. Same trap assemble hit.
-$applied = @($ops)
-if ($nfcSkipped) { $applied = @($ops | Where-Object { $_ -ne 'nfc' }) }
+# Operations reports what RAN. Anything requested but absent from $ran either
+# declined (already in $skipped, with a reason) or names no op at all — a typo
+# like 'trim-trailng' silently matches nothing, and echoing it would claim a
+# transform that never happened. Recorded rather than thrown: a config mistake
+# should not cost the ingest, but it must not be invisible either.
+foreach ($requested in ($ops | Select-Object -Unique))
+{
+    if ($requested -in $ran) { continue }
+
+    # Scan the records rather than reaching for $skipped.Op: member access on an
+    # EMPTY array writes to the error stream, and colonel clears $Error before
+    # every processor call and attributes what it finds per item — so the common
+    # case (nothing skipped) would hang a spurious error on every single item.
+    $alreadyRecorded = $false
+    foreach ($s in $skipped) { if ($s.Op -eq $requested) { $alreadyRecorded = $true; break } }
+    if (-not $alreadyRecorded) { $skipped += [pscustomobject]@{ Op = $requested; Reason = 'UnknownOp' } }
+}
+
+# $ran is built by @() += so it is already an array at every count — no
+# if-expression in the assignment path. An if-expression ENUMERATES its output,
+# collapsing a one-element array to a scalar: @('lf') would arrive as the string
+# 'lf' and Operations[0] would be 'l'. Same trap assemble hit.
 $record = if ($includeMeta)
 {
-    $fields = [ordered]@{ Processor = 'format'; Operations = $applied }
-    if ($nfcSkipped) { $fields['Skipped'] = @([pscustomobject]@{ Op = 'nfc'; Reason = $nfcSkipped }) }
+    $fields = [ordered]@{ Processor = 'format'; Operations = @($ran) }
+    if ($skipped.Count) { $fields['Skipped'] = @($skipped) }
     [pscustomobject]$fields
 }
 else { $null }
