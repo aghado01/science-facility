@@ -80,10 +80,9 @@
         emoji sequences or Indic text carries these characters in its fixtures
         by necessity, and this tool exists to carry such code intact.
 
-        Splitting per code point also retires `no-bom` (was `^﻿`), which
-        `strip-zwnbsp` subsumes — the latter is unanchored, so it catches the
-        BOM plus any deprecated mid-file ZWNBSP. Consequence worth knowing:
-        stripping ONLY a leading BOM is no longer expressible.
+        `strip-zwnbsp` is unanchored, so it catches a leading BOM plus any
+        deprecated mid-file ZWNBSP. Consequence worth knowing: stripping ONLY
+        a leading BOM is not expressible.
 
         NOT addressed here: the bidi controls U+202A-U+202E / U+2066-U+2069
         (Trojan Source, CVE-2021-42574) are invisible AND make source display
@@ -155,8 +154,7 @@ if ('strip-wj' -in $ops)
     $t = $t -replace '\u2060', ''
 }
 
-# Unanchored, so this covers a leading BOM as well as any mid-file ZWNBSP \u2014
-# which is what allowed the old anchored `no-bom` op to retire.
+# Unanchored, so this covers a leading BOM as well as any mid-file ZWNBSP.
 if ('strip-zwnbsp' -in $ops)
 {
     $t = $t -replace '\uFEFF', ''

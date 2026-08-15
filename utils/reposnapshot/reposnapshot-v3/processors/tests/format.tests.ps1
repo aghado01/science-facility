@@ -20,8 +20,7 @@ Set-StrictMode -Version Latest
       2. Default ops applied when Operations omitted
       3. lf  — every line terminator normalized to LF (CRLF, CR, VT, FF,
          NEL, LS, PS), so downstream can treat LF as the only break
-      4. strip-zwnbsp — U+FEFF removed anywhere, BOM included (subsumes the
-         retired no-bom op)
+      4. strip-zwnbsp — U+FEFF removed anywhere, BOM included
       5. strip-zwsp / strip-wj — inert invisibles removed, and ZWJ/ZWNJ
          PRESERVED: they carry meaning, so no op strips them at all
       6. trim-trailing — per-line trailing whitespace removed
@@ -171,9 +170,9 @@ $rRun = Invoke-Processor -Item "a`n`u{2028}`nb" -Config @{ Operations = @('lf', 
 Assert-True ($rRun.Content -eq "a`n`nb") 'lf + max-blank-1: folded terminator participates in run collapse'
 
 # ============================================================
-# 4. no-bom
+# 4. strip-zwnbsp
 # ============================================================
-Enter-Section '4. strip-zwnbsp — U+FEFF anywhere (subsumes retired no-bom)'
+Enter-Section '4. strip-zwnbsp — U+FEFF anywhere, BOM included'
 
 $bomText = [char]0xFEFF + "hello"
 
@@ -181,13 +180,8 @@ $rBom = Invoke-Processor -Item $bomText -Config @{ Operations = @('strip-zwnbsp'
 Assert-True ($rBom.Content -eq 'hello') 'strip-zwnbsp: leading BOM removed'
 Assert-True ($rBom.Content[0] -ne [char]0xFEFF) 'strip-zwnbsp: first char is not BOM'
 
-# Unanchored — this is what let the anchored no-bom op retire.
 $rMid = Invoke-Processor -Item "a$([char]0xFEFF)b" -Config @{ Operations = @('strip-zwnbsp') }
-Assert-True ($rMid.Content -eq 'ab') 'strip-zwnbsp: mid-file ZWNBSP removed too'
-
-# The retired op must be genuinely gone, not silently accepted as a no-op name.
-$rNoBom = Invoke-Processor -Item $bomText -Config @{ Operations = @('no-bom') }
-Assert-True ($rNoBom.Content -eq $bomText) 'no-bom: retired — the name no longer does anything'
+Assert-True ($rMid.Content -eq 'ab') 'strip-zwnbsp: unanchored — mid-file ZWNBSP removed too'
 
 # ============================================================
 # 5. strip-zwsp / strip-wj  +  ZWJ/ZWNJ preservation
@@ -217,12 +211,13 @@ Assert-True ($rDefaultsZwj.Content.TrimEnd("`n") -eq $zwjSeq) 'DEFAULT chain: ZW
 $rDefaultsZwnj = Invoke-Processor -Item $zwnjText
 Assert-True ($rDefaultsZwnj.Content.TrimEnd("`n") -eq $zwnjText) 'DEFAULT chain: ZWNJ survives intact'
 
-# Not merely absent from the defaults — unreachable. A caller cannot opt in.
+# Not merely absent from the defaults — no op strips them, so selecting the
+# entire surface still leaves them intact.
 $rAllOps = Invoke-Processor -Item "$zwjSeq|$zwnjText" -Config @{
     Operations = @('lf', 'nfc', 'strip-zwsp', 'strip-wj', 'strip-zwnbsp', 'trim-trailing',
-        'trim-inner', 'max-blank-1', 'trim-doc', 'ensure-final-lf', 'strip-zwj', 'strip-zwnj')
+        'trim-inner', 'max-blank-1', 'trim-doc', 'ensure-final-lf')
 }
-Assert-True ($rAllOps.Content -eq "$zwjSeq|$zwnjText`n") 'every op selected incl. invented strip-zwj/strip-zwnj names: ZWJ and ZWNJ still survive'
+Assert-True ($rAllOps.Content -eq "$zwjSeq|$zwnjText`n") 'every op selected: ZWJ and ZWNJ still survive'
 
 # ============================================================
 # 6. trim-trailing
