@@ -49,19 +49,50 @@
         Pipeline suitability per op:
             Op               TP-safe   RS opt-in   Notes
             lf               yes       yes         ALL line terminators -> LF; run first
-            no-bom           yes       yes         Strip UTF-8 BOM
             nfc              yes       yes         Unicode NFC normalization
-            strip-zwsp       yes       yes         Zero-width invisibles
+            strip-zwsp       yes       yes         U+200B ZERO WIDTH SPACE
+            strip-wj         yes       yes         U+2060 WORD JOINER
+            strip-zwnbsp     yes       yes         U+FEFF anywhere, BOM included
             trim-trailing    yes       yes         Per-line trailing whitespace
             trim-inner       yes       yes         Inline multi-space collapse between words; NOT DEFAULT
             max-blank-1      caution   yes         Keep ≤1 blank line; collapse 2+ blank lines to 1; lossy for prose
             trim-doc         yes       yes         Strip leading/trailing blank lines from document
             ensure-final-lf  yes       yes         Append a final LF if absent; runs LAST
 
-        Default set (what you get with no Operations key) — the whitespace-
-        structural ops only:
-            lf · no-bom · nfc · strip-zwsp · trim-trailing · max-blank-1 ·
-            trim-doc · ensure-final-lf
+        INVISIBLES: one op per code point, and two are deliberately absent
+        (2026-08-15). The old single `strip-zwsp` removed five characters as
+        though they were one class. Three are inert presentation hints and are
+        stripped; the other two are CONTENT and are no longer touched at all:
+
+            U+200D ZWJ  — composes emoji sequences (the family emoji is
+                          man + ZWJ + woman + ZWJ + girl; strip the joiners
+                          and it becomes three separate people) and forces
+                          Indic conjunct forms. Spelled out rather than shown:
+                          a literal example would be a raw invisible sitting
+                          in the file that warns about raw invisibles.
+            U+200C ZWNJ — separates morphemes in Persian/Arabic/Urdu/Hindi;
+                          removing it changes the word.
+
+        Both are the only thing distinguishing one string from another, so
+        deleting them is data corruption, not sanitization. They are not
+        offered as ops — a caller cannot opt into breaking this. Note the
+        self-referential hazard that settles it: any library that PROCESSES
+        emoji sequences or Indic text carries these characters in its fixtures
+        by necessity, and this tool exists to carry such code intact.
+
+        Splitting per code point also retires `no-bom` (was `^﻿`), which
+        `strip-zwnbsp` subsumes — the latter is unanchored, so it catches the
+        BOM plus any deprecated mid-file ZWNBSP. Consequence worth knowing:
+        stripping ONLY a leading BOM is no longer expressible.
+
+        NOT addressed here: the bidi controls U+202A-U+202E / U+2066-U+2069
+        (Trojan Source, CVE-2021-42574) are invisible AND make source display
+        differently from how it executes — the failure mode that matters most
+        for a payload meant to be read. Open.
+
+        Default set (what you get with no Operations key):
+            lf · nfc · strip-zwsp · strip-wj · strip-zwnbsp · trim-trailing ·
+            max-blank-1 · trim-doc · ensure-final-lf
 
         `trim-inner` is deliberately OUT of it. Every other default touches
         whitespace at line boundaries and margins, where shape is formatting
@@ -79,7 +110,7 @@ param(
     [hashtable]$Config = @{}
 )
 
-$ops = if ($Config.ContainsKey('Operations')) { @($Config['Operations']) } else { @('lf', 'no-bom', 'nfc', 'strip-zwsp', 'trim-trailing', 'max-blank-1', 'trim-doc', 'ensure-final-lf') }
+$ops = if ($Config.ContainsKey('Operations')) { @($Config['Operations']) } else { @('lf', 'nfc', 'strip-zwsp', 'strip-wj', 'strip-zwnbsp', 'trim-trailing', 'max-blank-1', 'trim-doc', 'ensure-final-lf') }
 $includeMeta = if ($null -ne $Config['IncludeMeta']) { [bool]$Config['IncludeMeta'] } else { $true }
 
 # Content-key resolution — harmonized content-mutator contract (6d), shared by
@@ -106,19 +137,29 @@ if ('lf' -in $ops)
     $t = $t -replace "`r`n", "`n" -replace '[\r\u000B\u000C\u0085\u2028\u2029]', "`n"
 }
 
-if ('no-bom' -in $ops)
-{
-    $t = $t -replace '^\uFEFF', ''
-}
-
 if ('nfc' -in $ops)
 {
     try { $t = $t.Normalize([System.Text.NormalizationForm]::FormC) } catch {}
 }
 
+# One op per code point. ZWJ U+200D and ZWNJ U+200C are absent by design \u2014
+# they carry meaning (see .NOTES INVISIBLES). Order among the three is
+# irrelevant: none is produced or consumed by NFC or by the others.
 if ('strip-zwsp' -in $ops)
 {
-    $t = $t -replace '[\u200B\u200C\u200D\u2060\uFEFF]', ''
+    $t = $t -replace '\u200B', ''
+}
+
+if ('strip-wj' -in $ops)
+{
+    $t = $t -replace '\u2060', ''
+}
+
+# Unanchored, so this covers a leading BOM as well as any mid-file ZWNBSP \u2014
+# which is what allowed the old anchored `no-bom` op to retire.
+if ('strip-zwnbsp' -in $ops)
+{
+    $t = $t -replace '\uFEFF', ''
 }
 
 if ('trim-trailing' -in $ops)
