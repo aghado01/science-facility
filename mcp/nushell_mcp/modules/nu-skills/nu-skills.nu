@@ -1,13 +1,19 @@
 # nu-skills.nu - Native Nushell interactive skill & reference resource provider
 
+# `path self` only works at parse time, so capture the module dir in a const
+const SELF_DIR = (path self | path dirname)
+
 # Resolve the anchored skill directory with fallback
 def get-skill-root []: nothing -> string {
-    let raw = ($env.NU_SKILL_DIR? | default (path self | path dirname | path join "../../skills/nushell"))
+    let raw = ($env.NU_SKILL_DIR? | default ($SELF_DIR | path join "../../skills/nushell"))
     $raw | path expand
 }
 
+# Exported as `main` — nushell forbids a module exporting a command with its own name;
+# `use nu-skills` / `use nu-skills *` binds this to `nu-skills`.
+
 # Query Nushell skill documentation and reference topics
-export def "nu-skills" [
+export def main [
     topic?: string # Optional topic to read directly (e.g. gotchas, posix-cheatsheet, pipelines, file-io, data-analysis, advanced, parity, mcp, sessions)
 ]: nothing -> string {
     if ($topic == null or $topic == "") {
@@ -25,7 +31,7 @@ export def "nu-skills list" []: nothing -> table {
         return []
     }
     
-    ls ($ref_dir | path join "*.md")
+    ls ($ref_dir | path join "*.md" | into glob)
     | each { |row|
         let stem = ($row.name | path parse | get stem)
         let first_line = (open --raw $row.name | lines | where ($it !~ '^#\s*$') | first 1 | default [""] | get 0 | str replace -r '^#+\s*' '')
@@ -75,7 +81,7 @@ export def "nu-skills search" [
         return []
     }
 
-    ls ($ref_dir | path join "*.md")
+    ls ($ref_dir | path join "*.md" | into glob)
     | each { |row|
         let stem = ($row.name | path parse | get stem)
         open --raw $row.name
@@ -99,7 +105,7 @@ export def "nu-skills status" []: nothing -> record {
     let exists = ($root | path exists)
     let count = if $exists {
         let ref_dir = ($root | path join "references")
-        if ($ref_dir | path exists) { (ls ($ref_dir | path join "*.md") | length) } else { 0 }
+        if ($ref_dir | path exists) { (ls ($ref_dir | path join "*.md" | into glob) | length) } else { 0 }
     } else { 0 }
 
     {

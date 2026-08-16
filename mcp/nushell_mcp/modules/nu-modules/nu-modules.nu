@@ -1,17 +1,26 @@
 # nu-modules.nu - Native module introspection and discovery for $env.NU_LIB_DIRS
 
+# `path self` only works at parse time, so capture the module dir in a const
+const SELF_DIR = (path self | path dirname)
+
 # Resolve list of existing library directories from $env.NU_LIB_DIRS
 def get-lib-dirs []: nothing -> list<string> {
-    let raw = ($env.NU_LIB_DIRS? | default (path self | path dirname | path join ".."))
+    let raw = ($env.NU_LIB_DIRS? | default ($SELF_DIR | path join ".."))
+    # Accept a list (nushell-native) or a PATH-style joined string (raw OS env)
     let list_dirs = if ($raw | describe) =~ "list" {
         $raw
     } else {
-        [$raw]
+        $raw | split row (char esep)
     }
     
     $list_dirs
     | each { |d| $d | path expand }
     | where { |d| $d | path exists }
+}
+
+# Recursively glob *.nu under a dir; `glob` rejects backslash separators, so normalize
+def nu-files-under [dir: string]: nothing -> list<string> {
+    glob $"($dir | str replace -a '\' '/')/**/*.nu"
 }
 
 # Find entry file or root directory for a given module name
@@ -27,7 +36,7 @@ def resolve-module [name: string]: nothing -> record {
             } else if ($alt_entry | path exists) {
                 $alt_entry
             } else {
-                let first_nu = (ls ($dir_mod | path join "*.nu") | first 1 | default [{ name: "" }] | get 0.name)
+                let first_nu = (ls ($dir_mod | path join "*.nu" | into glob) | first 1 | default [{ name: "" }] | get 0.name)
                 $first_nu
             }
             return { found: true, type: "dir", name: $name, path: $dir_mod, entry: $entry }
@@ -42,8 +51,11 @@ def resolve-module [name: string]: nothing -> record {
     { found: false, type: "none", name: $name, path: "", entry: "" }
 }
 
+# Exported as `main` — nushell forbids a module exporting a command with its own name;
+# `use nu-modules` / `use nu-modules *` binds this to `nu-modules`.
+
 # Main command: List all modules or inspect a specific module
-export def "nu-modules" [
+export def main [
     name?: string # Optional module name to inspect
 ]: nothing -> any {
     if ($name == null or $name == "") {
@@ -65,7 +77,7 @@ export def "nu-modules list" []: nothing -> table {
         let entries = (ls $dir)
         let dir_mods = ($entries | where type == dir | each { |d|
             let mod_name = ($d.name | path basename)
-            let nu_files = (glob ($d.name | path join "**/*.nu"))
+            let nu_files = (nu-files-under $d.name)
             let cmd_count = if ($nu_files | is-not-empty) {
                 $nu_files | each { |f| open --raw $f | lines | where $it =~ '^\s*export\s+def' | length } | math sum
             } else { 0 }
@@ -109,7 +121,7 @@ export def "nu-modules inspect" [
     }
 
     let files_to_scan = if $mod.type == "dir" {
-        glob ($mod.path | path join "**/*.nu")
+        nu-files-under $mod.path
     } else {
         [$mod.entry]
     }
@@ -124,8 +136,9 @@ export def "nu-modules inspect" [
         | where { |row| $row.item =~ '^\s*export\s+def' }
         | each { |row|
             let def_line = ($row.item | str trim)
-            let cmd_name = ($def_line | parse -r 'export\s+def\s+(?:(?:"([^"]+)")|([^\s\[]+))' | get 0 | values | compact | get 0 | default "")
-            let sig = ($def_line | parse -r 'export\s+def\s+(?:(?:"[^"]+")|(?:[^\s\[]+))\s*(\[[^\]]*\](?:\s*:\s*[^\s\{]+)?)' | get 0.capture0? | default "")
+            let cmd_name = ($def_line | parse -r 'export\s+def\s+(?:(?:"([^"]+)")|([^\s\[]+))' | get -o 0 | default {} | values | compact | get -o 0 | default "")
+            # Signature is only captured when the `[...]` closes on the def line; multi-line sigs yield ""
+            let sig = ($def_line | parse -r 'export\s+def\s+(?:(?:"[^"]+")|(?:[^\s\[]+))\s*(\[[^\]]*\](?:\s*:\s*[^\s\{]+)?)' | get -o 0.capture0 | default "")
             
             # Look backwards for docstring comment
             let idx = $row.index
@@ -159,7 +172,7 @@ export def "nu-modules search" [
 
     $lib_dirs
     | each { |dir|
-        glob ($dir | path join "**/*.nu")
+        nu-files-under $dir
         | each { |file|
             let mod_name = ($file | path parse | get stem)
             open --raw $file
@@ -195,7 +208,7 @@ export def "nu-modules read" [
 export def "nu-modules status" []: nothing -> record {
     let dirs = (get-lib-dirs)
     let mods = (nu-modules list)
-    let total_cmds = ($mods | get commands | math sum | default 0)
+    let total_cmds = if ($mods | is-empty) { 0 } else { $mods | get commands | math sum }
 
     {
         lib_dirs: $dirs,
