@@ -1,5 +1,8 @@
+# Exported as `main` — a module cannot export a command named after itself;
+# `use duplicates` binds this to `duplicates`.
+
 # duplicates returns the rows that correspond to duplicates of the given column.
-export def duplicates  [
+export def main [
     column: string # Column to look duplicates at
     --count(-c) # set it to display the number of times the value is repeated.
 ] {
@@ -16,7 +19,7 @@ export def duplicates  [
 # duplicates files recursively finds duplicate files in the current working folder.
 # It uses a heuristic based on duplicate files having the same size.
 export def "duplicates files" [] {
-    do -i {ls **/*} | duplicates size
+    do -i {ls **/*} | main size
 }
 
 

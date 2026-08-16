@@ -1,218 +1,183 @@
-# nu-modules.nu - Native module introspection and discovery for $env.NU_LIB_DIRS
+# nu-modules.nu — discovery and introspection over $env.NU_LIB_DIRS
+#
+# Uses nushell's own loader as the source of truth: a unit is whatever `use`
+# accepts, loadability is decided by actually loading it in a child `nu -n`,
+# and command facts come from `scope modules` / `scope commands` there.
+# No source-text parsing of definitions.
 
 # `path self` only works at parse time, so capture the module dir in a const
 const SELF_DIR = (path self | path dirname)
 
-# Resolve list of existing library directories from $env.NU_LIB_DIRS
-def get-lib-dirs []: nothing -> list<string> {
+# ---------------------------------------------------------------- helpers
+
+# Existing library directories from $env.NU_LIB_DIRS (list, or PATH-style string)
+def lib-dirs []: nothing -> list<string> {
     let raw = ($env.NU_LIB_DIRS? | default ($SELF_DIR | path join ".."))
-    # Accept a list (nushell-native) or a PATH-style joined string (raw OS env)
-    let list_dirs = if ($raw | describe) =~ "list" {
-        $raw
+    let dirs = if ($raw | describe) =~ "list" { $raw } else { $raw | split row (char esep) }
+    $dirs
+    | each {|d| $d | path expand | str replace -a '\' '/' }
+    | where {|d| $d | path exists }
+}
+
+# Enumerate `use`-able units under one lib dir.
+#   dir containing mod.nu           -> {unit: <dir>,          kind: module}
+#   any other .nu file (recursive)  -> {unit: <rel/path.nu>,  kind: file}
+# Files inside a mod.nu directory are internal to that module and not listed.
+def units-in [lib: string]: nothing -> table {
+    let entries = (ls $lib)
+    let dirs = ($entries | where type == dir | get name | each {|d| $d | str replace -a '\' '/' })
+    let mod_dirs = ($dirs | where {|d| $d | path join mod.nu | path exists })
+    let loose_dirs = ($dirs | where {|d| not ($d | path join mod.nu | path exists) })
+
+    let modules = ($mod_dirs | each {|d|
+        {unit: ($d | path basename), kind: "module", entry: ($d | path join mod.nu), lib: $lib}
+    })
+    let loose_files = ($loose_dirs
+        | each {|d| glob $"($d)/**/*.nu" }
+        | flatten
+        | append ($entries | where type == file and name =~ '\.nu$' | get name)
+        | each {|f|
+            let f = ($f | str replace -a '\' '/')
+            {unit: ($f | str replace $"($lib)/" ''), kind: "file", entry: $f, lib: $lib}
+        })
+    $modules | append $loose_files
+}
+
+# All units across all lib dirs
+def all-units []: nothing -> table {
+    lib-dirs | each {|lib| units-in $lib } | flatten | sort-by kind unit
+}
+
+# Resolve a unit name to its record, or error listing what exists
+def resolve [name: string]: nothing -> record {
+    let all = (all-units)
+    let hit = ($all | where unit == $name)
+    if ($hit | is-empty) {
+        error make {
+            msg: $"Unit '($name)' not found in NU_LIB_DIRS. Known units:\n($all | get unit | each { $'  - ($in)' } | str join "\n")"
+        }
+    }
+    $hit | first
+}
+
+# Load a unit in a child `nu -n` and return what the engine says about it.
+# Single mechanism for both "does it load" and "what does it export".
+def probe [u: record]: nothing -> record {
+    let stem = ($u.unit | path parse | get stem)
+    let script = ([
+        'const NU_LIB_DIRS = ' (lib-dirs | to nuon) '; '
+        'use ' $u.unit ' *; '
+        'let m = (scope modules | where name == ' ($stem | to nuon) ' | first); '
+        'let cmds = (scope commands | where name in ($m.commands.name) | select name description signatures attributes is_sub); '
+        '{module: $m.name, file: $m.file, has_env: $m.has_env_block, description: $m.description, commands: $cmds} | to nuon'
+    ] | str join)
+    let r = (^nu -n -c $script | complete)
+    if $r.exit_code == 0 {
+        let info = ($r.stdout | from nuon)
+        {loads: true, error: "", info: $info}
     } else {
-        $raw | split row (char esep)
+        let err = ($r.stderr | lines | where $it =~ '^\s*(Error:|x )' | str join ' | ' | str trim | str substring 0..240)
+        {loads: false, error: $err, info: null}
     }
-    
-    $list_dirs
-    | each { |d| $d | path expand }
-    | where { |d| $d | path exists }
 }
 
-# Recursively glob *.nu under a dir; `glob` rejects backslash separators, so normalize
-def nu-files-under [dir: string]: nothing -> list<string> {
-    glob $"($dir | str replace -a '\' '/')/**/*.nu"
-}
-
-# Find entry file or root directory for a given module name
-def resolve-module [name: string]: nothing -> record {
-    let dirs = (get-lib-dirs)
-    for dir in $dirs {
-        let dir_mod = ($dir | path join $name)
-        if ($dir_mod | path exists) and (($dir_mod | path type) == "dir") {
-            let mod_entry = ($dir_mod | path join "mod.nu")
-            let alt_entry = ($dir_mod | path join $"($name).nu")
-            let entry = if ($mod_entry | path exists) {
-                $mod_entry
-            } else if ($alt_entry | path exists) {
-                $alt_entry
-            } else {
-                let first_nu = (ls ($dir_mod | path join "*.nu" | into glob) | first 1 | default [{ name: "" }] | get 0.name)
-                $first_nu
+# Render one `scope commands` signature record as a compact string
+def render-sig [sigs: record]: nothing -> string {
+    let params = ($sigs | transpose k v | get -o 0.v | default [])
+    let inp = ($params | where parameter_type == input | get -o 0.syntax_shape | default "any")
+    let out = ($params | where parameter_type == output | get -o 0.syntax_shape | default "any")
+    let args = ($params
+        | where parameter_type in [positional rest named switch]
+        | each {|p|
+            let short = (if $p.short_flag != null { '(-' + $p.short_flag + ')' } else { '' })
+            match $p.parameter_type {
+                "positional" => $"($p.parameter_name)(if $p.is_optional { '?' } else { '' }): ($p.syntax_shape)",
+                "rest" => $"...($p.parameter_name): ($p.syntax_shape)",
+                "switch" => $"--($p.parameter_name)($short)",
+                "named" => $"--($p.parameter_name)($short): ($p.syntax_shape)",
+                _ => ""
             }
-            return { found: true, type: "dir", name: $name, path: $dir_mod, entry: $entry }
         }
-
-        let file_mod = ($dir | path join $"($name).nu")
-        if ($file_mod | path exists) {
-            return { found: true, type: "file", name: $name, path: $file_mod, entry: $file_mod }
-        }
-    }
-
-    { found: false, type: "none", name: $name, path: "", entry: "" }
+        | str join ", ")
+    $"[($args)]: ($inp) -> ($out)"
 }
 
-# Exported as `main` — nushell forbids a module exporting a command with its own name;
+# ---------------------------------------------------------------- exports
+
+# Exported as `main` — a module cannot export a command named after itself;
 # `use nu-modules` / `use nu-modules *` binds this to `nu-modules`.
 
-# Main command: List all modules or inspect a specific module
+# List all units, or inspect one
 export def main [
-    name?: string # Optional module name to inspect
+    unit?: string # Optional unit to inspect (e.g. argx, formats/to-ini.nu)
 ]: nothing -> any {
-    if ($name == null or $name == "") {
-        nu-modules list
-    } else {
-        nu-modules inspect $name
-    }
+    if ($unit == null or $unit == "") { nu-modules list } else { nu-modules inspect $unit }
 }
 
-# List all available modules across $env.NU_LIB_DIRS in a structured table
+# List every `use`-able unit on NU_LIB_DIRS with loadability decided by loading it
 export def "nu-modules list" []: nothing -> table {
-    let lib_dirs = (get-lib-dirs)
-    if ($lib_dirs | is-empty) {
-        return []
+    all-units | each {|u|
+        let p = (probe $u)
+        {
+            unit: $u.unit,
+            kind: $u.kind,
+            loads: $p.loads,
+            commands: (if $p.loads { $p.info.commands | length } else { null }),
+            has_env: (if $p.loads { $p.info.has_env } else { null }),
+            error: $p.error,
+            entry: $u.entry,
+        }
     }
-
-    $lib_dirs
-    | each { |dir|
-        let entries = (ls $dir)
-        let dir_mods = ($entries | where type == dir | each { |d|
-            let mod_name = ($d.name | path basename)
-            let nu_files = (nu-files-under $d.name)
-            let cmd_count = if ($nu_files | is-not-empty) {
-                $nu_files | each { |f| open --raw $f | lines | where $it =~ '^\s*export\s+def' | length } | math sum
-            } else { 0 }
-
-            {
-                module: $mod_name,
-                type: "dir",
-                commands: $cmd_count,
-                path: $d.name
-            }
-        })
-
-        let file_mods = ($entries | where type == file and name =~ '\.nu$' | each { |f|
-            let mod_name = ($f.name | path parse | get stem)
-            let cmd_count = (open --raw $f.name | lines | where $it =~ '^\s*export\s+def' | length)
-
-            {
-                module: $mod_name,
-                type: "file",
-                commands: $cmd_count,
-                path: $f.name
-            }
-        })
-
-        $dir_mods | append $file_mods
-    }
-    | flatten
-    | sort-by module
 }
 
-# Inspect a module and extract all exported commands, signatures, and doc comments
+# Exported commands of one unit, straight from `scope commands` after loading it
 export def "nu-modules inspect" [
-    name: string # Module name to inspect
+    unit: string # Unit name as shown by `nu-modules list`
 ]: nothing -> table {
-    let mod = (resolve-module $name)
-    if not $mod.found {
-        let available = (nu-modules list | get module)
-        error make {
-            msg: $"Module '($name)' not found in NU_LIB_DIRS.\nAvailable modules:\n($available | each { $'  - ($in)' } | str join "\n")"
+    let u = (resolve $unit)
+    let p = (probe $u)
+    if not $p.loads {
+        error make { msg: $"Unit '($unit)' does not load:\n($p.error)" }
+    }
+    $p.info.commands | each {|c|
+        {
+            module: $p.info.module,
+            command: $c.name,
+            signature: (render-sig $c.signatures),
+            description: $c.description,
+            attributes: ($c.attributes | get -o name | default []),
         }
     }
-
-    let files_to_scan = if $mod.type == "dir" {
-        nu-files-under $mod.path
-    } else {
-        [$mod.entry]
-    }
-
-    $files_to_scan
-    | each { |file|
-        let lines = (open --raw $file | lines)
-        let total = ($lines | length)
-
-        $lines
-        | enumerate
-        | where { |row| $row.item =~ '^\s*export\s+def' }
-        | each { |row|
-            let def_line = ($row.item | str trim)
-            let cmd_name = ($def_line | parse -r 'export\s+def\s+(?:(?:"([^"]+)")|([^\s\[]+))' | get -o 0 | default {} | values | compact | get -o 0 | default "")
-            # Signature is only captured when the `[...]` closes on the def line; multi-line sigs yield ""
-            let sig = ($def_line | parse -r 'export\s+def\s+(?:(?:"[^"]+")|(?:[^\s\[]+))\s*(\[[^\]]*\](?:\s*:\s*[^\s\{]+)?)' | get -o 0.capture0 | default "")
-            
-            # Look backwards for docstring comment
-            let idx = $row.index
-            let doc = if $idx > 0 {
-                let prev = ($lines | get ($idx - 1) | str trim)
-                if ($prev | str starts-with "#") {
-                    $prev | str replace -r '^#+\s*' ''
-                } else { "" }
-            } else { "" }
-
-            {
-                module: $name,
-                command: $cmd_name,
-                signature: $sig,
-                description: $doc,
-                file: ($file | path basename)
-            }
-        }
-    }
-    | flatten
 }
 
-# Search across all module files for a keyword or pattern
+# Line-level regex search across every .nu file on NU_LIB_DIRS (text search, not parsed)
 export def "nu-modules search" [
-    query: string # Keyword or regex to search for in modules
+    query: string # Regex to search for
 ]: nothing -> table {
-    let lib_dirs = (get-lib-dirs)
-    if ($lib_dirs | is-empty) {
-        return []
-    }
-
-    $lib_dirs
-    | each { |dir|
-        nu-files-under $dir
-        | each { |file|
-            let mod_name = ($file | path parse | get stem)
-            open --raw $file
-            | lines
-            | enumerate
-            | where { |row| $row.item =~ $query }
-            | each { |row|
-                {
-                    module: $mod_name,
-                    line: ($row.index + 1),
-                    content: ($row.item | str trim),
-                    file: ($file | path basename)
-                }
-            }
-        }
-        | flatten
-    }
-    | flatten
+    lib-dirs | each {|lib|
+        glob $"($lib)/**/*.nu" | each {|f|
+            let f = ($f | str replace -a '\' '/')
+            open --raw $f | lines | enumerate
+            | where {|row| $row.item =~ $query }
+            | each {|row| {file: ($f | str replace $"($lib)/" ''), line: ($row.index + 1), content: ($row.item | str trim)} }
+        } | flatten
+    } | flatten
 }
 
-# Read the raw source code of a module entrypoint
+# Raw source of a unit's entry file (mod.nu for a module, the file itself for a file unit)
 export def "nu-modules read" [
-    name: string # Module name to read
+    unit: string # Unit name as shown by `nu-modules list`
 ]: nothing -> string {
-    let mod = (resolve-module $name)
-    if not $mod.found {
-        error make { msg: $"Module '($name)' not found in NU_LIB_DIRS" }
-    }
-    open --raw $mod.entry
+    open --raw (resolve $unit | get entry)
 }
 
-# Diagnostics for $env.NU_LIB_DIRS and module counts
+# Lib dirs and unit/command totals
 export def "nu-modules status" []: nothing -> record {
-    let dirs = (get-lib-dirs)
-    let mods = (nu-modules list)
-    let total_cmds = if ($mods | is-empty) { 0 } else { $mods | get commands | math sum }
-
+    let rows = (nu-modules list)
     {
-        lib_dirs: $dirs,
-        module_count: ($mods | length),
-        total_commands: $total_cmds
+        lib_dirs: (lib-dirs),
+        units: ($rows | length),
+        loadable: ($rows | where loads | length),
+        commands: ($rows | where loads | get commands | append 0 | math sum),
     }
 }
