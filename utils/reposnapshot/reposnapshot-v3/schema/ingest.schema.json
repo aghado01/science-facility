@@ -1,34 +1,34 @@
 {
   "stage": "ingest",
   "module": "rs.core.ingest.psm1 — Invoke-Ingest(-FilteredFsGraph …) → Compile-Plan / Invoke-Plan (rs.core.colonel.v2)",
-  "$comment": "Flattens surviving descriptors out of filter.out.Graph and dispatches each VERBATIM as $Item to the colonel chain. The chain's first processor is file-read (processors/file-read.ps1); every processor clones the item (Copy-Bag) and adds. out.bag is therefore filter.out.file ∪ file-read's additions ∪ whatever else the chain attached — OPEN beyond the fields listed. Colonel's parameter surface is reflected (New-ForwardedParamDictionary), not restated here.",
+  "$comment": "Flattens surviving descriptors out of membrane.out.Graph and dispatches each VERBATIM as $Item to the colonel chain. The chain's first processor is file-read (processors/file-read.ps1); every processor clones the item (Copy-Bag) and adds. out.bag is therefore membrane.out.file ∪ file-read's additions ∪ whatever else the chain attached — OPEN beyond the fields listed. Colonel's parameter surface is reflected (New-ForwardedParamDictionary), not restated here.",
   "in": {
     "params": {
-      "FilteredFsGraph": { "type": "object", "note": "filter.out.result — @{ Graph; Skipped }; also accepts a bare Dictionary/array of nodes" },
+      "FilteredFsGraph": { "type": "object", "note": "membrane.out.result — @{ Graph; Skipped }; also accepts a bare Dictionary/array of nodes" },
       "…":               { "type": "reflected", "note": "all Compile-Plan / Invoke-Plan params, forwarded by name" }
     },
     "node": {
-      "Files": { "from": "filter.out.node", "note": "the only node field ingest reads; node context is gone after flattening" }
+      "Files": { "from": "membrane.out.node", "note": "the only node field ingest reads; node context is gone after flattening" }
     },
     "file": {
-      "AbsolutePath": { "from": "filter.out.file", "note": "read by file-read (the only descriptor field the chain NEEDS)" },
-      "RelativePath": { "from": "filter.out.file", "note": "passthrough" },
-      "NodePath":     { "from": "filter.out.file", "note": "passthrough" },
-      "Extension":    { "from": "filter.out.file", "note": "passthrough" },
-      "SizeBytes":    { "from": "filter.out.file", "note": "passthrough" },
-      "LastWriteUtc": { "from": "filter.out.file", "note": "passthrough" },
-      "CreationUtc":  { "from": "filter.out.file", "note": "passthrough" },
-      "FsAttributes": { "from": "filter.out.file", "note": "passthrough" }
+      "AbsolutePath": { "from": "membrane.out.file", "note": "read by file-read (the only descriptor field the chain NEEDS)" },
+      "RelativePath": { "from": "membrane.out.file", "note": "passthrough" },
+      "NodePath":     { "from": "membrane.out.file", "note": "passthrough" },
+      "Extension":    { "from": "membrane.out.file", "note": "passthrough" },
+      "SizeBytes":    { "from": "membrane.out.file", "note": "passthrough" },
+      "LastWriteUtc": { "from": "membrane.out.file", "note": "passthrough" },
+      "CreationUtc":  { "from": "membrane.out.file", "note": "passthrough" },
+      "FsAttributes": { "from": "membrane.out.file", "note": "passthrough" }
     },
     "skipped": {
-      "Path":   { "from": "filter.out.skipped", "note": "merged into out.result.Skipped" },
-      "Reason": { "from": "filter.out.skipped" }
+      "Path":   { "from": "membrane.out.skipped", "note": "merged into out.result.Skipped" },
+      "Reason": { "from": "membrane.out.skipped" }
     }
   },
   "out": {
     "result": {
       "Results":  { "type": "bag[]",    "note": "index-stable in eligible order; null slot = worker returned nothing" },
-      "Skipped":  { "type": "skipped[]", "note": "filter.out.skipped merged with any dispatch skips" },
+      "Skipped":  { "type": "skipped[]", "note": "membrane.out.skipped merged with any dispatch skips" },
       "Errors":   { "type": "string[]" },
       "Warnings": { "type": "string[]" },
       "Streams":  { "type": "object[]", "note": "structured worker streams, forwarded intact" },
@@ -36,14 +36,14 @@
       "Timing":   { "type": "object",   "optional": true }
     },
     "bag": {
-      "AbsolutePath": { "from": "filter.out.file" },
-      "RelativePath": { "from": "filter.out.file" },
-      "NodePath":     { "from": "filter.out.file" },
-      "Extension":    { "from": "filter.out.file" },
-      "SizeBytes":    { "from": "filter.out.file" },
-      "LastWriteUtc": { "from": "filter.out.file" },
-      "CreationUtc":  { "from": "filter.out.file" },
-      "FsAttributes": { "from": "filter.out.file" },
+      "AbsolutePath": { "from": "membrane.out.file" },
+      "RelativePath": { "from": "membrane.out.file" },
+      "NodePath":     { "from": "membrane.out.file" },
+      "Extension":    { "from": "membrane.out.file" },
+      "SizeBytes":    { "from": "membrane.out.file" },
+      "LastWriteUtc": { "from": "membrane.out.file" },
+      "CreationUtc":  { "from": "membrane.out.file" },
+      "FsAttributes": { "from": "membrane.out.file" },
       "Content":      { "type": "string", "origin": "file-read", "optional": true, "note": "decoded text; absent when ReadError is set; mutators replace it" },
       "Encoding":     { "type": "string", "origin": "file-read", "optional": true, "note": "'UTF-8' — an asserted decode policy, not yet a measurement (decisions-ledger #28)" },
       "ReadError":    { "type": "string", "origin": "file-read", "optional": true, "note": "BinaryOrNulContent | <exception message>; always paired with _ChainHalt" },
@@ -51,10 +51,10 @@
       "…":            { "type": "open",   "note": "Attributes, Processing, Operations, … — anything a processor attaches" }
     },
     "skipped": {
-      "Path":      { "from": "filter.out.skipped", "note": "the filter stage's records are merged verbatim" },
-      "Reason":    { "from": "filter.out.skipped" },
-      "SizeBytes": { "from": "filter.out.skipped", "optional": true },
-      "Extension": { "from": "filter.out.skipped", "optional": true }
+      "Path":      { "from": "membrane.out.skipped", "note": "the membrane stage's records are merged verbatim" },
+      "Reason":    { "from": "membrane.out.skipped" },
+      "SizeBytes": { "from": "membrane.out.skipped", "optional": true },
+      "Extension": { "from": "membrane.out.skipped", "optional": true }
     }
   }
 }

@@ -1,7 +1,7 @@
 {
-  "stage": "filter",
-  "module": "rs.core.filter.psm1 — New-GlobCompiler(-CrawlerGraph -GlobSemantics …) then Invoke-Filter(-CompiledNodes -CrawlerGraph …)",
-  "$comment": "Decides which crawled files survive. GlobCompiler (this stage's dependency, semantics-neutral) compiles per-node state from glob sources under Ignore or Selection semantics; Invoke-Filter applies two eligibility GUARDS first (MaxSizeBytes, extension blacklist — crawler metadata, no I/O, NOT glob semantics, do not invert), then the glob verdict. Takes a SLICE of crawler.out (the `from` fields below); rebuilds nodes with its own shape (out.node) and keeps file descriptors as the same objects (out.file = crawler.out.file). Anything in crawler.out.node not in out.node — the subtree rollups — is reachable downstream only by joining filter.out ⋈ crawler.out on NodePath (the orchestrator retains crawler.out). Fails fast if a descriptor lacks RelativePath or Extension.",
+  "stage": "membrane",
+  "module": "rs.core.membrane.psm1 — New-GlobCompiler(-CrawlerGraph -GlobSemantics …) then Invoke-Membrane(-CompiledNodes -CrawlerGraph …)",
+  "$comment": "Decides which crawled files pass through: selection, implicit (sentinels) or explicit (globs) under Ignore or Selection semantics, plus the hard exclusions. GlobCompiler (this stage's dependency, semantics-neutral) compiles per-node state from glob sources; Invoke-Membrane applies two eligibility GUARDS first (MaxSizeBytes, extension blacklist — crawler metadata, no I/O, NOT glob semantics, do not invert), then the glob verdict. Takes a SLICE of crawler.out (the `from` fields below); rebuilds nodes with its own shape (out.node) and keeps file descriptors as the same objects (out.file = crawler.out.file). Anything in crawler.out.node not in out.node — the subtree rollups — is reachable downstream only by joining membrane.out ⋈ crawler.out on NodePath (the orchestrator retains crawler.out). Fails fast if a descriptor lacks RelativePath or Extension.",
   "in": {
     "params": {
       "GlobSemantics":          { "type": "Ignore|Selection", "note": "compiler; what a glob match MEANS — Ignore: match = excluded (sentinels + virtual root ignore file); Selection: match = kept (user globs only, no sentinel I/O, no dir pruning). Params of the other semantics are inert. reports/ignore-semantics-update.md" },
@@ -10,8 +10,8 @@
       "IgnoreOverridePatterns": { "type": "string[]", "optional": true, "note": "compiler, Ignore only; merged as negations into the same virtual file" },
       "SelectionPatterns":      { "type": "string[]", "optional": true, "note": "compiler, Selection only; empty/self-annihilated throws" },
       "SentinelFileNames":      { "type": "string[]", "note": "compiler, Ignore only; default ['.gitignore', '.snapignore']; read from disk by AbsolutePath" },
-      "MaxSizeBytes":           { "type": "long",     "note": "GUARD (Invoke-Filter); 0 = no ceiling → Skipped FileTooLarge" },
-      "ExtensionBlacklist":     { "type": "string[]", "optional": true, "note": "GUARD (Invoke-Filter); ADDITIVE to the hard blacklist, never replaces it → Skipped ExtensionBlacklisted. The hard list (images, media, archives, compiled, office docs, fonts, data blobs) is $script:HardExtensionBlacklist in the module — reposnapshot has no business ingesting binary blobs under either semantics; a plain data list awaiting a run-config home (defaults.filter.extensionBlacklist)" }
+      "MaxSizeBytes":           { "type": "long",     "note": "GUARD (Invoke-Membrane); 0 = no ceiling → Skipped FileTooLarge" },
+      "ExtensionBlacklist":     { "type": "string[]", "optional": true, "note": "GUARD (Invoke-Membrane); ADDITIVE to the hard blacklist, never replaces it → Skipped ExtensionBlacklisted. The hard list (images, media, archives, compiled, office docs, fonts, data blobs) is $script:HardExtensionBlacklist in the module — reposnapshot has no business ingesting binary blobs under either semantics; a plain data list awaiting a run-config home (defaults.membrane.extensionBlacklist)" }
     },
     "node": {
       "NodePath":     { "from": "crawler.out.node" },

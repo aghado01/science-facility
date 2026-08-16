@@ -5,12 +5,14 @@ using namespace System.Text
 using namespace System.Text.RegularExpressions
 <#
 .SYNOPSIS
-    Filter stage — decides which crawled files survive. GlobCompiler (this
-    module's dependency, semantics-neutral) compiles per-node state from glob
-    sources; Invoke-Filter applies it plus the eligibility guards.
+    Membrane stage — decides which crawled files pass through: selection,
+    implicit (sentinels) or explicit (globs), under either semantics, plus the
+    hard exclusions. GlobCompiler (this module's dependency, semantics-neutral)
+    compiles per-node state from glob sources; Invoke-Membrane applies it plus
+    the eligibility guards.
 
 .DESCRIPTION
-    Contract: schema/filter.schema.json (in = a slice of crawler.out; out =
+    Contract: schema/membrane.schema.json (in = a slice of crawler.out; out =
     pruned graph, nodes rebuilt, file descriptors the same objects filtered).
     Enriches nothing; fails fast if a descriptor lacks RelativePath/Extension.
 
@@ -23,7 +25,7 @@ using namespace System.Text.RegularExpressions
     semantic authority (dual truth table on Semantics). Params belonging to
     the other semantics are inert, never errors.
 
-    Invoke-Filter — two eligibility guards run BEFORE any glob test, on
+    Invoke-Membrane — two eligibility guards run BEFORE any glob test, on
     crawler metadata only (no I/O): MaxSizeBytes and the extension blacklist
     below. They are not glob semantics and do not invert with GlobSemantics.
 
@@ -721,7 +723,7 @@ function New-GlobCompiler
 
     .OUTPUTS
         [PSCustomObject] @{
-            CompiledNodes     = object[]  — node array; pass to Invoke-Filter -CompiledNodes
+            CompiledNodes     = object[]  — node array; pass to Invoke-Membrane -CompiledNodes
             SentinelIgnoreFiles = PSCustomObject[]  — @{ NodePath; Source; Globs } for all sentinel files found
         }
     #>
@@ -866,7 +868,7 @@ function Test-PathExcluded
 #endregion
 
 # ══════════════════════════════════════════════════════════════════════════
-# FILTER STAGE — eligibility guards + glob verdicts
+# MEMBRANE STAGE — eligibility guards + glob verdicts
 # ══════════════════════════════════════════════════════════════════════════
 
 # =============================================================================
@@ -877,12 +879,12 @@ function Test-PathExcluded
 # source material a reading agent wants, under EITHER GlobSemantics — a
 # Selection run for '*' must still not pull in a .png. So this is not a
 # pattern source that participates in inheritance/negation/precedence; it is
-# an unconditional eligibility guard applied by Invoke-Filter before any glob
+# an unconditional eligibility guard applied by Invoke-Membrane before any glob
 # test, on the crawler-stamped Extension alone (no read).
 #
 # It is data, not logic — a plain list. It lives here because no run-config
 # system exists yet to hold it; when admiral's config projection lands this
-# is the first obvious `defaults.filter.extensionBlacklist` entry, and the
+# is the first obvious `defaults.membrane.extensionBlacklist` entry, and the
 # code path is already a parameter (-ExtensionBlacklist, additive), so lifting
 # it out is a one-line change. Do not turn it into a glob source to "unify" it.
 # =============================================================================
@@ -904,11 +906,11 @@ $script:HardExtensionBlacklist = [HashSet[string]]::new([StringComparer]::Ordina
     '.bin', '.dat', '.pkl', '.npy', '.npz', '.parquet', '.db', '.sqlite'
 ) | ForEach-Object { [void]$script:HardExtensionBlacklist.Add($_) }
 
-function Invoke-Filter
+function Invoke-Membrane
 {
     <#
     .SYNOPSIS
-        The filter stage proper: joins compiled nodes with the crawler graph,
+        The membrane stage proper: joins compiled nodes with the crawler graph,
         applies the eligibility guards, then the glob verdicts. Pure filter —
         consumes crawler-stamped descriptors, enriches nothing.
 
@@ -921,7 +923,7 @@ function Invoke-Filter
              why it stands outside the glob design.
           2. Glob verdict — [GlobCompiler]::TestPath on RelativePath (dual truth
              table on the semantics-stamped CompiledState).
-        Then empty-leaf prune. Contract: schema/filter.schema.json.
+        Then empty-leaf prune. Contract: schema/membrane.schema.json.
 
     .PARAMETER CompiledNodes
         New-GlobCompiler output: @( @{ NodePath; AbsolutePath; NodeDepth; CompiledState } ).
@@ -938,7 +940,7 @@ function Invoke-Filter
         replaces it). Leading dot: @('.lock', '.min.js').
 
     .OUTPUTS
-        [PSCustomObject] @{ Graph; Skipped } — filter.out.result. Graph values are
+        [PSCustomObject] @{ Graph; Skipped } — membrane.out.result. Graph values are
         rebuilt nodes @{ NodePath; AbsolutePath; NodeDepth; Files; CompiledState };
         Files hold the surviving crawler descriptors, untouched.
     #>
@@ -996,7 +998,7 @@ function Invoke-Filter
             {
                 if ($null -eq $f.PSObject.Properties[$req])
                 {
-                    throw "Invoke-Filter: file entry '$($f.AbsolutePath)' lacks $req — input must be a crawler graph carrying the descriptor contract (rs.core.crawler stamps it at walk time; schema/descriptor.json)."
+                    throw "Invoke-Membrane: file entry '$($f.AbsolutePath)' lacks $req — input must be a crawler graph carrying the descriptor contract (rs.core.crawler stamps it at walk time; schema/descriptor.json)."
                 }
             }
             if ($MaxSizeBytes -gt 0 -and $f.SizeBytes -gt $MaxSizeBytes)
@@ -1053,7 +1055,7 @@ function Invoke-Filter
 
 # Please sort exports alphabetically within each section.
 Export-ModuleMember -Function @(
-    'Invoke-Filter'
+    'Invoke-Membrane'
     'New-GlobCompiler'
     'Test-PathExcluded'
 )

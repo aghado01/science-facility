@@ -10,6 +10,20 @@ stages inherently as it grew; v3 needs one *by design*.
 **Mission (user, 2026-07-28):** coordinate the stages, hold pipeline state, and
 handle routing decisions about data and control flow.
 
+## Pipeline vocabulary (user, 2026-08-15)
+
+**Discover → Membrane → Ingestion → Assembly → Export.** These are admiral's
+names — the semantics its wrappers carry. The atomic modules keep names for
+what they *implement*: `rs.core.crawler` implements discovery;
+`rs.core.membrane` is the membrane (selection, implicit via sentinels or
+explicit via globs, under either `GlobSemantics`, plus the hard exclusions);
+`rs.core.ingest` + colonel chains implement ingestion; `rs.core.assemble`
+implements assembly; export has three phases with three modules — sharding
+(`rs.core.shards`, preparation for serialization after assembly),
+serialization (`rs.core.serialize`), and the manifest built from the
+serialized bytes (`rs.core.manifest`). Module names do not chase the
+vocabulary; the wrappers map one onto the other.
+
 ## Architecture principle (user, 2026-07-28)
 
 Stages are developed **independently and modularly**, with defining contracts

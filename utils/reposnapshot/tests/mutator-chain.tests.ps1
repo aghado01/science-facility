@@ -105,14 +105,14 @@ try
     Enter-Section '1. Pipeline runs with two content mutators in the chain'
     # -----------------------------------------------------------------------
     Import-Module (Join-Path $v3 'rs.core.crawler.psm1') -Force
-    Import-Module (Join-Path $v3 'rs.core.filter.psm1') -Force
+    Import-Module (Join-Path $v3 'rs.core.membrane.psm1') -Force
     Import-Module (Join-Path $v3 'rs.core.colonel.v2.psm1') -Force -WarningAction SilentlyContinue
     Import-Module (Join-Path $v3 'rs.core.ingest.psm1') -Force
     Import-Module (Join-Path $v3 'rs.core.assemble.psm1') -Force
 
     $crawl = (New-FileSystemCrawler -RootPath $fixtureRoot).Invoke()
     $compiled = New-GlobCompiler -CrawlerGraph $crawl.Graph
-    $filtered = Invoke-Filter -CompiledNodes $compiled.CompiledNodes -CrawlerGraph $crawl.Graph
+    $filtered = Invoke-Membrane -CompiledNodes $compiled.CompiledNodes -CrawlerGraph $crawl.Graph
 
     # The profile 6d unblocked: reader → whitespace mutator → language-specific
     # mutator → enrich-only tail. Position doctrine: rs-attributes LAST, after

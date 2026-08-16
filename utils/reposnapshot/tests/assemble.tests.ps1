@@ -219,13 +219,13 @@ try
 
     # v3 side — full pipeline, harness-as-admiral
     Import-Module (Join-Path $v3 'rs.core.crawler.psm1') -Force
-    Import-Module (Join-Path $v3 'rs.core.filter.psm1') -Force
+    Import-Module (Join-Path $v3 'rs.core.membrane.psm1') -Force
     Import-Module (Join-Path $v3 'rs.core.colonel.v2.psm1') -Force -WarningAction SilentlyContinue
     Import-Module (Join-Path $v3 'rs.core.ingest.psm1') -Force
 
     $crawl = (New-FileSystemCrawler -RootPath $fixtureRoot).Invoke()
     $compiled = New-GlobCompiler -CrawlerGraph $crawl.Graph
-    $filtered = Invoke-Filter -CompiledNodes $compiled.CompiledNodes -CrawlerGraph $crawl.Graph
+    $filtered = Invoke-Membrane -CompiledNodes $compiled.CompiledNodes -CrawlerGraph $crawl.Graph
     $ingest = Invoke-Ingest -FilteredFsGraph $filtered `
         -Manifest @{
             'file-read'     = (Join-Path $v3 'processors\file-read.ps1')

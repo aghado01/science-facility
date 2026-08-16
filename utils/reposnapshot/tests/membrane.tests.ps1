@@ -3,7 +3,7 @@ Set-StrictMode -Version Latest
 
 <#
 .SYNOPSIS
-    Formal test harness for rs.core.filter.psm1 — GlobSemantics Ignore | Selection (Design v3).
+    Formal test harness for rs.core.membrane.psm1 — GlobSemantics Ignore | Selection (Design v3).
 
 .DESCRIPTION
     Covers:
@@ -19,7 +19,7 @@ Set-StrictMode -Version Latest
 
 .NOTES
     Run from any directory:
-        & "$PSScriptRoot\filter.tests.ps1"
+        & "$PSScriptRoot\membrane.tests.ps1"
 #>
 
 $v3 = Join-Path $PSScriptRoot '..\reposnapshot-v3'
@@ -70,13 +70,13 @@ Set-Content -Path (Join-Path $fixtureRoot 'sub/note.txt')    -Value 'note'
 Set-Content -Path (Join-Path $fixtureRoot 'tests/skip.ps1')  -Value '$t = 3'
 
 Import-Module (Join-Path $v3 'rs.core.crawler.psm1') -Force
-Import-Module (Join-Path $v3 'rs.core.filter.psm1') -Force
+Import-Module (Join-Path $v3 'rs.core.membrane.psm1') -Force
 
-function Invoke-FilterScenario ([hashtable]$CompilerArgs)
+function Invoke-MembraneScenario ([hashtable]$CompilerArgs)
 {
     $crawl = (New-FileSystemCrawler -RootPath $fixtureRoot).Invoke()
     $compiled = New-GlobCompiler -CrawlerGraph $crawl.Graph @CompilerArgs
-    $filtered = Invoke-Filter -CompiledNodes $compiled.CompiledNodes -CrawlerGraph $crawl.Graph
+    $filtered = Invoke-Membrane -CompiledNodes $compiled.CompiledNodes -CrawlerGraph $crawl.Graph
     [pscustomobject]@{
         Compiled  = $compiled
         Filtered  = $filtered
@@ -89,7 +89,7 @@ try
     # -----------------------------------------------------------------------
     Enter-Section '1. Ignore mode — virtual root ignore file semantics'
     # -----------------------------------------------------------------------
-    $s1 = Invoke-FilterScenario @{ IgnorePatterns = @('*.tmp', '!save.tmp') }
+    $s1 = Invoke-MembraneScenario @{ IgnorePatterns = @('*.tmp', '!save.tmp') }
     Assert-True ($s1.Survivors -notcontains 'noise.log') 'sentinel positive: noise.log excluded'
     Assert-True ($s1.Survivors -contains 'keep.log') 'sentinel negation: keep.log rescued'
     Assert-True ($s1.Survivors -notcontains 'extra.tmp') 'IgnorePatterns positive: extra.tmp excluded'
@@ -100,35 +100,35 @@ try
     # -----------------------------------------------------------------------
     Enter-Section '2. IgnoreOverridePatterns — negations by convention'
     # -----------------------------------------------------------------------
-    $s2 = Invoke-FilterScenario @{ IgnorePatterns = @('*.tmp'); IgnoreOverridePatterns = @('extra.tmp') }
+    $s2 = Invoke-MembraneScenario @{ IgnorePatterns = @('*.tmp'); IgnoreOverridePatterns = @('extra.tmp') }
     Assert-True ($s2.Survivors -contains 'extra.tmp') 'override countermands IgnorePatterns: extra.tmp rescued'
     Assert-True ($s2.Survivors -notcontains 'save.tmp') 'non-overridden *.tmp still excluded'
 
-    $s2b = Invoke-FilterScenario @{ IgnoreOverridePatterns = @('noise.log') }
+    $s2b = Invoke-MembraneScenario @{ IgnoreOverridePatterns = @('noise.log') }
     Assert-True ($s2b.Survivors -contains 'noise.log') 'override countermands sentinel material: noise.log rescued'
 
-    $s2c = Invoke-FilterScenario @{ IgnoreOverridePatterns = @('!app.ps1') }
+    $s2c = Invoke-MembraneScenario @{ IgnoreOverridePatterns = @('!app.ps1') }
     Assert-True ($s2c.Survivors -notcontains 'app.ps1') 'double negation → positive ignore: app.ps1 excluded (silly but admissible)'
 
     # Inherited gitignore semantics: file-only negation cannot re-include
     # content under an excluded directory (branch prunes first — same as git)
-    $s2d = Invoke-FilterScenario @{ IgnoreOverridePatterns = @('dist/bundle.js') }
+    $s2d = Invoke-MembraneScenario @{ IgnoreOverridePatterns = @('dist/bundle.js') }
     Assert-True ($s2d.Survivors -notcontains 'dist/bundle.js') `
         'gitignore constraint: file-only override cannot rescue inside pruned branch'
 
     # The recipe: negate the directory to rescue the branch and its contents
-    $s2e = Invoke-FilterScenario @{ IgnoreOverridePatterns = @('dist/') }
+    $s2e = Invoke-MembraneScenario @{ IgnoreOverridePatterns = @('dist/') }
     Assert-True ($s2e.Survivors -contains 'dist/bundle.js') `
         'directory-negation recipe: override dist/ rescues branch + contents'
 
     # -----------------------------------------------------------------------
     Enter-Section '3. Cross-mode params are inert (never errors)'
     # -----------------------------------------------------------------------
-    $s3 = Invoke-FilterScenario @{ SelectionPatterns = @('*.nonexistent') }   # Ignore semantics (default)
+    $s3 = Invoke-MembraneScenario @{ SelectionPatterns = @('*.nonexistent') }   # Ignore semantics (default)
     Assert-True ($s3.Survivors -contains 'app.ps1') 'Ignore mode: SelectionPatterns not consulted, no error'
     Assert-True ($s3.Survivors -notcontains 'noise.log') 'Ignore mode: sentinel semantics unaffected'
 
-    $s3b = Invoke-FilterScenario @{
+    $s3b = Invoke-MembraneScenario @{
         GlobSemantics = 'Selection'; SelectionPatterns = @('*.ps1')
         IgnorePatterns = @('*.ps1'); IgnoreOverridePatterns = @('whatever')
     }
@@ -138,7 +138,7 @@ try
     # -----------------------------------------------------------------------
     Enter-Section '4. Selection mode'
     # -----------------------------------------------------------------------
-    $s4 = Invoke-FilterScenario @{ GlobSemantics = 'Selection'; SelectionPatterns = @('*.ps1') }
+    $s4 = Invoke-MembraneScenario @{ GlobSemantics = 'Selection'; SelectionPatterns = @('*.ps1') }
     Assert-True ($s4.Survivors.Count -eq 3 -and
         ($s4.Survivors -contains 'app.ps1') -and
         ($s4.Survivors -contains 'sub/helper.ps1') -and
@@ -147,22 +147,22 @@ try
     Assert-True (@($s4.Compiled.SentinelIgnoreFiles).Count -eq 0) 'sentinel scan skipped (no I/O, no aggregate)'
 
     # Sentinels are not consulted: *.log selection includes the gitignored noise.log
-    $s4b = Invoke-FilterScenario @{ GlobSemantics = 'Selection'; SelectionPatterns = @('*.log') }
+    $s4b = Invoke-MembraneScenario @{ GlobSemantics = 'Selection'; SelectionPatterns = @('*.log') }
     Assert-True ($s4b.Survivors -contains 'noise.log' -and $s4b.Survivors -contains 'keep.log') `
         'sentinels unconsulted: gitignored noise.log is selectable'
 
     # Negation = un-keep exception
-    $s4c = Invoke-FilterScenario @{ GlobSemantics = 'Selection'; SelectionPatterns = @('*.ps1', '!tests/') }
+    $s4c = Invoke-MembraneScenario @{ GlobSemantics = 'Selection'; SelectionPatterns = @('*.ps1', '!tests/') }
     Assert-True ($s4c.Survivors -contains 'app.ps1' -and $s4c.Survivors -contains 'sub/helper.ps1') 'selection kept outside negation'
     Assert-True ($s4c.Survivors -notcontains 'tests/skip.ps1') 'selection negation un-keeps tests/'
 
     # Fail-fast: empty and self-annihilated sets throw
     $threwEmpty = $false
-    try { Invoke-FilterScenario @{ GlobSemantics = 'Selection' } | Out-Null } catch { $threwEmpty = $true }
+    try { Invoke-MembraneScenario @{ GlobSemantics = 'Selection' } | Out-Null } catch { $threwEmpty = $true }
     Assert-True $threwEmpty 'fail-fast: Selection mode with no SelectionPatterns throws'
 
     $threwAnnih = $false
-    try { Invoke-FilterScenario @{ GlobSemantics = 'Selection'; SelectionPatterns = @('*.ps1', '!*.ps1') } | Out-Null } catch { $threwAnnih = $true }
+    try { Invoke-MembraneScenario @{ GlobSemantics = 'Selection'; SelectionPatterns = @('*.ps1', '!*.ps1') } | Out-Null } catch { $threwAnnih = $true }
     Assert-True $threwAnnih 'fail-fast: self-annihilated selection set throws'
 
     # -----------------------------------------------------------------------
@@ -197,5 +197,5 @@ finally
 }
 
 # ---------------------------------------------------------------------------
-Write-Host "`n═══ filter.tests: $script:Passed passed, $script:Failed failed ═══" -ForegroundColor $(if ($script:Failed -eq 0) { 'Green' } else { 'Red' })
+Write-Host "`n═══ membrane.tests: $script:Passed passed, $script:Failed failed ═══" -ForegroundColor $(if ($script:Failed -eq 0) { 'Green' } else { 'Red' })
 if ($script:Failed -gt 0) { exit 1 }

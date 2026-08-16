@@ -1,5 +1,18 @@
 # Changelog 
 
+## 2026-08-15 — filter → membrane; pipeline vocabulary is admiral's, module names say what they implement
+
+`rs.core.filter.psm1` → `rs.core.membrane.psm1`; `Invoke-Filter` → `Invoke-Membrane`;
+`schema/filter.schema.json` → `membrane.schema.json` (`stage: membrane`; ingest
+`from` refs follow); `tests/filter.tests.ps1` → `membrane.tests.ps1`. A membrane
+is selectively permeable — selection, implicit (sentinels) or explicit (globs),
+under either GlobSemantics, plus the hard exclusions — which says more than
+"filter". Pipeline vocabulary *Discover → Membrane → Ingestion → Assembly →
+Export* recorded in admiral-orchestration §"Pipeline vocabulary" and AGENTS.md:
+it belongs to admiral's wrappers; atomic modules keep implementation names
+(crawler implements discovery; shards + serialize + manifest implement export).
+Battery 15 · 869 · 0.
+
 ## 2026-08-15 — Stage rename: ignore → filter; IgnoreCompiler → GlobCompiler; Regime/IngestMode → GlobSemantics
 
 "Ignore" is a semantics, not a stage. `rs.core.ignore.psm1` → `rs.core.filter.psm1`;
