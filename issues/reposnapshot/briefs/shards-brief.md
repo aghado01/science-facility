@@ -72,8 +72,9 @@ in assemble for this).
 
 Trade accepted: the plan now depends on emission knobs (attributes on/off,
 wire naming, codec) — flip one and membership can shift. Emission-invariant
-plans were a property nobody asked for; an exact budget is what
-`MaxShardSizeBytes` says.
+plans were a property nobody asked for; an exact quota is what
+`MaxShardSizeBytes` says (soft in the sense below — oversized shards exceed
+it by convention — but exact where it applies).
 
 ## Contract
 
@@ -110,10 +111,24 @@ do not ride into the plan; that is a fact, not a failure).
 | `ShardPrefix` / `Stem` | `ShardStem` | string · from RunContext/Root | keep, rename |
 | `ExcludeAttributes` / `ExcludeShardBlocks`, `Format`, `Compress` | — | — | **relocate to serialize** — emission knobs, not planning |
 
-**Anti-fragmentation** — LTS has no explicit min-fill / tail-merge knob; its
-smoothing is `Balanced` / `Loose`. Recorded as **open**: whether v3 wants a
-real anti-frag setting (e.g. merge a trailing shard below X% into its
-predecessor when the group allows) or whether `Balanced` is the mechanism.
+**Anti-fragmentation is a property, not a knob** (user, 2026-08-15) — it falls
+out of three things already above, and needs nothing added:
+
+1. **Atomicity** — the planner's unit is the entry; an ingested file's content
+   is **never split across shard files**. That is the fragmentation being
+   avoided. Invariant of the plan structure (`Entries[]` per shard).
+2. **The overflow exception** — `AllowOversizedShards` (`$true`): when a
+   single entry's `Measure-Row` exceeds the quota, it is neither fragmented
+   nor dropped — it gets its own shard, oversized by convention,
+   `IsOversized = $true`, exactly one entry.
+3. **Smoothing** — `Packing = Balanced | Loose`, so a group's tail is not one
+   tiny shard.
+
+Consequence for the quota's meaning: **`MaxShardSizeBytes` is a quota for
+multi-entry shards, not a hard cap on every file** — oversized shards exceed
+it by design; tail shards fall short. Two different determinisms, do not
+conflate: shard *sizes* are not uniform and the quota is soft; each shard's
+`PlannedSizeBytes` is exact and equals its written file.
 
 ## Algorithm — five phases, in memory, no I/O
 
@@ -126,8 +141,9 @@ predecessor when the group allows) or whether `Balanced` is the mechanism.
    `RelativePath` (reading order). *(Recon's inference on Flat; confirm against
    LTS before implementing — the sort key is a policy call either way.)*
 3. **Pack** — per group, `cumulative += Measure-Row(entry, header, idxWidth)`;
-   flush when `cumulative + next > budget` or `count ≥ MaxFilesPerShard`;
-   oversized isolation per the switch; budget per `Packing`. `PlannedSizeBytes`
+   flush when `cumulative + next > quota` or `count ≥ MaxFilesPerShard`;
+   oversized isolation per the switch (a lone entry over quota → its own
+   shard, whole); effective quota per `Packing`. `PlannedSizeBytes`
    includes `Measure-HeaderRow`.
 4. **Name** — `Ordinal = i+1`; `Key = "s{0:D3}"`, plus `_<cleanGroup>` when
    grouped and not `.root` (`cleanGroup` = group key minus leading `.`, path
@@ -163,9 +179,11 @@ wrappers; any I/O in the planner; sorting at serialization.
   idx makes this exact, not bounded). This is the new gate the measurement
   buys; assert it in `pipeline.smoke` once serialize exists.
 - Deterministic: identical IR + identical knobs → bit-identical plan.
-- Coverage: every entry in exactly one shard; Σ `EntryCount` = `IR.EntryCount`.
-- Oversized isolation: a synthetic entry over budget gets its own shard under
-  `$true`; throws under `$false`.
+- Coverage + atomicity: every entry in exactly one shard, whole; Σ `EntryCount`
+  = `IR.EntryCount`; no entry appears in two shards.
+- Oversized isolation: a synthetic entry over quota gets its own shard under
+  `$true` (`IsOversized`, `EntryCount = 1`); throws under `$false`. Every
+  non-oversized shard's `PlannedSizeBytes ≤ MaxShardSizeBytes`.
 - Idx: `IdxMap` values are `0..N-1`, monotonic across shards in reading order.
 - `contracts.tests` green with `shards.schema.json` present; battery green and
   error stream clean.
@@ -180,7 +198,6 @@ wrappers; any I/O in the planner; sorting at serialization.
 
 ## Open calls
 
-- Anti-fragmentation: real knob or `Balanced` suffices.
 - `Balanced` ×1.1 / `Loose` ×0.8 — keep LTS constants or re-derive.
 - Flat ordering key — `Get-PathHash` (recon) vs something else; confirm LTS.
 - Whether the plan holds entry *references* (assumed) or copies.
