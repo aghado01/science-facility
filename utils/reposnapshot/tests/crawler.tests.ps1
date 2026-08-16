@@ -114,21 +114,26 @@ try
     Assert-True ($null -eq $util.PSObject.Properties['Attributes']) 'no bare Attributes field (name reserved for rs-attributes element)'
 
     # -----------------------------------------------------------------------
-    Enter-Section '3d. Descriptor conforms to schema/descriptor.json (origin=crawler, exactly)'
+    Enter-Section '3d. Output conforms to schema/crawler.schema.json (out.file / out.node, exactly)'
     # -----------------------------------------------------------------------
-    $schemaPath = Join-Path (Split-Path $crawlerPath -Parent) 'schema/descriptor.json'
-    Assert-True (Test-Path $schemaPath) 'schema/descriptor.json exists'
-    $schema = Get-Content -LiteralPath $schemaPath -Raw | ConvertFrom-Json -AsHashtable
-    $crawlerFields = @($schema.fields.GetEnumerator() | Where-Object { $_.Value.origin -eq 'crawler' } | ForEach-Object { $_.Key })
+    $schemaPath = Join-Path (Split-Path $crawlerPath -Parent) 'schema/crawler.schema.json'
+    Assert-True (Test-Path $schemaPath) 'schema/crawler.schema.json exists'
+    $contract = Get-Content -LiteralPath $schemaPath -Raw | ConvertFrom-Json -AsHashtable
+    Assert-True ($contract.stage -eq 'crawler') 'contract names its stage'
+    $fileFields = @($contract.out.file.Keys)
     $stamped = @($util.PSObject.Properties.Name)
-    $missing = @($crawlerFields | Where-Object { $_ -notin $stamped })
-    $undeclared = @($stamped | Where-Object { $_ -notin $crawlerFields })
-    Assert-True ($missing.Count -eq 0) 'every origin=crawler field is stamped' "missing: $($missing -join ', ')"
-    Assert-True ($undeclared.Count -eq 0) 'no stamped field is undeclared in the schema' "undeclared: $($undeclared -join ', ')"
-    foreach ($name in $crawlerFields)
-    {
-        Assert-True ($schema.fields[$name].scope -in @('core', 'ingestion', 'element')) "schema scope valid for $name" "got '$($schema.fields[$name].scope)'"
-    }
+    $missing = @($fileFields | Where-Object { $_ -notin $stamped })
+    $undeclared = @($stamped | Where-Object { $_ -notin $fileFields })
+    Assert-True ($missing.Count -eq 0) 'every out.file field is stamped on the descriptor' "missing: $($missing -join ', ')"
+    Assert-True ($undeclared.Count -eq 0) 'no stamped descriptor field is undeclared in out.file' "undeclared: $($undeclared -join ', ')"
+    $nodeFields = @($contract.out.node.Keys)
+    $nodeStamped = @($result.Graph['src/'].PSObject.Properties.Name)
+    Assert-True (@($nodeFields | Where-Object { $_ -notin $nodeStamped }).Count -eq 0 -and @($nodeStamped | Where-Object { $_ -notin $nodeFields }).Count -eq 0) `
+        'node shape equals out.node exactly' "node: $($nodeStamped -join ','); contract: $($nodeFields -join ',')"
+    $resultFields = @($contract.out.result.Keys)
+    $resultStamped = @($result.PSObject.Properties.Name)
+    Assert-True (@($resultFields | Where-Object { $_ -notin $resultStamped }).Count -eq 0 -and @($resultStamped | Where-Object { $_ -notin $resultFields }).Count -eq 0) `
+        'result envelope equals out.result exactly'
 
     # -----------------------------------------------------------------------
     Enter-Section '3c. Node rollups (on-disk subtree totals)'

@@ -1,125 +1,54 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://reposnapshot/v3/schema/assemble.schema.json",
-  "title": "RepoSnapshot v3 — Assemble IR",
-  "description": "DOCUMENTATION ONLY — not read by code (see descriptor.json for the register that IS). In-memory intermediate representation produced by Invoke-Assemble. Successor to the LTS JSON monolith as a DATA STRUCTURE — v3 never emits it as an artifact. Property names are the in-memory PascalCase shape; JSON wire naming and emission-side arrangement (sort/group/shard/idx) are downstream writer concerns and are deliberately NOT described here. Per-field dispositions (core / ingestion / element) are declared in schema/descriptor.json and consumed by rs.core.assemble at import; this file describes the macro-shape (Header / Entries / Skipped / Diagnostics) only. Source of truth: reposnapshot-v3/rs.core.assemble.psm1 (Invoke-Assemble). Design: issues/reposnapshot/design/rs.core.assemble-design.md. Captured 2026-08-09; descriptor deference added 2026-08-15.",
-  "type": "object",
-  "required": ["Header", "Entries", "Skipped", "Diagnostics"],
-  "additionalProperties": false,
-  "properties": {
-    "Header": { "$ref": "#/$defs/header" },
-    "Entries": {
-      "type": "array",
-      "description": "Open self-describing property bags in CANONICAL INGESTED ORDER (store order). All sorting/grouping/sharding is the emission-side arrangement layer and is not applied here.",
-      "items": { "$ref": "#/$defs/entry" }
+  "stage": "assemble",
+  "module": "rs.core.assemble.psm1 — Invoke-Assemble(-DispatchOutput [-RunContext] [-Adapter] [-EntryRouting])",
+  "$comment": "Collates the ingest envelope into the IR — an in-memory DATA STRUCTURE (successor of the LTS JSON monolith), never emitted as an artifact; wire naming and arrangement (sort/group/shard/idx) are writer concerns. READ BY CODE: rs.core.assemble loads out.entry.core and out.entry.exclude at import — those two lists are this stage's projection semantics, declared here and nowhere else. in.bag names what assemble actually READS from a bag; out.entry says what an entry IS: core (guaranteed, not counted in Header.Elements) + everything else the bag carried (elements, counted) − exclude. Adding an ingestion-side field upstream that must not reach the payload = add it to out.entry.exclude; forgetting makes it ride into the payload as an element, which the golden test catches.",
+  "in": {
+    "params": {
+      "DispatchOutput": { "type": "object", "note": "ingest.out.result" },
+      "RunContext":     { "type": "object", "optional": true, "note": "run-level header material stamped VERBATIM (RunStamp, Root, GeneratorVersion, ConfigEcho, Timing, Environment, GitHistory, …); EntryCount and Elements are RESERVED — carrying either throws" },
+      "Adapter":        { "type": "Code",   "note": "track adapter; Code = one result → one entry (Thread lands with the thread-corpus milestone)" },
+      "EntryRouting":   { "type": "LeanPayload|KeepContentless", "note": "LeanPayload (default): read failures / null / empty content route to Diagnostics.Routed and never become entries. KeepContentless: LTS-style, every non-null result is an entry" }
     },
-    "Skipped": {
-      "type": "array",
-      "description": "Pre-chain skips passed through from DispatchOutput.Skipped (e.g. ignore size-cap, FileStatReadFailed). Never entries; distinct from Diagnostics.Routed, which is post-adapt routing.",
-      "items": { "type": "object", "additionalProperties": true }
+    "envelope": {
+      "Results":  { "from": "ingest.out.result" },
+      "Skipped":  { "from": "ingest.out.result", "optional": true, "note": "passed through" },
+      "Errors":   { "from": "ingest.out.result", "optional": true, "note": "→ Diagnostics.Errors" },
+      "Warnings": { "from": "ingest.out.result", "optional": true, "note": "→ Diagnostics.Warnings" }
     },
-    "Diagnostics": { "$ref": "#/$defs/diagnostics" }
+    "bag": {
+      "RelativePath": { "from": "ingest.out.bag", "note": "routing records name the item by it" },
+      "Content":      { "from": "ingest.out.bag", "note": "LeanPayload: absent/non-string → NoContent; '' → EmptyFile or EmptiedByProcessing" },
+      "SizeBytes":    { "from": "ingest.out.bag", "note": "LeanPayload: distinguishes EmptyFile (0 on disk) from EmptiedByProcessing" },
+      "ReadError":    { "from": "ingest.out.bag", "note": "LeanPayload: routes with its kind as Reason; KeepContentless: retained" },
+      "_ChainHalt":   { "from": "ingest.out.bag", "note": "LeanPayload: routes as ChainHalt when no ReadError" }
+    }
   },
-  "$defs": {
+  "out": {
+    "result": {
+      "Header":      { "type": "header" },
+      "Entries":     { "type": "entry[]", "note": "CANONICAL INGESTED ORDER (store order); all sorting/grouping/sharding is emission-side" },
+      "Skipped":     { "from": "ingest.out.result", "note": "pre-chain skips passed through verbatim; distinct from Diagnostics.Routed" },
+      "Diagnostics": { "type": "diagnostics", "note": "feed for the diagnostic sidecar — never rendered into payloads" }
+    },
     "header": {
-      "type": "object",
-      "description": "RunContext fields stamped VERBATIM (never computed) plus the two assemble-derived facts. EntryCount and Elements are reserved names — a RunContext carrying either causes Invoke-Assemble to throw. RunContext fields are open; the known ones below carry shapes owned by RunContext, not by assemble.",
-      "required": ["EntryCount", "Elements"],
-      "additionalProperties": true,
-      "properties": {
-        "EntryCount": { "type": "integer", "minimum": 0, "description": "assemble-derived: Entries.Count" },
-        "Elements": {
-          "type": "object",
-          "description": "Payload self-description + coverage diagnostics. One key per non-core element name observed across entries; the core fields (RelativePath/NodePath/LastWriteUtc/Content) are excluded.",
-          "additionalProperties": {
-            "type": "object",
-            "required": ["Count", "Total"],
-            "additionalProperties": false,
-            "properties": {
-              "Count": { "type": "integer", "minimum": 0, "description": "entries carrying this element" },
-              "Total": { "type": "integer", "minimum": 0, "description": "total entries (denominator)" }
-            }
-          }
-        },
-        "RunStamp": { "description": "run-level RunContext field (verbatim)" },
-        "Root": { "description": "artifact-facing root anchor (RunContext, verbatim)" },
-        "GeneratorVersion": { "description": "RunContext, verbatim" },
-        "ConfigEcho": { "description": "effective run configuration echo (RunContext); ancestor of the LTS header params block" },
-        "Timing": { "description": "RunContext, verbatim" },
-        "Environment": { "description": "RunContext, verbatim" },
-        "GitHistory": { "description": "RunContext, verbatim (never exercised in the LTS selfies)" }
-      }
+      "EntryCount": { "type": "int",    "note": "assemble-derived: Entries.Count" },
+      "Elements":   { "type": "object", "note": "assemble-derived: { <name>: { Count; Total } } — observed presence per non-core entry field; payload self-description + coverage" },
+      "…":          { "type": "open",   "note": "every RunContext field, verbatim" }
     },
     "entry": {
-      "type": "object",
-      "description": "Open element model: a self-describing bag. The core fields are guaranteed on code-track entries under the default LeanPayload routing; any number of additional elements may be attached by chain processors (e.g. Attributes, Processing, Operations) and flow through assemble with zero per-element code. EXCLUDED by assemble: every field with scope=ingestion in schema/descriptor.json (the authoritative list — not repeated here). Under LeanPayload, ReadError is also excluded (routed to Diagnostics); under KeepContentless it is retained and Content may be absent/empty.",
-      "required": ["RelativePath", "NodePath", "LastWriteUtc", "Content"],
-      "additionalProperties": true,
-      "properties": {
-        "RelativePath": { "type": "string", "description": "root-anchored, forward-slash; the payload path column (LTS row 'path')" },
-        "NodePath": { "type": "string", "description": "directory node path; structure encoded flatly for reader token economy" },
-        "LastWriteUtc": { "type": "string", "format": "date-time", "description": "crawler stat (identity contract)" },
-        "Content": { "type": ["string", "null"], "description": "PROCESSED content (post-chain), NOT the on-disk original. Under LeanPayload always a non-empty string (null/empty routed out); under KeepContentless may be null/empty/absent." },
-        "Attributes": { "$ref": "#/$defs/attributes" },
-        "Processing": {
-          "type": "array",
-          "description": "Chain-ordered processing trail (processor + ops). Known element; item shape owned by the emitting processors. Feeds the payload channel manifest (which channels the payload carries).",
-          "items": { "type": "object", "additionalProperties": true }
-        },
-        "Operations": { "description": "rs-psstrip operations record, promoted to an attached element (open element model). Shape owned by rs-psstrip." }
-      }
-    },
-    "attributes": {
-      "type": "object",
-      "description": "Content-form statistics over the PROCESSED Content. SpanBytes is the UTF-8 byte span of processed content (payload byte semantics) — NOT on-disk SizeBytes, and NOT the writer-side encoded row 'length'. Produced by processors/rs-attributes.ps1 and surfaced through the open element model (assemble does not own this shape). Optional on any entry — absent when the entry carries no usable Content (e.g. thread envelopes). 4-decimal rounding matches LTS for the golden comparison; CompressionRatio deliberately diverges (LTS emits 0 for >100-char entries via a disposed-stream defect).",
-      "additionalProperties": false,
-      "required": ["SpanBytes", "CharCount", "WordCount", "PunctuationCount", "UniqueChars", "Entropy", "CompressionRatio", "WhitespaceRatio", "LineStats"],
-      "properties": {
-        "SpanBytes": { "type": "integer", "minimum": 0, "description": "UTF-8 byte span of processed content (payload navigation + packing semantics)" },
-        "CharCount": { "type": "integer", "minimum": 0, "description": ".NET string length (UTF-16 code units)" },
-        "WordCount": { "type": "integer", "minimum": 0, "description": "naive \\s+ split count (Unicode-simple)" },
-        "PunctuationCount": { "type": "integer", "minimum": 0, "description": "\\p{P} match count" },
-        "UniqueChars": { "type": "integer", "minimum": 0, "description": "distinct char count" },
-        "Entropy": { "type": "number", "minimum": 0, "description": "Shannon entropy per character (bits); 4-decimal" },
-        "CompressionRatio": { "type": "number", "description": "GZip length / raw length; 4-decimal. 1.0 for content of 100 chars or fewer (the >100 guard)." },
-        "WhitespaceRatio": { "type": "number", "minimum": 0, "maximum": 1, "description": "\\s match count / char count; 4-decimal" },
-        "LineStats": {
-          "type": "object",
-          "description": "Line-length statistics. Lines split on LF only, so a trailing CR is included on CRLF content — deliberate LTS parity.",
-          "additionalProperties": false,
-          "required": ["Mean", "Median", "StdDev", "Max"],
-          "properties": {
-            "Mean": { "type": "number", "description": "2-decimal" },
-            "Median": { "type": "integer", "description": "lower-median (index floor(n/2) of the sorted lengths)" },
-            "StdDev": { "type": "number", "description": "population standard deviation; 2-decimal" },
-            "Max": { "type": "integer" }
-          }
-        }
-      }
+      "core": {
+        "RelativePath": { "from": "ingest.out.bag" },
+        "NodePath":     { "from": "ingest.out.bag" },
+        "LastWriteUtc": { "from": "ingest.out.bag" },
+        "Content":      { "from": "ingest.out.bag", "note": "may be absent/empty only under KeepContentless" }
+      },
+      "exclude": [ "AbsolutePath", "SizeBytes", "Extension", "CreationUtc", "FsAttributes", "_ChainHalt" ],
+      "elements": { "type": "open", "note": "every other bag field, arrival order preserved (Encoding, Attributes, Processing, …); ReadError is an element only under KeepContentless" }
     },
     "diagnostics": {
-      "type": "object",
-      "description": "Never rendered into payloads — the feed for the diagnostic sidecar (payload doctrine).",
-      "required": ["Routed", "Errors", "Warnings"],
-      "additionalProperties": false,
-      "properties": {
-        "Routed": {
-          "type": "array",
-          "description": "Entries diverted from the payload by LeanPayload routing (or a null dispatch result).",
-          "items": {
-            "type": "object",
-            "required": ["Index", "RelativePath", "Reason"],
-            "additionalProperties": false,
-            "properties": {
-              "Index": { "type": "integer", "minimum": 0, "description": "position in the dispatch Results (ingested order)" },
-              "RelativePath": { "type": ["string", "null"] },
-              "Reason": { "type": "string", "description": "Known values: NullResult, ChainHalt, NoContent, EmptyContent, EmptyFile, EmptiedByProcessing — or a read-failure kind string (from the item's ReadError)." }
-            }
-          }
-        },
-        "Errors": { "type": "array", "description": "Dispatch-level error strings (colonel Streams -> ingest projection).", "items": { "type": "string" } },
-        "Warnings": { "type": "array", "description": "Dispatch-level plus worker/budget warning strings.", "items": { "type": "string" } }
-      }
+      "Routed":   { "type": "routed[]", "note": "@{ Index; RelativePath; Reason } — NullResult | <ReadError kind> | ChainHalt | NoContent | EmptyFile | EmptiedByProcessing" },
+      "Errors":   { "type": "string[]" },
+      "Warnings": { "type": "string[]" }
     }
   }
 }

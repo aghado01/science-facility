@@ -48,11 +48,11 @@ using namespace System.Collections.Generic
     coverage diagnostics). A new enrichment processor's element flows
     through with zero changes here.
 
-    Field dispositions come from schema/descriptor.json (read at import):
-      scope=ingestion → stripped from entry bags (AbsolutePath, SizeBytes,
-        Extension, CreationUtc, FsAttributes, _ChainHalt today).
-      scope=core      → guaranteed on every entry; not counted in Elements.
-      anything else   → element (open element model; unlisted = element).
+    Stage contract: schema/assemble.schema.json (in = what is read from the
+    envelope and each bag; out = what an entry IS). Read at import:
+      out.entry.core    → guaranteed on every entry; not counted in Elements.
+      out.entry.exclude → stripped from entry bags.
+      anything else     → element (open element model; unlisted = element).
       ReadError — routed to Diagnostics under LeanPayload; retained in the
         bag under KeepContentless (a content-less entry must say why).
 
@@ -91,16 +91,15 @@ using namespace System.Collections.Generic
 #>
 
 # =============================================================================
-# Descriptor field register — schema/descriptor.json is the declaration; this
-# module reads it once at import. Missing/unparseable file fails the import
-# loudly rather than silently emptying the exclusion set.
+# Stage contract — schema/assemble.schema.json. This module reads its OWN
+# contract once at import: out.entry.core (guaranteed fields, not counted in
+# Elements) and out.entry.exclude (dropped from bags). Missing/unparseable file
+# fails the import loudly rather than silently emptying the exclusion set.
 # =============================================================================
-$script:DescriptorSchema = Get-Content -LiteralPath "$PSScriptRoot/schema/descriptor.json" -Raw |
+$script:Contract = Get-Content -LiteralPath "$PSScriptRoot/schema/assemble.schema.json" -Raw |
     ConvertFrom-Json -AsHashtable
-$script:IngestionFields = @($script:DescriptorSchema.fields.GetEnumerator() |
-        Where-Object { $_.Value.scope -eq 'ingestion' } | ForEach-Object { $_.Key })
-$script:CoreFields = @($script:DescriptorSchema.fields.GetEnumerator() |
-        Where-Object { $_.Value.scope -eq 'core' } | ForEach-Object { $_.Key })
+$script:CoreFields = @($script:Contract.out.entry.core.Keys)
+$script:ExcludedFields = @($script:Contract.out.entry.exclude)
 
 # =============================================================================
 # PUBLIC — Invoke-Assemble
@@ -159,8 +158,8 @@ function Invoke-Assemble
 
     $results = @($DispatchOutput.Results)
 
-    # Entry-bag exclusions — scope=ingestion in schema/descriptor.json
-    $alwaysExcluded = $script:IngestionFields
+    # Entry-bag exclusions — schema/assemble.schema.json out.entry.exclude
+    $alwaysExcluded = $script:ExcludedFields
 
     $entries = [List[PSCustomObject]]::new()
     $routed = [List[PSCustomObject]]::new()
@@ -223,7 +222,7 @@ function Invoke-Assemble
     }
 
     # ── Phase: derive (Elements declaration — post-route coverage) ────────
-    $coreFields = $script:CoreFields   # scope=core in schema/descriptor.json
+    $coreFields = $script:CoreFields   # schema/assemble.schema.json out.entry.core
     $elementCounts = [ordered]@{}
     foreach ($entry in $entries)
     {

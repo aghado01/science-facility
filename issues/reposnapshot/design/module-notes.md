@@ -39,20 +39,33 @@ and until 2026-08-15 the only field list anywhere was assemble's hardcoded
 exclusion — knowledge of "which fields are ingestion-side" lived at the end of
 the line, not with the field.
 
-**Payload boundary — `schema/descriptor.json` (2026-08-15).** The one place a
-field is declared, and it is *read by code*: `rs.core.assemble` derives its
-exclusion set (`scope=ingestion`) and core set (`scope=core`) from it at
-import; `tests/crawler.tests.ps1` asserts the crawler stamps exactly the
-`origin=crawler` fields (both directions); `tests/assemble.tests.ps1` asserts
-the module's exclusion set equals the schema's. Anything not listed is an
-element by default — the register declares dispositions, it does not close
-the bag. To add a field: stamp it in its origin stage and add a line; forget
-the line and it rides into the payload as an element, which the golden test
-catches (the safe failure direction). If a writer later wants `CreationUtc`
-in a tree manifest, flip its scope; the writer, not the crawler, makes that
-call. `schema/assemble.schema.json` remains as documentation of the IR
-macro-shape and is marked as not read by code — it defers field dispositions
-to `descriptor.json` rather than repeating them (ledger #6).
+**Stage contracts — `schema/<stage>.schema.json` (2026-08-15).** Each stage
+declares `{ stage, in, out }` as field registers under named shapes
+(`crawler.out.file`, `ignore.in.node`, `ingest.out.bag`, `assemble.out.entry`,
+…). A field may carry `from: "<stage>.out.<shape>"` — taken verbatim from
+that upstream shape. That one convention makes the cross-stage relations set
+operations, checked generically by `tests/contracts.tests.ps1` (knows no stage
+by name): every `from` resolves (input ⊆ upstream output, per field), and the
+**join residues** are printed — for each `Y.in ← X.out.S`, the fields of
+`X.out.S` no `Y.out.*` declares `from` it, i.e. reachable downstream only by
+`Y.out ⋈ X.out` on the retained upstream output (the orchestrator holds both).
+Today's residues: `crawler.out.node − ignore.out.node = {Files, Subtree*}`;
+`ignore.out.node` reaches nothing in ingest (flattening); `ingest.out.bag −
+assemble.out.entry.core = exclude ∪ {Encoding, ReadError}` with the landing
+open. Contracts prime a stage's semantics: assemble is not privileged —
+`assemble.in.bag` names what it *reads* (RelativePath, Content, SizeBytes,
+ReadError, _ChainHalt) and `assemble.out.entry` says what an entry *is* (core
++ elements − exclude); the module reads its own contract at import for the
+`core` and `exclude` lists, nothing upstream's. `crawler.tests` asserts the
+crawler's descriptor/node/result shapes equal `crawler.out.*` exactly;
+`assemble.tests` asserts the module's lists equal its contract. Anything not
+listed in an open shape is an element — contracts declare, they do not close
+the bag. To add a field: stamp it, add it to the origin's `out`, add `from`
+lines where it passes through, and (if it must not reach the payload) add it to
+`assemble.out.entry.exclude`; forget the last and it rides in as an element,
+which the golden test catches. A short-lived `descriptor.json` union register
+(2026-08-15, one day) was replaced by this decomposition — a cross-stage
+god-view read by assemble is what the per-stage model avoids.
 
 **Rollups are on-disk, pre-filter.** `SubtreeDirCount` / `SubtreeFileCount` /
 `SubtreeBytes` describe what is on disk under a node, computed in a

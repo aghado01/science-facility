@@ -117,9 +117,15 @@ rewriting history.
 - `reposnapshot-v3/` — v3 modules (crawler → ignore/selection → colonel
   chains → assemble → writers) + `processors/` (ISS-loadable, body-only,
   `param($Item, $Config)`, copy-on-enrich, interior helpers allowed).
-  `schema/descriptor.json` is the per-file field register — the one place a
-  descriptor/bag/entry field is declared (origin, scope, type); assemble reads
-  it, tests enforce it. Add a field there when you stamp one.
+  `schema/<stage>.schema.json` — per-stage I/O contracts (`{ stage, in, out }`,
+  field registers under named shapes; `from: "<stage>.out.<shape>"` marks a
+  field taken verbatim from upstream). `tests/contracts.tests.ps1` checks every
+  `from` resolves (input ⊆ upstream output) and prints join residues — fields
+  reachable only by joining a stage's output with a retained upstream output.
+  Assemble reads its own contract's `out.entry.core`/`exclude`. When you add a
+  field: stamp it, declare it in the origin's `out`, add `from` where it passes
+  through, and add it to `assemble.out.entry.exclude` if it must not reach the
+  payload.
 - `issues/reposnapshot/` — design docs (`design/`, `briefs/`, `planning/`,
   `reports/`, `discussion/`). **`planning/v3-consolidation-plan.md` is the
   sequenced work ledger**; `planning/decisions-ledger.md` the settled calls;

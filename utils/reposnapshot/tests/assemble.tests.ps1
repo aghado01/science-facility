@@ -114,14 +114,18 @@ foreach ($dropped in @('AbsolutePath', 'SizeBytes', 'Extension', 'CreationUtc', 
 {
     Assert-True ($null -eq $ir.Entries[0].PSObject.Properties[$dropped]) "entry bag excludes $dropped"
 }
-# The exclusion set is READ from schema/descriptor.json, not hardcoded — prove the
-# module's list equals the schema's scope=ingestion set (drift in either direction fails).
-$schemaPath = Join-Path $PSScriptRoot '..\reposnapshot-v3\schema\descriptor.json'
-$schema = Get-Content -LiteralPath $schemaPath -Raw | ConvertFrom-Json -AsHashtable
-$schemaIngestion = @($schema.fields.GetEnumerator() | Where-Object { $_.Value.scope -eq 'ingestion' } | ForEach-Object { $_.Key }) | Sort-Object
-$moduleIngestion = @(& (Get-Module rs.core.assemble) { $script:IngestionFields }) | Sort-Object
-Assert-True (($schemaIngestion -join ',') -eq ($moduleIngestion -join ',')) 'assemble exclusion set = schema scope=ingestion' "schema: $($schemaIngestion -join ','); module: $($moduleIngestion -join ',')"
-Assert-True ($null -eq $ir.Header.Elements.PSObject.Properties['Extension'] -and $null -eq $ir.Header.Elements.PSObject.Properties['FsAttributes']) 'ingestion fields never reach Header.Elements'
+# The exclusion and core sets are READ from the stage's own contract
+# (schema/assemble.schema.json out.entry.exclude / out.entry.core), not hardcoded —
+# prove the module's lists equal the contract's (drift in either direction fails).
+$schemaPath = Join-Path $PSScriptRoot '..\reposnapshot-v3\schema\assemble.schema.json'
+$contract = Get-Content -LiteralPath $schemaPath -Raw | ConvertFrom-Json -AsHashtable
+$contractExclude = @($contract.out.entry.exclude) | Sort-Object
+$moduleExclude = @(& (Get-Module rs.core.assemble) { $script:ExcludedFields }) | Sort-Object
+Assert-True (($contractExclude -join ',') -eq ($moduleExclude -join ',')) 'assemble exclusion set = contract out.entry.exclude' "contract: $($contractExclude -join ','); module: $($moduleExclude -join ',')"
+$contractCore = @($contract.out.entry.core.Keys) | Sort-Object
+$moduleCore = @(& (Get-Module rs.core.assemble) { $script:CoreFields }) | Sort-Object
+Assert-True (($contractCore -join ',') -eq ($moduleCore -join ',')) 'assemble core set = contract out.entry.core' "contract: $($contractCore -join ','); module: $($moduleCore -join ',')"
+Assert-True ($null -eq $ir.Header.Elements.PSObject.Properties['Extension'] -and $null -eq $ir.Header.Elements.PSObject.Properties['FsAttributes']) 'excluded fields never reach Header.Elements'
 foreach ($kept in @('RelativePath', 'NodePath', 'LastWriteUtc', 'Content', 'Encoding', 'Attributes'))
 {
     Assert-True ($null -ne $ir.Entries[0].PSObject.Properties[$kept]) "entry bag keeps $kept"

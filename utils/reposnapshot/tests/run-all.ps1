@@ -45,6 +45,7 @@ Set-StrictMode -Version Latest
 
 $repoRoot = Split-Path $PSScriptRoot -Parent
 $suitePaths = @(
+    (Join-Path $PSScriptRoot 'contracts.tests.ps1')
     (Join-Path $PSScriptRoot 'crawler.tests.ps1')
     (Join-Path $PSScriptRoot 'ignore.tests.ps1')
     (Join-Path $PSScriptRoot 'pipeline.smoke.tests.ps1')

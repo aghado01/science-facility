@@ -1,0 +1,44 @@
+{
+  "stage": "crawler",
+  "module": "rs.core.crawler.psm1 — New-FileSystemCrawler(-RootPath).Invoke()",
+  "$comment": "Stage I/O contract. Field entries: { type, note, optional?, from? }. `from` = '<stage>.out.<shape>' names the upstream shape a field is taken from verbatim; tests/contracts.tests.ps1 asserts every `from` resolves (subset relation). Nothing here is read by the crawler itself — it stamps; tests/crawler.tests.ps1 asserts the stamped descriptor equals out.file exactly.",
+  "in": {
+    "params": {
+      "RootPath": { "type": "string", "note": "directory; resolved to absolute, forward-slash, trailing '/'" }
+    }
+  },
+  "out": {
+    "result": {
+      "RootPath":       { "type": "string" },
+      "Graph":          { "type": "Dictionary[NodePath, node]", "note": "ordinal keys; root = ''" },
+      "DirectoryCount": { "type": "int" },
+      "FileCount":      { "type": "int" },
+      "SkippedCount":   { "type": "int" },
+      "Skipped":        { "type": "skipped[]", "note": "diagnostics feed — a SIBLING of Graph, not folded into it" }
+    },
+    "node": {
+      "NodePath":         { "type": "string", "note": "graph key; directory portion, trailing '/', root = ''" },
+      "AbsolutePath":     { "type": "string", "note": "trailing '/'" },
+      "NodeDepth":        { "type": "int" },
+      "Files":            { "type": "file[]" },
+      "SubtreeDirCount":  { "type": "int",  "note": "on-disk, pre-filter; descendants not counting self; computed post-walk" },
+      "SubtreeFileCount": { "type": "int",  "note": "on-disk, pre-filter; files at or below" },
+      "SubtreeBytes":     { "type": "long", "note": "on-disk, pre-filter; sum of SizeBytes at or below" }
+    },
+    "file": {
+      "AbsolutePath": { "type": "string",         "note": "read target; ingestion-side only" },
+      "RelativePath": { "type": "string",         "note": "root-anchored, forward slashes, no leading slash; = NodePath + name" },
+      "NodePath":     { "type": "string",         "note": "owning node key, duplicated so the descriptor stands alone after flattening" },
+      "Extension":    { "type": "string",         "note": "[Path]::GetExtension — leading '.', '' if none" },
+      "SizeBytes":    { "type": "long",           "note": "on-disk length (byte-semantics layer 1)" },
+      "LastWriteUtc": { "type": "datetime",       "note": "Kind=Utc" },
+      "CreationUtc":  { "type": "datetime",       "note": "Kind=Utc; same stat" },
+      "FsAttributes": { "type": "FileAttributes", "note": "System.IO.FileAttributes flags; not 'Attributes' (that is the rs-attributes element)" }
+    },
+    "skipped": {
+      "Path":   { "type": "string" },
+      "Reason": { "type": "string", "note": "AttributeReadFailed | ReparsePoint | FileStatReadFailed | AccessDenied | PathTooLong | IOException | SecurityException | NotSupported | <exception type>" },
+      "Error":  { "type": "string", "optional": true }
+    }
+  }
+}

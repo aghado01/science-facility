@@ -1,0 +1,60 @@
+{
+  "stage": "ingest",
+  "module": "rs.core.ingest.psm1 — Invoke-Ingest(-FilteredFsGraph …) → Compile-Plan / Invoke-Plan (rs.core.colonel.v2)",
+  "$comment": "Flattens surviving descriptors out of ignore.out.Graph and dispatches each VERBATIM as $Item to the colonel chain. The chain's first processor is file-read (processors/file-read.ps1); every processor clones the item (Copy-Bag) and adds. out.bag is therefore ignore.out.file ∪ file-read's additions ∪ whatever else the chain attached — OPEN beyond the fields listed. Colonel's parameter surface is reflected (New-ForwardedParamDictionary), not restated here.",
+  "in": {
+    "params": {
+      "FilteredFsGraph": { "type": "object", "note": "ignore.out.result — @{ Graph; Skipped }; also accepts a bare Dictionary/array of nodes" },
+      "…":               { "type": "reflected", "note": "all Compile-Plan / Invoke-Plan params, forwarded by name" }
+    },
+    "node": {
+      "Files": { "from": "ignore.out.node", "note": "the only node field ingest reads; node context is gone after flattening" }
+    },
+    "file": {
+      "AbsolutePath": { "from": "ignore.out.file", "note": "read by file-read (the only descriptor field the chain NEEDS)" },
+      "RelativePath": { "from": "ignore.out.file", "note": "passthrough" },
+      "NodePath":     { "from": "ignore.out.file", "note": "passthrough" },
+      "Extension":    { "from": "ignore.out.file", "note": "passthrough" },
+      "SizeBytes":    { "from": "ignore.out.file", "note": "passthrough" },
+      "LastWriteUtc": { "from": "ignore.out.file", "note": "passthrough" },
+      "CreationUtc":  { "from": "ignore.out.file", "note": "passthrough" },
+      "FsAttributes": { "from": "ignore.out.file", "note": "passthrough" }
+    },
+    "skipped": {
+      "Path":   { "from": "ignore.out.skipped", "note": "merged into out.result.Skipped" },
+      "Reason": { "from": "ignore.out.skipped" }
+    }
+  },
+  "out": {
+    "result": {
+      "Results":  { "type": "bag[]",    "note": "index-stable in eligible order; null slot = worker returned nothing" },
+      "Skipped":  { "type": "skipped[]", "note": "ignore.out.skipped merged with any dispatch skips" },
+      "Errors":   { "type": "string[]" },
+      "Warnings": { "type": "string[]" },
+      "Streams":  { "type": "object[]", "note": "structured worker streams, forwarded intact" },
+      "Budget":   { "type": "object",   "optional": true },
+      "Timing":   { "type": "object",   "optional": true }
+    },
+    "bag": {
+      "AbsolutePath": { "from": "ignore.out.file" },
+      "RelativePath": { "from": "ignore.out.file" },
+      "NodePath":     { "from": "ignore.out.file" },
+      "Extension":    { "from": "ignore.out.file" },
+      "SizeBytes":    { "from": "ignore.out.file" },
+      "LastWriteUtc": { "from": "ignore.out.file" },
+      "CreationUtc":  { "from": "ignore.out.file" },
+      "FsAttributes": { "from": "ignore.out.file" },
+      "Content":      { "type": "string", "origin": "file-read", "optional": true, "note": "decoded text; absent when ReadError is set; mutators replace it" },
+      "Encoding":     { "type": "string", "origin": "file-read", "optional": true, "note": "'UTF-8' — an asserted decode policy, not yet a measurement (decisions-ledger #28)" },
+      "ReadError":    { "type": "string", "origin": "file-read", "optional": true, "note": "BinaryOrNulContent | <exception message>; always paired with _ChainHalt" },
+      "_ChainHalt":   { "type": "bool",   "origin": "chain",     "optional": true, "note": "set by any processor that halts the chain" },
+      "…":            { "type": "open",   "note": "Attributes, Processing, Operations, … — anything a processor attaches" }
+    },
+    "skipped": {
+      "Path":      { "from": "ignore.out.skipped", "note": "ignore's records are merged verbatim" },
+      "Reason":    { "from": "ignore.out.skipped" },
+      "SizeBytes": { "from": "ignore.out.skipped", "optional": true },
+      "Extension": { "from": "ignore.out.skipped", "optional": true }
+    }
+  }
+}
