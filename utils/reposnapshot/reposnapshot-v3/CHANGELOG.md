@@ -1,5 +1,14 @@
 # Changelog 
 
+## 2026-08-15 — Ignore docstring slimmed; semantics doc stands alone
+
+`rs.core.ignore` module docstring reduced to stages + regime-at-the-rim +
+pointers. Its inline in/out examples were stale (pre-`Extension`) —
+`schema/ignore.schema.json` is the tested truth. Semantics moved to
+`issues/reposnapshot/reports/ignore-semantics-update.md` (carved out of the
+backport report by the user; header/provenance added, cross-linked both ways).
+`design/module-notes.md §rs.core.ignore` added. Battery 15 · 869 · 0.
+
 ## 2026-08-15 — Changelog cut-off 
 
 - Froze old changelog and initialized new one starting from last change in previous copy

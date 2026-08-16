@@ -5,55 +5,25 @@ using namespace System.Text
 using namespace System.Text.RegularExpressions
 <#
 .SYNOPSIS
-    RepoSnapshot V3 Ignore Compiler — Normalize / Coalesce / Walk / Reduce / Gather-Scatter pipeline.
+    Ignore stage — pure filter over the crawler graph. New-IgnoreCompiler
+    compiles per-node state; Invoke-IgnoreFilter applies it.
 
 .DESCRIPTION
-    Transforms the flat node array from the crawler's projection into
-    immutable per-node compiled ignore state for the filter stage.
+    Contract: schema/ignore.schema.json (in = a slice of crawler.out; out =
+    pruned graph, nodes rebuilt, file descriptors the same objects filtered).
+    Enriches nothing; fails fast if a descriptor lacks RelativePath/Extension.
 
-    Five-stage pipeline + pruning:
-      Stage 0: Normalize     — separator collapse, degenerate rejection
-      Stage 1: Coalesce      — per-node source merge, annihilation, anchor-prefix
-      Stage 2: Walk          — BFS inheritance with depth-annotated dictionaries
-      Stage 3: Reduce        — depth precedence, subsumption heuristic
-      Stage 4: Gather-Scatter — signature-keyed regex compilation + scatter
+    Five semantics-neutral stages + pruning:
+      0 Normalize · 1 Coalesce · 2 Walk · 3 Reduce · 4 Gather-Scatter (regex)
+    Regime is interpretation, applied only at the rim: IngestMode picks the
+    sources (Ignore: sentinels + virtual root ignore file; Selection: user
+    globs only, no sentinel I/O, no directory pruning) and stamps every
+    CompiledState { Regime; Positives; Exceptions }; TestPath is the single
+    semantic authority (dual truth table on Regime). Cross-mode params are
+    inert, never errors.
 
-    Two modes (IngestMode — explicit run intent; both run the same five-stage
-    machinery; cross-mode pattern params are inert, never errors):
-      1. Ignore (default) — sentinel scan + virtual root ignore source
-         (IgnoreDefaults + IgnorePatterns + IgnoreOverridePatterns-as-
-         negations) merged through nested gitignore semantics; directory
-         branch pruning runs. IgnorePatterns and IgnoreOverridePatterns are
-         both virtual global ignore sources — containers for positives and
-         negations BY CONVENTION (override entries are '!'-prefixed on
-         merge; a '!'-prefixed override entry double-negates to a positive).
-         Overrides follow canonical gitignore precedence: a file-only
-         negation cannot re-include content under an excluded directory —
-         negate the directory to rescue a branch.
-      2. Selection — the run is expressly about ingesting what is wanted.
-         Sentinels are NOT consulted (no scan, no I/O); SelectionPatterns
-         compiles as a selection regime through the same five stages
-         (negations = un-keep exceptions); match = KEEP at test time;
-         directory pruning is skipped (file-targeted keep patterns never
-         match directory paths); the post-filter empty-leaf prune cleans up.
-         Empty/self-annihilated SelectionPatterns throws (fail-fast).
-
-    Input contract (from crawler Graph — ItemDescriptor identity stamped at
-    walk time by rs.core.crawler; this stage is a pure filter and enriches
-    nothing):
-      @( @{ NodePath = 'src/lib/'; AbsolutePath = 'C:/repo/src/lib/'; NodeDepth = 2;
-             Files = @( @{ AbsolutePath = 'C:/repo/src/lib/.gitignore';
-                           RelativePath = 'src/lib/.gitignore'; NodePath = 'src/lib/';
-                           SizeBytes = 42; LastWriteUtc = [datetime] } ) } )
-      IgnoreFiles is built internally from Files via sentinel scan (New-IgnoreCompiler).
-      IngestMode and the pattern params are passed separately to New-IgnoreCompiler.
-
-    Output contract (to filter stage):
-      @( @{ NodePath = 'src/lib/'; AbsolutePath = 'C:/repo/src/lib/'; NodeDepth = 2;
-             CompiledState = @{ Regime = 'Ignore'|'Selection'
-                                Positives = [regex]; Exceptions = [regex] } } )  # regex slots may be $null
-      Single regime-stamped state slot; TestPath is the sole semantic
-      authority (dual truth table on Regime).
+    Semantics, rationale, history:
+    issues/reposnapshot/reports/ignore-semantics-update.md
 #>
 
 # Hard extension blacklist — binary / non-text file types that are never useful

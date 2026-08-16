@@ -109,3 +109,20 @@ file's stat are isolated so one bad entry does not lose the directory.
 - Stage-appended attributes generalization (`.TODO` bullet 3) — landed as the
   stamping rule above plus the open-bag descriptor; the separate brief is
   superseded by that rule.
+
+---
+
+## rs.core.ignore
+
+Semantics have their own document: `reports/ignore-semantics-update.md`
+(Ignore / Selection regimes, Design v3, reconciliation with the code — carved
+out of the backport report 2026-08-15). Contract: `schema/ignore.schema.json`.
+Docstring slimmed 2026-08-15 to stages + regime-at-the-rim + pointers; the
+inline input/output examples it carried were stale (pre-`Extension`) and are
+replaced by the schema, which is tested.
+
+**Reads `$f.Extension`** (since 2026-08-15) rather than re-deriving; fails
+fast on a descriptor lacking `RelativePath` or `Extension` — the crawler
+contract, checked at the boundary. Node rollups from `crawler.out.node` are
+not carried (see contracts residue); ignore rebuilds nodes with
+`{ NodePath; AbsolutePath; NodeDepth; Files; CompiledState }`.
