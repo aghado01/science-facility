@@ -11,6 +11,34 @@
         "PARA_MUX_CONFIG_FILE": "./mcp/para-agent/bin/mux/mux.conf",
         "PARA_NU_BIN": "./mcp/para-agent/bin/nu/nu.exe"
       }
+    },
+    "pwsh_exec": {
+      "command": "D:/aghado01/science-facility/mcp/pwsh_exec/.venv/Scripts/uv.exe",
+      "args": [
+        "run",
+        "--project",
+        "D:/aghado01/science-facility/mcp/pwsh_exec",
+        "--no-cache",
+        "--locked",
+        "--no-sync",
+        "python",
+        "-B",
+        "D:/aghado01/science-facility/mcp/pwsh_exec/server.py"
+      ],
+      "env": {}
+    },
+    "nushell": {
+      "command": "nu",
+      "args": [
+        "--mcp"
+      ],
+      "env": {
+        "NU_MCP_OUTPUT_LIMIT": "20kb",
+        "NO_COLOR": "1",
+        "NU_LOG_LEVEL": "warn",
+        "NU_LIB_DIRS": "./mcp/nushell_mcp/modules",
+        "NU_SKILL_DIR": "./mcp/nushell_mcp/skills/nushell"
+      }
     }
   }
 }
