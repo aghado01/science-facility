@@ -1,0 +1,1 @@
+this is a backup/source for the claude code integration point for nushell and nushell-mcp, not meant to be run on its own
