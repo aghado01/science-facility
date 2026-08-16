@@ -153,20 +153,3 @@ There's also a bigger pattern here for the crusade: **para-agent quietly contain
 3. **Put the nu leverage where nu already lives: the panes.** Your para-agents run *in* nu. The high-value move is growing `para-cli.nu` — agent-facing nu commands that call MCP/engine verbs (`scrutinize`, journal reads) and land results as native tables the agent can `where`/`histogram` locally. That's the same three-faces conclusion as before, instantiated: engine owns bytes, MCP owns contracts, nu owns expression — at the surface where a shell is actually held by someone.
 
 The one thing I'd flag as genuinely yours to decide is item 2 — whether `NuEngine` gets deleted, quarantined, or kept as a utility. Everything else is making the de facto architecture official.
-
----
-
-# <command-name>/model</command-name>
-            <command-message>model</command-message>
-            <command-args>claude-sonnet-5</command-args>
-
----
-
-# <local-command-stdout>Set model to claude-sonnet-5</local-command-stdout>
-
----
-
-# \chat-export to `D:\aghado01\science-facility\issues\reposnapshot\discussion`
-
-That was bash syntax leaking into a pwsh string — switching to the PowerShell tool properly:
-`-MarkdownDir` is the parameter. Running the export now with default exclusions and the requested destination:
