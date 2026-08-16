@@ -152,6 +152,27 @@ record rows, recording offsets. Interface: shards → serialize hands over
 `@{ ShardKey; Entries[]; … }`; serialize hands manifest `@{ Header; Rows[] with
 offsets; ByteLength }`. Neither reaches into the other's decision.
 
+**Two questions, two truths, no feedback loop** (user, 2026-08-15; ledger
+#26/#27; AGENTS "planning is not measurement"):
+
+- *Which entries go in which shard* is a **planning** question. Its inputs are
+  what is in memory after ingestion — processed content, `Attributes.SpanBytes`
+  — and every estimate is bounded above by the on-disk `SizeBytes` it came
+  from. Estimation with high confidence is enough; the policy is about
+  grouping, overflow, anti-fragmentation, target size per shard file. **Nothing
+  downstream needs this to have been byte-exact**, and a shard's actual written
+  length may differ from its planned size — that is expected, not an error.
+- *Where each row's bytes landed* is a **measurement** question, and only the
+  writer knows. Serialize records offsets as a receipt of the write; manifest
+  reads them. That is why manifest follows serialize, and why nothing
+  "recovers" positions.
+
+The knot this cuts: `rs-attributes` was once asked to serve the first question
+with a number deliberately invariant to emission settings — wrong tool, wrong
+direction (#26). Serialize never reports back to shards; shards never asks
+serialize for exact bytes. If a future policy wants post-write rebalancing,
+that is a new stage after serialize, not a loop.
+
 ## Exit gate
 
 - **The seek contract round-trips, byte-exact**: for every emitted row, reading
