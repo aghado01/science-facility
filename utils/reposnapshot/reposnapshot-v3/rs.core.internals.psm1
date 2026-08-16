@@ -17,7 +17,7 @@
     The reflection-forwarding mechanism is deliberately unconventional
     (signatures change in stage functions without rippling into wrappers) and
     carries a documentation requirement: flag every use site (admiral brief,
-    issues/v3/admiral-orchestration.md — wrapper mechanism section, incl.
+    issues/reposnapshot/design/admiral-orchestration.md — wrapper mechanism section, incl.
     accepted implications: load-order dependency, collision policy,
     best-effort DefaultValue reflection). Current use site: rs.core.ingest.
 

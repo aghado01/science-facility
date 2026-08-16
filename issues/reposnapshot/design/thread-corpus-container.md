@@ -264,7 +264,7 @@ synthesis — sampling without coverage accountability; fluency masks the gaps.
   for the eventual centralization, not a binding. ~~Do not use rs.core.hash/lsh as-is
   (broken numerics).~~ Landed 2026-07-23 as `rs.core.numerics.psm1` (G3 pull:
   hashlib-new SimHash/MinHash + SHA256 identity + fixed Hamming/Levenshtein;
-  see issues/v3/rs.core.numerics-design.md and the cross-exam doc).
+  see issues/reposnapshot/design/rs.core.numerics-design.md and the cross-exam doc).
 - Prior art in PowerShellCore: `rs.core/threadparser` (.legacy Markdig parser),
   NDPSON doc-ingestion discussions under `rs.core/.discussion/sharding/`.
 
@@ -355,7 +355,7 @@ said what"), multi-flavor, modestly sized, personally meaningful — ideal dogfo
   rs.core.sharding header now states this track's store re-disposition.
 
 - 2026-07-29 — Markdown processor family seeded from the mdnav concept
-  extraction (`issues/v3/md-processor-family-design.md`): rs-mdseg is the
+  extraction (`issues/reposnapshot/design/md-processor-family-design.md`): rs-mdseg is the
   generalized threadparser core (basis-driven segmentation, tiling
   invariant, fence-aware); tp-{flavor} refactor implied (shared
   segmentation + flavor lifting) — bears on open decisions 3 (secondary

@@ -220,7 +220,7 @@ contract checks. Recorded as a candidate only — not a decision.
 
 ## Cross-references
 
-- `issues/v3/lts-v3-transfer-audit.md` — work log 2026-07-28: processor-span
+- `issues/reposnapshot/reports/lts-v3-transfer-audit.md` — work log 2026-07-28: processor-span
   disposition (what belongs in the chain vs assembly vs writers).
 - `reposnapshot-v3/rs.core.ingest.psm1` — proto-admiral (see Ingest reframe);
   its `{Results; Skipped; Errors; Warnings}` envelope and reflected forwarding

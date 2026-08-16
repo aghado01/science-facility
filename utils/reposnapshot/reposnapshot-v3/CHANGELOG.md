@@ -1,5 +1,24 @@
 # Changelog 
 
+## 2026-08-15 — Docket housekeeping: shard-container brief; dead briefs archived; ledger #33–38; stale pointers swept
+
+`briefs/shard-container-brief.md` merges `schema-derivation` + `row-grammar`
+under the payload vocabulary *header row · record row · framing* — "schema"
+now means stage contract only; "row grammar" retired (the header row IS the
+grammar; rows render from it). Container DNA named (CSV header + positional
+records; JSONL self-documenting store; LPAC-style length-prefix framing;
+informal columnar-SQL kinship); the coordination problem stated (configurable
+row fields → header and rows from one declaration; LTS's ugly solution
+enumerated as what must not come across); seam with `rs.core.shards`
+(membership/order vs bytes) drawn. Five briefs archived to `briefs/.archive/`
+with a README (the two merged; stage-appended-attributes SUPERSEDED;
+old-tree-reconciliation DONE; swarm-plan CANCELLED). Decisions ledger gains
+#33–38 for today's calls (per-stage contracts; schema-vs-header vocabulary;
+module names vs pipeline vocabulary; membrane/GlobCompiler/GlobSemantics;
+blacklist outside glob semantics; crawler free-at-vantage). All 14 remaining
+`issues/v3/` pointers → `issues/reposnapshot/{design,planning,reports,discussion}/`.
+Battery 15 · 869 · 0.
+
 ## 2026-08-15 — filter → membrane; pipeline vocabulary is admiral's, module names say what they implement
 
 `rs.core.filter.psm1` → `rs.core.membrane.psm1`; `Invoke-Filter` → `Invoke-Membrane`;

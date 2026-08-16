@@ -181,8 +181,8 @@ the battery is green".)*
   including whether `Encoding` moves to Header or stays on the entry.
 - **Where the emission declaration goes**: tree file beside Compaction, shard
   header row, or both.
-- **Forward pointer, speculative:** under the per-shard schema idea
-  (`schema-derivation-brief.md`), an element holding a single distinct value across
+- **Forward pointer, speculative:** under the per-shard header-row idea
+  (`shard-container-brief.md` §crux), an element holding a single distinct value across
   a shard could be declared once in that shard's header instead of repeated per
   row. `Encoding` is the obvious first candidate. Noted as a connection, not a
   dependency — neither brief should wait on the other.

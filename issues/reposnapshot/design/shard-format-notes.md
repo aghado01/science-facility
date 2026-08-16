@@ -69,7 +69,7 @@ as normative when the format is named.
   what codec the span is in, nor what character encoding it decodes as. Framing is
   guaranteed by the length prefix; decoding is left to the reader's inference, and
   with no JSON behind the format (see v3 divergence above) there is no external spec
-  to infer *from*. Filed as declarations owed: `issues/v3/payload-manifest-ledger.md`
+  to infer *from*. Filed as declarations owed: `issues/reposnapshot/planning/payload-manifest-ledger.md`
   #16 (codec) and #17 (encoding).
   **Answered for v3 by §"Content codec — SPEC"** (2026-08-14): the regime is four
   rules, declared in the tree's Compaction notice. Note the *reduced* form of the

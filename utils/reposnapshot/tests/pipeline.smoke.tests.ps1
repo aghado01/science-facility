@@ -7,7 +7,7 @@ Set-StrictMode -Version Latest
 
 .DESCRIPTION
     The harness plays admiral (build-against-absent-admiral rule — see
-    issues/v3/admiral-orchestration.md): it sequences the stages and mediates
+    issues/reposnapshot/design/admiral-orchestration.md): it sequences the stages and mediates
     hand-offs exactly as admiral will, exercising the ItemDescriptor identity
     contract across every boundary:
 

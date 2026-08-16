@@ -62,7 +62,7 @@ requests, so processing never gates on validity. Implications for the fix:
   one string token) must degrade to **under-stripping** (comments retained) — never span
   deletion. Under-strip is the acceptable failure direction; corruption is not.
 - Pure-regex stripping is last resort only, and must mask string literals first.
-- Stripping is **language-specific by architecture** — see `issues/v3/comment-ontology.md`.
+- Stripping is **language-specific by architecture** — see `issues/reposnapshot/design/comment-ontology.md`.
   Do not grow the extension-switch in `Normalize-FileContent`; the PS fix should be the
   per-language processor path. Two PS-specific requirements: (a) `#Requires` and a line-1
   shebang lex as ordinary Comment tokens — the token path must classify them as

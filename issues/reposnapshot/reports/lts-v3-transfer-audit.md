@@ -28,7 +28,7 @@ therefore already the LTS-driven engine, not a parallel reimplementation — the
 |---|---|---|---|
 | Comment stripping | `Normalize-FileContent` stage 4 — token walk (2026-07-22 fix); cs/py/js combined alternation scan | `rs-psstrip` (kind ops + masking + auto-route, ahead of LTS as of 2026-07-22), `rs-csstrip` | **Resolved both sides.** End state: LTS dispatches to processors (comment-ontology). rs-csstrip should adopt LTS's combined-alternation technique (superior to span regexes for cs/js) — evaluate. |
 | Whitespace/normalize | `Normalize-FileContent` stages 1–3 | `format-ws` (richer op vocabulary) | v3 forward; check stages 1–3 for behaviors format-ws lacks (NBSP→space, region markers → `region-markers` kind). |
-| Ignore/selection | `Get-GitIgnoredPaths`, `Read-GitIgnoreRules`, `Convert-GitIgnoreGlobToRegex`, `Build-GitIgnoreMatcher`, `Find-ExternalIgnoreRules`, `Normalize-PatternArray`, `New-PathInclusionTester` | `rs.core.ignore` (IgnoreCompiler: inheritance walk, exception domination, override bypass, regex cache) | v3 is the design forward. Audit LTS for semantics v3 lacks: external ignore rules, `SelectionOverrides` behavior. Redesign complete 2026-07-28: `issues/v3/ignore-selection-inversion.md` (Design v2 — mode dichotomy + override rescue + reconciliation); implementation pending. |
+| Ignore/selection | `Get-GitIgnoredPaths`, `Read-GitIgnoreRules`, `Convert-GitIgnoreGlobToRegex`, `Build-GitIgnoreMatcher`, `Find-ExternalIgnoreRules`, `Normalize-PatternArray`, `New-PathInclusionTester` | `rs.core.ignore` (IgnoreCompiler: inheritance walk, exception domination, override bypass, regex cache) | v3 is the design forward. Audit LTS for semantics v3 lacks: external ignore rules, `SelectionOverrides` behavior. Redesign complete 2026-07-28: `issues/reposnapshot/reports/ignore-selection-inversion.md` (Design v2 — mode dichotomy + override rescue + reconciliation); implementation pending. |
 | Binary/content filter | `Test-IsBinaryFile`, `Get-FilteredFiles`, `Filter-Content` (has the `-ExpandProperty Count -gt 0` bug) | `file-read` NUL guard; `Invoke-IgnoreFilter` size/ext blacklist | v3 forward; decide whether content-pattern filtering (`Filter-Content`) survives at all or retires. |
 | Preview/byte offsets | `New-ContentAndPreview`, `Get-EntryByteOffsets` (UTF-8 byte-accurate — the seek contract) | none yet | Split 2026-07-28: **preview RETIRED as a concept** (perfunctory head/tail; future previews = new element family, uncommitted — assemble-design). **Byte offsets still transfer** with the writers; the seek contract remains load-bearing for the MCP fetch API. |
 | Tree/TOC rendering | `Build-DirectoryTree`, `Build-AsciiTree`, `Build-TreeDiagramCompact`, `Build-TocTree` (inline renderers); `Import-TocTemplateEngine` (loads the v3 engine) | `rs.core.template.ps1` (handlebars-lite, TOC models) — **shared, already LTS-consumed** | **"Verify" RESOLVED 2026-08-09: YES.** LTS dot-sources `rs.core.template.ps1` at module load (`:11-14`) and via `Import-TocTemplateEngine` (`:79`) — the template engine is the shared engine LTS already drives, not a v3-only reimplementation. Remaining gap: (a) wire it into a V3-native path (no ingest/assemble consumer today), (b) consolidate LTS's **inline** `Build-*Tree` renderers against the module's TOC models. |
@@ -74,7 +74,7 @@ therefore already the LTS-driven engine, not a parallel reimplementation — the
   is a *new* capability, not a transfer — but the shard-row/tree conventions it extends
   are currently defined by LTS output. Format decision above gates it.
 
-> **Canonical sequenced plan as of 2026-07-28:** `issues/v3/v3-consolidation-plan.md`
+> **Canonical sequenced plan as of 2026-07-28:** `issues/reposnapshot/planning/v3-consolidation-plan.md`
 > (consolidation-first doctrine; supersedes the inline plan sequencing in the
 > work-log entries below, which remain as session record).
 
@@ -113,7 +113,7 @@ therefore already the LTS-driven engine, not a parallel reimplementation — the
     rejects only a single wrapping FunctionDefinitionAst / missing top-level param
     block, allowing interior helper functions.
   - **Crawler↔ignore residues named**; resolution architecture and the greedy-crawl
-    decision recorded in `issues/v3/admiral-orchestration.md` (new brief, same
+    decision recorded in `issues/reposnapshot/design/admiral-orchestration.md` (new brief, same
     session): information through-line via admiral, no lateral stage fusing,
     RelativePath-stamping/mutation-ownership/diagnostics-split cleanups.
 
@@ -125,7 +125,7 @@ therefore already the LTS-driven engine, not a parallel reimplementation — the
   **ItemDescriptor contract** (crawler stamps `AbsolutePath, RelativePath, NodePath,
   SizeBytes, LastWriteUtc`; ignore becomes pure filter; ingest passes descriptors;
   processors copy-on-enrich preserving identity fields) — spec in
-  `issues/v3/rs.core.assemble-design.md`. **Plan (present vs deferred):**
+  `issues/reposnapshot/design/rs.core.assemble-design.md`. **Plan (present vs deferred):**
   1. *Now (blocking):* crawler enrichment (RelativePath + LastWriteUtc) → remove
      ignore's stamping → ingest passes descriptor objects → end-to-end smoke test
      (crawl→ignore→ingest→file-read over this repo).
@@ -153,7 +153,7 @@ therefore already the LTS-driven engine, not a parallel reimplementation — the
   port the architecture back. Adjudication: non-blocking for the ItemDescriptor
   seam work (de-stamping stays trivial); schedule as its own refactor when the
   ignore engine is next opened beyond de-stamping. Full comparison + backport
-  sketch (same session): `issues/v3/ignore-selection-inversion.md` — semantics
+  sketch (same session): `issues/reposnapshot/reports/ignore-selection-inversion.md` — semantics
   as interpretation (enum + state stamp + dual TestPath truth table + Include-
   mode prune guard); C# dead-cache defect flagged do-not-import; sentinel
   semantics under Selection mode identified as the open design decision.

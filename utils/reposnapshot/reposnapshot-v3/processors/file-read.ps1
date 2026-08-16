@@ -3,7 +3,7 @@
 #
 # The chain's reader: consumes an ItemDescriptor (crawler-stamped identity —
 # AbsolutePath, RelativePath, NodePath, SizeBytes, LastWriteUtc; see
-# issues/v3/rs.core.assemble-design.md) and attaches Content + Encoding.
+# issues/reposnapshot/design/rs.core.assemble-design.md) and attaches Content + Encoding.
 # Binary (NUL-byte) content _ChainHalts with ReadError='BinaryOrNulContent';
 # read failures _ChainHalt with the exception message. Halted items are
 # routed to Diagnostics by assemble (lean-payload doctrine).

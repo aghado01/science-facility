@@ -15,7 +15,7 @@ Set-StrictMode -Version Latest
 
 .DESCRIPTION
     Replaces rs.core.hash + rs.core.lsh + rs.core.measures (G1 generation,
-    non-functional — see issues/v3/rs-core-numerics-cross-exam-20260723.md).
+    non-functional — see issues/reposnapshot/discussion/rs-core-numerics-cross-exam-20260723.md).
     Demand-driven: only surfaces with consumers or near-term corpus use.
 
     Region 1  IDENTITY    Get-PathHash, Get-ContentHash, Get-StreamHash (SHA256)

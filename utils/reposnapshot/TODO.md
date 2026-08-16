@@ -22,18 +22,18 @@ Update output filewriting convention to create a runstamped subdirectory with sh
 
 make intermediate json monolith optional (DELIVERED 2026-07-29: the IR exists — `rs.core.assemble.psm1`, golden-validated; optional monolith _emission_ is a writer-phase knob)
 
-update ignore-compiler's "antisemantics" to be like ThermoMapper's repo-audit's ignore compiler where positive vs negative semantics are toggled as opposed to having positive/selective semantics toggled by executive override (IMPLEMENTED 2026-07-28 as Design v3 — `-IngestMode` on `New-IgnoreCompiler`; `issues/v3/ignore-selection-inversion.md`; names provisional/renameable)
+update ignore-compiler's "antisemantics" to be like ThermoMapper's repo-audit's ignore compiler where positive vs negative semantics are toggled as opposed to having positive/selective semantics toggled by executive override (IMPLEMENTED 2026-07-28 as Design v3 — `-IngestMode` on `New-IgnoreCompiler`; `issues/reposnapshot/reports/ignore-selection-inversion.md`; names provisional/renameable)
 
 finish v3 mvp e.g. fill in gaps between functionality of v3 and LTS
 
-- consolidation plan EXECUTED through the IR (2026-07-29 — `issues/v3/v3-consolidation-plan.md`); remaining LTS-parity gap is the writer phase (rows/offsets/tree/shards) + item 6d
+- consolidation plan EXECUTED through the IR (2026-07-29 — `issues/reposnapshot/planning/v3-consolidation-plan.md`); remaining LTS-parity gap is the writer phase (rows/offsets/tree/shards) + item 6d
 
 need to design handling and conventions for configuration and documentation files
 
 - considering different output channel/format
 - forward design sketched 2026-07-29 (assemble-design §Content-class dispositions): config = descriptor-only POINTER sidecar (absolute paths, at-will follow-up, not ingested by default — no read, no content); docs/markdown = their own tracks/formats (md-family, exchange envelopes); class routing at eligibility, always overridable
 
-incorporate more general markdown processing and specialized segmentaton/sharding mode (design seeded 2026-07-29 from the mdnav concept extraction — `issues/v3/md-processor-family-design.md`: rs-mdprofile / rs-mdseg / rs-mdstrip family)
+incorporate more general markdown processing and specialized segmentaton/sharding mode (design seeded 2026-07-29 from the mdnav concept extraction — `issues/reposnapshot/design/md-processor-family-design.md`: rs-mdprofile / rs-mdseg / rs-mdstrip family)
 
 incorporate support for more languages, ideally with both regex "pseudoAST" and proper AST support (doctrine recorded 2026-07-28 — comment-ontology language-expansion: thoughtful-regex processors are the default for new languages, native AST on demand; fluid, per-language)
 

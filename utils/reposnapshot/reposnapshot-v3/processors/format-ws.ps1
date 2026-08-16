@@ -12,7 +12,7 @@
     application order is a correctness invariant, not a preference. This
     processor is the named precedent for the operation-order doctrine
     ("config selects members, implementation owns sequence" —
-    issues/v3/rs.core.assemble-design.md).
+    issues/reposnapshot/design/rs.core.assemble-design.md).
 
     Processor self-documentation (no runtime enforcement in this file):
         - Item contract:  harmonized content mutator (consolidation 6d) —

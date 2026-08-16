@@ -222,9 +222,9 @@ their lifters target the same envelope. Thread-corpus open decision 3
   setext, chat-shape deviations).
 - `issues/thread-corpus-container.md` — decisions 3/4; the ExchangeBlock
   unit model rs-mdseg's units feed.
-- `issues/v3/comment-ontology.md` — kinds/policy pattern rs-mdstrip
+- `issues/reposnapshot/design/comment-ontology.md` — kinds/policy pattern rs-mdstrip
   instantiates for markdown noise.
-- `issues/v3/lts-v3-transfer-audit.md` — subaddressing note (mdnav address
+- `issues/reposnapshot/reports/lts-v3-transfer-audit.md` — subaddressing note (mdnav address
   model as prior art).
 - TODO.md "more general markdown processing and specialized
   segmentation/sharding mode" — this is that design.
