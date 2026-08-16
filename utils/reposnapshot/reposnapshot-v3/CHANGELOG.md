@@ -1,5 +1,19 @@
 # Changelog 
 
+## 2026-08-15 — shards brief: planning is exact (Measure-Row from rs.core.container); doctrine narrowed
+
+`briefs/shards-brief.md` adopts `design/gemini-shard-recon.md` (LTS knob roster,
+pathology, five-phase algorithm) with corrections (three-segment `from`;
+residues are facts; `SizeBytes` is excluded and not needed). Key change: shard
+packing plans on `Measure-Row(entry, header, idxWidth)` — exact, computed
+forward from the one layout function in a new `rs.core.container` dependency
+(`Format-Row` → pieces; `Measure-Row`/`Render-Row`; `Measure-Content`/
+`Encode-Content` over one codec table; fixed-width idx). AGENTS "planning is
+not measurement" narrowed to *planning never reads written bytes; offsets stay
+the writer's receipt*; ledger #39; #26/#27 stand. shard-container-brief seam
+and shape updated to match. Anti-frag knob, packing constants, Flat sort key,
+layout module name recorded as open calls.
+
 ## 2026-08-15 — Docket housekeeping: shard-container brief; dead briefs archived; ledger #33–38; stale pointers swept
 
 `briefs/shard-container-brief.md` merges `schema-derivation` + `row-grammar`

@@ -66,14 +66,18 @@ Same construct can play different roles per relationship: `#Requires` is
   declarations are owed to the reader —
   `issues/reposnapshot/planning/payload-manifest-ledger.md` #16/#17; open look-back items in
   consolidation §B.6e.
-- **Planning is not measurement** — the trap the layer 2/3 distinction sets.
-  Shard packing *plans* against `Attributes.SpanBytes`, and that is correct:
-  `MaxShardSpanBytes` is a policy budget, and escape inflation is negligible
-  at shard granularity. Tree-manifest offsets are *measured off the written
-  file*, after the fact. Nothing forecasts encoded bytes, so nothing is
-  corrupted by not knowing them. Do not "fix" packing to chase serialized
-  exactness — the only real rule is narrower: never publish a layer 2 number
-  where a reader will spend it as an offset or an exact length.
+- **Planning never reads written bytes; it computes them forward** (narrowed
+  2026-08-15 from "planning is not measurement"). Every byte of a shard file
+  is ours and every input is in memory at plan time, so a row's serialized
+  size is a pure function — `Measure-Row(entry, header, idxWidth)` from the
+  one layout module (`rs.core.container`), the same function `Render-Row`
+  writes with. Shards packs on it exactly; there is no estimate. What stays
+  true: **offsets are the writer's receipt** (`Render-Row`'s running cursor),
+  never derived from a measure and never recovered from a written file; and
+  never publish a layer 2 number (`Attributes.SpanBytes`) where a reader will
+  spend it as an offset or an exact length. `SpanBytes` remains the
+  emission-invariant reader-facing attribute; it is not the packing input
+  (ledger #26 stands). See `briefs/shards-brief.md`.
 - **Naming grade: `Span` measures content, `Size` bounds a container** (user,
   2026-08-10). The naming corollary of the rule above, and it binds on code
   **not yet written**. `Span` belongs to numbers stating how much *content*

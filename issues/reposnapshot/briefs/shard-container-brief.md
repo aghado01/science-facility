@@ -79,6 +79,12 @@ in an ugly way and it is the reason a verbatim port is refused (ledger #5):
    semantics (correct, and the published contract): `row_offset` start of row ·
    `row_meta_end` last byte before the content delimiter · `row_content_begin`
    · `row_content_end` (== begin when empty).
+   The layout is a **dependency of two stages**, so it lives in its own small
+   module — `rs.core.container` — as `Format-Row → pieces`, from which
+   `Measure-Row` (shards, sums lengths) and `Render-Row` (serialize, writes)
+   derive; likewise `Measure-Content` / `Encode-Content` over the one codec
+   rule table (count without allocating vs materialize), and the header-row
+   pair. One grammar site, three callers; plan and file cannot disagree.
 3. **Grouping decides membership, not how bytes are written.** One emission
    path consumes a shard's row list regardless of how `rs.core.shards` grouped
    it (Flat / ByFileType / …). The Flat-vs-grouped divergence disappears rather
@@ -156,22 +162,24 @@ offsets; ByteLength }`. Neither reaches into the other's decision.
 #26/#27; AGENTS "planning is not measurement"):
 
 - *Which entries go in which shard* is a **planning** question. Its inputs are
-  what is in memory after ingestion — processed content, `Attributes.SpanBytes`
-  — and every estimate is bounded above by the on-disk `SizeBytes` it came
-  from. Estimation with high confidence is enough; the policy is about
-  grouping, overflow, anti-fragmentation, target size per shard file. **Nothing
-  downstream needs this to have been byte-exact**, and a shard's actual written
-  length may differ from its planned size — that is expected, not an error.
+  in memory after ingestion, and — revised the same day (ledger #39) — the
+  plan is **exact, computed forward**: `Measure-Row(entry, header, idxWidth)`
+  from the layout module gives a row's serialized size as a pure function
+  (`spanBytes = utf8(codec(Content))`, counted without allocating; fixed-width
+  idx). Policy is grouping, overflow, anti-fragmentation, target size per shard
+  file. Planning **never reads written bytes**; a shard file's length equals
+  its `PlannedSizeBytes` by construction (`shards-brief` exit gate).
 - *Where each row's bytes landed* is a **measurement** question, and only the
   writer knows. Serialize records offsets as a receipt of the write; manifest
   reads them. That is why manifest follows serialize, and why nothing
-  "recovers" positions.
+  "recovers" positions — and why no offset is ever derived from `Measure-Row`.
 
 The knot this cuts: `rs-attributes` was once asked to serve the first question
 with a number deliberately invariant to emission settings — wrong tool, wrong
-direction (#26). Serialize never reports back to shards; shards never asks
-serialize for exact bytes. If a future policy wants post-write rebalancing,
-that is a new stage after serialize, not a loop.
+direction (#26). Now neither stage measures for the other: both call the same
+`rs.core.container` layout function — shards to sum, serialize to write.
+Serialize never reports back to shards. If a future policy wants post-write
+rebalancing, that is a new stage after serialize, not a loop.
 
 ## Exit gate
 
@@ -203,8 +211,9 @@ that is a new stage after serialize, not a loop.
 
 - Streaming vs per-shard buffering — the cursor shape makes streaming
   possible; per-shard buffering already beats LTS's whole-corpus double copy.
-- Where the renderer lives — `rs.core.serialize` (0 bytes today). Lay it out so
-  the manifest split is a cut, not an untangle.
+- Where the layout lives — leaning `rs.core.container` (a dependency of shards
+  and serialize), with `rs.core.serialize` (0 bytes today) owning the emission
+  loop over a plan. Lay it out so the manifest split is a cut, not an untangle.
 - Empty-content rows — LTS emits `row_content_end == row_content_begin` for a
   zero-length span. Under LeanPayload empty content never becomes an entry;
   confirm the case is unreachable and drop the branch rather than port dead
