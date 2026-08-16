@@ -37,9 +37,7 @@
       "env": {
         "NU_MCP_OUTPUT_LIMIT": "20kb",
         "NO_COLOR": "1",
-        "NU_LOG_LEVEL": "warn",
-        "NU_LIB_DIRS": "./mcp/nushell_mcp/modules",
-        "NU_SKILL_DIR": "./mcp/nushell_mcp/skills/nushell"
+        "NU_LOG_LEVEL": "warn"
       }
     }
   }

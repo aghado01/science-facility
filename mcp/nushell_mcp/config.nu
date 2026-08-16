@@ -1,18 +1,27 @@
-# config.nu — startup config for the nushell MCP server
-#   nu --mcp --config ./mcp/nushell_mcp/config.nu
+# config.nu — startup config for the nushell MCP augmentation layer
+#   nu --mcp --config <path-to-this-file>
 #
-# Preloads the augmented-shell modules so every `evaluate` call sees them
-# without an explicit `use`. Self-anchoring: the env NU_LIB_DIRS from
-# .mcp.json is NOT yet merged into the parse-time const when this file is
-# parsed, so we extend the const here relative to this file's location.
+# This file is the SINGLE OWNER of the layer's layout. Launchers (.mcp.json,
+# para-agent, a hand-run `nu --mcp`) only need to pass --config; they should
+# not set NU_LIB_DIRS / NU_SKILL_DIR themselves. Everything below is anchored
+# to this file's location via `path self`, so it is cwd-independent.
+#
+# Layout:
+#   modules/         custom modules incl. nu-skills, nu-modules
+#   skills/nushell/  reference corpus (SKILL.md + references/*.md)
 
 const MCP_ROOT = (path self | path dirname)
-const NU_LIB_DIRS = $NU_LIB_DIRS ++ [($MCP_ROOT | path join modules)]
+const MODULES_DIR = ($MCP_ROOT | path join modules)
+const SKILLS_DIR = ($MCP_ROOT | path join skills nushell)
 
-# Runtime env for the modules themselves (nu-modules reads $env.NU_LIB_DIRS,
-# nu-skills reads $env.NU_SKILL_DIR). Defaults keep working even if .mcp.json
-# omits them.
-$env.NU_SKILL_DIR = ($env.NU_SKILL_DIR? | default ($MCP_ROOT | path join skills nushell))
+# Parse-time: lets `use nu-skills` etc. resolve below.
+const NU_LIB_DIRS = $NU_LIB_DIRS ++ [$MODULES_DIR]
 
+# Runtime: nushell populates $env.NU_LIB_DIRS with its own defaults even when the
+# process env is unset, so nu-modules' fallback would never fire — set it explicitly.
+$env.NU_LIB_DIRS = ($env.NU_LIB_DIRS? | default [] | append $MODULES_DIR | uniq)
+$env.NU_SKILL_DIR = $SKILLS_DIR
+
+# Preload the augmentation modules into the persistent engine state.
 use nu-skills *
 use nu-modules *
