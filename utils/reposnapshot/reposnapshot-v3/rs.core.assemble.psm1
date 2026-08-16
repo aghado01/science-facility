@@ -48,13 +48,11 @@ using namespace System.Collections.Generic
     coverage diagnostics). A new enrichment processor's element flows
     through with zero changes here.
 
-    Excluded from entry bags (macro-convention):
-      AbsolutePath, SizeBytes, Extension, CreationUtc, FsAttributes —
-        ingestion-side crawler facts (path doctrine / byte-semantics: the
-        payload deals in RelativePath and Attributes.SpanBytes); consumed
-        upstream (reads, eligibility, routing). Un-exclude here if a writer
-        wants one — see design/module-notes.md §rs.core.crawler.
-      _ChainHalt — chain mechanics.
+    Field dispositions come from schema/descriptor.json (read at import):
+      scope=ingestion → stripped from entry bags (AbsolutePath, SizeBytes,
+        Extension, CreationUtc, FsAttributes, _ChainHalt today).
+      scope=core      → guaranteed on every entry; not counted in Elements.
+      anything else   → element (open element model; unlisted = element).
       ReadError — routed to Diagnostics under LeanPayload; retained in the
         bag under KeepContentless (a content-less entry must say why).
 
@@ -91,6 +89,18 @@ using namespace System.Collections.Generic
                         payloads.
       }
 #>
+
+# =============================================================================
+# Descriptor field register — schema/descriptor.json is the declaration; this
+# module reads it once at import. Missing/unparseable file fails the import
+# loudly rather than silently emptying the exclusion set.
+# =============================================================================
+$script:DescriptorSchema = Get-Content -LiteralPath "$PSScriptRoot/schema/descriptor.json" -Raw |
+    ConvertFrom-Json -AsHashtable
+$script:IngestionFields = @($script:DescriptorSchema.fields.GetEnumerator() |
+        Where-Object { $_.Value.scope -eq 'ingestion' } | ForEach-Object { $_.Key })
+$script:CoreFields = @($script:DescriptorSchema.fields.GetEnumerator() |
+        Where-Object { $_.Value.scope -eq 'core' } | ForEach-Object { $_.Key })
 
 # =============================================================================
 # PUBLIC — Invoke-Assemble
@@ -149,8 +159,8 @@ function Invoke-Assemble
 
     $results = @($DispatchOutput.Results)
 
-    # Entry-bag exclusions (macro-convention — see module docstring)
-    $alwaysExcluded = @('AbsolutePath', 'SizeBytes', 'Extension', 'CreationUtc', 'FsAttributes', '_ChainHalt')
+    # Entry-bag exclusions — scope=ingestion in schema/descriptor.json
+    $alwaysExcluded = $script:IngestionFields
 
     $entries = [List[PSCustomObject]]::new()
     $routed = [List[PSCustomObject]]::new()
@@ -213,7 +223,7 @@ function Invoke-Assemble
     }
 
     # ── Phase: derive (Elements declaration — post-route coverage) ────────
-    $coreFields = @('RelativePath', 'NodePath', 'LastWriteUtc', 'Content')
+    $coreFields = $script:CoreFields   # scope=core in schema/descriptor.json
     $elementCounts = [ordered]@{}
     foreach ($entry in $entries)
     {

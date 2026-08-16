@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://reposnapshot/v3/schema/assemble.schema.json",
   "title": "RepoSnapshot v3 — Assemble IR",
-  "description": "In-memory intermediate representation produced by Invoke-Assemble. Successor to the LTS JSON monolith as a DATA STRUCTURE — v3 never emits it as an artifact. Property names are the in-memory PascalCase shape; JSON wire naming and emission-side arrangement (sort/group/shard/idx) are downstream writer concerns and are deliberately NOT described here. Source of truth: reposnapshot-v3/rs.core.assemble.psm1 (Invoke-Assemble). Design: issues/v3/rs.core.assemble-design.md. Captured 2026-08-09.",
+  "description": "DOCUMENTATION ONLY — not read by code (see descriptor.json for the register that IS). In-memory intermediate representation produced by Invoke-Assemble. Successor to the LTS JSON monolith as a DATA STRUCTURE — v3 never emits it as an artifact. Property names are the in-memory PascalCase shape; JSON wire naming and emission-side arrangement (sort/group/shard/idx) are downstream writer concerns and are deliberately NOT described here. Per-field dispositions (core / ingestion / element) are declared in schema/descriptor.json and consumed by rs.core.assemble at import; this file describes the macro-shape (Header / Entries / Skipped / Diagnostics) only. Source of truth: reposnapshot-v3/rs.core.assemble.psm1 (Invoke-Assemble). Design: issues/reposnapshot/design/rs.core.assemble-design.md. Captured 2026-08-09; descriptor deference added 2026-08-15.",
   "type": "object",
   "required": ["Header", "Entries", "Skipped", "Diagnostics"],
   "additionalProperties": false,
@@ -52,7 +52,7 @@
     },
     "entry": {
       "type": "object",
-      "description": "Open element model: a self-describing bag. The core fields are guaranteed on code-track entries under the default LeanPayload routing; any number of additional elements may be attached by chain processors (e.g. Attributes, Processing, Operations) and flow through assemble with zero per-element code. EXCLUDED by assemble: AbsolutePath, SizeBytes (descriptor bookkeeping — the payload deals in RelativePath and Attributes.SpanBytes), _ChainHalt (chain mechanics). Under LeanPayload, ReadError is also excluded (routed to Diagnostics); under KeepContentless it is retained and Content may be absent/empty.",
+      "description": "Open element model: a self-describing bag. The core fields are guaranteed on code-track entries under the default LeanPayload routing; any number of additional elements may be attached by chain processors (e.g. Attributes, Processing, Operations) and flow through assemble with zero per-element code. EXCLUDED by assemble: every field with scope=ingestion in schema/descriptor.json (the authoritative list — not repeated here). Under LeanPayload, ReadError is also excluded (routed to Diagnostics); under KeepContentless it is retained and Content may be absent/empty.",
       "required": ["RelativePath", "NodePath", "LastWriteUtc", "Content"],
       "additionalProperties": true,
       "properties": {

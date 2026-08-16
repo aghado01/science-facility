@@ -79,7 +79,7 @@ function New-Result ([hashtable]$Props)
 $now = [datetime]::UtcNow
 $unitEnvelope = [pscustomobject]@{
     Results  = @(
-        (New-Result @{ AbsolutePath = 'C:/r/a.ps1'; RelativePath = 'a.ps1'; NodePath = ''; SizeBytes = 10L; LastWriteUtc = $now; Content = 'alpha'; Encoding = 'UTF-8'; Attributes = [pscustomobject]@{ SpanBytes = 5 } }),
+        (New-Result @{ AbsolutePath = 'C:/r/a.ps1'; RelativePath = 'a.ps1'; NodePath = ''; Extension = '.ps1'; SizeBytes = 10L; LastWriteUtc = $now; CreationUtc = $now; FsAttributes = [IO.FileAttributes]::Archive; Content = 'alpha'; Encoding = 'UTF-8'; Attributes = [pscustomobject]@{ SpanBytes = 5 } }),
         (New-Result @{ AbsolutePath = 'C:/r/bin.dat'; RelativePath = 'bin.dat'; NodePath = ''; SizeBytes = 4L; LastWriteUtc = $now; ReadError = 'BinaryOrNulContent'; _ChainHalt = $true }),
         $null,
         (New-Result @{ AbsolutePath = 'C:/r/empty.txt'; RelativePath = 'empty.txt'; NodePath = ''; SizeBytes = 0L; LastWriteUtc = $now; Content = ''; Encoding = 'UTF-8' }),
@@ -110,10 +110,18 @@ $ir = Invoke-Assemble -DispatchOutput $unitEnvelope
 Assert-True (@($ir.Entries).Count -eq 2) '2 entries from 6 results' "got $(@($ir.Entries).Count)"
 Assert-True ($ir.Entries[0].RelativePath -eq 'a.ps1' -and $ir.Entries[1].RelativePath -eq 'sub/b.ps1') `
     'ingested order preserved (canonical store order)'
-foreach ($dropped in @('AbsolutePath', 'SizeBytes', '_ChainHalt', 'ReadError'))
+foreach ($dropped in @('AbsolutePath', 'SizeBytes', 'Extension', 'CreationUtc', 'FsAttributes', '_ChainHalt', 'ReadError'))
 {
     Assert-True ($null -eq $ir.Entries[0].PSObject.Properties[$dropped]) "entry bag excludes $dropped"
 }
+# The exclusion set is READ from schema/descriptor.json, not hardcoded — prove the
+# module's list equals the schema's scope=ingestion set (drift in either direction fails).
+$schemaPath = Join-Path $PSScriptRoot '..\reposnapshot-v3\schema\descriptor.json'
+$schema = Get-Content -LiteralPath $schemaPath -Raw | ConvertFrom-Json -AsHashtable
+$schemaIngestion = @($schema.fields.GetEnumerator() | Where-Object { $_.Value.scope -eq 'ingestion' } | ForEach-Object { $_.Key }) | Sort-Object
+$moduleIngestion = @(& (Get-Module rs.core.assemble) { $script:IngestionFields }) | Sort-Object
+Assert-True (($schemaIngestion -join ',') -eq ($moduleIngestion -join ',')) 'assemble exclusion set = schema scope=ingestion' "schema: $($schemaIngestion -join ','); module: $($moduleIngestion -join ',')"
+Assert-True ($null -eq $ir.Header.Elements.PSObject.Properties['Extension'] -and $null -eq $ir.Header.Elements.PSObject.Properties['FsAttributes']) 'ingestion fields never reach Header.Elements'
 foreach ($kept in @('RelativePath', 'NodePath', 'LastWriteUtc', 'Content', 'Encoding', 'Attributes'))
 {
     Assert-True ($null -ne $ir.Entries[0].PSObject.Properties[$kept]) "entry bag keeps $kept"

@@ -117,6 +117,9 @@ rewriting history.
 - `reposnapshot-v3/` — v3 modules (crawler → ignore/selection → colonel
   chains → assemble → writers) + `processors/` (ISS-loadable, body-only,
   `param($Item, $Config)`, copy-on-enrich, interior helpers allowed).
+  `schema/descriptor.json` is the per-file field register — the one place a
+  descriptor/bag/entry field is declared (origin, scope, type); assemble reads
+  it, tests enforce it. Add a field there when you stamp one.
 - `issues/reposnapshot/` — design docs (`design/`, `briefs/`, `planning/`,
   `reports/`, `discussion/`). **`planning/v3-consolidation-plan.md` is the
   sequenced work ledger**; `planning/decisions-ledger.md` the settled calls;

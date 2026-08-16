@@ -1,0 +1,22 @@
+{
+  "$comment": "Descriptor field register — the ONE place a field on the per-file record is declared. The record is created by the crawler, cloned-and-extended by every chain processor (Copy-Bag), and reduced to an entry by assemble. This file is READ BY CODE: rs.core.assemble derives its bag exclusions (scope=ingestion) and core set (scope=core) from it; tests/crawler.tests.ps1 asserts the crawler stamps exactly the origin=crawler fields. Anything a processor attaches that is NOT listed here is an element by default (open element model) — the register declares dispositions, it does not close the bag. To add a field: stamp it in its origin stage AND add a line here; forgetting the line makes it ride into the payload as an element, which the golden test catches.",
+  "scopes": {
+    "core":      "always on a code-track entry; excluded from Header.Elements counting because presence is guaranteed",
+    "ingestion": "ingestion-side fact; stripped from entry bags by assemble; never a row column, never in Header.Elements",
+    "element":   "rides into the entry bag and is counted in Header.Elements; the writer decides emission"
+  },
+  "fields": {
+    "AbsolutePath": { "origin": "crawler",   "scope": "ingestion", "type": "string",         "note": "read target only; never in a payload (path doctrine)" },
+    "RelativePath": { "origin": "crawler",   "scope": "core",      "type": "string",         "note": "root-anchored, forward slashes, no leading slash; the payload path column" },
+    "NodePath":     { "origin": "crawler",   "scope": "core",      "type": "string",         "note": "directory portion of RelativePath, trailing '/', root = ''; graph key" },
+    "Extension":    { "origin": "crawler",   "scope": "ingestion", "type": "string",         "note": "[Path]::GetExtension — leading '.', '' if none; ignore blacklist + routing read it" },
+    "SizeBytes":    { "origin": "crawler",   "scope": "ingestion", "type": "long",           "note": "on-disk length; eligibility only (byte-semantics layer 1)" },
+    "LastWriteUtc": { "origin": "crawler",   "scope": "core",      "type": "datetime",       "note": "Kind=Utc" },
+    "CreationUtc":  { "origin": "crawler",   "scope": "ingestion", "type": "datetime",       "note": "Kind=Utc; free from the same stat; un-exclude if a writer wants it" },
+    "FsAttributes": { "origin": "crawler",   "scope": "ingestion", "type": "FileAttributes", "note": "System.IO.FileAttributes flags; not 'Attributes' — that name is the rs-attributes element" },
+    "Content":      { "origin": "file-read", "scope": "core",      "type": "string",         "note": "decoded text; mutators replace it via Copy-Bag; may be absent when ReadError is set" },
+    "Encoding":     { "origin": "file-read", "scope": "element",   "type": "string",         "note": "currently an asserted decode policy ('UTF-8'), not a measurement — decisions-ledger #28 / encoding-lookback-brief" },
+    "ReadError":    { "origin": "file-read", "scope": "element",   "type": "string",         "note": "set with _ChainHalt on read failure; under LeanPayload the item routes to Diagnostics before bag construction, under KeepContentless it is retained" },
+    "_ChainHalt":   { "origin": "chain",     "scope": "ingestion", "type": "bool",           "note": "chain mechanics; set by any processor that halts the chain" }
+  }
+}

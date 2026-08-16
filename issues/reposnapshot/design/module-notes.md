@@ -21,21 +21,38 @@ often 10–100× the surviving count. This is decisions-ledger #30 restated as a
 criterion so it applies to fields nobody has named yet.
 
 Fields exist for later consumers even when the next stage does not use them.
-Ignore derives extension itself today (`[Path]::GetExtension`); it can read
-`$f.Extension` instead — same function, so identical values — when convenient.
+Ignore reads `$f.Extension` (since 2026-08-15; it used to re-derive with
+`[Path]::GetExtension`) and fails fast if a descriptor lacks it, the same way
+it already did for `RelativePath` — measure once at the vantage, read
+downstream.
 
 **Naming.** `FsAttributes`, not `Attributes`: `Attributes` is the rs-attributes
 element (`Attributes.SpanBytes`) and the two must not collide once a descriptor
 reaches an entry bag.
 
-**Payload boundary.** Every crawler field rides into entry bags via `file-read`
-(copy-on-enrich, all input properties). Fields that are ingestion-side facts —
-`AbsolutePath`, `SizeBytes`, and now `Extension`, `CreationUtc`,
-`FsAttributes` — are excluded from bags by `rs.core.assemble`'s
-`$alwaysExcluded` list so they neither appear as row columns nor pollute
-`Header.Elements`. If a writer later wants one (e.g. `CreationUtc` in a tree
-manifest), un-excluding it is a one-list change; the writer, not the crawler,
-is where that call is made.
+**One record, four names.** "Descriptor" (on `Graph[].Files`), "item"
+(`$Item` in a processor), "bag"/"result" (in and out of the chain), and
+"entry" (in the IR) are the *same record* at four points. Nothing declares
+its fields in code; each stage clones it (`Copy-Bag`, a single `[ordered]`
+cast over all keys) and adds. So a crawler field reaches assemble untouched,
+and until 2026-08-15 the only field list anywhere was assemble's hardcoded
+exclusion — knowledge of "which fields are ingestion-side" lived at the end of
+the line, not with the field.
+
+**Payload boundary — `schema/descriptor.json` (2026-08-15).** The one place a
+field is declared, and it is *read by code*: `rs.core.assemble` derives its
+exclusion set (`scope=ingestion`) and core set (`scope=core`) from it at
+import; `tests/crawler.tests.ps1` asserts the crawler stamps exactly the
+`origin=crawler` fields (both directions); `tests/assemble.tests.ps1` asserts
+the module's exclusion set equals the schema's. Anything not listed is an
+element by default — the register declares dispositions, it does not close
+the bag. To add a field: stamp it in its origin stage and add a line; forget
+the line and it rides into the payload as an element, which the golden test
+catches (the safe failure direction). If a writer later wants `CreationUtc`
+in a tree manifest, flip its scope; the writer, not the crawler, makes that
+call. `schema/assemble.schema.json` remains as documentation of the IR
+macro-shape and is marked as not read by code — it defers field dispositions
+to `descriptor.json` rather than repeating them (ledger #6).
 
 **Rollups are on-disk, pre-filter.** `SubtreeDirCount` / `SubtreeFileCount` /
 `SubtreeBytes` describe what is on disk under a node, computed in a

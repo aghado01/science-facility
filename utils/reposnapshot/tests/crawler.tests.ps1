@@ -114,6 +114,23 @@ try
     Assert-True ($null -eq $util.PSObject.Properties['Attributes']) 'no bare Attributes field (name reserved for rs-attributes element)'
 
     # -----------------------------------------------------------------------
+    Enter-Section '3d. Descriptor conforms to schema/descriptor.json (origin=crawler, exactly)'
+    # -----------------------------------------------------------------------
+    $schemaPath = Join-Path (Split-Path $crawlerPath -Parent) 'schema/descriptor.json'
+    Assert-True (Test-Path $schemaPath) 'schema/descriptor.json exists'
+    $schema = Get-Content -LiteralPath $schemaPath -Raw | ConvertFrom-Json -AsHashtable
+    $crawlerFields = @($schema.fields.GetEnumerator() | Where-Object { $_.Value.origin -eq 'crawler' } | ForEach-Object { $_.Key })
+    $stamped = @($util.PSObject.Properties.Name)
+    $missing = @($crawlerFields | Where-Object { $_ -notin $stamped })
+    $undeclared = @($stamped | Where-Object { $_ -notin $crawlerFields })
+    Assert-True ($missing.Count -eq 0) 'every origin=crawler field is stamped' "missing: $($missing -join ', ')"
+    Assert-True ($undeclared.Count -eq 0) 'no stamped field is undeclared in the schema' "undeclared: $($undeclared -join ', ')"
+    foreach ($name in $crawlerFields)
+    {
+        Assert-True ($schema.fields[$name].scope -in @('core', 'ingestion', 'element')) "schema scope valid for $name" "got '$($schema.fields[$name].scope)'"
+    }
+
+    # -----------------------------------------------------------------------
     Enter-Section '3c. Node rollups (on-disk subtree totals)'
     # -----------------------------------------------------------------------
     $root = $result.Graph['']

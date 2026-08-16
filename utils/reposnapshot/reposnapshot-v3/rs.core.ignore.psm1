@@ -1016,22 +1016,25 @@ function Invoke-IgnoreFilter
         if ($null -eq $source) { continue }
 
         # Apply metadata pre-filters (size + extension) in one pass.
-        # No I/O — all decisions are based on crawler-supplied metadata.
-        # Identity (incl. RelativePath) is crawler-stamped; fail fast on a
-        # pre-contract graph rather than silently matching against $null.
+        # No I/O — all decisions read crawler-stamped fields (RelativePath,
+        # SizeBytes, Extension — schema/descriptor.json origin=crawler); fail
+        # fast on a pre-contract graph rather than silently matching $null.
         $preFiltered = [List[object]]::new()
         foreach ($f in $source.Files)
         {
-            if ($null -eq $f.PSObject.Properties['RelativePath'])
+            foreach ($req in @('RelativePath', 'Extension'))
             {
-                throw "Invoke-IgnoreFilter: file entry '$($f.AbsolutePath)' lacks RelativePath — input must be a crawler graph carrying the ItemDescriptor identity contract (rs.core.crawler stamps identity at walk time)."
+                if ($null -eq $f.PSObject.Properties[$req])
+                {
+                    throw "Invoke-IgnoreFilter: file entry '$($f.AbsolutePath)' lacks $req — input must be a crawler graph carrying the descriptor contract (rs.core.crawler stamps it at walk time; schema/descriptor.json)."
+                }
             }
             if ($MaxSizeBytes -gt 0 -and $f.SizeBytes -gt $MaxSizeBytes)
             {
                 $skipped.Add([PSCustomObject]@{ Path = $f.AbsolutePath; Reason = 'FileTooLarge'; SizeBytes = $f.SizeBytes })
                 continue
             }
-            $ext = [Path]::GetExtension($f.AbsolutePath)
+            $ext = $f.Extension
             if ($ext -and $extBlacklist.Contains($ext))
             {
                 $skipped.Add([PSCustomObject]@{ Path = $f.AbsolutePath; Reason = 'ExtensionBlacklisted'; Extension = $ext })

@@ -1,5 +1,29 @@
 # Changelog — rs.core - formerly threadparser/v2-new
 
+## 2026-08-15 — `schema/descriptor.json`: the field register, read by code; ignore reads `Extension`
+
+The per-file record (descriptor → item → bag → entry — one record, four
+names) had no declaration anywhere; the only field list in the codebase was
+assemble's hardcoded exclusion, so adding a crawler field meant editing the
+end of the line. `schema/descriptor.json` is now the one place a field is
+declared — origin stage, scope (`core` / `ingestion` / `element`), type,
+note — and it has teeth because code reads it (ledger #6): `rs.core.assemble`
+derives `$alwaysExcluded` (scope=ingestion) and `$coreFields` (scope=core)
+from it at import, failing the import loudly if the file is missing;
+`crawler.tests` asserts the crawler stamps exactly the origin=crawler set
+(both directions); `assemble.tests` asserts the module's exclusion set equals
+the schema's. Unlisted fields are elements by default — the register declares
+dispositions, it does not close the bag. `schema/assemble.schema.json` stays
+as IR macro-shape documentation, marked not-read-by-code, deferring field
+dispositions to `descriptor.json` instead of repeating them.
+
+`rs.core.ignore`: reads `$f.Extension` instead of re-deriving with
+`[Path]::GetExtension`, and `Extension` joins `RelativePath` in the fail-fast
+descriptor-contract check (probe: a graph with `Extension` stripped throws
+`lacks Extension`).
+
+Battery: 14 suites · 806 passed · 0 failed.
+
 ## 2026-08-15 — Crawler stamps what is free at its vantage; docstring slimmed
 
 `rs.core.crawler`: file descriptors gain `Extension`, `CreationUtc`,
