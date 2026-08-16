@@ -22,15 +22,15 @@ The executable resolver uses this order:
 
 The server recognizes these client-neutral configuration variables:
 
-| Variable                    | Required | Meaning                                                                                     |
-| --------------------------- | -------- | ------------------------------------------------------------------------------------------- |
-| `MCP_POWERSHELL_EXECUTABLE` | No       | Absolute executable override. The bundled PowerShell is the default.                        |
-| `MCP_POWERSHELL_PROFILE`    | No       | Absolute path to one profile file that is explicitly dot-sourced before the requested code. |
+| Variable                    | Required | Meaning                                                                                                           |
+| --------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------- |
+| `MCP_POWERSHELL_EXECUTABLE` | No       | Absolute executable override. The bundled PowerShell is the default.                                              |
+| `MCP_POWERSHELL_PROFILE`    | No       | Absolute path to a custom profile file. Defaults to `$PSHOME/profile.ps1` beside the active PowerShell runtime.   |
 
-When a profile is configured, it is resolved with PowerShell's `-LiteralPath`
+When a profile is configured or discovered at `$PSHOME/profile.ps1`, it is resolved with PowerShell's `-LiteralPath`
 semantics and loaded once per tool call. Profile output is suppressed, while
 functions, aliases, modules, variables, and environment changes remain
-available to the requested code in that process. A missing or invalid profile
+available to the requested code in that process. An explicitly configured missing or invalid profile
 causes that invocation to fail instead of silently continuing.
 
 Profiles should be noninteractive: avoid prompts, PSReadLine configuration,
@@ -138,7 +138,7 @@ checkout and can be copied into a client's MCP configuration. Its shape is:
 }
 ```
 
-Omit `MCP_POWERSHELL_PROFILE` for a profile-free client. Set
+Omit `MCP_POWERSHELL_PROFILE` to use the default `$PSHOME/profile.ps1` profile (if present). Set
 `MCP_POWERSHELL_EXECUTABLE` only when deliberately overriding the bundled
 runtime.
 

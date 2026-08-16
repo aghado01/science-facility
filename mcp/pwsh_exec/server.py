@@ -49,17 +49,16 @@ def _build_powershell_code(code: str) -> str:
     commands = [
         "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); "
         "$OutputEncoding = [Console]::OutputEncoding; "
+        "$__mcpPowerShellProfile = if ($env:MCP_POWERSHELL_PROFILE -and $env:MCP_POWERSHELL_PROFILE.Trim()) { "
+        f"(Resolve-Path -LiteralPath $env:{POWERSHELL_PROFILE_ENV_VAR} -ErrorAction Stop).ProviderPath "
+        "} elseif (Test-Path -LiteralPath \"$PSHOME/profile.ps1\") { "
+        "\"$PSHOME/profile.ps1\" "
+        "}; "
+        "if ($__mcpPowerShellProfile) { "
+        "$null = . $__mcpPowerShellProfile; "
+        "Remove-Variable __mcpPowerShellProfile -ErrorAction SilentlyContinue; "
+        "}; "
     ]
-
-    profile_path = os.environ.get(POWERSHELL_PROFILE_ENV_VAR)
-    if profile_path and profile_path.strip():
-        commands.append(
-            "$__mcpPowerShellProfile = "
-            f"(Resolve-Path -LiteralPath $env:{POWERSHELL_PROFILE_ENV_VAR} "
-            "-ErrorAction Stop).ProviderPath; "
-            "$null = . $__mcpPowerShellProfile; "
-            "Remove-Variable __mcpPowerShellProfile -ErrorAction SilentlyContinue; "
-        )
 
     commands.append(code)
     return "".join(commands)

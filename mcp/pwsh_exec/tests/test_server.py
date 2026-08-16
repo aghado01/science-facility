@@ -62,22 +62,25 @@ class PowerShellExecutableTests(unittest.TestCase):
 
 
 class PowerShellProfileTests(unittest.TestCase):
-    def test_profile_is_not_loaded_when_variable_is_absent(self):
+    def test_default_profile_falls_back_to_pshome_profile_when_variable_is_absent(self):
         with mock.patch.dict(os.environ, {}, clear=True):
             code = server._build_powershell_code("Get-Date")
 
-        self.assertNotIn("MCP_POWERSHELL_PROFILE", code)
+        self.assertIn("Test-Path -LiteralPath \"$PSHOME/profile.ps1\"", code)
+        self.assertIn("\"$PSHOME/profile.ps1\"", code)
+        self.assertIn("$null = . $__mcpPowerShellProfile", code)
         self.assertTrue(code.endswith("Get-Date"))
 
-    def test_blank_profile_is_treated_as_unset(self):
+    def test_blank_profile_falls_back_to_pshome_profile(self):
         with mock.patch.dict(
             os.environ, {"MCP_POWERSHELL_PROFILE": "   "}, clear=True
         ):
             code = server._build_powershell_code("Get-Date")
 
-        self.assertNotIn("MCP_POWERSHELL_PROFILE", code)
+        self.assertIn("Test-Path -LiteralPath \"$PSHOME/profile.ps1\"", code)
+        self.assertIn("\"$PSHOME/profile.ps1\"", code)
 
-    def test_profile_is_resolved_literally_and_dot_sourced(self):
+    def test_configured_profile_is_resolved_literally_and_dot_sourced(self):
         profile_path = "C:/profiles/client's profile.ps1"
         with mock.patch.dict(
             os.environ, {"MCP_POWERSHELL_PROFILE": profile_path}, clear=True
@@ -110,7 +113,21 @@ class PowerShellProfileTests(unittest.TestCase):
         self.assertEqual(output, "profile-loaded\n")
 
 
-class PowerShellProfileIntegrationTests(unittest.TestCase):
+    @unittest.skipUnless(
+        server.DEFAULT_POWERSHELL_EXECUTABLE.is_file(),
+        "the bundled PowerShell runtime is not installed",
+    )
+    def test_default_pshome_profile_is_loaded_by_bundled_powershell(self):
+        environment = {
+            "MCP_POWERSHELL_EXECUTABLE": "",
+            "MCP_POWERSHELL_PROFILE": "",
+        }
+
+        with mock.patch.dict(os.environ, environment, clear=False):
+            output = server._run_powershell("$env:PSModulePath")
+
+        self.assertIn("Modules", output)
+
     @unittest.skipUnless(
         server.DEFAULT_POWERSHELL_EXECUTABLE.is_file(),
         "the bundled PowerShell runtime is not installed",
