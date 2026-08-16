@@ -24,6 +24,19 @@ run modes with overridable defaults, not a fixed taxonomy.
 (assemble-design §Content-class dispositions; thread-corpus brief;
 md-processor-family design.)
 
+## How to read the design docs
+
+Design docs under `issues/reposnapshot/` describe the **target** pipeline;
+parts of it are unbuilt (admiral, shards, serialize). Code that does not yet
+match a design doc is not a defect and must not be reconciled in either
+direction unprompted. **Tests are the only enforcement.** When the user
+extends a stage toward a documented future consumer — a field nobody reads
+yet, a hook nothing calls yet — that is the design landing, not a
+contradiction to flag. Ask "is this free at this stage's vantage?" before
+asking "who consumes it?" Rationale and history displaced from docstrings
+live in `issues/reposnapshot/design/module-notes.md`; docstrings state
+contracts only.
+
 ## The four analysis relationships — name yours before reasoning
 
 Most confusion on this project is a category error between these:
@@ -46,12 +59,12 @@ Same construct can play different roles per relationship: `#Requires` is
 - **Byte semantics, three layers, never conflated**: `SizeBytes` (on-disk,
   eligibility only) · `Attributes.SpanBytes` (UTF-8 span of processed
   content — payload semantics) · rendered row `length` (encoded span,
-  writer-side). See `issues/v3/rs.core.assemble-design.md` §Payload doctrine.
+  writer-side). See `issues/reposnapshot/design/rs.core.assemble-design.md` §Payload doctrine.
 - **Encoding and codec belong to the serializer** (2026-08-09). Upstream
   stages measure in *canonical UTF-8 by convention* — deliberately invariant
   to what a writer emits, so attributes stay comparable across runs. Both
   declarations are owed to the reader —
-  `issues/v3/payload-manifest-ledger.md` #16/#17; open look-back items in
+  `issues/reposnapshot/planning/payload-manifest-ledger.md` #16/#17; open look-back items in
   consolidation §B.6e.
 - **Planning is not measurement** — the trap the layer 2/3 distinction sets.
   Shard packing *plans* against `Attributes.SpanBytes`, and that is correct:
@@ -104,10 +117,13 @@ rewriting history.
 - `reposnapshot-v3/` — v3 modules (crawler → ignore/selection → colonel
   chains → assemble → writers) + `processors/` (ISS-loadable, body-only,
   `param($Item, $Config)`, copy-on-enrich, interior helpers allowed).
-- `issues/v3/` — design docs. **`v3-consolidation-plan.md` is the sequenced
-  work ledger**; `admiral-orchestration.md` holds the orchestrator design
-  (admiral doesn't exist yet — stages carry contracts for what it will
-  provide; test harnesses play admiral).
+- `issues/reposnapshot/` — design docs (`design/`, `briefs/`, `planning/`,
+  `reports/`, `discussion/`). **`planning/v3-consolidation-plan.md` is the
+  sequenced work ledger**; `planning/decisions-ledger.md` the settled calls;
+  `design/admiral-orchestration.md` the orchestrator design (admiral doesn't
+  exist yet — stages carry contracts for what it will provide; test harnesses
+  play admiral); `design/module-notes.md` per-module rationale displaced from
+  docstrings.
 - `reposnapshot-v3/CHANGELOG.md` — dated per-change sections, newest first.
 - `tests/` + `reposnapshot-v3/processors/tests/` — plain-PS assert harness
   (Enter-Section / Assert-True), no Pester, `$PSScriptRoot`-relative.
@@ -123,7 +139,7 @@ rewriting history.
       run. Every suite therefore carries a `catch` that records
       `SUITE ABORTED` as a failure. **Keep it when adding a suite.**
 - `RepoSnapshotLts.psm1` — the legacy monolith. **Not authoritative**
-  (see `issues/v3/lts-v3-transfer-audit.md`); it carries known defects
+  (see `issues/reposnapshot/reports/lts-v3-transfer-audit.md`); it carries known defects
   (zeroed metrics when content off; compression_ratio always 0). As of
   2026-07-29 it is no longer load-bearing for the code-track data model:
   `rs.core.assemble.psm1` produces the IR, golden-validated against a live

@@ -7,33 +7,29 @@ using namespace System.Security
 
 <#
 .SYNOPSIS
-    RepoSnapshot V3 crawler — greedy BFS walk producing the file-system graph.
+    Crawl stage — greedy BFS over the root; produces the file-system graph.
 
 .DESCRIPTION
-    Output contract — each graph node carries a Files array of ItemDescriptor
-    identity records (see issues/v3/rs.core.assemble-design.md):
+    Output: @{ RootPath; Graph; DirectoryCount; FileCount; SkippedCount; Skipped }
+      Graph[NodePath] → @{ NodePath; AbsolutePath; NodeDepth; Files;
+                           SubtreeDirCount; SubtreeFileCount; SubtreeBytes }
+      Files[]        → @{ AbsolutePath; RelativePath; NodePath; Extension;
+                           SizeBytes; LastWriteUtc; CreationUtc; FsAttributes }
+      Skipped[]      → @{ Path; Reason; [Error] }  — diagnostics, sibling of Graph
 
-        @{ AbsolutePath; RelativePath; NodePath; SizeBytes; LastWriteUtc }
+    Stamping rule: the crawler stamps everything that is FREE at its vantage —
+    no extra syscall, no file read. Facts that cost a read (encoding, binary
+    sniff, hashes) belong to later stages. Fields exist for later consumers
+    even when the next stage does not use them; downstream reads, never
+    re-derives. Subtree rollups are on-disk totals (pre-filter) computed from
+    the graph in memory after the walk.
 
-    Path doctrine (store vs view, applied to paths):
-      - AbsolutePath exists for unambiguous ingestion-side reads — it never
-        appears in rendered snapshot artifacts.
-      - RelativePath is the artifact-facing identity: root-anchored, forward
-        slashes, no leading slash. The snapshot is anchored to a root; the
-        hierarchy is represented flatly and the nested structure is encoded
-        in RelativePath alone — minimal tokens for an LLM reader that needs
-        repository structure, not system locations.
-      - NodePath (directory portion, trailing '/'; root = '') is the graph
-        key, duplicated onto file entries so descriptors remain self-standing
-        after the graph is flattened for dispatch.
-    All identity fields are stamped here, at walk time, from data the walk
-    already holds — downstream stages filter and enrich but never re-derive
-    identity (ignore is a pure filter; processors copy-on-enrich).
+    Paths: forward slashes; RelativePath root-anchored, no leading slash;
+    NodePath = directory portion with trailing '/', root = ''. AbsolutePath is
+    ingestion-side only — never in a payload.
 
-.TODO
-    - Crawler should probably be split into multiple classes — one for the BFS walk and graph - maybe.
-    - Crawler should have a separate method for getting diagnostics, rather than including that in the graph or as sidecar properties on the nodes. This keeps the graph clean and focused on representing the file system structure and metadata, while diagnostics can be a separate feed for logging, reporting, or sidecar output.
-    - Pipeline can append attributes after each stage to facilitate coordination and communication from stage to stage
+    Rationale, history, deferred items:
+    issues/reposnapshot/design/module-notes.md §rs.core.crawler
 #>
 
 class FileSystemCrawler
@@ -41,8 +37,6 @@ class FileSystemCrawler
 
     # ── Configuration (immutable after construction) ──────────────────────
     [string]   $RootPath            # absolute, forward-slash, trailing /
-    # Feature request: add param for max crawl depth relative to root in case the user feels like it
-
 
     # ── Results (populated by Invoke) ─────────────────────────────────────
     [Dictionary[string, PSCustomObject]] $Graph
@@ -85,13 +79,7 @@ class FileSystemCrawler
         $rootDirPath = $this.RootPath.TrimEnd('/')
 
         # ── Seed root node ──
-        $rootNode = [PSCustomObject]@{
-            NodePath     = ''
-            AbsolutePath = $this.RootPath
-            NodeDepth    = 0
-            Files        = [List[PSCustomObject]]::new()
-        }
-        $this.Graph[''] = $rootNode
+        $this.Graph[''] = $this.NewNode('', $this.RootPath, 0)
         $this.DirectoryCount = 1
 
         $queue.Enqueue([PSCustomObject]@{ Path = $rootDirPath; NodeDepth = 0 })
@@ -137,28 +125,19 @@ class FileSystemCrawler
 
                         $childDepth = $item.NodeDepth + 1
                         $childNodePath = $this.ToNodePath($entry)
-                        $childNode = [PSCustomObject]@{
-                            NodePath     = $childNodePath
-                            AbsolutePath = $entry + '/'
-                            NodeDepth    = $childDepth
-                            Files        = [List[PSCustomObject]]::new()
-                        }
-
-                        $this.Graph[$childNodePath] = $childNode
+                        $this.Graph[$childNodePath] = $this.NewNode($childNodePath, $entry + '/', $childDepth)
                         $this.DirectoryCount++
                         $queue.Enqueue([PSCustomObject]@{ Path = $entry; NodeDepth = $childDepth })
 
                     }
                     else
                     {
-                        # FILE — isolated stat read (size + last-write from one FileInfo)
-                        $len = $null
-                        $lastWriteUtc = [datetime]::MinValue
+                        # FILE — one FileInfo stat serves size, timestamps; attributes already in hand
+                        $fi = $null
                         try
                         {
                             $fi = [FileInfo]::new($entry)
-                            $len = $fi.Length
-                            $lastWriteUtc = $fi.LastWriteTimeUtc
+                            $null = $fi.Length   # forces the single stat; throws here if it will
                         }
                         catch
                         {
@@ -170,15 +149,15 @@ class FileSystemCrawler
                             continue
                         }
 
-                        # Identity fields stamped at walk time — see path doctrine
-                        # in the module docstring. RelativePath = NodePath + name:
-                        # zero extra derivation, root-anchored by construction.
                         $this.Graph[$nodePath].Files.Add([PSCustomObject]@{
                                 AbsolutePath = $entry
                                 RelativePath = $nodePath + [Path]::GetFileName($entry)
                                 NodePath     = $nodePath
-                                SizeBytes    = $len
-                                LastWriteUtc = $lastWriteUtc
+                                Extension    = [Path]::GetExtension($entry)   # leading '.', '' if none
+                                SizeBytes    = $fi.Length
+                                LastWriteUtc = $fi.LastWriteTimeUtc
+                                CreationUtc  = $fi.CreationTimeUtc
+                                FsAttributes = $attrs                         # [FileAttributes] flags
                             })
                         $this.FileCount++
                     }
@@ -204,9 +183,6 @@ class FileSystemCrawler
             {
                 $this.Skipped.Add([PSCustomObject]@{ Path = $dir; Reason = 'NotSupported' })
             }
-            # custom catches for other anticipated exceptions can be added here
-            # maybe binary files based on extension
-            # maybe filesizeKB ceiling threshold
             catch
             {
                 $this.Skipped.Add([PSCustomObject]@{
@@ -217,6 +193,8 @@ class FileSystemCrawler
             }
         }
 
+        $this.RollUp()
+
         $this.HasRun = $true
         return [PSCustomObject]@{
             RootPath       = $this.RootPath
@@ -225,6 +203,40 @@ class FileSystemCrawler
             FileCount      = $this.FileCount
             SkippedCount   = $this.Skipped.Count
             Skipped        = $this.Skipped
+        }
+    }
+
+    # ── Private: NewNode — one shape for every graph node ─────────────────
+    hidden [PSCustomObject] NewNode([string]$nodePath, [string]$absolutePath, [int]$depth)
+    {
+        return [PSCustomObject]@{
+            NodePath         = $nodePath
+            AbsolutePath     = $absolutePath
+            NodeDepth        = $depth
+            Files            = [List[PSCustomObject]]::new()
+            SubtreeDirCount  = 0      # descendants, not counting self
+            SubtreeFileCount = 0      # files at or below this node
+            SubtreeBytes     = 0L     # sum of SizeBytes at or below this node
+        }
+    }
+
+    # ── Private: RollUp — subtree totals, deepest-first so each node is
+    #    complete before it is folded into its parent. In-memory only.
+    hidden [void] RollUp()
+    {
+        foreach ($node in ($this.Graph.Values | Sort-Object -Property NodeDepth -Descending))
+        {
+            foreach ($f in $node.Files)
+            {
+                $node.SubtreeFileCount++
+                $node.SubtreeBytes += $f.SizeBytes
+            }
+            if ($node.NodePath -eq '') { continue }
+
+            $parent = $this.Graph[$this.ParentNodePath($node.NodePath)]
+            $parent.SubtreeDirCount  += 1 + $node.SubtreeDirCount
+            $parent.SubtreeFileCount += $node.SubtreeFileCount
+            $parent.SubtreeBytes     += $node.SubtreeBytes
         }
     }
 
@@ -239,6 +251,15 @@ class FileSystemCrawler
         return $rel
     }
 
+    # ── Private: ParentNodePath — 'src/lib/' → 'src/'; 'src/' → '' ─────────
+    hidden [string] ParentNodePath([string]$nodePath)
+    {
+        $trimmed = $nodePath.TrimEnd('/')
+        $i = $trimmed.LastIndexOf('/')
+        if ($i -lt 0) { return '' }
+        return $trimmed.Substring(0, $i + 1)
+    }
+
 }
 
 function New-FileSystemCrawler
@@ -247,10 +268,9 @@ function New-FileSystemCrawler
     .SYNOPSIS
         Factory: creates a configured FileSystemCrawler instance.
     .EXAMPLE
-        $result  = (New-FileSystemCrawler -RootPath 'C:\repo').Invoke()
-        # $result.Graph          → Dictionary[NodePath, node]; feed to ignore compiler
-        # $result.RootPath       → absolute root
-        # $result.DirectoryCount / FileCount / SkippedCount / Skipped → diagnostics feed
+        $result = (New-FileSystemCrawler -RootPath 'C:\repo').Invoke()
+        # $result.Graph    → Dictionary[NodePath, node]; feed to the ignore stage
+        # $result.Skipped  → diagnostics feed
     #>
     param(
         [Parameter(Mandatory)]

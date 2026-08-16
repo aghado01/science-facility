@@ -93,7 +93,7 @@ try
     # -----------------------------------------------------------------------
     $util = $result.Graph['src/lib/'].Files | Where-Object { $_.RelativePath -eq 'src/lib/util.ps1' }
     Assert-True ($null -ne $util) 'util.ps1 found by RelativePath'
-    foreach ($field in @('AbsolutePath', 'RelativePath', 'NodePath', 'SizeBytes', 'LastWriteUtc'))
+    foreach ($field in @('AbsolutePath', 'RelativePath', 'NodePath', 'Extension', 'SizeBytes', 'LastWriteUtc', 'CreationUtc', 'FsAttributes'))
     {
         Assert-True ($null -ne $util.PSObject.Properties[$field]) "field present: $field"
     }
@@ -102,6 +102,36 @@ try
     Assert-True ($util.LastWriteUtc -is [datetime]) 'LastWriteUtc is [datetime]'
     Assert-True ($util.LastWriteUtc.Kind -eq [System.DateTimeKind]::Utc) 'LastWriteUtc Kind = Utc'
     Assert-True (([datetime]::UtcNow - $util.LastWriteUtc).TotalMinutes -lt 5) 'LastWriteUtc is recent (fixture just written)'
+
+    # -----------------------------------------------------------------------
+    Enter-Section '3b. Free-at-vantage fields (Extension / CreationUtc / FsAttributes)'
+    # -----------------------------------------------------------------------
+    Assert-True ($util.Extension -eq '.ps1') 'Extension carries the leading dot' "got '$($util.Extension)'"
+    Assert-True ($util.Extension -eq [IO.Path]::GetExtension($util.AbsolutePath)) 'Extension agrees with [Path]::GetExtension (what ignore derives)'
+    Assert-True ($util.CreationUtc -is [datetime] -and $util.CreationUtc.Kind -eq [System.DateTimeKind]::Utc) 'CreationUtc is a Utc [datetime]'
+    Assert-True ($util.FsAttributes -is [IO.FileAttributes]) 'FsAttributes is a [FileAttributes] enum'
+    Assert-True (-not $util.FsAttributes.HasFlag([IO.FileAttributes]::Directory)) 'FsAttributes on a file lacks Directory flag'
+    Assert-True ($null -eq $util.PSObject.Properties['Attributes']) 'no bare Attributes field (name reserved for rs-attributes element)'
+
+    # -----------------------------------------------------------------------
+    Enter-Section '3c. Node rollups (on-disk subtree totals)'
+    # -----------------------------------------------------------------------
+    $root = $result.Graph['']
+    $src = $result.Graph['src/']
+    $lib = $result.Graph['src/lib/']
+    $docs = $result.Graph['docs/']
+    foreach ($field in @('SubtreeDirCount', 'SubtreeFileCount', 'SubtreeBytes'))
+    {
+        Assert-True ($null -ne $root.PSObject.Properties[$field]) "node field present: $field"
+    }
+    Assert-True ($lib.SubtreeDirCount -eq 0 -and $lib.SubtreeFileCount -eq 1) 'leaf src/lib/: 0 dirs, 1 file' "got $($lib.SubtreeDirCount)/$($lib.SubtreeFileCount)"
+    Assert-True ($src.SubtreeDirCount -eq 1 -and $src.SubtreeFileCount -eq 2) 'src/: 1 dir (lib), 2 files (main + util)' "got $($src.SubtreeDirCount)/$($src.SubtreeFileCount)"
+    Assert-True ($docs.SubtreeDirCount -eq 0 -and $docs.SubtreeFileCount -eq 1) 'docs/: 0 dirs, 1 file'
+    Assert-True ($root.SubtreeDirCount -eq 3 -and $root.SubtreeFileCount -eq 4) 'root: 3 dirs, 4 files (= DirectoryCount-1 / FileCount)' "got $($root.SubtreeDirCount)/$($root.SubtreeFileCount)"
+    $allBytes = ($result.Graph.Values | ForEach-Object { $_.Files } | Measure-Object -Property SizeBytes -Sum).Sum
+    Assert-True ($root.SubtreeBytes -eq $allBytes) 'root SubtreeBytes = sum of every file SizeBytes' "got $($root.SubtreeBytes) vs $allBytes"
+    Assert-True ($src.SubtreeBytes -eq ($src.Files[0].SizeBytes + $lib.SubtreeBytes)) 'src/ SubtreeBytes = own files + lib subtree'
+    Assert-True ($root.SubtreeBytes -is [long]) 'SubtreeBytes stays [long]'
 
     # -----------------------------------------------------------------------
     Enter-Section '4. Path doctrine invariants'

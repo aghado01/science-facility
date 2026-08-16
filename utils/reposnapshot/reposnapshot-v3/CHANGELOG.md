@@ -1,5 +1,34 @@
 # Changelog — rs.core - formerly threadparser/v2-new
 
+## 2026-08-15 — Crawler stamps what is free at its vantage; docstring slimmed
+
+`rs.core.crawler`: file descriptors gain `Extension`, `CreationUtc`,
+`FsAttributes` (all from the stat/attribute reads the walk already makes);
+graph nodes gain `SubtreeDirCount` / `SubtreeFileCount` / `SubtreeBytes`,
+computed deepest-first over the in-memory graph after the walk (on-disk,
+pre-filter totals; ignore rebuilds nodes so they are crawler-output facts,
+not carried). Node construction factored into `NewNode`. The rule these
+follow — *stamp anything free at the vantage, nothing that costs a read* — is
+stated once in the docstring; rationale, path doctrine, and the old `.TODO`
+block moved to `issues/reposnapshot/design/module-notes.md §rs.core.crawler`.
+`FsAttributes`, not `Attributes`, to avoid the rs-attributes element.
+
+`rs.core.assemble`: `$alwaysExcluded` extends to the three new descriptor
+fields (ingestion-side facts, same class as `AbsolutePath`/`SizeBytes`), so
+they neither ride into entry bags nor register in `Header.Elements`.
+Verified end-to-end over `processors/`: descriptors and post-file-read results
+carry them; entries and Elements unchanged.
+
+`AGENTS.md`: new §"How to read the design docs" — target-vs-built, tests are
+the only enforcement, free-at-vantage before who-consumes. Stale `issues/v3/`
+pointers in AGENTS.md and the two touched modules corrected to
+`issues/reposnapshot/…` (18 other files still carry the old path).
+
+Supersedes `briefs/stage-appended-attributes-brief.md` (the mechanism is the
+open-bag descriptor plus the stamping rule; nothing separate to build).
+
+Battery: 14 suites · 790 passed · 0 failed (`crawler.tests` 26 → 46).
+
 ## 2026-08-09 — Codec settled: `\` stands on measurement; cipher key gets a home
 
 Closes the sigil thread the four entries below leave open, and sites the key.

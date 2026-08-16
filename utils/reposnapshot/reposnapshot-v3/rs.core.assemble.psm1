@@ -9,7 +9,7 @@ using namespace System.Collections.Generic
     structure, never as an artifact).
 
 .DESCRIPTION
-    Design: issues/v3/rs.core.assemble-design.md (ownership map, monolith
+    Design: issues/reposnapshot/design/rs.core.assemble-design.md (ownership map, monolith
     inventory, open element model, operation-order doctrine, payload
     doctrine). Assemble is a STAGE, not a chain processor: collation is
     cross-item. It relates to the stage sequence as rs-attributes relates to
@@ -49,9 +49,11 @@ using namespace System.Collections.Generic
     through with zero changes here.
 
     Excluded from entry bags (macro-convention):
-      AbsolutePath, SizeBytes — ingestion-side descriptor bookkeeping (path
-        doctrine / byte-semantics: the payload deals in RelativePath and
-        Attributes.SpanBytes); consumed upstream (reads, eligibility).
+      AbsolutePath, SizeBytes, Extension, CreationUtc, FsAttributes —
+        ingestion-side crawler facts (path doctrine / byte-semantics: the
+        payload deals in RelativePath and Attributes.SpanBytes); consumed
+        upstream (reads, eligibility, routing). Un-exclude here if a writer
+        wants one — see design/module-notes.md §rs.core.crawler.
       _ChainHalt — chain mechanics.
       ReadError — routed to Diagnostics under LeanPayload; retained in the
         bag under KeepContentless (a content-less entry must say why).
@@ -148,7 +150,7 @@ function Invoke-Assemble
     $results = @($DispatchOutput.Results)
 
     # Entry-bag exclusions (macro-convention — see module docstring)
-    $alwaysExcluded = @('AbsolutePath', 'SizeBytes', '_ChainHalt')
+    $alwaysExcluded = @('AbsolutePath', 'SizeBytes', 'Extension', 'CreationUtc', 'FsAttributes', '_ChainHalt')
 
     $entries = [List[PSCustomObject]]::new()
     $routed = [List[PSCustomObject]]::new()

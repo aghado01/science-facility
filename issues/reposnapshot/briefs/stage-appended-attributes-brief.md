@@ -1,8 +1,14 @@
 # Stage-appended attributes — brief
 
-**Status:** filed, not started · **Filed:** 2026-08-15 · **Track:** pre-ingestion
-mechanism. Recovers a pending update that dropped out of view because it lives in
-`design/admiral-orchestration.md` rather than the consolidation plan.
+**Status:** SUPERSEDED 2026-08-15 — no separate mechanism to build. The
+descriptor is already an open bag (copy-on-enrich from `file-read` onward), and
+the crawler now stamps by rule: *anything free at its vantage, nothing that
+costs a read* (`design/module-notes.md §rs.core.crawler`). `Encoding` from
+ingest is just the next stage applying the same rule; ownership is
+copy-on-append as recommended below. Kept for the reasoning. · **Filed:**
+2026-08-15 · **Track:** pre-ingestion mechanism. Recovers a pending update that
+dropped out of view because it lives in `design/admiral-orchestration.md` rather
+than the consolidation plan.
 
 Sources: crawler `.TODO` bullet 3 · admiral-orchestration §"The through-line",
 §"Known residues to clean" #2 · this session's binary/encoding discussion.
