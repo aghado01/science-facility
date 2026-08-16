@@ -10,6 +10,15 @@ and the work log). · **Contract:** `reposnapshot-v3/schema/ignore.schema.json`
 (`IngestMode` / `IgnorePatterns` / `IgnoreOverridePatterns` /
 `SelectionPatterns`) are provisional; the semantics are settled.
 
+**Naming update 2026-08-15 (after this doc was written):** the stage is now
+`filter` (`rs.core.filter.psm1`), the compiler is `GlobCompiler`, and the
+`IngestMode` param + `CompiledState.Regime` field collapsed into one name —
+`GlobSemantics` / `CompiledState.Semantics`, values `Ignore | Selection`.
+`Invoke-IgnoreFilter` → `Invoke-Filter`; `Test-PathIgnored` →
+`Test-PathExcluded`. Read "regime" below as "semantics" and "IngestMode" as
+"GlobSemantics"; the pattern-param names are unchanged. Rationale:
+`design/module-notes.md §rs.core.filter`.
+
 Reading order: Operational context → Design v3 (final) → Reconciliation. v2 and
 the inversion architecture are kept as the record of how v3 was reached.
 

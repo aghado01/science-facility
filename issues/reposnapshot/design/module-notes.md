@@ -112,17 +112,48 @@ file's stat are isolated so one bad entry does not lose the directory.
 
 ---
 
-## rs.core.ignore
+## rs.core.filter (was rs.core.ignore until 2026-08-15)
+
+**Renamed 2026-08-15** — "ignore" is a *semantics*, not a stage. The stage
+decides which crawled files survive under either semantics, so it is `filter`;
+its dependency, the five-stage compile machinery, is `GlobCompiler`
+(semantics-neutral — the C# descendant in ThermoMapper's repo-audit already
+used `GlobCompiler` / `GlobSemantics`). Names, old → new: `rs.core.ignore.psm1`
+→ `rs.core.filter.psm1`; `IgnoreCompiler` → `GlobCompiler`;
+`New-IgnoreCompiler` → `New-GlobCompiler`; `Invoke-IgnoreFilter` →
+`Invoke-Filter`; `Test-PathIgnored` → `Test-PathExcluded` ("ignored" was wrong
+under Selection); `-IngestMode` param **and** `CompiledState.Regime` → one name,
+`GlobSemantics` / `CompiledState.Semantics`, values `Ignore | Selection`
+(unchanged, so `SelectionPatterns` etc. don't churn). Two names for one value
+was the smell; "regime" was opaque; `IngestMode` had borrowed the
+orchestrator's vocabulary for a stage param — admiral maps its `mode:` onto
+`-GlobSemantics`. `IgnoreDefaults` / `IgnorePatterns` /
+`IgnoreOverridePatterns` / `SelectionPatterns` / `SentinelFileNames` keep
+their names: they name their own semantics correctly. Historical reports and
+ledger entries keep the names of their day.
+
+**The extension blacklist stands outside glob semantics — deliberately.**
+reposnapshot has no business ingesting blobs of binary; a Selection run for
+`*` must still not pull in a `.png`. So it is an unconditional eligibility
+guard (with `MaxSizeBytes`) applied by `Invoke-Filter` before any glob test,
+on the crawler-stamped `Extension`, and it does not invert with
+`GlobSemantics`. It is data — a plain list — sitting in code because no
+run-config system exists yet; the code path is already the additive
+`-ExtensionBlacklist` param, so when admiral's config projection lands it
+becomes `defaults.filter.extensionBlacklist` in a one-line change. Co-located
+with `Invoke-Filter` (not the compiler) and declared in `filter.schema.json`
+so a reader finds it where the guard runs. Do not "unify" it into a glob
+source.
 
 Semantics have their own document: `reports/ignore-semantics-update.md`
-(Ignore / Selection regimes, Design v3, reconciliation with the code — carved
-out of the backport report 2026-08-15). Contract: `schema/ignore.schema.json`.
-Docstring slimmed 2026-08-15 to stages + regime-at-the-rim + pointers; the
-inline input/output examples it carried were stale (pre-`Extension`) and are
-replaced by the schema, which is tested.
+(Ignore / Selection, Design v3, reconciliation with the code — carved out of
+the backport report 2026-08-15; written with the pre-rename names).
+Contract: `schema/filter.schema.json`. Docstrings slimmed 2026-08-15; the
+inline input/output examples were stale (pre-`Extension`) and are replaced by
+the schema, which is tested.
 
 **Reads `$f.Extension`** (since 2026-08-15) rather than re-deriving; fails
 fast on a descriptor lacking `RelativePath` or `Extension` — the crawler
 contract, checked at the boundary. Node rollups from `crawler.out.node` are
-not carried (see contracts residue); ignore rebuilds nodes with
+not carried (see contracts residue); the filter rebuilds nodes with
 `{ NodePath; AbsolutePath; NodeDepth; Files; CompiledState }`.

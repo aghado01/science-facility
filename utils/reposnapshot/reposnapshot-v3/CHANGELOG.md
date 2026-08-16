@@ -1,5 +1,21 @@
 # Changelog 
 
+## 2026-08-15 — Stage rename: ignore → filter; IgnoreCompiler → GlobCompiler; Regime/IngestMode → GlobSemantics
+
+"Ignore" is a semantics, not a stage. `rs.core.ignore.psm1` → `rs.core.filter.psm1`;
+`IgnoreCompiler` → `GlobCompiler` (semantics-neutral, as the C# descendant names it);
+`New-IgnoreCompiler` → `New-GlobCompiler`; `Invoke-IgnoreFilter` → `Invoke-Filter`;
+`Test-PathIgnored` → `Test-PathExcluded`; `-IngestMode` + `CompiledState.Regime`
+→ one name, `GlobSemantics` / `.Semantics` (values `Ignore|Selection` unchanged;
+pattern params unchanged). `schema/ignore.schema.json` → `filter.schema.json`
+(`stage: filter`; ingest's `from` refs follow); `tests/ignore.tests.ps1` →
+`filter.tests.ps1`. The hard extension blacklist is co-located with `Invoke-Filter`
+and its purpose stated in place: an unconditional eligibility guard OUTSIDE glob
+semantics — reposnapshot has no business ingesting binary blobs under either
+semantics; a data list awaiting a run-config home. Historical docs keep old names;
+`reports/ignore-semantics-update.md` carries a naming-update note. Battery
+15 · 869 · 0 (identical counts — pure rename).
+
 ## 2026-08-15 — Ignore docstring slimmed; semantics doc stands alone
 
 `rs.core.ignore` module docstring reduced to stages + regime-at-the-rim +

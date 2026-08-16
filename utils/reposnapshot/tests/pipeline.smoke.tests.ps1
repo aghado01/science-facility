@@ -71,7 +71,7 @@ try
     Enter-Section '1. Stage modules import (admiral load-order responsibility)'
     # -----------------------------------------------------------------------
     Import-Module (Join-Path $v3 'rs.core.crawler.psm1') -Force
-    Import-Module (Join-Path $v3 'rs.core.ignore.psm1') -Force
+    Import-Module (Join-Path $v3 'rs.core.filter.psm1') -Force
     Import-Module (Join-Path $v3 'rs.core.colonel.v2.psm1') -Force
     Import-Module (Join-Path $v3 'rs.core.ingest.psm1') -Force
     Assert-True ($null -ne (Get-Command Invoke-Ingest -ErrorAction SilentlyContinue)) 'all stage modules loaded'
@@ -85,10 +85,10 @@ try
     # -----------------------------------------------------------------------
     Enter-Section '3. Ignore (pure filter over crawler identity)'
     # -----------------------------------------------------------------------
-    $compiled = New-IgnoreCompiler -CrawlerGraph $crawl.Graph
+    $compiled = New-GlobCompiler -CrawlerGraph $crawl.Graph
     Assert-True (@($compiled.SentinelIgnoreFiles).Count -eq 1) '.gitignore discovered as sentinel'
 
-    $filtered = Invoke-IgnoreFilter -CompiledNodes $compiled.CompiledNodes -CrawlerGraph $crawl.Graph
+    $filtered = Invoke-Filter -CompiledNodes $compiled.CompiledNodes -CrawlerGraph $crawl.Graph
     $survivors = @($filtered.Graph.Values | ForEach-Object { $_.Files } | ForEach-Object { $_.RelativePath })
     Assert-True ($survivors.Count -eq 3) '3 survivors after sentinel+gitignore+extension filters' "got: $($survivors -join ', ')"
     Assert-True ($survivors -contains 'keep.ps1' -and $survivors -contains 'sub/nested.ps1' -and $survivors -contains 'data.txt') `

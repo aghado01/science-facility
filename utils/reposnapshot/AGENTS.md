@@ -114,8 +114,11 @@ rewriting history.
 
 ## Where things live
 
-- `reposnapshot-v3/` — v3 modules (crawler → ignore/selection → colonel
-  chains → assemble → writers) + `processors/` (ISS-loadable, body-only,
+- `reposnapshot-v3/` — v3 modules (crawler → filter → colonel chains →
+  assemble → writers). Stage names are the files (`rs.core.filter.psm1`);
+  the filter stage's dependency is `GlobCompiler` (semantics-neutral;
+  `-GlobSemantics Ignore|Selection` says what a match means) — "ignore" is a
+  semantics, not a stage. + `processors/` (ISS-loadable, body-only,
   `param($Item, $Config)`, copy-on-enrich, interior helpers allowed).
   `schema/<stage>.schema.json` — per-stage I/O contracts (`{ stage, in, out }`,
   field registers under named shapes; `from: "<stage>.out.<shape>"` marks a

@@ -1,0 +1,58 @@
+{
+  "stage": "filter",
+  "module": "rs.core.filter.psm1 — New-GlobCompiler(-CrawlerGraph -GlobSemantics …) then Invoke-Filter(-CompiledNodes -CrawlerGraph …)",
+  "$comment": "Decides which crawled files survive. GlobCompiler (this stage's dependency, semantics-neutral) compiles per-node state from glob sources under Ignore or Selection semantics; Invoke-Filter applies two eligibility GUARDS first (MaxSizeBytes, extension blacklist — crawler metadata, no I/O, NOT glob semantics, do not invert), then the glob verdict. Takes a SLICE of crawler.out (the `from` fields below); rebuilds nodes with its own shape (out.node) and keeps file descriptors as the same objects (out.file = crawler.out.file). Anything in crawler.out.node not in out.node — the subtree rollups — is reachable downstream only by joining filter.out ⋈ crawler.out on NodePath (the orchestrator retains crawler.out). Fails fast if a descriptor lacks RelativePath or Extension.",
+  "in": {
+    "params": {
+      "GlobSemantics":          { "type": "Ignore|Selection", "note": "compiler; what a glob match MEANS — Ignore: match = excluded (sentinels + virtual root ignore file); Selection: match = kept (user globs only, no sentinel I/O, no dir pruning). Params of the other semantics are inert. reports/ignore-semantics-update.md" },
+      "IgnoreDefaults":         { "type": "string[]", "note": "compiler, Ignore only; default ['.snapshot/', '.git/', 'node_modules/']" },
+      "IgnorePatterns":         { "type": "string[]", "optional": true, "note": "compiler, Ignore only; virtual root ignore file" },
+      "IgnoreOverridePatterns": { "type": "string[]", "optional": true, "note": "compiler, Ignore only; merged as negations into the same virtual file" },
+      "SelectionPatterns":      { "type": "string[]", "optional": true, "note": "compiler, Selection only; empty/self-annihilated throws" },
+      "SentinelFileNames":      { "type": "string[]", "note": "compiler, Ignore only; default ['.gitignore', '.snapignore']; read from disk by AbsolutePath" },
+      "MaxSizeBytes":           { "type": "long",     "note": "GUARD (Invoke-Filter); 0 = no ceiling → Skipped FileTooLarge" },
+      "ExtensionBlacklist":     { "type": "string[]", "optional": true, "note": "GUARD (Invoke-Filter); ADDITIVE to the hard blacklist, never replaces it → Skipped ExtensionBlacklisted. The hard list (images, media, archives, compiled, office docs, fonts, data blobs) is $script:HardExtensionBlacklist in the module — reposnapshot has no business ingesting binary blobs under either semantics; a plain data list awaiting a run-config home (defaults.filter.extensionBlacklist)" }
+    },
+    "node": {
+      "NodePath":     { "from": "crawler.out.node" },
+      "AbsolutePath": { "from": "crawler.out.node" },
+      "NodeDepth":    { "from": "crawler.out.node" },
+      "Files":        { "from": "crawler.out.node" }
+    },
+    "file": {
+      "AbsolutePath": { "from": "crawler.out.file", "note": "sentinel reads; skip records" },
+      "RelativePath": { "from": "crawler.out.file", "note": "pattern matching; contract check" },
+      "Extension":    { "from": "crawler.out.file", "note": "blacklist; contract check" },
+      "SizeBytes":    { "from": "crawler.out.file", "note": "MaxSizeBytes ceiling" }
+    }
+  },
+  "out": {
+    "result": {
+      "Graph":   { "type": "Dictionary[NodePath, node]", "note": "pruned; empty leaves removed" },
+      "Skipped": { "type": "skipped[]" }
+    },
+    "node": {
+      "NodePath":      { "from": "crawler.out.node" },
+      "AbsolutePath":  { "from": "crawler.out.node" },
+      "NodeDepth":     { "from": "crawler.out.node" },
+      "Files":         { "type": "file[]", "note": "surviving descriptors — same objects as crawler.out.file, filtered" },
+      "CompiledState": { "type": "object", "note": "@{ Semantics; Positives; Exceptions } — semantics-stamped compiled glob state for the node; TestPath interprets it" }
+    },
+    "file": {
+      "AbsolutePath": { "from": "crawler.out.file" },
+      "RelativePath": { "from": "crawler.out.file" },
+      "NodePath":     { "from": "crawler.out.file" },
+      "Extension":    { "from": "crawler.out.file" },
+      "SizeBytes":    { "from": "crawler.out.file" },
+      "LastWriteUtc": { "from": "crawler.out.file" },
+      "CreationUtc":  { "from": "crawler.out.file" },
+      "FsAttributes": { "from": "crawler.out.file" }
+    },
+    "skipped": {
+      "Path":      { "type": "string" },
+      "Reason":    { "type": "string", "note": "FileTooLarge | ExtensionBlacklisted" },
+      "SizeBytes": { "type": "long",   "optional": true, "note": "with FileTooLarge" },
+      "Extension": { "type": "string", "optional": true, "note": "with ExtensionBlacklisted" }
+    }
+  }
+}

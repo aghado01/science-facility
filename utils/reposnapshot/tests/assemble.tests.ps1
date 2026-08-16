@@ -160,12 +160,12 @@ Enter-Section '4. Header stamping'
 # ---------------------------------------------------------------------------
 $ctx = [pscustomobject]@{
     RunStamp = $now; Root = 'C:/r'; GeneratorVersion = '3.0-test'
-    ConfigEcho = [pscustomobject]@{ IngestMode = 'Ignore' }
+    ConfigEcho = [pscustomobject]@{ GlobSemantics = 'Ignore' }
 }
 $ir2 = Invoke-Assemble -DispatchOutput $unitEnvelope -RunContext $ctx
 Assert-True ($ir2.Header.RunStamp -eq $now -and $ir2.Header.Root -eq 'C:/r') 'RunContext stamped verbatim'
 Assert-True ($ir2.Header.GeneratorVersion -eq '3.0-test') 'GeneratorVersion stamped'
-Assert-True ($ir2.Header.ConfigEcho.IngestMode -eq 'Ignore') 'nested ConfigEcho intact'
+Assert-True ($ir2.Header.ConfigEcho.GlobSemantics -eq 'Ignore') 'nested ConfigEcho intact'
 Assert-True ($ir2.Header.EntryCount -eq 2) 'EntryCount derived'
 Assert-True ($null -ne $ir.Header.PSObject.Properties['EntryCount'] -and @($ir.Header.PSObject.Properties).Count -eq 2) `
     'no RunContext → Header carries only derived fields'
@@ -219,13 +219,13 @@ try
 
     # v3 side — full pipeline, harness-as-admiral
     Import-Module (Join-Path $v3 'rs.core.crawler.psm1') -Force
-    Import-Module (Join-Path $v3 'rs.core.ignore.psm1') -Force
+    Import-Module (Join-Path $v3 'rs.core.filter.psm1') -Force
     Import-Module (Join-Path $v3 'rs.core.colonel.v2.psm1') -Force -WarningAction SilentlyContinue
     Import-Module (Join-Path $v3 'rs.core.ingest.psm1') -Force
 
     $crawl = (New-FileSystemCrawler -RootPath $fixtureRoot).Invoke()
-    $compiled = New-IgnoreCompiler -CrawlerGraph $crawl.Graph
-    $filtered = Invoke-IgnoreFilter -CompiledNodes $compiled.CompiledNodes -CrawlerGraph $crawl.Graph
+    $compiled = New-GlobCompiler -CrawlerGraph $crawl.Graph
+    $filtered = Invoke-Filter -CompiledNodes $compiled.CompiledNodes -CrawlerGraph $crawl.Graph
     $ingest = Invoke-Ingest -FilteredFsGraph $filtered `
         -Manifest @{
             'file-read'     = (Join-Path $v3 'processors\file-read.ps1')

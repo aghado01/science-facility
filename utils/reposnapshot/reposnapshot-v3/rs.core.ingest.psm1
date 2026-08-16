@@ -15,9 +15,9 @@ Import-Module "$PSScriptRoot/rs.core.internals.psm1" -Force
     Disposition open: absorbed into admiral vs kept as a named submodule.
 
 .DESCRIPTION
-    Sits between Invoke-IgnoreFilter and colonel (Compile-Plan / Invoke-Plan).
+    Sits between Invoke-Filter and colonel (Compile-Plan / Invoke-Plan).
     Metadata-based eligibility filtering (size ceiling, extension blacklist) is
-    owned by Invoke-IgnoreFilter — it already holds per-file metadata and runs
+    owned by Invoke-Filter — it already holds per-file metadata and runs
     before any I/O. Binary (NUL byte) detection is handled opportunistically
     inside file-read.ps1 after ReadAllBytes.
 
@@ -28,7 +28,7 @@ Import-Module "$PSScriptRoot/rs.core.internals.psm1" -Force
 
       2. Dispatch         — calls colonel's Invoke-Plan with the eligible item
          list and compiled plan; aggregates skipped + result diagnostics.
-         Skipped entries from Invoke-IgnoreFilter (FileTooLarge,
+         Skipped entries from Invoke-Filter (FileTooLarge,
          ExtensionBlacklisted) are merged into ingest's Skipped output.
 
     Colonel's parameter surface is reflected via New-ForwardedParamDictionary
@@ -36,7 +36,7 @@ Import-Module "$PSScriptRoot/rs.core.internals.psm1" -Force
     uniquely owns. All Compile-Plan and Invoke-Plan params are surfaced through
     DynamicParam and routed at call time via Split-ForwardedParams.
 
-    Input contract (from Invoke-IgnoreFilter):
+    Input contract (from Invoke-Filter):
       FilteredFsGraph — [PSCustomObject] @{ Graph; Skipped } or plain
       Dictionary[NodePath, PSCustomObject] / flat array for back-compat.
       Each node in Graph carries a Files array of ItemDescriptor identity
@@ -74,12 +74,12 @@ function Invoke-Ingest
         Runs the ingest pipeline: plan compilation and colonel dispatch.
 
     .PARAMETER FilteredFsGraph
-        Output from Invoke-IgnoreFilter — [PSCustomObject] @{ Graph; Skipped } or a plain
+        Output from Invoke-Filter — [PSCustomObject] @{ Graph; Skipped } or a plain
         Dictionary[NodePath, PSCustomObject] / flat array for back-compat.
         Each node in Graph must carry a Files property of ItemDescriptor identity
         records: @{ AbsolutePath; RelativePath; NodePath; SizeBytes; LastWriteUtc }.
         Descriptors are dispatched to colonel as Items verbatim.
-        Skipped entries from ignore (FileTooLarge, ExtensionBlacklisted) are merged into
+        Skipped entries from the filter stage (FileTooLarge, ExtensionBlacklisted) are merged into
         ingest's Skipped output.
 
     All remaining parameters (Manifest, Profiles/Steps, ChainExecutorPath, IssPreset,

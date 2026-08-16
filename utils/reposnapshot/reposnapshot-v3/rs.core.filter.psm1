@@ -5,74 +5,58 @@ using namespace System.Text
 using namespace System.Text.RegularExpressions
 <#
 .SYNOPSIS
-    Ignore stage — pure filter over the crawler graph. New-IgnoreCompiler
-    compiles per-node state; Invoke-IgnoreFilter applies it.
+    Filter stage — decides which crawled files survive. GlobCompiler (this
+    module's dependency, semantics-neutral) compiles per-node state from glob
+    sources; Invoke-Filter applies it plus the eligibility guards.
 
 .DESCRIPTION
-    Contract: schema/ignore.schema.json (in = a slice of crawler.out; out =
+    Contract: schema/filter.schema.json (in = a slice of crawler.out; out =
     pruned graph, nodes rebuilt, file descriptors the same objects filtered).
     Enriches nothing; fails fast if a descriptor lacks RelativePath/Extension.
 
-    Five semantics-neutral stages + pruning:
+    GlobCompiler — five semantics-neutral stages + pruning:
       0 Normalize · 1 Coalesce · 2 Walk · 3 Reduce · 4 Gather-Scatter (regex)
-    Regime is interpretation, applied only at the rim: IngestMode picks the
+    GlobSemantics is interpretation, applied only at the rim: it picks the
     sources (Ignore: sentinels + virtual root ignore file; Selection: user
-    globs only, no sentinel I/O, no directory pruning) and stamps every
-    CompiledState { Regime; Positives; Exceptions }; TestPath is the single
-    semantic authority (dual truth table on Regime). Cross-mode params are
-    inert, never errors.
+    globs only, no sentinel I/O, no directory pruning) and is stamped on every
+    CompiledState { Semantics; Positives; Exceptions }; TestPath is the single
+    semantic authority (dual truth table on Semantics). Params belonging to
+    the other semantics are inert, never errors.
+
+    Invoke-Filter — two eligibility guards run BEFORE any glob test, on
+    crawler metadata only (no I/O): MaxSizeBytes and the extension blacklist
+    below. They are not glob semantics and do not invert with GlobSemantics.
 
     Semantics, rationale, history:
     issues/reposnapshot/reports/ignore-semantics-update.md
 #>
 
-# Hard extension blacklist — binary / non-text file types that are never useful
-# in a source snapshot. Applied by Invoke-IgnoreFilter before ignore regex passes.
-# Caller-supplied ExtensionBlacklist is additive (not replaceable).
-$script:HardExtensionBlacklist = [HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
-@(
-    # Images
-    '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.ico', '.svg', '.webp', '.tiff', '.avif',
-    # Video / audio
-    '.mp4', '.mp3', '.wav', '.mov', '.avi', '.mkv', '.flac', '.ogg', '.webm',
-    # Archives
-    '.zip', '.gz', '.tar', '.7z', '.rar', '.br', '.zst',
-    # Compiled / binary
-    '.exe', '.dll', '.pdb', '.obj', '.lib', '.so', '.dylib', '.wasm',
-    # Documents
-    '.pdf', '.docx', '.xlsx', '.pptx', '.odt', '.ods',
-    # Fonts / web assets
-    '.woff', '.woff2', '.ttf', '.eot', '.otf',
-    # Data / model blobs
-    '.bin', '.dat', '.pkl', '.npy', '.npz', '.parquet', '.db', '.sqlite'
-) | ForEach-Object { [void]$script:HardExtensionBlacklist.Add($_) }
+#region GlobCompiler — Normalize / Coalesce / Walk / Reduce / Gather-Scatter (semantics-neutral)
 
-#region Ignore Compiler — Normalize / Coalesce / Walk / Reduce / Gather-Scatter
-
-class IgnoreCompiler
+class GlobCompiler
 {
 
     # ── Retained state ────────────────────────────────────────────────────
     [object[]]$Nodes                           # the node array — mutated through pipeline stages
     [hashtable]$NodeLookup                     # NodePath → node — built once, used by Walk + Prune
     [hashtable]$RegexCache                     # signature → @{Positives=[regex]; Exceptions=[regex]}
-    [string]$Regime                            # 'Ignore' | 'Selection' — stamped on every CompiledState
+    [string]$Semantics                            # 'Ignore' | 'Selection' — stamped on every CompiledState
     [List[PSCustomObject]]$SentinelIgnoreFiles # flat aggregate of all sentinel entries found — @{ NodePath; Source; Globs }
 
     # ── Configuration (immutable after construction) ──────────────────────
     hidden [bool]$HasRun
 
-    # ── Constructor (hidden — use New-IgnoreCompiler factory) ────────────
-    # $rootPatterns: the virtual root-level pattern source — in Ignore mode
+    # ── Constructor (hidden — use New-GlobCompiler factory) ────────────
+    # $rootPatterns: the virtual root-level pattern source — in Ignore semantics
     # the merged IgnoreDefaults + IgnorePatterns + overrides-as-negations;
-    # in Selection mode the SelectionPatterns. Same injection either way —
-    # the compile machinery is semantics-neutral; Regime is interpretation.
-    hidden IgnoreCompiler([object[]]$flatNodes, [string[]]$rootPatterns, [string]$regime)
+    # in Selection semantics the SelectionPatterns. Same injection either way —
+    # the compile machinery is semantics-neutral; Semantics is interpretation.
+    hidden GlobCompiler([object[]]$flatNodes, [string[]]$rootPatterns, [string]$semantics)
     {
         $this.Nodes = $flatNodes
         $this.HasRun = $false
         $this.RegexCache = @{}
-        $this.Regime = $regime
+        $this.Semantics = $semantics
 
         # Build NodePath → node lookup once
         $this.NodeLookup = @{}
@@ -98,17 +82,17 @@ class IgnoreCompiler
         if ($this.HasRun)
         {
             throw [System.InvalidOperationException]::new(
-                'IgnoreCompiler.Invoke() has already been called. Create a new instance for a new run.')
+                'GlobCompiler.Invoke() has already been called. Create a new instance for a new run.')
         }
         $this.HasRun = $true
 
-        # ── Five-stage pipeline — both regimes, no mode branches inside stages ──
+        # ── Five-stage pipeline — both semantics, no mode branches inside stages ──
         $this.Normalize()
         $this.Coalesce()
 
         # Fail-fast (Selection): an empty or self-annihilated selection set is
         # a user error, never a valid request for nothing.
-        if ($this.Regime -eq 'Selection')
+        if ($this.Semantics -eq 'Selection')
         {
             $any = $false
             foreach ($node in $this.Nodes)
@@ -118,7 +102,7 @@ class IgnoreCompiler
             if (-not $any)
             {
                 throw [System.ArgumentException]::new(
-                    'SelectionPatterns is empty or self-annihilated — Selection mode requires a logically non-empty selection set.')
+                    'SelectionPatterns is empty or self-annihilated — Selection semantics requires a logically non-empty selection set.')
             }
         }
 
@@ -126,11 +110,11 @@ class IgnoreCompiler
         $this.Reduce()
         $this.CompileRegex()
 
-        # Prune only under Ignore regime: file-targeted keep patterns can never
+        # Prune only under Ignore semantics: file-targeted keep patterns can never
         # match directory paths, so pruning under Selection would kill subtrees
         # before their files were evaluated. Greedy crawl makes prune a CPU
         # optimization only; the post-filter empty-leaf prune cleans up.
-        if ($this.Regime -eq 'Ignore')
+        if ($this.Semantics -eq 'Ignore')
         {
             $this.Prune()
         }
@@ -142,9 +126,9 @@ class IgnoreCompiler
     # STATIC — Filter-time path test (stateless, used externally)
     # ══════════════════════════════════════════════════════════════════════
 
-    # The single semantic authority — dual truth table on CompiledState.Regime.
+    # The single semantic authority — dual truth table on CompiledState.Semantics.
     # Returns $true when the path is EXCLUDED from results. Exceptions keep one
-    # meaning in both regimes: undo the primary verdict (rescue under Ignore;
+    # meaning in both semantics: undo the primary verdict (rescue under Ignore;
     # un-keep under Selection).
     static [bool] TestPath([string]$relativePath, [object]$nodeState)
     {
@@ -154,18 +138,18 @@ class IgnoreCompiler
         {
             # No compiled patterns: Ignore → keep all; Selection → exclude all
             # (unreachable under Selection: fail-fast guards the empty set).
-            if ($null -ne $state -and $state.Regime -eq 'Selection') { return $true }
+            if ($null -ne $state -and $state.Semantics -eq 'Selection') { return $true }
             return $false
         }
 
-        if ($state.Regime -eq 'Selection')
+        if ($state.Semantics -eq 'Selection')
         {
             if (-not $state.Positives.IsMatch($relativePath)) { return $true }    # unmatched → excluded
             if ($null -ne $state.Exceptions -and $state.Exceptions.IsMatch($relativePath)) { return $true }  # un-keep
             return $false                                                          # selected
         }
 
-        # Ignore regime
+        # Ignore semantics
         if (-not $state.Positives.IsMatch($relativePath)) { return $false }        # unmatched → kept
         if ($null -ne $state.Exceptions -and $state.Exceptions.IsMatch($relativePath)) { return $false }     # rescued
         return $true                                                               # ignored
@@ -388,11 +372,11 @@ class IgnoreCompiler
                 }
             }
 
-            # Single regime-stamped state slot — filter-time code needs no
-            # out-of-band mode knowledge (TestPath reads Regime from here).
+            # Single semantics-stamped state slot — filter-time code needs no
+            # out-of-band mode knowledge (TestPath reads Semantics from here).
             $cached = $this.RegexCache[$signature]
             $node | Add-Member -NotePropertyName 'CompiledState' -NotePropertyValue (@{
-                    Regime     = $this.Regime
+                    Semantics     = $this.Semantics
                     Positives  = $cached.Positives
                     Exceptions = $cached.Exceptions
                 }) -Force
@@ -428,7 +412,7 @@ class IgnoreCompiler
             if ($null -ne $directParent -and $this.NodeLookup.ContainsKey($directParent))
             {
                 $parentNode = $this.NodeLookup[$directParent]
-                if ([IgnoreCompiler]::TestPath($node.NodePath, $parentNode))
+                if ([GlobCompiler]::TestPath($node.NodePath, $parentNode))
                 {
                     [void]$pruned.Add($node.NodePath)
                 }
@@ -485,7 +469,7 @@ class IgnoreCompiler
 
         if ([string]::IsNullOrWhiteSpace($p) -or $p -eq '/')
         {
-            Write-Warning "IgnoreCompiler: discarding degenerate pattern '$raw'"
+            Write-Warning "GlobCompiler: discarding degenerate pattern '$raw'"
             return $null
         }
 
@@ -681,47 +665,48 @@ class IgnoreCompiler
 }
 
 # ── Factory function ──────────────────────────────────────────────────────
-function New-IgnoreCompiler
+function New-GlobCompiler
 {
     <#
     .SYNOPSIS
-        Factory: creates and invokes an IgnoreCompiler instance.
+        Factory: creates and invokes a GlobCompiler instance.
 
     .DESCRIPTION
-        Accepts the crawler graph (Dictionary or flat array) plus IngestMode and
-        the mode's pattern params. Cross-mode pattern params are INERT — never
-        errors — so ergonomic defaults can stay populated while switching modes.
+        Accepts the crawler graph (Dictionary or flat array) plus GlobSemantics and
+        that semantics' pattern params. Params belonging to the other semantics
+        are INERT — never errors — so ergonomic defaults can stay populated while
+        switching.
 
     .PARAMETER CrawlerGraph
         Crawler graph: either Dictionary[string, PSCustomObject] keyed by NodePath,
         or a flat object[] of node objects. Each node must carry NodePath, AbsolutePath,
         NodeDepth, and Files. IgnoreFiles is built internally by the sentinel scan.
 
-    .PARAMETER IngestMode
+    .PARAMETER GlobSemantics
         'Ignore' (default) — canonical ignore-file-driven ingestion.
         'Selection' — the run is expressly about ingesting what is wanted:
         sentinels are not consulted (no scan, no I/O); SelectionPatterns is the
-        selection regime; IgnoreDefaults/IgnorePatterns/IgnoreOverridePatterns
+        sole pattern source; IgnoreDefaults/IgnorePatterns/IgnoreOverridePatterns
         are not consulted.
 
     .PARAMETER SentinelFileNames
-        Ignore mode only. Names of ignore files to detect in each node's Files
+        Ignore semantics only. Names of ignore files to detect in each node's Files
         list and parse into IgnoreFiles entries. Defaults to
         @('.gitignore', '.snapignore'). Pass @() to skip sentinel discovery.
 
     .PARAMETER IgnoreDefaults
-        Ignore mode only. Default glob patterns prepended to IgnorePatterns.
+        Ignore semantics only. Default glob patterns prepended to IgnorePatterns.
         Defaults to @('.snapshot/', '.git/', 'node_modules/'). Pass @() to
         suppress. Treated identically to IgnorePatterns — visible, overridable.
 
     .PARAMETER IgnorePatterns
-        Ignore mode only. Caller-supplied root-level ignore globs — a VIRTUAL
+        Ignore semantics only. Caller-supplied root-level ignore globs — a VIRTUAL
         ROOT IGNORE FILE merged with the sentinels and processed through the
         full nested semantics. Negations ('!x') are valid here, exactly as in
         a real ignore file.
 
     .PARAMETER IgnoreOverridePatterns
-        Ignore mode only. Globs that countermand ignore materials — merged into
+        Ignore semantics only. Globs that countermand ignore materials — merged into
         the same virtual root source as NEGATIONS by convention (each entry is
         '!'-prefixed; an already-'!'-prefixed entry double-negates into a
         positive ignore — silly but admissible). Follows canonical gitignore
@@ -730,13 +715,13 @@ function New-IgnoreCompiler
         branch and its contents.
 
     .PARAMETER SelectionPatterns
-        Selection mode only. The selection criteria, in canonical glob
+        Selection semantics only. The selection criteria, in canonical glob
         semantics; negations are un-keep exceptions ("select *.ps1 except
         tests/"). An empty or self-annihilated set throws (fail-fast).
 
     .OUTPUTS
         [PSCustomObject] @{
-            CompiledNodes     = object[]  — node array; pass to Invoke-IgnoreFilter -CompiledNodes
+            CompiledNodes     = object[]  — node array; pass to Invoke-Filter -CompiledNodes
             SentinelIgnoreFiles = PSCustomObject[]  — @{ NodePath; Source; Globs } for all sentinel files found
         }
     #>
@@ -745,7 +730,7 @@ function New-IgnoreCompiler
         [Parameter(Mandatory)]
         [object]$CrawlerGraph,
         [ValidateSet('Ignore', 'Selection')]
-        [string]$IngestMode = 'Ignore',
+        [string]$GlobSemantics = 'Ignore',
         [string[]]$IgnoreDefaults = @('.snapshot/', '.git/', 'node_modules/'),
         [string[]]$IgnorePatterns = $null,
         [string[]]$IgnoreOverridePatterns = $null,
@@ -762,15 +747,15 @@ function New-IgnoreCompiler
         $flatNodes = @($CrawlerGraph)
     }
 
-    # ── Assemble the virtual root pattern source per mode ─────────────────────
-    # Ignore mode: IgnoreDefaults + IgnorePatterns + overrides-as-negations —
+    # ── Assemble the virtual root pattern source per semantics ────────────────
+    # Ignore semantics: IgnoreDefaults + IgnorePatterns + overrides-as-negations —
     # one virtual root ignore file; the engine's merge/inheritance/annihilation
     # machinery treats all three identically (containers by convention).
-    # Selection mode: SelectionPatterns only; ignore-side params are inert.
-    if ($IngestMode -eq 'Selection')
+    # Selection semantics: SelectionPatterns only; ignore-side params are inert.
+    if ($GlobSemantics -eq 'Selection')
     {
         $combinedIgnorePatterns = @($SelectionPatterns) | Where-Object { $_ }
-        $SentinelFileNames = @()   # sentinels are not consulted in Selection mode
+        $SentinelFileNames = @()   # sentinels are not consulted in Selection semantics
     }
     else
     {
@@ -831,14 +816,14 @@ function New-IgnoreCompiler
                 }
                 catch
                 {
-                    Write-Warning "IgnoreCompiler: failed to read sentinel '$($f.AbsolutePath)' — $($_.Exception.GetType().Name)"
+                    Write-Warning "GlobCompiler: failed to read sentinel '$($f.AbsolutePath)' — $($_.Exception.GetType().Name)"
                 }
             }
             $node.Files = $remainingFiles
         }
     }
 
-    $compiler = [IgnoreCompiler]::new($flatNodes, $combinedIgnorePatterns, $IngestMode)
+    $compiler = [GlobCompiler]::new($flatNodes, $combinedIgnorePatterns, $GlobSemantics)
     $compiler.SentinelIgnoreFiles = $sentinelAggregate
     return [PSCustomObject]@{
         CompiledNodes       = $compiler.Invoke()
@@ -847,20 +832,20 @@ function New-IgnoreCompiler
 }
 
 # ── Standalone filter utility ────────────────────────────────────────────
-function Test-PathIgnored
+function Test-PathExcluded
 {
     <#
     .SYNOPSIS
         Tests whether a relative path is excluded based on compiled node state.
-        Delegates to [IgnoreCompiler]::TestPath() — the dual truth table over
-        the regime-stamped CompiledState (Ignore: match = excluded unless
+        Delegates to [GlobCompiler]::TestPath() — the dual truth table over
+        the semantics-stamped CompiledState (Ignore: match = excluded unless
         rescued; Selection: non-match = excluded, exception un-keeps).
 
     .PARAMETER RelativePath
         Forward-slash normalized relative path to test.
 
     .PARAMETER NodeState
-        Node carrying CompiledState = @{ Regime; Positives; Exceptions }.
+        Node carrying CompiledState = @{ Semantics; Positives; Exceptions }.
 
     .OUTPUTS
         [bool] — $true if the path should be EXCLUDED from the snapshot.
@@ -875,72 +860,87 @@ function Test-PathIgnored
         [object]$NodeState
     )
 
-    return [IgnoreCompiler]::TestPath($RelativePath, $NodeState)
+    return [GlobCompiler]::TestPath($RelativePath, $NodeState)
 }
 
 #endregion
 
 # ══════════════════════════════════════════════════════════════════════════
-# FILTERING — join + apply
+# FILTER STAGE — eligibility guards + glob verdicts
 # ══════════════════════════════════════════════════════════════════════════
 
-function Invoke-IgnoreFilter
+# =============================================================================
+# Hard extension blacklist — the one guard that stands OUTSIDE glob semantics.
+#
+# reposnapshot has no business ingesting blobs of binary. Images, media,
+# archives, compiled output, office documents, fonts and data blobs are never
+# source material a reading agent wants, under EITHER GlobSemantics — a
+# Selection run for '*' must still not pull in a .png. So this is not a
+# pattern source that participates in inheritance/negation/precedence; it is
+# an unconditional eligibility guard applied by Invoke-Filter before any glob
+# test, on the crawler-stamped Extension alone (no read).
+#
+# It is data, not logic — a plain list. It lives here because no run-config
+# system exists yet to hold it; when admiral's config projection lands this
+# is the first obvious `defaults.filter.extensionBlacklist` entry, and the
+# code path is already a parameter (-ExtensionBlacklist, additive), so lifting
+# it out is a one-line change. Do not turn it into a glob source to "unify" it.
+# =============================================================================
+$script:HardExtensionBlacklist = [HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+@(
+    # Images
+    '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.ico', '.svg', '.webp', '.tiff', '.avif',
+    # Video / audio
+    '.mp4', '.mp3', '.wav', '.mov', '.avi', '.mkv', '.flac', '.ogg', '.webm',
+    # Archives
+    '.zip', '.gz', '.tar', '.7z', '.rar', '.br', '.zst',
+    # Compiled / binary
+    '.exe', '.dll', '.pdb', '.obj', '.lib', '.so', '.dylib', '.wasm',
+    # Documents
+    '.pdf', '.docx', '.xlsx', '.pptx', '.odt', '.ods',
+    # Fonts / web assets
+    '.woff', '.woff2', '.ttf', '.eot', '.otf',
+    # Data / model blobs
+    '.bin', '.dat', '.pkl', '.npy', '.npz', '.parquet', '.db', '.sqlite'
+) | ForEach-Object { [void]$script:HardExtensionBlacklist.Add($_) }
+
+function Invoke-Filter
 {
     <#
     .SYNOPSIS
-        Joins compiled ignore nodes with the crawler graph, pre-filters by size
-        and extension, and applies ignore rules in a single pass. Pure filter —
-        consumes the crawler-stamped identity contract, enriches nothing.
+        The filter stage proper: joins compiled nodes with the crawler graph,
+        applies the eligibility guards, then the glob verdicts. Pure filter —
+        consumes crawler-stamped descriptors, enriches nothing.
 
     .DESCRIPTION
-        Two-phase operation:
-          1. Join + metadata pre-filter — for each surviving compiled node, look up
-             the crawler's original node by NodePath and apply the optional
-             MaxSizeBytes ceiling and extension blacklist. Both filters operate
-             on crawler metadata (SizeBytes, file extension) — no I/O required.
-             Rejected files are collected in Skipped with a typed Reason.
-          2. Filter — walk the joined dictionary and test each file's
-             RelativePath through [IgnoreCompiler]::TestPath — the single
-             semantic authority (dual truth table on the regime-stamped
-             CompiledState; exceptions undo the primary verdict in both
-             regimes).
-
-        RelativePath arrives on every file entry from the crawler (ItemDescriptor
-        identity is stamped once, at walk time — see rs.core.crawler path
-        doctrine); this stage fails fast if fed a pre-contract graph.
-        Both metadata filters (size, extension) belong here because this stage
-        already holds per-file metadata and operates before any I/O — eliminating
-        unwanted files at the earliest possible point, before ignore regex passes
-        and before pruning.
+        Per surviving compiled node, in one pass over its files:
+          1. Eligibility guards (crawler metadata only, no I/O; NOT glob
+             semantics, do not invert with GlobSemantics): MaxSizeBytes ceiling
+             → Skipped 'FileTooLarge'; hard + caller extension blacklist →
+             Skipped 'ExtensionBlacklisted'. See the blacklist block below for
+             why it stands outside the glob design.
+          2. Glob verdict — [GlobCompiler]::TestPath on RelativePath (dual truth
+             table on the semantics-stamped CompiledState).
+        Then empty-leaf prune. Contract: schema/filter.schema.json.
 
     .PARAMETER CompiledNodes
-        Output from New-IgnoreCompiler:
-          @( @{ NodePath; AbsolutePath; NodeDepth; CompiledState } )
-        CompiledState = @{ Regime; Positives; Exceptions } — regime-stamped;
-        TestPath interprets it (dual truth table).
+        New-GlobCompiler output: @( @{ NodePath; AbsolutePath; NodeDepth; CompiledState } ).
 
     .PARAMETER CrawlerGraph
-        The full crawler graph dictionary (NodePath → node), or flat array.
-        Each node must carry a Files property of ItemDescriptor identity records:
-        @{ AbsolutePath; RelativePath; NodePath; SizeBytes; LastWriteUtc }.
+        The crawler graph (Dictionary NodePath → node, or flat array) —
+        crawler.out; descriptors must carry RelativePath and Extension.
 
     .PARAMETER MaxSizeBytes
-        Optional size ceiling in bytes. Files with SizeBytes exceeding this value
-        are excluded and reported in the Skipped output. 0 = no ceiling (default).
+        Size ceiling in bytes; 0 = no ceiling (default).
 
     .PARAMETER ExtensionBlacklist
-        Additional extensions to reject beyond the hard defaults (additive, not replaceable).
-        Include the leading dot: @('.lock', '.min.js').
-        Hard defaults cover images, video, audio, archives, compiled binaries, documents,
-        fonts, and data blobs — see $script:HardExtensionBlacklist.
+        Extensions to reject IN ADDITION to the hard blacklist (additive, never
+        replaces it). Leading dot: @('.lock', '.min.js').
 
     .OUTPUTS
-        [PSCustomObject] @{
-            Graph   = [Dictionary[string, PSCustomObject]]  — surviving nodes keyed by NodePath
-            Skipped = [PSCustomObject[]]  — @{ Path; Reason; ... } (FileTooLarge or ExtensionBlacklisted)
-        }
-        Graph values: @{ NodePath; AbsolutePath; NodeDepth; Files; CompiledState }
-        Files arrays contain only surviving files (identity fields untouched).
+        [PSCustomObject] @{ Graph; Skipped } — filter.out.result. Graph values are
+        rebuilt nodes @{ NodePath; AbsolutePath; NodeDepth; Files; CompiledState };
+        Files hold the surviving crawler descriptors, untouched.
     #>
     [CmdletBinding()]
     param(
@@ -996,7 +996,7 @@ function Invoke-IgnoreFilter
             {
                 if ($null -eq $f.PSObject.Properties[$req])
                 {
-                    throw "Invoke-IgnoreFilter: file entry '$($f.AbsolutePath)' lacks $req — input must be a crawler graph carrying the descriptor contract (rs.core.crawler stamps it at walk time; schema/descriptor.json)."
+                    throw "Invoke-Filter: file entry '$($f.AbsolutePath)' lacks $req — input must be a crawler graph carrying the descriptor contract (rs.core.crawler stamps it at walk time; schema/descriptor.json)."
                 }
             }
             if ($MaxSizeBytes -gt 0 -and $f.SizeBytes -gt $MaxSizeBytes)
@@ -1023,9 +1023,9 @@ function Invoke-IgnoreFilter
 
         # ── Phase 2: Filter files in-place ──────────────────────────────
         # TestPath is the single semantic authority (dual truth table on the
-        # regime-stamped state) — no inline semantics duplication here.
+        # semantics-stamped state) — no inline semantics duplication here.
         $joined.Files = @($joined.Files.Where({
-                    -not [IgnoreCompiler]::TestPath($_.RelativePath, $joined)
+                    -not [GlobCompiler]::TestPath($_.RelativePath, $joined)
                 }))
 
         $result[$np] = $joined
@@ -1053,7 +1053,7 @@ function Invoke-IgnoreFilter
 
 # Please sort exports alphabetically within each section.
 Export-ModuleMember -Function @(
-    'Invoke-IgnoreFilter'
-    'New-IgnoreCompiler'
-    'Test-PathIgnored'
+    'Invoke-Filter'
+    'New-GlobCompiler'
+    'Test-PathExcluded'
 )

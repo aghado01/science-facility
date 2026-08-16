@@ -25,7 +25,7 @@
                    contract), so it must be first-class here.
       Function     including nested interior helpers, legitimate since the
                    colonel AST-validation fix (rs-psstrip/_SplitCommentPopulation).
-      ClassMethod  the stage classes (FileSystemCrawler, IgnoreCompiler,
+      ClassMethod  the stage classes (FileSystemCrawler, GlobCompiler,
                    RunspaceManager) live as PowerShell classes.
 
     Parse errors are reported but never fatal: the PS parser is error-recovering,
@@ -143,7 +143,7 @@ function New-SignatureRecord
         [string] $Name,
         [string] $Kind,
         # [object], not [string]: a typed [string] parameter coerces $null to '',
-        # collapsing "absent" into "empty". Same trap that made IgnoreCompiler's
+        # collapsing "absent" into "empty". Same trap that made GlobCompiler's
         # GetParentPath return '' for a null parent (fixed there as [object]) —
         # here it would report a help-less function as having an empty synopsis
         # and a plain function as belonging to a class named ''.
