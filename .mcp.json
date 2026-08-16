@@ -30,7 +30,9 @@
     "nushell": {
       "command": "nu",
       "args": [
-        "--mcp"
+        "--mcp",
+        "--config",
+        "./mcp/nushell_mcp/config.nu"
       ],
       "env": {
         "NU_MCP_OUTPUT_LIMIT": "20kb",
