@@ -483,6 +483,37 @@ Latin-1 Supplement, cheap in every tokenizer, and line-anchored so a
 mid-prose `§` in a legal corpus cannot collide with a header. The `--frame`
 flag name `pilcrow` is kept as the mode name regardless of glyph.
 
+*Syntactic closure — the psr hybrid (proposed, pending the shared spec
+freeze).* Records are **flat, newline-delimited, length-prefixed** (the
+machine layer, as in reposnapshot's `psr`: the prefix replaces escaping;
+`len` is authoritative; nothing nests arithmetically — a unit with an
+elision is emitted as *pieces*, each its own record). A **close line
+`§/ addr`** is a model-facing overlay: it re-mentions the address (a second
+retrieval hook), signals completeness, and makes nesting legible — none of
+which the next-sentinel scheme can express — while for the machine it is
+only a checksum (address/position mismatch → framing fault). If a payload
+does not end in LF the framer inserts one before the close; that LF is
+framing, counted in `framed`, never in `len`.
+
+```
+§ D002:H0108@fa8a 2/5 unit d2 ~629B ~160t 61234..61863 len=412
+<412 bytes>
+§ D002:H0108@fa8a/elided.1 data-uri ~404KiB 14187..430301 len=0
+§ D002:H0108@fa8a 2/5 unit d2 ~217B 61651..61863 len=217
+<217 bytes>
+§/ D002:H0108@fa8a
+```
+
+Modes: `--frame comment` (CLI default, today's bytes) · `pilcrow` (header +
+len, next-sentinel close) · `closed` (header + len + `§/` close, pieces
+grouped) · `none`. The MCP default between `pilcrow` and `closed` is chosen
+by the behavioral eval (D20), not here. **Header field style is a
+spec-freeze question**: positional pipe-separated fields (terser; a framed
+stream then *is* a psr row grammar — one reader across reposnapshot,
+para-agent, mdnav) vs. `k=v` (self-describing advance organizer). Measure
+both in situ with the token battery (D29) before choosing; lean —
+positional for the fixed core, `k=v` only for optional stamps.
+
 - Address = the anchor (`Dnnn:Hnnnn@digest`, or `Snnnn`/`Rnnnn`/`Wnnnn`,
   or a raw `Dnnn:@s..e`), extended compositionally for nested claims and
   placeholders (`…/fence.2`, `…/elided.1`) — every header is something the
