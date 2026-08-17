@@ -7,9 +7,10 @@ Set-StrictMode -Version Latest
 
 .DESCRIPTION
     Every stage declares { stage, in, out } with field registers under named
-    shapes. A field entry may carry `from: "<stage>.out.<shape>"`, meaning it
-    is taken verbatim from that upstream shape. This suite is GENERIC — it
-    knows no stage by name:
+    shapes. A field entry may carry `from: "<stage>.out.<shape>"` (or
+    `<stage>.out.<shape>.<register>` for a nested register one level down,
+    e.g. assemble.out.entry.core), meaning it is taken verbatim from that
+    upstream shape. This suite is GENERIC — it knows no stage by name:
 
       1. Every schema parses, names its stage, and has in/out.
       2. Every `from` resolves: the referenced stage exists, the shape exists
@@ -68,6 +69,28 @@ function Get-ShapeFields ([object]$Shape)
 {
     if ($Shape -is [System.Collections.IDictionary]) { return @($Shape.Keys | Where-Object { $_ -ne '…' }) }
     return @()
+}
+
+# Resolve a `from` reference to the upstream shape it names. Three segments
+# (<stage>.out.<shape>) or four (<stage>.out.<shape>.<register>) — the fourth
+# names a nested register one level down (e.g. assemble.out.entry.core), the
+# same one level the walk below allows. Returns @{ Stage; ShapeKey; Shape } or
+# a @{ Why } explaining the failure.
+function Resolve-OutShape ([hashtable]$Contracts, [string]$Ref)
+{
+    $parts = $Ref -split '\.'
+    if (($parts.Count -ne 3 -and $parts.Count -ne 4) -or $parts[1] -ne 'out') { return @{ Why = "malformed — expected <stage>.out.<shape>[.<register>]" } }
+    if (-not $Contracts.ContainsKey($parts[0])) { return @{ Why = "no contract for stage '$($parts[0])'" } }
+    if (-not $Contracts[$parts[0]].out.ContainsKey($parts[2])) { return @{ Why = "'$($parts[0]).out.$($parts[2])' shape does not exist" } }
+    $shape = $Contracts[$parts[0]].out[$parts[2]]
+    $key = $parts[2]
+    if ($parts.Count -eq 4)
+    {
+        if ($shape -isnot [System.Collections.IDictionary] -or -not $shape.ContainsKey($parts[3]) -or $shape[$parts[3]] -isnot [System.Collections.IDictionary]) { return @{ Why = "'$Ref' register does not exist under $($parts[0]).out.$($parts[2])" } }
+        $shape = $shape[$parts[3]]
+        $key = "$($parts[2]).$($parts[3])"
+    }
+    return @{ Stage = $parts[0]; ShapeKey = $key; Shape = $shape }
 }
 
 try
@@ -146,12 +169,10 @@ try
     foreach ($r in $refs)
     {
         $why = $null
-        $parts = $r.Ref -split '\.'
-        if ($parts.Count -ne 3 -or $parts[1] -ne 'out') { $why = "malformed — expected <stage>.out.<shape>" }
-        elseif ($parts[0] -eq $r.Stage) { $why = "references its own stage" }
-        elseif (-not $contracts.ContainsKey($parts[0])) { $why = "no contract for stage '$($parts[0])'" }
-        elseif (-not $contracts[$parts[0]].out.ContainsKey($parts[2])) { $why = "'$($parts[0]).out.$($parts[2])' shape does not exist" }
-        elseif ($r.Field -notin (Get-ShapeFields $contracts[$parts[0]].out[$parts[2]])) { $why = "'$($r.Field)' ∉ $($r.Ref) — upstream has: $((Get-ShapeFields $contracts[$parts[0]].out[$parts[2]]) -join ', ')" }
+        $res = Resolve-OutShape $contracts $r.Ref
+        if ($res.ContainsKey('Why')) { $why = $res.Why }
+        elseif ($res.Stage -eq $r.Stage) { $why = "references its own stage" }
+        elseif ($r.Field -notin (Get-ShapeFields $res.Shape)) { $why = "'$($r.Field)' ∉ $($r.Ref) — upstream has: $((Get-ShapeFields $res.Shape) -join ', ')" }
         Assert-True ($null -eq $why) "$($r.Stage).$($r.Side).$($r.Shape).$($r.Field) ← $($r.Ref)" $why
     }
     Assert-True ($refs.Count -gt 0) "at least one \`from\` reference exists across contracts" "got $($refs.Count)"
@@ -165,9 +186,9 @@ try
     foreach ($key in ($inPairs.Keys | Sort-Object))
     {
         $p = $inPairs[$key]
-        $upStage, $null, $upShape = $p.Up -split '\.'
-        if (-not $contracts.ContainsKey($upStage) -or -not $contracts[$upStage].out.ContainsKey($upShape)) { continue }
-        $upFields = Get-ShapeFields $contracts[$upStage].out[$upShape]
+        $res = Resolve-OutShape $contracts $p.Up
+        if ($res.ContainsKey('Why')) { continue }
+        $upFields = Get-ShapeFields $res.Shape
         $carriedHere = if ($carried.ContainsKey($p.Up)) { $carried[$p.Up] } else { @{} }
         $carriedByDown = @($carriedHere.Keys | Where-Object { $carriedHere[$_] -like "$($p.Down).out.*" })
         $landing = @($carriedHere.Values | Where-Object { $_ -like "$($p.Down).out.*" } | Sort-Object -Unique)

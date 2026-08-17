@@ -102,22 +102,25 @@ resolved header schema, so field presence and widths are known) and `Entries`
 `shards.out` — the **ShardPlan**:
 
 ```
-result:  @{ Header (from assemble.out.result); Plan; Groups[]; Shards[]; IdxMap }
-plan:    @{ TotalEntries; TotalPlannedSizeBytes; ShardCount; OversizedCount;
-            SingletonCount; InBandCount; SumOvershootBytes;
-            Grouping; GroupSort; OrderStrict; ShardQuotaBytes;
-            ShardToleranceBytes; HeaderBytes; IdxWidth }
-group:   @{ GroupKey; EntryCount; SumRowBytes; ShardCount; LowerBound; Gap;
-            OversizedCount; SingletonCount; InBandCount; SumOvershootBytes }
-shard:   @{ Ordinal; Key; GroupKey; Class (Normal|Singleton|InBand|Oversized);
-            IsOversized; PlannedSizeBytes; OvershootBytes; EntryCount;
-            Entries[] (references to assemble.out.entry, in shard order) }
-idxmap:  RelativePath → @{ GlobalIdx; ShardOrdinal; ShardKey; ShardIndex }
+result:    @{ Plan; Groups[]; Shards[]; IdxMap }        # no Header — the plan
+                                                        # embeds nothing upstream
+plan:      @{ TotalEntries; TotalPlannedSizeBytes; ShardCount; OversizedCount;
+              SingletonCount; InBandCount; SumOvershootBytes;
+              Grouping; GroupSort; OrderStrict; ShardQuotaBytes;
+              ShardToleranceBytes; HeaderBytes; IdxWidth }
+group:     @{ GroupKey; EntryCount; SumRowBytes; ShardCount; LowerBound; Gap;
+              OversizedCount; SingletonCount; InBandCount; SumOvershootBytes }
+shard:     @{ Ordinal; Key; GroupKey; Class (Normal|Singleton|InBand|Oversized);
+              IsOversized; PlannedSizeBytes; OvershootBytes; EntryCount;
+              Entries[] (references into assemble.out.result.Entries, shard order) }
+placement: RelativePath → @{ GlobalIdx; ShardOrdinal; ShardKey; ShardIndex }  (IdxMap values)
 ```
 
-`schema/shards.contract.json` declares it in the house convention
-(`from: "<stage>.out.<shape>"`); `contracts.tests` checks `shards.in ⊆
-assemble.out` and prints the residue.
+`schema/shards.contract.json` (minted 2026-08-17) declares it in the house
+convention; `contracts.tests` checks `shards.in ⊆ assemble.out ∪
+container.out` (four-segment `from` into `assemble.out.entry.core`) and prints
+the residue. Layout (`HeaderBytes`, `IdxWidth`, `Columns`) is an input from
+`container.out.layout`, resolved before this stage — not derived here.
 
 ## Knob roster (Size-graded; recon §3 with this session's corrections)
 

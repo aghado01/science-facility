@@ -1,0 +1,77 @@
+{
+  "stage": "manifest",
+  "module": "rs.core.manifest.psm1 — New-Manifest(-Receipt -Shards -Plan -Layout -RunContext -TreePath [-InstructionSet]) → tree. Builds the TOC model from three small in-memory objects and renders the tree file. TODAY THE FILE IS A BYTE-IDENTICAL COPY OF rs.lts.template.ps1 (LTS template engine, LTS-shaped inputs) — this contract is what it must become; Build-TocTree / Get-SnapshotPathParts port from the monolith (:1161 / :1228).",
+  "$comment": "Export phase 3 — the payload's declarations to the reader. Consumes the RECEIPT (measured offsets and byte lengths — only the writer knows), the PLAN (keys, groups, classes, oversized flags — reader hazards), and the LAYOUT (ColumnHeader from the resolved header row, not a hardcoded string). RunContext supplies provenance (RunStamp, Root, GeneratorVersion, ConfigEcho) as an opaque param, the assemble pattern — admiral has no contract yet, so its fields cannot be `from` targets. Every declaration the payload-manifest-ledger says a reader is owed (#8 offsets need their unit, #16 compaction notice, oversized-shard hazard, format identity) is a MODEL FIELD here so it is checkable, not prose. Writes exactly one file (the tree). Nothing flows back.",
+  "in": {
+    "params": {
+      "RunContext":     { "type": "object", "note": "provenance and config echo — RunStamp, Root, GeneratorVersion, ConfigEcho — read for SummaryLine / provenance lines; never hardcoded (LTS hardcoded `module`, wrongly)" },
+      "TreePath":       { "type": "path",   "note": "<ShardStem>_tree.md beside the shards" },
+      "InstructionSet": { "type": "string", "optional": true, "note": "reader-directed guidance block to include (tree Instructions; the planned cognitive stdlib) — prose as functional machinery" }
+    },
+    "receipt": {
+      "Shards":     { "from": "serialize.out.receipt", "note": "the payload lines and every row's offsets" },
+      "ShardCount": { "from": "serialize.out.receipt" },
+      "TotalBytes": { "from": "serialize.out.receipt" },
+      "Encoding":   { "from": "serialize.out.receipt", "note": "declared to the reader (ledger #17)" }
+    },
+    "shardreceipt": {
+      "Key":         { "from": "serialize.out.shardreceipt" },
+      "Path":        { "from": "serialize.out.shardreceipt", "note": "leaf name in the Payload block" },
+      "ByteLength":  { "from": "serialize.out.shardreceipt", "note": "declared per shard so a reader knows the read size before reading" },
+      "EntryCount":  { "from": "serialize.out.shardreceipt", "note": "'files:N' in the Payload block" },
+      "IsOversized": { "from": "serialize.out.shardreceipt", "note": "→ Hazards" },
+      "Rows":        { "from": "serialize.out.shardreceipt", "note": "→ tree rows" }
+    },
+    "row": {
+      "RelativePath":    { "from": "serialize.out.row", "note": "tree node" },
+      "RowOffset":       { "from": "serialize.out.row" },
+      "RowMetaEnd":      { "from": "serialize.out.row" },
+      "RowContentBegin": { "from": "serialize.out.row" },
+      "RowContentEnd":   { "from": "serialize.out.row" }
+    },
+    "shard": {
+      "Key":              { "from": "shards.out.shard", "note": "join to the receipt (same Key)" },
+      "GroupKey":         { "from": "shards.out.shard", "note": "group name in payload lines / grouping summary" },
+      "Class":            { "from": "shards.out.shard", "note": "Normal|Singleton|InBand|Oversized — Oversized → Hazards; classes summarized, not per-line noise" },
+      "PlannedSizeBytes": { "from": "shards.out.shard", "note": "cross-checked against ByteLength when both are in hand (belt and braces; serialize already asserted it)" }
+    },
+    "plan": {
+      "ShardCount":          { "from": "shards.out.plan" },
+      "OversizedCount":      { "from": "shards.out.plan" },
+      "Grouping":            { "from": "shards.out.plan", "note": "SummaryLine" },
+      "GroupSort":           { "from": "shards.out.plan", "note": "SummaryLine" },
+      "OrderStrict":         { "from": "shards.out.plan", "note": "SummaryLine" },
+      "ShardQuotaBytes":     { "from": "shards.out.plan", "note": "SummaryLine — the quota, named as a Size" },
+      "ShardToleranceBytes": { "from": "shards.out.plan", "note": "SummaryLine — quota + tolerance is the ceiling the reader may rely on, except for shards listed under Hazards" }
+    },
+    "layout": {
+      "Format":        { "from": "container.out.layout", "note": "'psr' — format identity is declared here, not by the .txt extension" },
+      "HeaderRowText": { "from": "container.out.layout", "note": "→ ColumnHeader: the tree states the header row every shard carries, verbatim — one declaration, third sink" }
+    }
+  },
+  "out": {
+    "tree": {
+      "Path":  { "type": "path",  "note": "the written tree file" },
+      "Model": { "type": "model", "note": "what was rendered — kept in memory for tests / diagnostics; not a second artifact" }
+    },
+    "model": {
+      "Title":         { "type": "string",   "note": "'<ShardStem>_s*.txt'" },
+      "Format":        { "from": "container.out.layout", "note": "'psr' — plus the accommodation note (files are .txt so tools read them whole)" },
+      "SummaryLine":   { "type": "string",   "note": "Grouping | GroupSort | OrderStrict | ShardQuotaBytes | ShardToleranceBytes | Created | Shards — from plan + RunContext, never preformatted upstream" },
+      "PayloadLines":  { "type": "string[]", "note": "tree file first, then one line per shard: leaf name, files:N, bytes:N, group" },
+      "Instructions":  { "type": "string[]", "note": "reader-directed guidance (virtual-database framing; seek by offsets; do not grep)" },
+      "ColumnHeader":  { "type": "string",   "note": "tree row metadata legend AND the psr header row verbatim (layout.HeaderRowText)" },
+      "OffsetUnit":    { "type": "string",   "note": "'bytes, 0-based, end offsets inclusive' — payload-manifest-ledger #8, stated not implied" },
+      "Encoding":      { "from": "serialize.out.receipt", "note": "'utf-8' (no BOM, LF) — ledger #17" },
+      "Compaction":    { "type": "string",   "note": "the notice (not a cipher key): content is codec-encoded, one physical line per row, line breaks encoded — payload-manifest-ledger #16" },
+      "Hazards":       { "type": "hazard[]", "note": "one per oversized shard; empty when none — the reader's 'every shard ≤ ceiling except these'" },
+      "TocTree":       { "type": "string",   "note": "rendered tree: name<TAB>shard_index<TAB>row_offset<TAB>row_meta_end<TAB>row_content_begin<TAB>row_content_end, from receipt rows" },
+      "Provenance":    { "type": "object",   "note": "RunStamp, Root, GeneratorVersion, ConfigEcho — from RunContext verbatim" }
+    },
+    "hazard": {
+      "Key":        { "type": "string" },
+      "ByteLength": { "type": "long",   "note": "actual size — how far over the ceiling the reader must be prepared to read whole" },
+      "Reason":     { "type": "string", "note": "'single record exceeds quota + tolerance; kept whole (atomicity)'" }
+    }
+  }
+}

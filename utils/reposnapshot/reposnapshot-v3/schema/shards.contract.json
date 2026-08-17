@@ -1,0 +1,81 @@
+{
+  "stage": "shards",
+  "module": "rs.core.shards.psm1 — New-ShardPlan(-Entries -Layout [-Grouping] [-GroupSort] [-OrderStrict] [-ShardQuotaBytes] [-ShardToleranceBytes] [-MaxFilesPerShard] [-ShardStem]) → plan. Pure planning: zero I/O, zero offsets. Internally: enumerate → measure (Measure-Row from container) → classify → strict baseline → flexible rearrangement (FFD + tolerance-bounded bin elimination) → sequence → plan; the packer core is a pure function over a size vector (synthetic-vector tests). FILED, NOT STARTED (shards-brief, revised 2026-08-16).",
+  "$comment": "Export phase 1. Decides membership, arrangement, and global indexing; serialize consumes the plan; nothing flows back. Entries are held as REFERENCES into assemble.out.result.Entries (indices or the objects themselves) — the plan never copies content and never embeds the IR or the layout (no god object; admiral holds those). Header schema / widths / bytes come from container.out.layout, resolved before this stage. Grouping ByFileType derives the extension from RelativePath (Extension is excluded from entry bags by assemble). Row bytes are exact and packing-invariant (fixed-width gidx). Ledger #40–#47.",
+  "in": {
+    "params": {
+      "Grouping":            { "type": "Flat|ByFileType|ByRootDirectory", "note": "containment unit; Flat = one group. A shard never mixes groups; packing runs per group. Default Flat" },
+      "GroupSort":           { "type": "PathAsc|PathHash",                "note": "per-group nominal order; PathAsc = RelativePath ordinal ascending (default); PathHash = Get-PathHash (numerics, ledger #4) as a reading-order device" },
+      "OrderStrict":         { "type": "switch",                          "note": "$true: shards are contiguous runs of nominal order (greedy contiguous, optimal at quota; + tolerance → greedy-at-ceiling + DP). $false (default): membership optimized within group, nominal sort restored within each shard for rendering" },
+      "ShardQuotaBytes":     { "type": "long",                            "note": "target — a Size (whole written file: header + rows). Packing capacity. Working default 32768" },
+      "ShardToleranceBytes": { "type": "long",                            "note": "exact bytes above quota a PACKED shard may reach only when that eliminates a shard; ceiling = quota + tolerance. Working default 4096" },
+      "MaxFilesPerShard":    { "type": "int",                             "note": "second capacity dimension honored alongside bytes. Default 100000" },
+      "ShardStem":           { "type": "string",                          "note": "filename stem for Key derivation (from RunContext/Root)" }
+    },
+    "result": {
+      "Entries": { "from": "assemble.out.result", "note": "canonical ingested order in; every entry becomes exactly one record (atomicity — never split; ledger #47)" }
+    },
+    "entry": {
+      "RelativePath": { "from": "assemble.out.entry.core", "note": "grouping key source (root dir / extension) and GroupSort key; idxmap key" },
+      "Content":      { "from": "assemble.out.entry.core", "note": "measured via Measure-Row(layout, entry) — never rendered here; the codec's byte count is a counting fold" }
+    },
+    "layout": {
+      "HeaderBytes": { "from": "container.out.layout", "note": "seeds every shard's PlannedSizeBytes; capacity = quota − HeaderBytes" },
+      "IdxWidth":    { "from": "container.out.layout", "note": "gidx width; assigned values come after packing, width is known before" },
+      "Columns":     { "from": "container.out.layout", "note": "what Measure-Row measures per entry (sources, widths); shards passes it through, does not interpret it" }
+    }
+  },
+  "out": {
+    "result": {
+      "Plan":   { "type": "plan" },
+      "Groups": { "type": "group[]", "note": "in group order" },
+      "Shards": { "type": "shard[]", "note": "in final reading order (Ordinal ascending) — groups concatenated, bins sequenced per group, runts as group tails" },
+      "IdxMap": { "type": "placement{}", "note": "dictionary RelativePath → placement; the cross-shard address table (gidx assigned here, after packing)" }
+    },
+    "plan": {
+      "TotalEntries":          { "type": "int" },
+      "TotalPlannedSizeBytes": { "type": "long",  "note": "Σ shard PlannedSizeBytes = Σ rows + ShardCount × HeaderBytes" },
+      "ShardCount":            { "type": "int" },
+      "OversizedCount":        { "type": "int",   "note": "shards with Class = Oversized (single record > ceiling; policy, not failure)" },
+      "SingletonCount":        { "type": "int",   "note": "single-record shards ≤ quota (full shards that happen to hold one record; not runts, not hazards)" },
+      "InBandCount":           { "type": "int",   "note": "single-record shards in (quota, ceiling]" },
+      "SumOvershootBytes":     { "type": "long",  "note": "Σ over non-oversized shards of max(0, PlannedSizeBytes − ShardQuotaBytes) — tolerance consumed; secondary objective" },
+      "Grouping":              { "type": "string" },
+      "GroupSort":             { "type": "string" },
+      "OrderStrict":           { "type": "bool" },
+      "ShardQuotaBytes":       { "type": "long" },
+      "ShardToleranceBytes":   { "type": "long" },
+      "HeaderBytes":           { "from": "container.out.layout", "note": "echoed so the plan is self-describing" },
+      "IdxWidth":              { "from": "container.out.layout" }
+    },
+    "group": {
+      "GroupKey":          { "type": "string", "note": "'.root' for root-level files under ByRootDirectory; extension key ('.noext' if none) under ByFileType; '' under Flat" },
+      "EntryCount":        { "type": "int" },
+      "SumRowBytes":       { "type": "long" },
+      "ShardCount":        { "type": "int" },
+      "LowerBound":        { "type": "int",   "note": "⌈Σ packable / (quota − HeaderBytes)⌉ + |oversized| — the packer's floor" },
+      "Gap":               { "type": "int",   "note": "ShardCount − LowerBound; 0 = provably tight" },
+      "OversizedCount":    { "type": "int" },
+      "SingletonCount":    { "type": "int" },
+      "InBandCount":       { "type": "int" },
+      "SumOvershootBytes": { "type": "long" }
+    },
+    "shard": {
+      "Ordinal":          { "type": "int",    "note": "1-based, global across groups; final reading order" },
+      "Key":              { "type": "string", "note": "sidx as filename fragment: 's{0:D3}' (+ '_<cleanGroup>' when grouped and not .root); width fixed before any name is written; NOT a row column" },
+      "GroupKey":         { "type": "string" },
+      "Class":            { "type": "Normal|Singleton|InBand|Oversized" },
+      "IsOversized":      { "type": "bool",   "note": "Class = Oversized; EntryCount = 1; PlannedSizeBytes > ceiling by policy; declared to the reader by manifest" },
+      "PlannedSizeBytes": { "type": "long",   "note": "HeaderBytes + Σ Measure-Row over Entries — equals the written file's byte length exactly (exit gate; serialize asserts it)" },
+      "OvershootBytes":   { "type": "long",   "note": "max(0, PlannedSizeBytes − ShardQuotaBytes) for non-oversized shards; 0 for Oversized (their excess is atomicity, not tolerance)" },
+      "EntryCount":       { "type": "int" },
+      "Entries":          { "type": "ref[]",  "note": "references (indices) into assemble.out.result.Entries, in shard order (nominal sort restored within the shard)" }
+    },
+    "placement": {
+      "GlobalIdx":    { "type": "int",    "note": "0..N−1, monotone in final reading order across all shards; the gidx column value (fixed width from layout.IdxWidth)" },
+      "ShardOrdinal": { "type": "int" },
+      "ShardKey":     { "type": "string" },
+      "ShardIndex":   { "type": "int",    "note": "0-based position within the shard" }
+    }
+  }
+}

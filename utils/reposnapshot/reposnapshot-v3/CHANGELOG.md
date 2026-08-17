@@ -1,5 +1,23 @@
 # Changelog 
 
+## 2026-08-17 — export contracts minted: container, shards, serialize, manifest
+
+`schema/{container,shards,serialize,manifest}.contract.json` — the four export
+stages declared before their code exists (build-against-absent rule), so the
+from-graph across export is checked now: `container.out.layout` is a `from`
+target in shards, serialize, and manifest (computed once, three sinks —
+checkable, not a discipline); `shards.out.{plan,shard,placement}` in serialize
+and manifest; `serialize.out.{receipt,shardreceipt,row}` in manifest;
+`assemble.out.entry.core` in shards and serialize. Plan holds entry references,
+embeds nothing upstream (`Header` dropped from `shards.out.result`; brief
+aligned). RunContext stays an opaque param (admiral has no contract).
+`contracts.tests`: `from` may now name a nested register one level down
+(`<stage>.out.<shape>.<register>`), symmetrical with the walk. Manifest's
+contract is what the LTS-template copy must become; declarations owed to the
+reader (offset unit, encoding, compaction notice, oversized hazards, format
+identity) are model fields. Battery 15 suites · 936 pass · 0 fail (contracts
+67 → 134).
+
 ## 2026-08-16 — stage contracts renamed `*.schema.json` → `*.contract.json`
 
 `schema/{assemble,crawler,ingest,membrane}.contract.json` (git mv). The files
