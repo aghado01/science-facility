@@ -511,12 +511,21 @@ positionally thereafter; its front-loaded metadata cells (`246 |
 hashish/tokenizer.cs | {1916 145 0.2526 4.6996} | 1982 |`) primed the read
 — address, identity, composition, size, before a byte of content; pipes cut
 the line into cells that attention treats as a header without being told;
-the trailing pipe is a one-character close. What cost the reader was the
-*escaped, single-line content* (`\n`, `\"` — the LTS flaw the shard notes
-already name), which for mdnav settles the one place its rows differ from a
-shard file: **the payload is raw, multi-line, unescaped, exactly `len`
-bytes** — it is Markdown meant to be read — and the length prefix is what
-makes a raw multi-line cell safe.
+the trailing pipe is a one-character close. The content cell was
+single-line with `\n` escapes — and comprehension was **intact**:
+indentation spaces are literal, only the physical newline is encoded, and
+whitespace tokens read no differently from printed ones. That encoding is
+reposnapshot's deliberate invariant, **one physical line per row**, and its
+benefits transfer: a physical newline always and only means "next record",
+rows are line-addressable and tool-friendly, and a header can never be
+confused with content. mdnav adopts it **by record class**: table/record
+outputs (outline rows, locate hits, marks/claims rows, coverage, plans) are
+one physical line per row with content cells escaped (previews are already
+whitespace-collapsed today). The one exception is **source
+materialization**: `read`'s payload is a raw, multi-line, unescaped cell of
+exactly `len` bytes — not for legibility, but because the covenant is
+*literal source bytes* (gate 14; `legacy-comment` byte-identical to today) —
+and the length prefix is what makes that exception safe.
 
 Records are **flat and newline-delimited** (a unit with an elision is
 emitted as *pieces*, each its own record — nothing nests arithmetically);
