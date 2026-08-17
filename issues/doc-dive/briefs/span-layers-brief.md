@@ -422,12 +422,65 @@ session store; the engine must make these natural):
 - **Diagnostics stay out of band.** stderr today; a small `notes[]` field in
   MCP results, never mixed into rows or bytes.
 
+**Stream framing — addressed, length-bounded coding regions.** The
+para-agent note
+[grok-addressable-context-stream.md](../../para-agent/notes/grok-addressable-context-stream.md)
+describes the model-facing stream as *coding regions* (clean content)
+separated by *non-coding headers*: thin, regular, low-entropy, fixed field
+order, carrying a short local address and a **UTF-8 byte length** so
+attention is handed the boundary instead of rediscovering it, and so the
+Primary can re-mention `e17.reply` without re-injecting it. mdnav's
+`read` is the document-side instance of the same idea and should emit the
+**same framing** — documents and exchanges become one kind of object in the
+Primary's stream:
+
+```
+¶ D002:H0108@fa8a span=61234..61863 len=629 basis=d2
+<exactly 629 bytes of source>
+¶ D002:H0108@fa8a/elided.1 kind=data-uri span=14187..430301 len=0
+¶ D002:H0117@aabc span=…  len=540 basis=d2
+…
+```
+
+- Address = the anchor (`Dnnn:Hnnnn@digest`, or `Snnnn`/`Rnnnn`/`Wnnnn`,
+  or a raw `Dnnn:@s..e`), extended compositionally for nested claims and
+  placeholders (`…/fence.2`, `…/elided.1`) — every header is something the
+  Primary can hand back to `read`.
+- **`len` is emitted UTF-8 bytes; `span` is source geometry. Never the same
+  field** — under `--strip`/`--only` they differ, and conflating them is the
+  historic byte-semantics trap. Placeholders are zero-length coding regions
+  with a header, so an elision is *addressable*, not just visible.
+- Every read is framed, including single-anchor reads (today undecorated),
+  because the header is what makes the region re-mentionable later.
+- The header grammar is a **shared spec** with para-agent (sentinel `¶`,
+  field order, escaping) and mdnav *conforms* to it; until it is frozen,
+  framing is a projection over the materialization piece list —
+  `--frame pilcrow|comment|none` — with `comment` (today's `<!-- mdnav … -->`,
+  inert when saved as `.md`) remaining the CLI default and `pilcrow` the
+  MCP default. One piece list, two renderings; the piece list is what
+  later context-mode hooks route on.
+
+**Vendoring.** mdnav 2.0 is expected to become an internally vendored MCP
+subsystem of para-agent, as `nushell-mcp` will. Constraints that follow:
+the engine stays single-file zero-dep; the server is an embeddable
+`createMdnavTools({ corpus, session, framing })` plus a thin standalone
+stdio runner, so para-agent can mount it in-process and supply its own
+session/result store; result handles and addresses are plain data that can
+sit in a para-agent transcript row (`e17.tool.3 → D002:H0108@fa8a`), giving
+cross-reference between exchange addresses and document addresses for free.
+
 Exit-gate additions: **17.** `select`/`partition`/`marks` honour
 `limit/offset` and always return `total`; **18.** `materialize` over
 `maxBytes` returns a plan with zero bytes and anchors that, followed,
 produce a within-budget read; **19.** no table query can return a field
 longer than the preview cap; **20.** the CLI exposes `--max-bytes` and
-`--limit/--offset` so the one-shot path has the same discipline.
+`--limit/--offset` so the one-shot path has the same discipline; **21.**
+framing round-trip: under `--frame pilcrow` every header's `len` equals the
+bytes that follow it exactly (incl. multi-byte UTF-8 and CRLF sources), the
+concatenated coding regions of a multi-anchor read equal the `--frame none`
+read byte-for-byte, an elision emits a zero-`len` header whose address
+`read` accepts and resolves to the elided source span, and `--frame comment`
+output is byte-identical to today's for the golden fixtures.
 
 ### Export surface (the MCP foundation)
 
