@@ -422,25 +422,37 @@ session store; the engine must make these natural):
 - **Diagnostics stay out of band.** stderr today; a small `notes[]` field in
   MCP results, never mixed into rows or bytes.
 
-**Stream framing — addressed, length-bounded coding regions.** The
+**Stream framing — front-declared, typed, addressed regions.** The
 para-agent note
 [grok-addressable-context-stream.md](../../para-agent/notes/grok-addressable-context-stream.md)
 describes the model-facing stream as *coding regions* (clean content)
 separated by *non-coding headers*: thin, regular, low-entropy, fixed field
-order, carrying a short local address and a **UTF-8 byte length** so
-attention is handed the boundary instead of rediscovering it, and so the
-Primary can re-mention `e17.reply` without re-injecting it. mdnav's
-`read` is the document-side instance of the same idea and should emit the
-**same framing** — documents and exchanges become one kind of object in the
-Primary's stream:
+order, with a short local address, so the Primary can re-mention
+`e17.reply` without re-injecting it. The "length-prefix" there is a
+metaphor for what a protocol prefix *does* — declare kind and magnitude
+before the payload, bound it independently of content, make it addressable,
+signal completeness — adapted to a model reader. The model-side analog of
+each: **declare-before-payload** (under causal attention every payload token
+is encoded already attending to a preceding header — prefix beats suffix;
+an *advance organizer*), **magnitude and cardinality** rather than bytes
+(`k/N`, coarse size — usable for tracking completeness and planning the
+read), **the sentinel** as the content-independent boundary, and **the
+address** for random access. mdnav's `read` is the document-side instance
+and emits the same framing, so documents and exchanges are one kind of
+object in the Primary's stream — and the header declares the *interpretive
+frame the backend already knows* (the claim kind, the basis, what was
+stripped), which is the claims table reflected into the stream:
 
 ```
-¶ D002:H0108@fa8a span=61234..61863 len=629 basis=d2
-<exactly 629 bytes of source>
-¶ D002:H0108@fa8a/elided.1 kind=data-uri span=14187..430301 len=0
-¶ D002:H0117@aabc span=…  len=540 basis=d2
+¶ D002:H0108@fa8a 2/5 kind=unit basis=d2 ~629B strip=html-tag span=61234..61863 len=629
+<629 bytes of source>
+¶ D002:H0108@fa8a/elided.1 kind=data-uri ~404KiB span=14187..430301 len=0
+¶ D002:H0117@aabc 3/5 kind=unit basis=d2 ~540B span=… len=540
 …
 ```
+
+Field order is fixed: address, ordinal-of-batch, kind, basis, coarse size,
+policy stamps, then the machine fields (`span`, `len`) last.
 
 - Address = the anchor (`Dnnn:Hnnnn@digest`, or `Snnnn`/`Rnnnn`/`Wnnnn`,
   or a raw `Dnnn:@s..e`), extended compositionally for nested claims and
@@ -448,8 +460,10 @@ Primary's stream:
   Primary can hand back to `read`.
 - **`len` is emitted UTF-8 bytes; `span` is source geometry. Never the same
   field** — under `--strip`/`--only` they differ, and conflating them is the
-  historic byte-semantics trap. Placeholders are zero-length coding regions
-  with a header, so an elision is *addressable*, not just visible.
+  historic byte-semantics trap. Both are *machine* fields (round-trip,
+  audit, tooling); the model-facing magnitude is the coarse `~629B` /
+  `~404KiB` and the `k/N` ordinal. Placeholders are zero-length coding
+  regions with a header, so an elision is *addressable*, not just visible.
 - Every read is framed, including single-anchor reads (today undecorated),
   because the header is what makes the region re-mentionable later.
 - The header grammar is a **shared spec** with para-agent (sentinel `¶`,
@@ -463,12 +477,12 @@ Primary's stream:
 *Evidence status of the framing claim* (so it is carried honestly): the
 value is real but uneven. Exact, short, re-mentioned addresses are the
 best-grounded part — repeated exact token sequences are the strongest
-in-context retrieval cue transformers have — and provenance labels and a
-regular sentinel are cheap and well supported. `len` has **no attention
+in-context retrieval cue transformers have; declare-before-payload has a
+causal-attention rationale; provenance/kind labels, `k/N`, and a regular
+sentinel are cheap and well supported. Byte `len` has **no attention
 benefit** (models do not count bytes; the boundary the model uses is the
-next sentinel) — keep it for machine consumers, audit, and coarse size
-awareness, not as a boundary claim. Headers cost ~10–15 tokens each, so
-frame at unit grain by default. The claim must be evaluated behaviorally
+next sentinel) — it is a machine field only. Headers cost ~10–15 tokens
+each, so frame at unit grain by default. The claim must be evaluated behaviorally
 (same tasks, `--frame none` vs `pilcrow`; address-recall accuracy,
 misattribution rate, tokens-to-answer) — a server-brief gate, not an
 assumption here.
