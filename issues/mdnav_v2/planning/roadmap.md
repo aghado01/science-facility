@@ -127,7 +127,13 @@ from measured reads; the framed-vs-unframed behavioral gate; embeddable
 **What:** a model-agnostic, empirical measurement of **token cost per
 symbol and per pattern**, in lieu of a standalone tokenizer (not always
 available for a given model), captured as **client/model-specific profiles**
-that are reused and refreshed when models change.
+that are reused and refreshed when models change. **This is the empirical
+model behind the "length prefix":** the header's model-facing magnitude
+becomes a *measured* token estimate for the client in use — `~629B ~160t`
+— computed as Σ (unit's per-kind bytes, from the claims-table composition)
+× (per-kind bytes→tokens ratio, from the client profile) + header cost,
+stamped with the profile id for provenance. Model-specific by measurement,
+not by reverse-engineering a tokenizer.
 
 **Why here:** the framing header's cost (`§`, `¶`, `k/N`, `~629B`, `@digest`,
 `span=..`) and the `~size` coarse magnitude are only honest in *tokens* if

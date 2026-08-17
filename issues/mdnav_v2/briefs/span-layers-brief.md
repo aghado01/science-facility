@@ -491,8 +491,15 @@ flag name `pilcrow` is kept as the mode name regardless of glyph.
   field** — under `--strip`/`--only` they differ, and conflating them is the
   historic byte-semantics trap. Both are *machine* fields (round-trip,
   audit, tooling); the model-facing magnitude is the coarse `~629B` /
-  `~404KiB` and the `k/N` ordinal. Placeholders are zero-length coding
-  regions with a header, so an elision is *addressable*, not just visible.
+  `~404KiB` and the `k/N` ordinal — and, when a **client token profile** is
+  loaded (roadmap: token-cost measurement battery), a measured estimate
+  `~160t` beside it, computed from the unit's per-kind composition × the
+  profile's per-kind ratios + header cost, stamped with the profile id in
+  the read's `note`. That estimate is the empirical "length prefix": model-
+  specific by measurement, never by a bundled tokenizer; absent a profile
+  the field is bytes only and no token number is invented. Placeholders are
+  zero-length coding regions with a header, so an elision is *addressable*,
+  not just visible.
 - Every read is framed, including single-anchor reads (today undecorated),
   because the header is what makes the region re-mentionable later.
 - The header grammar is a **shared spec** with para-agent (sentinel `¶`,
