@@ -373,6 +373,62 @@ never a summary, never a recommendation beyond stderr triage.** The exports
 below must make that shape natural for `server.mjs`; if a verb's result
 cannot be expressed as bytes-or-table, that is a design smell to report.
 
+### Agent context hygiene — the REPL contract
+
+What is being built is a **Markdown-documents REPL for an agent**: a
+persistent session over a corpus, small typed calls, results held
+server-side and sliced on demand. The scarce resource is the *caller's*
+context, and a tool surface that can only answer by inlining is useless
+however good the engine is. The model is `nu --mcp` as used from this
+harness: every evaluation returns a bounded record, the full value is kept
+in `$history.N`, and the caller pages it afterward. mdnav's rule becomes:
+**a query never inlines more than the caller's budget; everything else is a
+handle.** Backend obligations (the server brief owns tool names and the
+session store; the engine must make these natural):
+
+- **Every query is paged and counted.** `select`, `partition`, `relations`,
+  `locate`, `marks` take `{limit, offset, columns}` and return `{total,
+  rows}`; `total` is always present, rows only up to `limit`. Values are
+  plain arrays of records so a session store can hold and re-slice them
+  without recompute; queries are memoized by `(digest, policy, args)` so
+  re-asking is free.
+- **`materialize` takes a budget and can answer with a plan.** `{maxBytes}`
+  is a first-class argument (CLI: `--max-bytes`, default generous; MCP
+  default small, e.g. 8 KiB). Over budget it returns **no bytes** — instead
+  `{bytes, spans, elided, anchors, suggestion}`: the plan the caller would
+  have paid for, with the anchors to narrow by (`--depth`, `--enter`,
+  `--only`, `--strip`, a smaller `--within`). Today's ">64 KiB stderr warn
+  before writing" is the seed; the MCP form refuses rather than warns,
+  because once bytes are in context the cost is paid.
+- **Bytes-or-table, never both.** A read result is bytes plus a one-line
+  stderr-style `note`; a table result is rows plus `total`; a `record` for
+  status. No prose, no summaries, no recommendations beyond `suggestion`
+  in a plan.
+- **Anchors are the agent's memory, not bytes.** The ledger already makes a
+  set of anchors a re-readable batch; expose `coverage` and `reads` so an
+  agent — or a post-compaction agent — can see what has been ingested and
+  re-read by anchor rather than carrying content. `@digest` on anchors turns
+  a stale note into a warning, not wrong content. Notes should hold
+  `D003:H0002@1281`, not paragraphs.
+- **Previews are bounded by construction.** `outline --preview N`,
+  `locate` snippets ≤ 120 chars, `marks --preview` all cap at the engine, not
+  the presenter; `truncate` on titles likewise. A table row is never allowed
+  to smuggle a body.
+- **Session state makes calls short.** Current corpus, run, profile,
+  default budget, and "current document" (`cd`-like) live in the session so
+  a call is `outline H0007 --depth 2`, not a repeat of the world. Result
+  handles (`$r3`) can be passed back as inputs (`read $r3.anchors`,
+  `select --within $r3`) so an investigation composes without re-inlining.
+- **Diagnostics stay out of band.** stderr today; a small `notes[]` field in
+  MCP results, never mixed into rows or bytes.
+
+Exit-gate additions: **17.** `select`/`partition`/`marks` honour
+`limit/offset` and always return `total`; **18.** `materialize` over
+`maxBytes` returns a plan with zero bytes and anchors that, followed,
+produce a within-budget read; **19.** no table query can return a field
+longer than the preview cap; **20.** the CLI exposes `--max-bytes` and
+`--limit/--offset` so the one-shot path has the same discipline.
+
 ### Export surface (the MCP foundation)
 
 `mdnav.mjs` gains named exports — `Corpus` (open a work-dir with a store;
