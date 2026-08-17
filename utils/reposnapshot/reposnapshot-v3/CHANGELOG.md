@@ -1,5 +1,20 @@
 # Changelog 
 
+## 2026-08-16 — psr header-row declaration (`schema/psr.header.json`); no row schema
+
+Container spec named **psr** (piped snapshot rows); `.txt` stays as a reader
+accommodation. `schema/psr.header.json` declares the admissible column
+superset — `gidx<int:N> | path | content_meta:{…} | content_bytes | content` —
+with framing (LF, no trailing `|`, UTF-8 no BOM), types, wire-name map
+(`source`), invariants, and the reason there is no row declaration: rows are
+the resolved header projected onto an entry, rendered and measured from the
+same layout object. `attributes` → `content_meta` (noun; metadata about the
+content span, paired with `content_bytes`); `length` → `content_bytes` (exact
+byte width of the encoded span). Deliberately not `*.schema.json` (stage
+contracts; ledger #34). shard-container-brief: new section; per-shard-header
+leaning superseded by one header per run (partial presence → empty marker per
+row). Ledger #45/#46 apply.
+
 ## 2026-08-15 — shards brief: planning is exact (Measure-Row from rs.core.container); doctrine narrowed
 
 `briefs/shards-brief.md` adopts `design/gemini-shard-recon.md` (LTS knob roster,

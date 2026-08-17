@@ -1,0 +1,94 @@
+{
+  "format": "psr",
+  "$comment": "psr — piped snapshot rows. The header row of every shard file is RENDERED FROM THIS DECLARATION, and record rows are the same declaration projected onto one entry. There is no row declaration and there must not be one (see `row`). READ BY CODE: rs.core.container resolves the run's layout from this admissible superset × run configuration (which optional columns / sub-fields are on) × the IR header (widths from EntryCount) — once per run; shards measures with it, serialize renders with it, manifest declares with it. Named psr.header.json, deliberately NOT *.schema.json: those are stage I/O contracts (ledger #34; contracts.tests globs them) — this declares payload columns.",
+
+  "identity": {
+    "name": "psr",
+    "expansion": "piped snapshot rows",
+    "lineage": "CSV (header names positional columns) · JSONL (one record per physical line) · LPAC (length-prefixed, byte-addressed content) · SQL table (declared, typed columns)",
+    "extension": ".txt",
+    "$comment": "The extension is a READER ACCOMMODATION — tool allowlists and preview/truncation windows key on it — not a format marker. The header row identifies the format by shape; the tree manifest names it. Do not 'fix' .txt to .psr."
+  },
+
+  "framing": {
+    "encoding": "utf-8",
+    "bom": false,
+    "record_terminator": "\n",
+    "field_delimiter": " | ",
+    "block": { "open": "{", "close": "}", "field_delimiter": " ", "depth": 1 },
+    "type_annotation": "<type> or <type:width> appended to each column name in the header row",
+    "empty_marker": "",
+    "header_row": "first physical line of every shard file; byte-identical across all shards of a run",
+    "$comment": "LF only; no trailing field delimiter (ledger #45, leaning). One physical line per row — line breaks inside content are encoded by the codec (shard-format-notes §Content codec — SPEC), never written raw. The writer emits these bytes explicitly regardless of platform; a BOM or CRLF would shift every published offset. Empty marker = nothing between delimiters (` |  | `), unambiguous under positional parsing; block sub-fields likewise (`{12  0.41}`)."
+  },
+
+  "types": {
+    "int":   "decimal digits; fixed-width when the column declares a width (zero-padded)",
+    "float": "fixed precision, 4 decimals, one deterministic formatter owned by rs.core.container (invariant culture)",
+    "str":   "UTF-8 text; may contain the field delimiter only inside `content` (framed by content_bytes, never parsed for delimiters)",
+    "block": "positional sub-fields between braces, one level deep, sub-field names and types declared inline in the header row: `name:{a<int> b<float>}`"
+  },
+
+  "columns": {
+    "$comment": "Admissible superset, in WIRE ORDER. `presence` = required (every run) | optional (on/off per run configuration). `role` = record (about the file) | content (about the content span). Wire names are snake_case; `source` gives the in-memory (PascalCase) origin — this table IS the wire-naming map.",
+
+    "gidx": {
+      "type": "int", "width": "digits(EntryCount)", "role": "record", "presence": "optional",
+      "source": "shard plan — assigned after packing (final reading order across all shards)",
+      "note": "Global record ordinal; ONE address scheme among several (path; tree byte offsets). Fixed width from a bound known before packing (EntryCount, at enumerate) is what lets the value be assigned after packing while row bytes stay exact (ledger #46). Which address columns v3 carries is still open; if none, this column is off."
+    },
+
+    "path": {
+      "type": "str", "role": "record", "presence": "required",
+      "source": "entry.RelativePath",
+      "note": "Relative to Root, forward slashes; the record's identity and the tree manifest's join key. Variable width, content-derived, known at enumerate."
+    },
+
+    "content_meta": {
+      "type": "block", "role": "content", "presence": "optional",
+      "source": "entry.Attributes (rs-attributes) plus any enrichment element a processor declares",
+      "note": "Metadata ABOUT the content span — hence the content_ prefix, pairing it with content_bytes and content. Extensible: which sub-fields are on is run configuration; new enrichment processors add admissible sub-fields here without writer changes (open element model). When the block is on, every row carries it; a sub-field absent on a row renders the empty marker.",
+      "fields": {
+        "chars":       { "type": "int",   "source": "Attributes.CharCount" },
+        "words":       { "type": "int",   "source": "Attributes.WordCount" },
+        "punct":       { "type": "int",   "source": "Attributes.PunctuationCount" },
+        "uniq_chars":  { "type": "int",   "source": "Attributes.UniqueChars" },
+        "entropy":     { "type": "float", "source": "Attributes.Entropy" },
+        "ws_ratio":    { "type": "float", "source": "Attributes.WhitespaceRatio" },
+        "compression": { "type": "float", "source": "Attributes.CompressionRatio", "note": "LTS defect: always 0 (AGENTS). Admissible only once the metric is real; off by default." },
+        "line_mean":   { "type": "float", "source": "Attributes.LineStats.Mean" },
+        "line_median": { "type": "float", "source": "Attributes.LineStats.Median" },
+        "line_sd":     { "type": "float", "source": "Attributes.LineStats.StdDev" },
+        "line_max":    { "type": "int",   "source": "Attributes.LineStats.Max" },
+        "$comment": "LineStats is nested in memory; blocks are one level deep on the wire, so it flattens with a line_ prefix. Attributes.SpanBytes is deliberately NOT a sub-field: content_bytes is that quantity as the container measures it at write time — one fact, one column."
+      },
+      "$default_on": [ "chars", "words", "ws_ratio", "entropy" ],
+      "$default_on_comment": "LTS parity set (char_count word_count whitespace_ratio entropy). Working default; final is a config-surface call."
+    },
+
+    "content_bytes": {
+      "type": "int", "role": "content", "presence": "required",
+      "source": "Measure-Content(entry.Content) = utf8(codec(Content)) — rs.core.container, counted without allocating",
+      "note": "The EXACT byte width of the content span as it sits in the file (UTF-8, post-codec) — the number a reader hands to a seek. NOT the source file's on-disk size (SizeBytes, excluded from the IR) and NOT a character count (chars). Immediately precedes content: that adjacency is the seek contract (row_meta_end / row_content_begin in the tree). Vocabulary: this is the content SPAN; the row span is the whole physical line and is not a column."
+    },
+
+    "content": {
+      "type": "str", "role": "content", "presence": "required", "position": "last",
+      "source": "codec(entry.Content)",
+      "note": "Always the final column; never parsed for delimiters — framed by content_bytes."
+    }
+  },
+
+  "invariants": [
+    "Column order is this declaration's order; `content` is last; `content_bytes` immediately precedes `content`.",
+    "One header per run: the resolved header row is byte-identical in every shard file; header-row count in a payload equals shard-file count.",
+    "Every record row in a shard carries exactly the header's column count; absent optional values render the empty marker (partial presence resolves per row, never per shard — the per-shard-header option is superseded).",
+    "Position-dependent columns (gidx) are fixed-width from a bound known before packing; row bytes are therefore packing-invariant and Measure-Row is exact.",
+    "Required columns cannot be turned off; optional columns and block sub-fields are run configuration, resolved once, before packing.",
+    "The header row is the ONLY place names and types appear; rows carry values only."
+  ],
+
+  "row": {
+    "$comment": "There is no row declaration. A record row is this header declaration PROJECTED onto one entry: for each resolved column, in order, take `source`, render per `type` (and `width`), join with the field delimiter, terminate. The header names and types the value; the row carries the value. Measure-Row and Render-Row iterate the SAME resolved column list from the SAME object (rs.core.container's layout), so header and rows cannot disagree on count, order, or type — by construction, not by check. A separate row schema would be a second artifact that has to agree with the first: exactly the LTS drift class (row grammar written three times, nothing checks). Ledger #34 (header row IS the grammar), #46 (header is the superset, the row its shadow)."
+  }
+}

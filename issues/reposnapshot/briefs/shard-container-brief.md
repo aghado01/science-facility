@@ -90,7 +90,51 @@ in an ugly way and it is the reason a verbatim port is refused (ledger #5):
    it (Flat / ByFileType / …). The Flat-vs-grouped divergence disappears rather
    than being unified.
 
-## The crux — partial presence
+## The header row is the declaration — why there is no row schema (2026-08-16)
+
+The container spec is named **psr** (*piped snapshot rows*); the file
+extension stays `.txt` as a reader accommodation (tool allowlists,
+preview/truncation windows), not a format marker. Its admissible column set is
+declared once, in `reposnapshot-v3/schema/psr.header.json` — **read by code**
+(`rs.core.container` resolves the run's layout from it; ledger #6), and
+deliberately not `*.schema.json` (stage contracts, ledger #34).
+
+Wire order and roles:
+
+```
+gidx<int:N> | path<str> | content_meta:{chars<int> words<int> ws_ratio<float> entropy<float>} | content_bytes<int> | content<str>
+   record       record            content (extensible block)                                content          content
+```
+
+- Required: `path`, `content_bytes`, `content`. Optional: `gidx` (one address
+  scheme among several; open), `content_meta` (renamed from LTS `attributes` —
+  a noun, and prefixed `content_` because it is metadata *about the content
+  span*, pairing it with `content_bytes` and `content`; sub-fields are run
+  configuration and extensible by processors).
+- `content_bytes` is the exact byte width of the encoded content span in the
+  file — the number a reader seeks with. Not `SizeBytes`, not `chars`. It
+  immediately precedes `content`; that adjacency is the seek contract. The
+  *row* span (whole physical line) is not a column.
+- LF terminator, no trailing `|`; UTF-8, no BOM (ledger #45).
+
+**The header row's declaration determines the datatypes of every field in
+every record row, so a record row has no schema of its own.** A row is the
+resolved header projected onto one entry: for each column in order, take the
+source, render per type and width, join, terminate. The header names and types
+the value; the row carries the value. `Measure-Row` and `Render-Row` iterate
+the *same* resolved column list from the *same* layout object, so header and
+rows cannot disagree on count, order, or type — by construction, not by check.
+A separate row schema would be a second artifact that must agree with the
+first: exactly the LTS drift class (row grammar written three times, nothing
+checks). Ledger #34 (the header row *is* the grammar), #46 (header is the
+superset, the row its shadow).
+
+**One header per run, byte-identical in every shard** — settled in the packing
+thread (shards-brief; ledger #46), and what the LTS artifacts already do. This
+supersedes the per-shard-header leaning below: partial presence resolves per
+*row* with the empty marker, never per shard.
+
+## The crux — partial presence (per-shard header option SUPERSEDED 2026-08-16 — see section above)
 
 The format is positional (values only, no keys per row), so every record row
 in a shard must carry the same column count. An element present on only some
@@ -102,7 +146,8 @@ entries forces a choice:
 - (c) **per-shard header** — the header is declared once per shard already;
   nothing requires two shards to agree.
 
-**(c) is the leaning.** It composes with grouping instead of fighting it: under
+**(c) was the leaning — superseded 2026-08-16 by one header per run; (a) with
+the empty marker is what `psr.header.json` declares.** Retained as record: under
 `ByFileType` a shard is homogeneous by construction, so a language-specific
 element is present on every row or none, and the header states which —
 honestly, per shard. Corpus-wide 30% coverage becomes 100% in three shards and
