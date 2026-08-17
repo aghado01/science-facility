@@ -3,7 +3,7 @@
 > **Role:** design canon — the "why" and the shape. Execution lives in
 > [planning/roadmap.md](../planning/roadmap.md) (milestones M0–M6, gate
 > subsets, chip seams), the audit trail in
-> [planning/decisions.md](../planning/decisions.md) (D1–D33, ascending), and the
+> [planning/decisions.md](../planning/decisions.md) (D1–D34, ascending), and the
 > figure-model homework in
 > [archaelogy/figure-model-survey.md](../archaelogy/figure-model-survey.md)
 > (function-by-function dispositions, must-survive behaviors, test map).
@@ -494,12 +494,18 @@ one large real transcript):
 | `⁂` U+2042 (asterism; alt `⁋` U+204B reversed pilcrow) | **close** — optional overlay | asterism historically marks a section's end/break |
 | `†` U+2020 | foot-matter / definition region, *if ever* | typographic footnote convention |
 
-Row grammar — **psr, adopted.** The design is
-`utils/reposnapshot/reposnapshot-v3/schema/psr.header.json` (piped
-snapshot rows; lineage CSV · JSONL · LPAC · SQL table), and its framing
-transfers verbatim because its *raison d'être* is the same as this
-section's — a container designed for direct sequential consumption by a
-model, proven on real artifacts read into context:
+Row grammar — **principles borrowed from psr; the atomic payload format is
+its own brief.** *(Roadmap item; this subsection is ideation, not spec.)*
+Two things must stay distinct: **reposnapshot's artifact format** (psr —
+`utils/reposnapshot/reposnapshot-v3/schema/psr.header.json`; a shard file
+consumed by seeking and reading) and **the in-context atomic payload
+format** this brief has been converging on — what the mdnav backend wraps
+a chunk in *before* it enters the MCP user's context. The second borrows
+the first's *principles* — psr's raison d'être is direct consumption by a
+model, proven on real artifacts — but it is not a transcription of it, and
+nothing already designed here (sigils `§`/`¶`, front-declared typed
+addressed regions, key-once, addressable elisions, interleaving) is
+displaced by it. Principles that transfer:
 
 - `record_terminator` LF; `field_delimiter` ` | `; `{…}` blocks one level
   deep with space-separated sub-fields; `<type>` / `<type:width>` appended
@@ -549,17 +555,31 @@ stays raw and byte-identical to today; the MCP default is decided by the
 behavioral eval (D20) with **codec as the psr-conformant candidate**, not
 pre-decided here.
 
+**Illustrative sketch — not the format.** The shape being converged on is
+roughly `<opening sigil> | <source identity> | <semantic sub-address> |
+<token-length estimate> | <content> ||`; how much of the metadata rides on
+every row versus a key declared once is *the* open design question, because
+the stream **interleaves discontiguous chunks from different sources** — a
+key-row-then-records pattern serves contiguous chunks of one document well,
+but an interleaved stream needs each chunk to be sufficiently
+self-identifying (source identity on the row, at minimum). Both patterns
+were prototyped earlier in this thread and both survive into the payload
+brief.
+
 ```
-key | sigil<str> | addr<str> | k/N<str> | kind<str> | basis<str> | content_meta:{prose<int> code<int> t<int>} | span<str> | content_bytes<int> | content<str> ||
-§ | D002:H0108@fa8a | 2/5 | unit | d2 | {72 20 160} | 61234..61863 | 412 | # Heading␊␊First paragraph of the unit…␊ ||
-… | D002:H0108@fa8a/elided.1 |  | data-uri |  | {  } | 14187..430301 | 0 |  ||
-§ | D002:H0108@fa8a | 2/5 | unit | d2 | {100 0 55} | 61651..61863 | 217 | …trailing prose of the same unit.␊ ||
+§ | D002:H0108@fa8a | 2/5 unit d2 | {72 20 ~160t} | 61234..61863 | 412 | <content> ||
+… | D002:H0108@fa8a/elided.1 | data-uri | {~404KiB} | 14187..430301 | 0 | ||
+¶ | e17.reply | adjutant | {~90t} | | 340 | <content> ||
+§ | D002:H0108@fa8a | 2/5 unit d2 | {100 0 ~55t} | 61651..61863 | 217 | <content> ||
 ⁂ | D002:H0108@fa8a ||
 ```
 
-(`raw` rendering: identical rows, but the `content` cell is the literal
-multi-line source of exactly `content_bytes` bytes and the `||` follows on
-its own line.)
+(A `§` document unit, an addressable elision, an interleaved `¶` exchange
+from another source, the unit's second piece, and an optional close — the
+`§`/`¶` glyphs from earlier in this section are load-bearing here and are
+not displaced by pipes. `<content>` is codec-encoded one-line or raw
+multi-line per profile; the atomic format brief decides how the two
+coexist in one stream.)
 
 **Emission is a profile setting, not a mode.** `sigils: legacy-comment |
 typographic | none` (CLI flag `--sigils`, replacing the earlier `--frame`
@@ -568,11 +588,17 @@ sigil vs a plain zero-`content_bytes` open, `content: codec | raw` — is also p
 is today's `<!-- mdnav … -->` (itself a sigil convention: the HTML comment is
 the Markdown-inert sigil) and stays the CLI default, byte-identical to
 today; `typographic` is the MCP default; close on/off is chosen by the
-behavioral eval (D20). **Header field style: psr** — pipe-celled,
-positional, typed in the key row, `content_meta` block for stamps — decided
-(above); D29 measures the token cost of the row and of the codec glyphs, it
-does not choose the style. A framed mdnav stream is a psr row grammar; one
-reader across reposnapshot, para-agent, mdnav. Nothing is ever `k=v`.
+behavioral eval (D20). **Header field style: pipe-celled and positional,
+on psr's principles** — lean, not decision; the atomic payload format brief
+(roadmap) owns it, together with key-once vs self-identifying rows,
+`||` vs LF, codec vs raw, and how `§`/`¶` chunks from different sources
+interleave. D29 measures costs; it does not choose. Nothing is `k=v`.
+
+**Namespace.** MCP tool names must not collide with native harness tools
+(`read`, `grep`, `glob`, `edit`, …): every mdnav tool is prefixed
+(`mdnav_read`, `mdnav_outline`, …) or lives under a single namespaced tool
+with a verb argument — the server brief decides which, but bare verbs are
+out.
 
 - Address = the anchor (`Dnnn:Hnnnn@digest`, or `Snnnn`/`Rnnnn`/`Wnnnn`,
   or a raw `Dnnn:@s..e`), extended compositionally for nested claims and

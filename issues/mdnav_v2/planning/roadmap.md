@@ -123,6 +123,40 @@ freezing the `§`/`¶` header spec with para-agent; default MCP budget chosen
 from measured reads; the framed-vs-unframed behavioral gate; embeddable
 `createMdnavTools` + stdio runner; vendoring into para-agent.
 
+## After — in-context atomic payload format brief (separate, shared with para-agent)
+
+**What:** the schema for what the mdnav backend (and para-agent) wraps a
+chunk of content in *before* it enters the MCP user's context — the
+lightweight, separator-based structure whose whole purpose is the
+context-window optimization this thread has been working toward. **Not**
+reposnapshot's artifact format: psr is a shard file consumed by seeking; this
+is a stream consumed by attention. It borrows psr's *principles* (declare
+before content; length/estimate prefix in lieu of escaping; positional
+pipe-celled metadata; the header row is the grammar; empty marker; one
+physical line per record where possible) and nothing else by default.
+
+**Design inputs already established here (all survive into the brief):**
+sigils `§` (document unit) and `¶` (exchange/turn) as the leading cell,
+`…` for addressable elisions, optional `⁂` close; front-declared typed
+addressed regions with `k/N`; the model-facing magnitude as a measured
+token estimate (`~Nt`, from the token battery) rather than bytes; source
+identity + semantic sub-address on every chunk; addressable elisions;
+budgets counting emitted bytes/tokens including wrappers.
+
+**Open questions the brief must answer:** (1) rough shape `<sigil> |
+<source identity> | <semantic sub-address> | <token estimate> | <content>
+||` — which cells are per-row vs declared once in a key, given that the
+stream **interleaves discontiguous chunks from different sources**
+(key-then-records suits contiguous chunks of one document; interleaving
+needs self-identifying rows — both prototyped, both must coexist);
+(2) `||` vs LF as record close in the stream; (3) content cell codec
+(one physical line) vs raw multi-line, and how both coexist in one stream;
+(4) how the key/legend is delivered (adapter skill, first record of a
+session, both); (5) tool **namespace** — no collisions with native harness
+tools (`read`, `grep`, `glob`, …): `mdnav_*` prefixes or one namespaced
+tool with a verb argument. **Evaluation:** D20 behavioral eval and D29
+token battery decide the contested points; nothing pre-decided.
+
 ## After — token-cost measurement battery (separate, shared with para-agent)
 
 **What:** a model-agnostic, empirical measurement of **token cost per
