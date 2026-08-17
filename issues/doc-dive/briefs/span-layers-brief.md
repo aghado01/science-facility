@@ -111,7 +111,8 @@ correct as written; prove it against a brute-force bitmap, not by inspection.
 
 ### 2. Claims — the occurrence table
 
-One table per document, persisted in the sidecar (schema 2 → 3), columnar:
+One table per document, **an in-memory value first** (typed arrays,
+≈12–16 B/claim; buffers + claims ≈ 1.2× corpus bytes), columnar:
 `starts[]`, `ends[]`, `kinds[]` (interned), `sources[]` (interned:
 which collector), `levels[]` (`char|line|multi`), `priorities[]`,
 `ruleIds[]` (interned, null for built-ins), `containers[]` (ordinal of the
@@ -140,6 +141,19 @@ renders as a click.
 Only shape decides membership (README §Triage principle stands): the
 `signed-url` target test, the `data-uri` `![](…)` wrapper rule, the
 `keepOf` label rule all carry over unchanged as claim `info`.
+
+**Stores.** The engine is a persistent-process design: a server holds one
+`Corpus` (buffers, claims, memoized views keyed by `(digest, policy)`) for
+its lifetime and answers queries from memory; invalidation is
+`statSync` size+mtime per query, digest on change, rebuild per document.
+Disk is for what must survive a process: the **inventory** (`Dnnn` → path
+— ids appear in agents' notes and must come back identical after restart)
+and the **reads ledger** (coverage and provenance across sessions;
+append-only JSONL as today). The sidecar (schema 3) is the serialization of
+the in-memory table behind a small store interface — `MemoryStore` (server)
+and `SidecarStore` (one-shot CLI, which has no warm process) — so the CLI
+and a running server pointed at the same work-dir see one index. Views are
+never persisted; they are cheap to recompute and policy-dependent.
 
 ### 2b. Relations — keyed joins over claims
 
@@ -334,9 +348,12 @@ cannot be expressed as bytes-or-table, that is a design smell to report.
 
 ### Export surface (the MCP foundation)
 
-`mdnav.mjs` gains named exports — `analyze`/`buildIndex`, `claimsOf`,
-`SpanSet`, `Selection`, `loadRules`, `loadProfile`, `materialize(buf, spans,
-policy)`, `coverageOf` — and the top-level CLI dispatch (last five lines
+`mdnav.mjs` gains named exports — `Corpus` (open a work-dir with a store;
+`discover`, `doc(ref)`, `invalidate`), `Doc` (`buf`, `digest`, `claims`,
+`select(pred)`, `partition(basis, policy)`, `relations(name)`), `SpanSet`,
+`Selection`, `loadRules`, `loadProfile`, `materialize(doc, spans, policy)`,
+`Ledger` — object-shaped so a server holds one `Corpus` for the process and
+CLI verbs open-query-close — and the top-level CLI dispatch (last five lines
 today: `parseArgs` → `VERBS[verb](args)`) moves under an `if (isMain)` guard
 keyed on `import.meta.url` vs `process.argv[1]`. **There is no guard and no
 export today; `import()` runs the CLI.** After this, `server.mjs` (next
@@ -409,8 +426,12 @@ the existing runner; the suite must report assert counts, not just PASS.
    bitmap over ≥ 200 random small interval sets; adjacent `[a,b)[b,c)` merge;
    outputs always normalized.
 3. Claims table: sorted `Geometry` order; nested claims carry the correct
-   `container`; sidecar round-trips at schema 3; unchanged file → no rescan;
-   schema-2 sidecar refreshed, not trusted.
+   `container`; `MemoryStore` and `SidecarStore` yield equal tables for the
+   same bytes; sidecar round-trips at schema 3; unchanged file → no rescan
+   under either store; a touched-but-identical file (mtime changed, digest
+   same) → no rescan; changed bytes → that document only is rebuilt;
+   schema-2 sidecar refreshed, not trusted; `Dnnn` ids identical after a
+   `Corpus` is closed and reopened.
 4. Rule collector: a `scope: line` rule cannot match across a line break; a
    `scope: whole` rule cannot match across an excluded gap (test with a
    pattern that would span it); a bad rule fails at load with file:line and
