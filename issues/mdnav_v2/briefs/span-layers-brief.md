@@ -3,7 +3,7 @@
 > **Role:** design canon — the "why" and the shape. Execution lives in
 > [planning/roadmap.md](../planning/roadmap.md) (milestones M0–M6, gate
 > subsets, chip seams), the audit trail in
-> [planning/decisions.md](../planning/decisions.md) (D1–D31, ascending), and the
+> [planning/decisions.md](../planning/decisions.md) (D1–D32, ascending), and the
 > figure-model homework in
 > [archaelogy/figure-model-survey.md](../archaelogy/figure-model-survey.md)
 > (function-by-function dispositions, must-survive behaviors, test map).
@@ -502,24 +502,40 @@ one large real transcript):
 | `⁂` U+2042 (asterism; alt `⁋` U+204B reversed pilcrow) | **close** — optional overlay | asterism historically marks a section's end/break |
 | `†` U+2020 | foot-matter / definition region, *if ever* | typographic footnote convention |
 
-Row grammar (unchanged in substance): line-anchored `<sigil> <address>
-<fields…> len=N`, then exactly `N` payload bytes; records are **flat and
-newline-delimited** (a unit with an elision is emitted as *pieces*, each its
-own record — nothing nests arithmetically); the optional close
-`⁂ <address>` re-mentions the address (a second retrieval hook), signals
-completeness, and makes nesting legible — for the machine it is only a
-checksum (address/position mismatch → framing fault). If a payload does not
-end in LF the framer inserts one before the close; that LF is framing,
-counted in `framed`, never in `len`.
+Row grammar — **the metadata block is a pipe-celled row; the payload is a
+raw multi-line cell.** The evidence is a reposnapshot shard read directly
+(`D:\aghado01\project-snapshots\ThermoMapper\src_20260701_122622_s024_hashish.txt`,
+2026-08-17): its typed header row (`idx<int> | path<str> |
+attributes:{…} | length<int> | content<str> |`) is a key read once and used
+positionally thereafter; its front-loaded metadata cells (`246 |
+hashish/tokenizer.cs | {1916 145 0.2526 4.6996} | 1982 |`) primed the read
+— address, identity, composition, size, before a byte of content; pipes cut
+the line into cells that attention treats as a header without being told;
+the trailing pipe is a one-character close. What cost the reader was the
+*escaped, single-line content* (`\n`, `\"` — the LTS flaw the shard notes
+already name), which for mdnav settles the one place its rows differ from a
+shard file: **the payload is raw, multi-line, unescaped, exactly `len`
+bytes** — it is Markdown meant to be read — and the length prefix is what
+makes a raw multi-line cell safe.
+
+Records are **flat and newline-delimited** (a unit with an elision is
+emitted as *pieces*, each its own record — nothing nests arithmetically);
+the optional close row `⁂ | <address> |` re-mentions the address (a second
+retrieval hook), signals completeness, and makes nesting legible — for the
+machine it is only a checksum (address/position mismatch → framing fault).
+If a payload does not end in LF the framer inserts one before the next row;
+that LF is framing, counted in `framed`, never in `len`. The key row is
+declared once per session (adapter skill + first record), not per read; a
+`{…}` group is a positional sub-block declared in the key, as in the shard.
 
 ```
-key: § unit · ¶ turn · … elided · ⁂ end · fields addr k/N kind basis ~B ~t span len
-§ D002:H0108@fa8a 2/5 unit d2 ~629B ~160t 61234..61863 len=412
-<412 bytes>
-… D002:H0108@fa8a/elided.1 data-uri ~404KiB 14187..430301 len=0
-§ D002:H0108@fa8a 2/5 unit d2 ~217B 61651..61863 len=217
+key | sigil | addr | k/N | kind | basis | {comp} | ~B | ~t | span | len |
+§ | D002:H0108@fa8a | 2/5 | unit | d2 | {prose72 code20} | ~629B | ~160t | 61234..61863 | 412 |
+<412 bytes of raw source, multi-line>
+… | D002:H0108@fa8a/elided.1 | | data-uri | | | ~404KiB | | 14187..430301 | 0 |
+§ | D002:H0108@fa8a | 2/5 | unit | d2 | {prose100} | ~217B | ~55t | 61651..61863 | 217 |
 <217 bytes>
-⁂ D002:H0108@fa8a
+⁂ | D002:H0108@fa8a |
 ```
 
 **Emission is a profile setting, not a mode.** `sigils: legacy-comment |
@@ -529,11 +545,13 @@ sigil vs a plain zero-`len` open — is also profile data. `legacy-comment`
 is today's `<!-- mdnav … -->` (itself a sigil convention: the HTML comment is
 the Markdown-inert sigil) and stays the CLI default, byte-identical to
 today; `typographic` is the MCP default; close on/off is chosen by the
-behavioral eval (D20). **Header field style is a spec-freeze question**:
-positional pipe-separated (terser; a framed stream then *is* a psr row
-grammar — one reader across reposnapshot, para-agent, mdnav) vs. `k=v`
-(self-describing). Measure both in situ (D29) before choosing; lean —
-positional core, `k=v` only for optional stamps.
+behavioral eval (D20). **Header field style: pipe-celled, positional,
+declared by a key row** — decided on direct reading evidence (above), with
+D29 confirming the token cost rather than choosing the style. A framed
+mdnav stream is then a psr row grammar with one multi-line cell — one
+reader across reposnapshot, para-agent, mdnav. Optional stamps that vary
+per profile go in a trailing `{…}` group declared in the key, never as
+`k=v` in the row.
 
 - Address = the anchor (`Dnnn:Hnnnn@digest`, or `Snnnn`/`Rnnnn`/`Wnnnn`,
   or a raw `Dnnn:@s..e`), extended compositionally for nested claims and
