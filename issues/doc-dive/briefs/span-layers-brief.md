@@ -452,9 +452,15 @@ the existing runner; the suite must report assert counts, not just PASS.
     source span (existing).
 15. `node -e "import('./mdnav.mjs').then(m => m.SpanSet && m.Selection)"`
     resolves without running the CLI.
-16. `default` profile output for every existing fixture is byte-identical to
-    pre-change output for `outline`, `read`, `coverage`, `locate` (golden
-    files), except where 5/6/9/12 say otherwise.
+16. `default` profile output for every existing fixture **and the 3.5 MB real
+    corpus the README cites** is byte-identical to pre-change output for
+    `outline`, `read`, `coverage`, `locate` (golden files captured in
+    sequencing step 2, before any scanner changes), except where 5/6/9/12
+    (bug fixes) and 8 (html-block-contained headings inactive by default)
+    say otherwise. Every diff against the goldens must be attributable to
+    one of those items by name; an unattributed diff fails the gate. The
+    report must list which real-corpus documents changed under 8, so the
+    `default` `enter` decision can be revisited with evidence.
 
 ## Sequencing
 
