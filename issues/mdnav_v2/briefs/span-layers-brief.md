@@ -456,15 +456,27 @@ frame the backend already knows* (the claim kind, the basis, what was
 stripped), which is the claims table reflected into the stream:
 
 ```
-¶ D002:H0108@fa8a 2/5 kind=unit basis=d2 ~629B strip=html-tag span=61234..61863 len=629
+§ D002:H0108@fa8a 2/5 kind=unit basis=d2 ~629B strip=html-tag span=61234..61863 len=629
 <629 bytes of source>
-¶ D002:H0108@fa8a/elided.1 kind=data-uri ~404KiB span=14187..430301 len=0
-¶ D002:H0117@aabc 3/5 kind=unit basis=d2 ~540B span=… len=540
+§ D002:H0108@fa8a/elided.1 kind=data-uri ~404KiB span=14187..430301 len=0
+§ D002:H0117@aabc 3/5 kind=unit basis=d2 ~540B span=… len=540
 …
 ```
 
-Field order is fixed: address, ordinal-of-batch, kind, basis, coarse size,
-policy stamps, then the machine fields (`span`, `len`) last.
+Field order is fixed: glyph, address, ordinal-of-batch, kind, basis, coarse
+size, policy stamps, then the machine fields (`span`, `len`) last.
+
+*Glyph as coarsest kind (proposed, pending the shared spec freeze):* the
+leading glyph carries the object class and borrows an existing typographic
+prior rather than teaching a new pattern — **`§`** for a document unit
+(section mark: `§ 3.2` already reads as a section reference), **`¶`** for an
+exchange/turn or generic coding region in the transcript stream (paragraph
+mark), and at most one more (`†` for foot-matter, if ever) — with `kind=`
+carrying the fine kind. One grammar, a glyph set of two or three, no more:
+regularity is what keeps the non-coding region low-entropy. Both glyphs are
+Latin-1 Supplement, cheap in every tokenizer, and line-anchored so a
+mid-prose `§` in a legal corpus cannot collide with a header. The `--frame`
+flag name `pilcrow` is kept as the mode name regardless of glyph.
 
 - Address = the anchor (`Dnnn:Hnnnn@digest`, or `Snnnn`/`Rnnnn`/`Wnnnn`,
   or a raw `Dnnn:@s..e`), extended compositionally for nested claims and
