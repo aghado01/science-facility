@@ -100,7 +100,9 @@ over the piece list — `--frame comment` (default CLI, byte-identical to
 today) | `pilcrow` | `none`, header field order fixed, addressable
 placeholders, `len`/`span` distinct; `notes[]` out of band.
 
-- **Gates:** 15, 17, 18, 19, 20, 21.
+- **Gates:** 15, 17, 18, 19, 20, 21, 21b (byte accounting: headers count
+  toward `maxBytes`; `§`/`¶` are 2 UTF-8 bytes; all framer arithmetic is
+  `Buffer.byteLength`, and the test asserts header bytes == chars + 1).
 - **Depends on:** M4. **Brief:** §Front-end grammar, §REPL contract,
   §Stream framing, §Export surface.
 - **Exit = Chip B done.** Report appended.

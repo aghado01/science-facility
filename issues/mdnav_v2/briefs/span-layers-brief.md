@@ -412,6 +412,11 @@ session store; the engine must make these natural):
   `--only`, `--strip`, a smaller `--within`). Today's ">64 KiB stderr warn
   before writing" is the seed; the MCP form refuses rather than warns,
   because once bytes are in context the cost is paid.
+  **Budgets count emitted bytes, headers included.** `maxBytes` is compared
+  against the total the framer will actually write — every header line
+  (UTF-8, so `§`/`¶` are 2 bytes each) plus every `len` — never against
+  payload alone; the plan reports both `payload` and `framed` totals. All
+  framing arithmetic is `Buffer.byteLength`, never string length.
 - **Bytes-or-table, never both.** A read result is bytes plus a one-line
   stderr-style `note`; a table result is rows plus `total`; a `record` for
   status. No prose, no summaries, no recommendations beyond `suggestion`
@@ -531,7 +536,14 @@ bytes that follow it exactly (incl. multi-byte UTF-8 and CRLF sources), the
 concatenated coding regions of a multi-anchor read equal the `--frame none`
 read byte-for-byte, an elision emits a zero-`len` header whose address
 `read` accepts and resolves to the elided source span, and `--frame comment`
-output is byte-identical to today's for the golden fixtures.
+output is byte-identical to today's for the golden fixtures; **21b.** byte
+accounting: total bytes written == Σ `Buffer.byteLength(header line)` + Σ
+`len`; each header line's byte length == its char length + 1 (the glyph is
+the only non-ASCII byte pair — asserted for `§` and `¶`); a header parser
+that reads the stream back recovers every address, `k/N`, `span`, `len`
+exactly; the plan's `framed` total equals the bytes a subsequent read
+within budget actually writes; a `maxBytes` that admits the payload but not
+payload + headers returns a plan, not bytes.
 
 ### Export surface (the MCP foundation)
 
@@ -580,6 +592,14 @@ within, profile})` is a Selection; `mdnav_read` is a projection.
    value-taking only when the next token is `all` or a comma-list whose every
    member is a known kind or `@profile`; otherwise bare. Anything not in
    either list is an error, not a guess.
+5. **Framer arithmetic is bytes, period.** The header glyphs `§` (U+00A7,
+   `C2 A7`) and `¶` (U+00B6, `C2 B6`) are two UTF-8 bytes; every header
+   line's cost is `Buffer.byteLength(line)`, every payload's is its `len`,
+   and `maxBytes` compares against their sum. A framer written with
+   `.length` passes every gate except 21b and then lies in the field by one
+   byte per header — the historic byte-semantics trap wearing a new hat.
+   Write headers and payloads to the same `Buffer`/stream so the count and
+   the bytes cannot diverge.
 
 ## Non-goals (this brief)
 
