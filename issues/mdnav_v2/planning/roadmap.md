@@ -118,9 +118,38 @@ dated review under `discussion/`.
 ## After — `server.mjs` brief (separate)
 
 Tool names over the export surface; session/result store (`$rN` handles);
-freezing the `¶` header spec with para-agent; default MCP budget chosen
+freezing the `§`/`¶` header spec with para-agent; default MCP budget chosen
 from measured reads; the framed-vs-unframed behavioral gate; embeddable
 `createMdnavTools` + stdio runner; vendoring into para-agent.
+
+## After — token-cost measurement battery (separate, shared with para-agent)
+
+**What:** a model-agnostic, empirical measurement of **token cost per
+symbol and per pattern**, in lieu of a standalone tokenizer (not always
+available for a given model), captured as **client/model-specific profiles**
+that are reused and refreshed when models change.
+
+**Why here:** the framing header's cost (`§`, `¶`, `k/N`, `~629B`, `@digest`,
+`span=..`) and the `~size` coarse magnitude are only honest in *tokens* if
+we have measured them; budgets and later context-mode hooks want tokens,
+not bytes; glyph choices (D28) should be validated, not assumed.
+
+**How (sketch):** measure through the model itself, which is what makes it
+agnostic — a token-count endpoint where one exists, otherwise usage deltas
+(prompt a probe string, read reported input tokens, difference against a
+baseline). Battery: (a) **registers** — ASCII letters/digits/punctuation,
+whitespace and newline forms (LF/CRLF), Latin-1 Supplement, General
+Punctuation, box drawing, a CJK sample, emoji, combining marks; bytes→tokens
+ratio per register; (b) **the framing vocabulary in situ** — whole header
+lines and their fields, because BPE merges with neighbours so an isolated
+glyph's cost is not its cost inside `§ D002:H0108@fa8a 2/5 …`; report
+ranges, not single numbers; (c) **typical payload mixes** — prose, fenced
+code, tables, base64 — so `~629B` can carry a `~tokens` estimate per kind.
+**Output:** `profiles/tokens/<client>-<model>-<date>.json` with per-register
+ratios, per-pattern costs, and the probe set + method so it can be re-run.
+**Consumers:** the framer's coarse-size field (`~629B ≈ ~160t`), `maxBytes`
+→ `maxTokens` translation, D28 glyph validation, para-agent routing hooks.
+Not a tokenizer; a lookup table with provenance and a refresh procedure.
 
 ## Deferred (named so they are not silently dropped)
 
