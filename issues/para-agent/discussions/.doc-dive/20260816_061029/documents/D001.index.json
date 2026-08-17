@@ -1,0 +1,1661 @@
+{
+  "schema": 2,
+  "id": "D001",
+  "path": "D:\\aghado01\\science-facility\\issues\\para-agent\\discussions\\codex-archaelogy-long-discussion.md",
+  "bytes": 309413,
+  "sha256": "19b4c7d7f721f4ea28fabafbcdb664b3fd1c231b35bc33c2774d269d724d411c",
+  "mtimeMs": 1786507098058.996,
+  "encoding": "utf-8",
+  "bom": false,
+  "newline": "LF",
+  "headings": [
+    {
+      "hid": "H0000",
+      "level": 0,
+      "title": "PREAMBLE",
+      "digest": "5531",
+      "line": 1,
+      "headingStart": 0,
+      "bodyStart": 0,
+      "subtreeEnd": 348
+    },
+    {
+      "hid": "H0001",
+      "level": 1,
+      "title": "so ive been working on this para-agent project and just had two of its agents do a deep dive on the implementation and examine other projects `D:\\aghado01\\science-facility\\mcp\\issues\\para-agent\\claude-agy-codesign-brief.md`",
+      "digest": "8ad3",
+      "line": 22,
+      "headingStart": 348,
+      "bodyStart": 574,
+      "subtreeEnd": 782
+    },
+    {
+      "hid": "H0002",
+      "level": 1,
+      "title": "i just want to examine the findings and do some more design work for now",
+      "digest": "5e9e",
+      "line": 28,
+      "headingStart": 782,
+      "bodyStart": 857,
+      "subtreeEnd": 25934
+    },
+    {
+      "hid": "H0003",
+      "level": 2,
+      "title": "Implementation ↔ contract map",
+      "digest": "ce80",
+      "line": 34,
+      "headingStart": 940,
+      "bodyStart": 975,
+      "subtreeEnd": 11674
+    },
+    {
+      "hid": "H0004",
+      "level": 3,
+      "title": "Substantially conforming",
+      "digest": "0cfc",
+      "line": 36,
+      "headingStart": 976,
+      "bodyStart": 1005,
+      "subtreeEnd": 2660
+    },
+    {
+      "hid": "H0005",
+      "level": 3,
+      "title": "Factual divergences / looseness",
+      "digest": "f220",
+      "line": 43,
+      "headingStart": 2660,
+      "bodyStart": 2696,
+      "subtreeEnd": 9286
+    },
+    {
+      "hid": "H0006",
+      "level": 3,
+      "title": "Correctness invariants the code currently relies on",
+      "digest": "c8bc",
+      "line": 67,
+      "headingStart": 9286,
+      "bodyStart": 9342,
+      "subtreeEnd": 10757
+    },
+    {
+      "hid": "H0007",
+      "level": 3,
+      "title": "Test coverage",
+      "digest": "8f3b",
+      "line": 75,
+      "headingStart": 10757,
+      "bodyStart": 10775,
+      "subtreeEnd": 11674
+    },
+    {
+      "hid": "H0008",
+      "level": 2,
+      "title": "Implementation/contract reality",
+      "digest": "0b95",
+      "line": 90,
+      "headingStart": 11674,
+      "bodyStart": 11709,
+      "subtreeEnd": 14382
+    },
+    {
+      "hid": "H0009",
+      "level": 2,
+      "title": "Critique of proposals 1–8",
+      "digest": "8f15",
+      "line": 100,
+      "headingStart": 14382,
+      "bodyStart": 14413,
+      "subtreeEnd": 17743
+    },
+    {
+      "hid": "H0010",
+      "level": 2,
+      "title": "Ranked architecture",
+      "digest": "18e6",
+      "line": 118,
+      "headingStart": 17743,
+      "bodyStart": 17766,
+      "subtreeEnd": 25934
+    },
+    {
+      "hid": "H0011",
+      "level": 3,
+      "title": "Verdict on the proposals",
+      "digest": "2f90",
+      "line": 140,
+      "headingStart": 20129,
+      "bodyStart": 20158,
+      "subtreeEnd": 22273
+    },
+    {
+      "hid": "H0012",
+      "level": 3,
+      "title": "Proposed shape",
+      "digest": "a191",
+      "line": 153,
+      "headingStart": 22273,
+      "bodyStart": 22292,
+      "subtreeEnd": 23708
+    },
+    {
+      "hid": "H0013",
+      "level": 3,
+      "title": "Highest-leverage sequence",
+      "digest": "9091",
+      "line": 185,
+      "headingStart": 23708,
+      "bodyStart": 23738,
+      "subtreeEnd": 25934
+    },
+    {
+      "hid": "H0014",
+      "level": 1,
+      "title": "yea, these things make sense. lets capture a report under science-facility/issues/para-agent. one confound right now is that claude's harness in particular is suffering from some overhead i'm trying to diagnose and root out. there's also an implicit layer of skill guidance that i have yet to really address to help the agents understand capabilities and how to use them efficiently. the goal is for it to be principled but somewhat open ended.",
+      "digest": "597f",
+      "line": 205,
+      "headingStart": 25934,
+      "bodyStart": 26381,
+      "subtreeEnd": 27033
+    },
+    {
+      "hid": "H0015",
+      "level": 1,
+      "title": "some of my old projects that i'm drawing inspiration from have snapshots in project-snapshots `D:\\aghado01\\project-snapshots\\cybernetic-copilot`, `D:\\aghado01\\project-snapshots\\vscodepilot`, `D:\\aghado01\\project-snapshots\\hierarchical-memory` , all of which are very old and not about para-agent per se, but contain potentially useful concepts, some of which have been integrated. for each of those directories there's a *_tree.md file that serves as the index and entrypoint to the *.txt shard files respectively and in some cases there are additional markdown documents related to a given project",
+      "digest": "b973",
+      "line": 221,
+      "headingStart": 27033,
+      "bodyStart": 27634,
+      "subtreeEnd": 66754
+    },
+    {
+      "hid": "H0016",
+      "level": 2,
+      "title": "Hierarchical-memory archaeology",
+      "digest": "38d8",
+      "line": 227,
+      "headingStart": 27721,
+      "bodyStart": 27756,
+      "subtreeEnd": 37349
+    },
+    {
+      "hid": "H0017",
+      "level": 3,
+      "title": "Concept classification",
+      "digest": "7261",
+      "line": 233,
+      "headingStart": 28550,
+      "bodyStart": 28577,
+      "subtreeEnd": 34721
+    },
+    {
+      "hid": "H0018",
+      "level": 3,
+      "title": "Most useful design inheritance",
+      "digest": "c7cd",
+      "line": 247,
+      "headingStart": 34721,
+      "bodyStart": 34756,
+      "subtreeEnd": 35949
+    },
+    {
+      "hid": "H0019",
+      "level": 3,
+      "title": "Guidance implication",
+      "digest": "e7fe",
+      "line": 274,
+      "headingStart": 35949,
+      "bodyStart": 35974,
+      "subtreeEnd": 36666
+    },
+    {
+      "hid": "H0020",
+      "level": 3,
+      "title": "Implementation archaeology caution",
+      "digest": "ef27",
+      "line": 287,
+      "headingStart": 36666,
+      "bodyStart": 36705,
+      "subtreeEnd": 37349
+    },
+    {
+      "hid": "H0021",
+      "level": 2,
+      "title": "vscodepilot archaeology memo",
+      "digest": "4d04",
+      "line": 297,
+      "headingStart": 37349,
+      "bodyStart": 37381,
+      "subtreeEnd": 46008
+    },
+    {
+      "hid": "H0022",
+      "level": 3,
+      "title": "Already integrated",
+      "digest": "8fb4",
+      "line": 301,
+      "headingStart": 37596,
+      "bodyStart": 37619,
+      "subtreeEnd": 39181
+    },
+    {
+      "hid": "H0023",
+      "level": 3,
+      "title": "Adapt",
+      "digest": "0c01",
+      "line": 308,
+      "headingStart": 39181,
+      "bodyStart": 39191,
+      "subtreeEnd": 42631
+    },
+    {
+      "hid": "H0024",
+      "level": 3,
+      "title": "Retire",
+      "digest": "da85",
+      "line": 353,
+      "headingStart": 42631,
+      "bodyStart": 42642,
+      "subtreeEnd": 45531
+    },
+    {
+      "hid": "H0025",
+      "level": 3,
+      "title": "Design implication",
+      "digest": "5b48",
+      "line": 373,
+      "headingStart": 45531,
+      "bodyStart": 45554,
+      "subtreeEnd": 46008
+    },
+    {
+      "hid": "H0026",
+      "level": 2,
+      "title": "Cybernetic-copilot archaeology memo",
+      "digest": "0c9b",
+      "line": 391,
+      "headingStart": 46008,
+      "bodyStart": 46047,
+      "subtreeEnd": 66754
+    },
+    {
+      "hid": "H0027",
+      "level": 3,
+      "title": "Carry forward",
+      "digest": "6a88",
+      "line": 397,
+      "headingStart": 46690,
+      "bodyStart": 46708,
+      "subtreeEnd": 50448
+    },
+    {
+      "hid": "H0028",
+      "level": 3,
+      "title": "Assumptions to retire",
+      "digest": "996f",
+      "line": 411,
+      "headingStart": 50448,
+      "bodyStart": 50474,
+      "subtreeEnd": 53237
+    },
+    {
+      "hid": "H0029",
+      "level": 3,
+      "title": "Recommended additions to the report",
+      "digest": "9c97",
+      "line": 436,
+      "headingStart": 53237,
+      "bodyStart": 53277,
+      "subtreeEnd": 66754
+    },
+    {
+      "hid": "H0030",
+      "level": 1,
+      "title": "yea there's also concepts from context-mode's framework that im trying to integrate and my own sensibilities from my work on customizing context-mode when i was using it, like my custom hook routing. i've barely scratched the surface of adaptations from context-mode and im trying to cross examine my old work on things like cybernetic copilot and vscodepilot that we looked at earlier with context-mode's approach as well as the customizations i built on top if it. Here's a subset of context-mode skill layer that i have set aside for archaelogy, as well as the old context-mode core that we built a while back, which ended up having some pathological flaws, but also several merits \"D:\\aghado01\\pet-projects\\context-mode-core\". In the context-mode-core, i was mixing concerns of customizing context-mode's functionality with cross-platform cross-agent administration since different clients like codex, claude, cursor etc require different adapters and have different harnesses that require different matching patterns for the various hooks.",
+      "digest": "7f2f",
+      "line": 551,
+      "headingStart": 66754,
+      "bodyStart": 67801,
+      "subtreeEnd": 112326
+    },
+    {
+      "hid": "H0031",
+      "level": 2,
+      "title": "Merits worth preserving",
+      "digest": "aaae",
+      "line": 561,
+      "headingStart": 68521,
+      "bodyStart": 68548,
+      "subtreeEnd": 70332
+    },
+    {
+      "hid": "H0032",
+      "level": 2,
+      "title": "Pathological concern mixing",
+      "digest": "afdd",
+      "line": 571,
+      "headingStart": 70332,
+      "bodyStart": 70363,
+      "subtreeEnd": 77309
+    },
+    {
+      "hid": "H0033",
+      "level": 3,
+      "title": "Administration leaked into runtime authority and guidance",
+      "digest": "3a2f",
+      "line": 573,
+      "headingStart": 70364,
+      "bodyStart": 70426,
+      "subtreeEnd": 71366
+    },
+    {
+      "hid": "H0034",
+      "level": 3,
+      "title": "The peer-adapter boundary was mostly nominal",
+      "digest": "ff09",
+      "line": 583,
+      "headingStart": 71366,
+      "bodyStart": 71415,
+      "subtreeEnd": 72296
+    },
+    {
+      "hid": "H0035",
+      "level": 3,
+      "title": "Hook routing improved guidance, but still fused too much",
+      "digest": "992d",
+      "line": 599,
+      "headingStart": 72296,
+      "bodyStart": 72357,
+      "subtreeEnd": 73199
+    },
+    {
+      "hid": "H0036",
+      "level": 3,
+      "title": "The wrapper is itself a plausible Claude-overhead confound",
+      "digest": "e941",
+      "line": 628,
+      "headingStart": 73199,
+      "bodyStart": 73262,
+      "subtreeEnd": 74427
+    },
+    {
+      "hid": "H0037",
+      "level": 3,
+      "title": "Deployment was recoverable, not truly transactional",
+      "digest": "d521",
+      "line": 643,
+      "headingStart": 74427,
+      "bodyStart": 74483,
+      "subtreeEnd": 75946
+    },
+    {
+      "hid": "H0038",
+      "level": 3,
+      "title": "Pinning and patches were principled but incomplete",
+      "digest": "f7b4",
+      "line": 655,
+      "headingStart": 75946,
+      "bodyStart": 76001,
+      "subtreeEnd": 77309
+    },
+    {
+      "hid": "H0039",
+      "level": 2,
+      "title": "Cross-map to the earlier archaeology",
+      "digest": "3b6c",
+      "line": 676,
+      "headingStart": 77309,
+      "bodyStart": 77349,
+      "subtreeEnd": 79945
+    },
+    {
+      "hid": "H0040",
+      "level": 2,
+      "title": "Context-mode archaeology memo",
+      "digest": "705d",
+      "line": 711,
+      "headingStart": 79945,
+      "bodyStart": 79978,
+      "subtreeEnd": 92559
+    },
+    {
+      "hid": "H0041",
+      "level": 3,
+      "title": "Provenance",
+      "digest": "1c4b",
+      "line": 719,
+      "headingStart": 80272,
+      "bodyStart": 80287,
+      "subtreeEnd": 80641
+    },
+    {
+      "hid": "H0042",
+      "level": 3,
+      "title": "Upstream framework",
+      "digest": "6b61",
+      "line": 723,
+      "headingStart": 80641,
+      "bodyStart": 80664,
+      "subtreeEnd": 88112
+    },
+    {
+      "hid": "H0043",
+      "level": 4,
+      "title": "Integrated or strongly validated",
+      "digest": "6176",
+      "line": 725,
+      "headingStart": 80665,
+      "bodyStart": 80703,
+      "subtreeEnd": 82253
+    },
+    {
+      "hid": "H0044",
+      "level": 4,
+      "title": "Adapt",
+      "digest": "0c01",
+      "line": 733,
+      "headingStart": 82253,
+      "bodyStart": 82264,
+      "subtreeEnd": 84903
+    },
+    {
+      "hid": "H0045",
+      "level": 4,
+      "title": "Retire",
+      "digest": "da85",
+      "line": 762,
+      "headingStart": 84903,
+      "bodyStart": 84915,
+      "subtreeEnd": 88112
+    },
+    {
+      "hid": "H0046",
+      "level": 3,
+      "title": "Local context-mode-core adaptations",
+      "digest": "fa98",
+      "line": 774,
+      "headingStart": 88112,
+      "bodyStart": 88152,
+      "subtreeEnd": 91115
+    },
+    {
+      "hid": "H0047",
+      "level": 4,
+      "title": "Integrated or worth preserving",
+      "digest": "355c",
+      "line": 776,
+      "headingStart": 88153,
+      "bodyStart": 88189,
+      "subtreeEnd": 89346
+    },
+    {
+      "hid": "H0048",
+      "level": 4,
+      "title": "Pathologies to retire",
+      "digest": "7b72",
+      "line": 786,
+      "headingStart": 89346,
+      "bodyStart": 89373,
+      "subtreeEnd": 91115
+    },
+    {
+      "hid": "H0049",
+      "level": 3,
+      "title": "Cross-project synthesis",
+      "digest": "0baf",
+      "line": 794,
+      "headingStart": 91115,
+      "bodyStart": 91143,
+      "subtreeEnd": 92559
+    },
+    {
+      "hid": "H0050",
+      "level": 2,
+      "title": "Bottom line",
+      "digest": "d84a",
+      "line": 823,
+      "headingStart": 92559,
+      "bodyStart": 92574,
+      "subtreeEnd": 93989
+    },
+    {
+      "hid": "H0051",
+      "level": 2,
+      "title": "Reconstructed matching/routing model",
+      "digest": "4023",
+      "line": 831,
+      "headingStart": 93989,
+      "bodyStart": 94029,
+      "subtreeEnd": 95550
+    },
+    {
+      "hid": "H0052",
+      "level": 2,
+      "title": "Native capability asymmetries",
+      "digest": "7203",
+      "line": 844,
+      "headingStart": 95550,
+      "bodyStart": 95583,
+      "subtreeEnd": 97425
+    },
+    {
+      "hid": "H0053",
+      "level": 2,
+      "title": "Guidance duplication and likely overhead",
+      "digest": "5b68",
+      "line": 858,
+      "headingStart": 97425,
+      "bodyStart": 97469,
+      "subtreeEnd": 99690
+    },
+    {
+      "hid": "H0054",
+      "level": 2,
+      "title": "Other verified failure modes",
+      "digest": "35be",
+      "line": 871,
+      "headingStart": 99690,
+      "bodyStart": 99722,
+      "subtreeEnd": 103750
+    },
+    {
+      "hid": "H0055",
+      "level": 2,
+      "title": "What is genuinely portable",
+      "digest": "5b2b",
+      "line": 884,
+      "headingStart": 103750,
+      "bodyStart": 103780,
+      "subtreeEnd": 104967
+    },
+    {
+      "hid": "H0056",
+      "level": 2,
+      "title": "Proposed para-agent hook abstraction",
+      "digest": "82b6",
+      "line": 906,
+      "headingStart": 104967,
+      "bodyStart": 105007,
+      "subtreeEnd": 112326
+    },
+    {
+      "hid": "H0057",
+      "level": 1,
+      "title": "regarding `hashish` from rector-codices as we noted, my intention is to reimplement tools directly in node for the para-agent system. shouldn't be very hard to lift, and the source code for hashish lives in thermomapper's SRC. the new implementation would likely borrow elements of science-facility/utils/jso-jackson as well as `hashish` and related concepts from cybernetic copilot",
+      "digest": "c85f",
+      "line": 1007,
+      "headingStart": 112326,
+      "bodyStart": 112711,
+      "subtreeEnd": 147276
+    },
+    {
+      "hid": "H0058",
+      "level": 2,
+      "title": "Borrow",
+      "digest": "2edf",
+      "line": 1067,
+      "headingStart": 115227,
+      "bodyStart": 115237,
+      "subtreeEnd": 117816
+    },
+    {
+      "hid": "H0059",
+      "level": 2,
+      "title": "Adapt rather than copy",
+      "digest": "10df",
+      "line": 1089,
+      "headingStart": 117816,
+      "bodyStart": 117842,
+      "subtreeEnd": 123031
+    },
+    {
+      "hid": "H0060",
+      "level": 3,
+      "title": "JSONL frames",
+      "digest": "4e3f",
+      "line": 1091,
+      "headingStart": 117843,
+      "bodyStart": 117860,
+      "subtreeEnd": 118973
+    },
+    {
+      "hid": "H0061",
+      "level": 3,
+      "title": "Selectors",
+      "digest": "d27e",
+      "line": 1120,
+      "headingStart": 118973,
+      "bodyStart": 118987,
+      "subtreeEnd": 120019
+    },
+    {
+      "hid": "H0062",
+      "level": 3,
+      "title": "Snapshot fidelity",
+      "digest": "f084",
+      "line": 1149,
+      "headingStart": 120019,
+      "bodyStart": 120041,
+      "subtreeEnd": 120795
+    },
+    {
+      "hid": "H0063",
+      "level": 3,
+      "title": "Receipts",
+      "digest": "60a6",
+      "line": 1164,
+      "headingStart": 120795,
+      "bodyStart": 120808,
+      "subtreeEnd": 122208
+    },
+    {
+      "hid": "H0064",
+      "level": 3,
+      "title": "Hash semantics",
+      "digest": "f571",
+      "line": 1205,
+      "headingStart": 122208,
+      "bodyStart": 122227,
+      "subtreeEnd": 123031
+    },
+    {
+      "hid": "H0065",
+      "level": 2,
+      "title": "Avoid",
+      "digest": "5cf9",
+      "line": 1217,
+      "headingStart": 123031,
+      "bodyStart": 123040,
+      "subtreeEnd": 127640
+    },
+    {
+      "hid": "H0066",
+      "level": 2,
+      "title": "Canonical source and maturity",
+      "digest": "aa1f",
+      "line": 1253,
+      "headingStart": 127640,
+      "bodyStart": 127673,
+      "subtreeEnd": 128918
+    },
+    {
+      "hid": "H0067",
+      "level": 2,
+      "title": "Exact SimHash/IDF behavior",
+      "digest": "7095",
+      "line": 1261,
+      "headingStart": 128918,
+      "bodyStart": 128948,
+      "subtreeEnd": 132111
+    },
+    {
+      "hid": "H0068",
+      "level": 3,
+      "title": "Text profile",
+      "digest": "6d6f",
+      "line": 1263,
+      "headingStart": 128949,
+      "bodyStart": 128966,
+      "subtreeEnd": 130136
+    },
+    {
+      "hid": "H0069",
+      "level": 3,
+      "title": "SimHash",
+      "digest": "c532",
+      "line": 1293,
+      "headingStart": 130136,
+      "bodyStart": 130148,
+      "subtreeEnd": 132111
+    },
+    {
+      "hid": "H0070",
+      "level": 2,
+      "title": "Remaining surface and port disposition",
+      "digest": "563a",
+      "line": 1342,
+      "headingStart": 132111,
+      "bodyStart": 132153,
+      "subtreeEnd": 135804
+    },
+    {
+      "hid": "H0071",
+      "level": 3,
+      "title": "High-value algorithms whose math can be lifted",
+      "digest": "af4f",
+      "line": 1344,
+      "headingStart": 132154,
+      "bodyStart": 132205,
+      "subtreeEnd": 133172
+    },
+    {
+      "hid": "H0072",
+      "level": 3,
+      "title": "Preserve algorithms, redesign representation",
+      "digest": "9b15",
+      "line": 1356,
+      "headingStart": 133172,
+      "bodyStart": 133221,
+      "subtreeEnd": 134443
+    },
+    {
+      "hid": "H0073",
+      "level": 3,
+      "title": "Redesign or defer",
+      "digest": "c037",
+      "line": 1362,
+      "headingStart": 134443,
+      "bodyStart": 134465,
+      "subtreeEnd": 135804
+    },
+    {
+      "hid": "H0074",
+      "level": 2,
+      "title": "Rector/jso-jackson distinction",
+      "digest": "8dab",
+      "line": 1371,
+      "headingStart": 135804,
+      "bodyStart": 135838,
+      "subtreeEnd": 136794
+    },
+    {
+      "hid": "H0075",
+      "level": 2,
+      "title": "Recommended phased Node boundary",
+      "digest": "4468",
+      "line": 1383,
+      "headingStart": 136794,
+      "bodyStart": 136830,
+      "subtreeEnd": 147276
+    },
+    {
+      "hid": "H0076",
+      "level": 1,
+      "title": "yea i mean, i pointed to these things for some inspiration about capabilities, but never intended to make it into a pile of MCP tools. almost nothing in hashish has any place functionally as an MCP tool. what i'm gesturing at is the MCP backend operations that make MCP agent-facing tool calls easy and remove unnecessary cognitive load about various operational concerns in running the MCP framework. i'm gesturing at something in spirit similar to my jsonl_engine in codex-scientiae `D:\\aghado01\\codex-scientiae\\src\\jsonl_engine` and its client `D:\\aghado01\\codex-scientiae\\src\\jsonl_engine-client`, currently a WIP progress but highlighting a principled engine and centralized place for handling codex-scientiae's serialization and store logistics. the engine/client split might loosely be analogous to tools vs backend in the MCP, even if in the adaptation for para-agent, it's all written in node",
+      "digest": "6d8a",
+      "line": 1514,
+      "headingStart": 147276,
+      "bodyStart": 148180,
+      "subtreeEnd": 184276
+    },
+    {
+      "hid": "H0077",
+      "level": 2,
+      "title": "Layer reconstruction",
+      "digest": "541d",
+      "line": 1534,
+      "headingStart": 149072,
+      "bodyStart": 149096,
+      "subtreeEnd": 150288
+    },
+    {
+      "hid": "H0078",
+      "level": 2,
+      "title": "What the client successfully hides",
+      "digest": "6a6b",
+      "line": 1546,
+      "headingStart": 150288,
+      "bodyStart": 150326,
+      "subtreeEnd": 153143
+    },
+    {
+      "hid": "H0079",
+      "level": 2,
+      "title": "Para-agent mapping",
+      "digest": "b980",
+      "line": 1572,
+      "headingStart": 153143,
+      "bodyStart": 153165,
+      "subtreeEnd": 154726
+    },
+    {
+      "hid": "H0080",
+      "level": 2,
+      "title": "Where para-agent should go beyond this WIP",
+      "digest": "aec8",
+      "line": 1595,
+      "headingStart": 154726,
+      "bodyStart": 154772,
+      "subtreeEnd": 161043
+    },
+    {
+      "hid": "H0081",
+      "level": 2,
+      "title": "Recommended Node layout",
+      "digest": "0843",
+      "line": 1669,
+      "headingStart": 161043,
+      "bodyStart": 161070,
+      "subtreeEnd": 163364
+    },
+    {
+      "hid": "H0082",
+      "level": 2,
+      "title": "Concern placement",
+      "digest": "42f5",
+      "line": 1756,
+      "headingStart": 163364,
+      "bodyStart": 163385,
+      "subtreeEnd": 165410
+    },
+    {
+      "hid": "H0083",
+      "level": 2,
+      "title": "What the façade removes from the agent’s workload",
+      "digest": "6a13",
+      "line": 1773,
+      "headingStart": 165410,
+      "bodyStart": 165466,
+      "subtreeEnd": 166441
+    },
+    {
+      "hid": "H0084",
+      "level": 2,
+      "title": "Example `run` flow",
+      "digest": "18a3",
+      "line": 1800,
+      "headingStart": 166441,
+      "bodyStart": 166463,
+      "subtreeEnd": 167910
+    },
+    {
+      "hid": "H0085",
+      "level": 2,
+      "title": "JSONL adaptation caveat",
+      "digest": "070e",
+      "line": 1824,
+      "headingStart": 167910,
+      "bodyStart": 167937,
+      "subtreeEnd": 168886
+    },
+    {
+      "hid": "H0086",
+      "level": 2,
+      "title": "Agent-facing surface rule",
+      "digest": "e5db",
+      "line": 1830,
+      "headingStart": 168886,
+      "bodyStart": 168915,
+      "subtreeEnd": 170432
+    },
+    {
+      "hid": "H0087",
+      "level": 2,
+      "title": "Reconstructed responsibility boundaries",
+      "digest": "c68f",
+      "line": 1850,
+      "headingStart": 170432,
+      "bodyStart": 170475,
+      "subtreeEnd": 173370
+    },
+    {
+      "hid": "H0088",
+      "level": 2,
+      "title": "Data model and operational merits",
+      "digest": "256a",
+      "line": 1879,
+      "headingStart": 173370,
+      "bodyStart": 173407,
+      "subtreeEnd": 176005
+    },
+    {
+      "hid": "H0089",
+      "level": 2,
+      "title": "What to adapt for para-agent",
+      "digest": "dd36",
+      "line": 1892,
+      "headingStart": 176005,
+      "bodyStart": 176037,
+      "subtreeEnd": 177794
+    },
+    {
+      "hid": "H0090",
+      "level": 2,
+      "title": "WIP flaws and cautions",
+      "digest": "5f2f",
+      "line": 1931,
+      "headingStart": 177794,
+      "bodyStart": 177820,
+      "subtreeEnd": 184276
+    },
+    {
+      "hid": "H0091",
+      "level": 1,
+      "title": "why don't we inventory the capabilities embedded in `hashish`. the specific algorithmic concepts and what they are useful for. for example, some hashing techniques are useful for identity, some are for search and finding, similarity measures are useful for measuring a variety of things. i just want to collect the conceptual value and applications of what hashish lays out as a grab bag of various concerns",
+      "digest": "5d50",
+      "line": 1988,
+      "headingStart": 184276,
+      "bodyStart": 184686,
+      "subtreeEnd": 243284
+    },
+    {
+      "hid": "H0092",
+      "level": 2,
+      "title": "Capability map: hashes, sketches, and candidate indexes",
+      "digest": "7617",
+      "line": 2004,
+      "headingStart": 184956,
+      "bodyStart": 185015,
+      "subtreeEnd": 186209
+    },
+    {
+      "hid": "H0093",
+      "level": 3,
+      "title": "First, the epistemic split",
+      "digest": "b414",
+      "line": 2006,
+      "headingStart": 185016,
+      "bodyStart": 185047,
+      "subtreeEnd": 186209
+    },
+    {
+      "hid": "H0094",
+      "level": 2,
+      "title": "1. Seeded FNV and `Mix64`: deterministic distribution substrate",
+      "digest": "ea05",
+      "line": 2024,
+      "headingStart": 186209,
+      "bodyStart": 186276,
+      "subtreeEnd": 188634
+    },
+    {
+      "hid": "H0095",
+      "level": 2,
+      "title": "2. Bloom filter: approximate membership",
+      "digest": "bcfb",
+      "line": 2065,
+      "headingStart": 188634,
+      "bodyStart": 188677,
+      "subtreeEnd": 190994
+    },
+    {
+      "hid": "H0096",
+      "level": 2,
+      "title": "3. Count-Min Sketch: approximate streaming frequency",
+      "digest": "c6fc",
+      "line": 2104,
+      "headingStart": 190994,
+      "bodyStart": 191050,
+      "subtreeEnd": 193180
+    },
+    {
+      "hid": "H0097",
+      "level": 2,
+      "title": "4. HyperLogLog: approximate distinct cardinality",
+      "digest": "4b99",
+      "line": 2146,
+      "headingStart": 193180,
+      "bodyStart": 193232,
+      "subtreeEnd": 195283
+    },
+    {
+      "hid": "H0098",
+      "level": 2,
+      "title": "5. MinHash: set-overlap fingerprint",
+      "digest": "aac6",
+      "line": 2181,
+      "headingStart": 195283,
+      "bodyStart": 195322,
+      "subtreeEnd": 198023
+    },
+    {
+      "hid": "H0099",
+      "level": 2,
+      "title": "6. MinHash LSH: approximate candidate retrieval",
+      "digest": "a117",
+      "line": 2218,
+      "headingStart": 198023,
+      "bodyStart": 198074,
+      "subtreeEnd": 199964
+    },
+    {
+      "hid": "H0100",
+      "level": 2,
+      "title": "7. SimHash: weighted-feature resemblance fingerprint",
+      "digest": "d9d7",
+      "line": 2250,
+      "headingStart": 199964,
+      "bodyStart": 200020,
+      "subtreeEnd": 203157
+    },
+    {
+      "hid": "H0101",
+      "level": 2,
+      "title": "8. Adjacent fuzzy digests: CTPH and TLSH",
+      "digest": "5f04",
+      "line": 2294,
+      "headingStart": 203157,
+      "bodyStart": 203201,
+      "subtreeEnd": 205822
+    },
+    {
+      "hid": "H0102",
+      "level": 3,
+      "title": "CTPH / ssdeep-style",
+      "digest": "59c9",
+      "line": 2298,
+      "headingStart": 203303,
+      "bodyStart": 203327,
+      "subtreeEnd": 204599
+    },
+    {
+      "hid": "H0103",
+      "level": 3,
+      "title": "TLSH-style histogram digest",
+      "digest": "ccfc",
+      "line": 2315,
+      "headingStart": 204599,
+      "bodyStart": 204631,
+      "subtreeEnd": 205822
+    },
+    {
+      "hid": "H0104",
+      "level": 2,
+      "title": "Cross-cutting design value",
+      "digest": "4387",
+      "line": 2334,
+      "headingStart": 205822,
+      "bodyStart": 205852,
+      "subtreeEnd": 207602
+    },
+    {
+      "hid": "H0105",
+      "level": 2,
+      "title": "Capability map",
+      "digest": "8d74",
+      "line": 2375,
+      "headingStart": 207602,
+      "bodyStart": 207620,
+      "subtreeEnd": 220501
+    },
+    {
+      "hid": "H0106",
+      "level": 2,
+      "title": "The co-occurrence statistics are several capabilities, not one",
+      "digest": "99b0",
+      "line": 2394,
+      "headingStart": 220501,
+      "bodyStart": 220567,
+      "subtreeEnd": 221899
+    },
+    {
+      "hid": "H0107",
+      "level": 2,
+      "title": "Edge conventions worth making explicit",
+      "digest": "912b",
+      "line": 2409,
+      "headingStart": 221899,
+      "bodyStart": 221941,
+      "subtreeEnd": 222900
+    },
+    {
+      "hid": "H0108",
+      "level": 2,
+      "title": "Conceptual synthesis",
+      "digest": "69b1",
+      "line": 2426,
+      "headingStart": 222900,
+      "bodyStart": 222924,
+      "subtreeEnd": 224004
+    },
+    {
+      "hid": "H0109",
+      "level": 2,
+      "title": "Core finding",
+      "digest": "5490",
+      "line": 2449,
+      "headingStart": 224004,
+      "bodyStart": 224020,
+      "subtreeEnd": 225249
+    },
+    {
+      "hid": "H0110",
+      "level": 2,
+      "title": "Fuzzy fingerprints and chunking",
+      "digest": "df98",
+      "line": 2464,
+      "headingStart": 225249,
+      "bodyStart": 225284,
+      "subtreeEnd": 230477
+    },
+    {
+      "hid": "H0111",
+      "level": 3,
+      "title": "`ctph.cs` — CTPH/ssdeep concept, but not a faithful CTPH implementation",
+      "digest": "c895",
+      "line": 2466,
+      "headingStart": 225285,
+      "bodyStart": 225363,
+      "subtreeEnd": 228133
+    },
+    {
+      "hid": "H0112",
+      "level": 3,
+      "title": "`tlsh.cs` — locality histogram fingerprint, but not interoperable TLSH",
+      "digest": "72ff",
+      "line": 2503,
+      "headingStart": 228133,
+      "bodyStart": 228210,
+      "subtreeEnd": 230153
+    },
+    {
+      "hid": "H0113",
+      "level": 3,
+      "title": "Actual content-defined chunking is absent",
+      "digest": "154b",
+      "line": 2538,
+      "headingStart": 230153,
+      "bodyStart": 230199,
+      "subtreeEnd": 230477
+    },
+    {
+      "hid": "H0114",
+      "level": 2,
+      "title": "Compression-based comparison",
+      "digest": "1591",
+      "line": 2542,
+      "headingStart": 230477,
+      "bodyStart": 230509,
+      "subtreeEnd": 232679
+    },
+    {
+      "hid": "H0115",
+      "level": 3,
+      "title": "`ncd.cs` — Normalized Compression Distance",
+      "digest": "ac14",
+      "line": 2544,
+      "headingStart": 230510,
+      "bodyStart": 230559,
+      "subtreeEnd": 232679
+    },
+    {
+      "hid": "H0116",
+      "level": 2,
+      "title": "Exact/general similarity capabilities",
+      "digest": "77f4",
+      "line": 2581,
+      "headingStart": 232679,
+      "bodyStart": 232720,
+      "subtreeEnd": 238389
+    },
+    {
+      "hid": "H0117",
+      "level": 3,
+      "title": "`levenshtein.cs` — ordered surface-form edit distance",
+      "digest": "8f6d",
+      "line": 2583,
+      "headingStart": 232721,
+      "bodyStart": 232781,
+      "subtreeEnd": 233807
+    },
+    {
+      "hid": "H0118",
+      "level": 3,
+      "title": "`jaccard.cs` — set overlap, coverage, and containment family",
+      "digest": "f1f3",
+      "line": 2604,
+      "headingStart": 233807,
+      "bodyStart": 233874,
+      "subtreeEnd": 235202
+    },
+    {
+      "hid": "H0119",
+      "level": 3,
+      "title": "`cos.cs` — vector-direction similarity and angular distance",
+      "digest": "d223",
+      "line": 2639,
+      "headingStart": 235202,
+      "bodyStart": 235268,
+      "subtreeEnd": 236486
+    },
+    {
+      "hid": "H0120",
+      "level": 3,
+      "title": "`histogram.cs` — distribution representation rather than a measure",
+      "digest": "2a5c",
+      "line": 2664,
+      "headingStart": 236486,
+      "bodyStart": 236559,
+      "subtreeEnd": 237453
+    },
+    {
+      "hid": "H0121",
+      "level": 3,
+      "title": "`measure.cs` — common measure dispatch vocabulary",
+      "digest": "d330",
+      "line": 2687,
+      "headingStart": 237453,
+      "bodyStart": 237509,
+      "subtreeEnd": 238389
+    },
+    {
+      "hid": "H0122",
+      "level": 2,
+      "title": "Supporting representation/hash primitives",
+      "digest": "65b1",
+      "line": 2705,
+      "headingStart": 238389,
+      "bodyStart": 238434,
+      "subtreeEnd": 239664
+    },
+    {
+      "hid": "H0123",
+      "level": 3,
+      "title": "`seeded.cs` — deterministic non-cryptographic mixer",
+      "digest": "2b1f",
+      "line": 2707,
+      "headingStart": 238435,
+      "bodyStart": 238493,
+      "subtreeEnd": 239234
+    },
+    {
+      "hid": "H0124",
+      "level": 3,
+      "title": "`shingler.cs` — local lexical feature extraction",
+      "digest": "f0a5",
+      "line": 2725,
+      "headingStart": 239234,
+      "bodyStart": 239289,
+      "subtreeEnd": 239664
+    },
+    {
+      "hid": "H0125",
+      "level": 2,
+      "title": "Complete 22-file coverage map",
+      "digest": "0d71",
+      "line": 2731,
+      "headingStart": 239664,
+      "bodyStart": 239697,
+      "subtreeEnd": 243284
+    },
+    {
+      "hid": "H0126",
+      "level": 1,
+      "title": "just did some ideation along the same lines of this thread with grok `D:\\aghado01\\science-facility\\issues\\mcp\\discussion\\grok-science-facility-exploration.md`",
+      "digest": "e7ae",
+      "line": 2795,
+      "headingStart": 243284,
+      "bodyStart": 243445,
+      "subtreeEnd": 247637
+    },
+    {
+      "hid": "H0127",
+      "level": 1,
+      "title": "i think the parts about console vs MCP hooks as well as the specific analysis of context-mode's compaction-survival mechanism are both pertinent as well",
+      "digest": "bc9c",
+      "line": 2847,
+      "headingStart": 247637,
+      "bodyStart": 247792,
+      "subtreeEnd": 252253
+    },
+    {
+      "hid": "H0128",
+      "level": 3,
+      "title": "Three observation planes",
+      "digest": "7cdb",
+      "line": 2851,
+      "headingStart": 247997,
+      "bodyStart": 248026,
+      "subtreeEnd": 249316
+    },
+    {
+      "hid": "H0129",
+      "level": 3,
+      "title": "What context-mode specifically demonstrates",
+      "digest": "8699",
+      "line": 2873,
+      "headingStart": 249316,
+      "bodyStart": 249364,
+      "subtreeEnd": 252253
+    },
+    {
+      "hid": "H0130",
+      "level": 1,
+      "title": "i would generalize from this and submit the idea of a precompact/postcompact hook that ensures that certain context elements survive, as more of standard session feature rather than context-modes simpler implementation. i'm gesturing at an architectural feature i want that is loosely implied by the context-mode insights, like relevant MCP tool surface, MCP contracts, or other session-level invariants such as perhaps some of the general procedural and metacognitive guidance, among other things. the exact surface of what gets re-injected or persisted automatically would itself be a configurable surface",
+      "digest": "c9af",
+      "line": 2914,
+      "headingStart": 252253,
+      "bodyStart": 252863,
+      "subtreeEnd": 259131
+    },
+    {
+      "hid": "H0131",
+      "level": 3,
+      "title": "Configurable restoration policy",
+      "digest": "9362",
+      "line": 2976,
+      "headingStart": 255549,
+      "bodyStart": 255585,
+      "subtreeEnd": 256359
+    },
+    {
+      "hid": "H0132",
+      "level": 3,
+      "title": "Session invariants",
+      "digest": "067a",
+      "line": 2995,
+      "headingStart": 256359,
+      "bodyStart": 256382,
+      "subtreeEnd": 259131
+    },
+    {
+      "hid": "H0133",
+      "level": 1,
+      "title": "ok so what should we scribe with these insights over the past few turns",
+      "digest": "c3de",
+      "line": 3036,
+      "headingStart": 259131,
+      "bodyStart": 259205,
+      "subtreeEnd": 264323
+    },
+    {
+      "hid": "H0134",
+      "level": 2,
+      "title": "1. Session continuity contract",
+      "digest": "41f4",
+      "line": 3040,
+      "headingStart": 259305,
+      "bodyStart": 259339,
+      "subtreeEnd": 260967
+    },
+    {
+      "hid": "H0135",
+      "level": 2,
+      "title": "2. Mounted artifact contract",
+      "digest": "64ad",
+      "line": 3072,
+      "headingStart": 260967,
+      "bodyStart": 260999,
+      "subtreeEnd": 262230
+    },
+    {
+      "hid": "H0136",
+      "level": 2,
+      "title": "3. Amend the reposnapshot MCP vision",
+      "digest": "e95a",
+      "line": 3097,
+      "headingStart": 262230,
+      "bodyStart": 262270,
+      "subtreeEnd": 262888
+    },
+    {
+      "hid": "H0137",
+      "level": 2,
+      "title": "4. Amend the context-mode analysis",
+      "digest": "7184",
+      "line": 3112,
+      "headingStart": 262888,
+      "bodyStart": 262926,
+      "subtreeEnd": 263380
+    },
+    {
+      "hid": "H0138",
+      "level": 2,
+      "title": "5. Amend the backend architecture",
+      "digest": "7066",
+      "line": 3122,
+      "headingStart": 263380,
+      "bodyStart": 263417,
+      "subtreeEnd": 264323
+    },
+    {
+      "hid": "H0139",
+      "level": 1,
+      "title": "ok lets do the scribing then, sub-agents likely permissible here",
+      "digest": "2a1b",
+      "line": 3140,
+      "headingStart": 264323,
+      "bodyStart": 264390,
+      "subtreeEnd": 278464
+    },
+    {
+      "hid": "H0140",
+      "level": 2,
+      "title": "High impact",
+      "digest": "94c3",
+      "line": 3228,
+      "headingStart": 267176,
+      "bodyStart": 267191,
+      "subtreeEnd": 268721
+    },
+    {
+      "hid": "H0141",
+      "level": 2,
+      "title": "Medium impact",
+      "digest": "2eec",
+      "line": 3244,
+      "headingStart": 268721,
+      "bodyStart": 268738,
+      "subtreeEnd": 271577
+    },
+    {
+      "hid": "H0142",
+      "level": 2,
+      "title": "Lower impact / precision improvements",
+      "digest": "4ca4",
+      "line": 3280,
+      "headingStart": 271577,
+      "bodyStart": 271618,
+      "subtreeEnd": 278464
+    },
+    {
+      "hid": "H0143",
+      "level": 1,
+      "title": "ok, so circling back, we have alot of good design work and planning in place, but regarding the current state of the MCP, there are several low-hanging fruit bug fixes and enhancements. can we review the session for things that are worth doing now, aside from all of the loftier design and infrastructure goals? several things surfaced in the original claude-agy transcript from earlier, and we surfaced more based on that",
+      "digest": "a18e",
+      "line": 3402,
+      "headingStart": 278464,
+      "bodyStart": 278889,
+      "subtreeEnd": 285160
+    },
+    {
+      "hid": "H0144",
+      "level": 2,
+      "title": "Fix now",
+      "digest": "8793",
+      "line": 3406,
+      "headingStart": 279127,
+      "bodyStart": 279138,
+      "subtreeEnd": 283800
+    },
+    {
+      "hid": "H0145",
+      "level": 2,
+      "title": "Small enhancements immediately afterward",
+      "digest": "48d6",
+      "line": 3432,
+      "headingStart": 283800,
+      "bodyStart": 283844,
+      "subtreeEnd": 284519
+    },
+    {
+      "hid": "H0146",
+      "level": 2,
+      "title": "Leave out of this milestone",
+      "digest": "a385",
+      "line": 3440,
+      "headingStart": 284519,
+      "bodyStart": 284550,
+      "subtreeEnd": 285160
+    },
+    {
+      "hid": "H0147",
+      "level": 1,
+      "title": "i think its important here to distinguish respective transcript records of agent using calls to bash or powershell vs the interface that get's launched in powershell and observed by write-host. also the journal doesn't currently attribute the author. this should be first class metadata in abstract terms of agent vs para-agent",
+      "digest": "e7cf",
+      "line": 3455,
+      "headingStart": 285160,
+      "bodyStart": 285490,
+      "subtreeEnd": 288233
+    },
+    {
+      "hid": "H0148",
+      "level": 1,
+      "title": "its also important to be clear about the semantics of \"para agent\" which is the agent tethered to the driving agent (claude so far). roles should be agent, para-agent, human. there is no unknown case and it should resolve to one of those three, which most of the time would be 'agent' for initialization since i start a claude session and tell claude to init a session with agy, the para-agent",
+      "digest": "a466",
+      "line": 3503,
+      "headingStart": 288233,
+      "bodyStart": 288629,
+      "subtreeEnd": 291290
+    },
+    {
+      "hid": "H0149",
+      "level": 1,
+      "title": "I dont like that schema as is. i like to think about it kind of like an old-fashioned wire communication framework, where two actors are sending messages to eachother. Wouldn't a simple \"To/From\" with role labels suffice?",
+      "digest": "8034",
+      "line": 3584,
+      "headingStart": 291290,
+      "bodyStart": 291514,
+      "subtreeEnd": 293701
+    },
+    {
+      "hid": "H0150",
+      "level": 1,
+      "title": "we should be able to assign specific identities to each model in the dyad based on the model name e.g. Fable, Opus etc and Gemini Flash/Gemini Pro, whichever agy model is running at the time",
+      "digest": "ac42",
+      "line": 3679,
+      "headingStart": 293701,
+      "bodyStart": 293894,
+      "subtreeEnd": 295862
+    },
+    {
+      "hid": "H0151",
+      "level": 1,
+      "title": "we shouldn't need enums for the identities though. those are something we can infer from the respective applications under the hood. \"Opus 4.8\" is a specific model enum in claude and we can list that or query it, or simply see it in the pane and fill communique schema with the value",
+      "digest": "29a6",
+      "line": 3776,
+      "headingStart": 295862,
+      "bodyStart": 296148,
+      "subtreeEnd": 297491
+    },
+    {
+      "hid": "H0152",
+      "level": 1,
+      "title": "how would getting the model name work idiomatically in claude and agy?",
+      "digest": "5ab9",
+      "line": 3824,
+      "headingStart": 297491,
+      "bodyStart": 297564,
+      "subtreeEnd": 300971
+    },
+    {
+      "hid": "H0153",
+      "level": 1,
+      "title": "agy doesn't have an equivalent of message.model?",
+      "digest": "30cf",
+      "line": 3900,
+      "headingStart": 300971,
+      "bodyStart": 301022,
+      "subtreeEnd": 303017
+    },
+    {
+      "hid": "H0154",
+      "level": 1,
+      "title": "I don't think it's sound to be using transcript files backend. I think it should be all based on API streaming model.id for both, with the MCP exposing tools to toggle things like the model. Application-level provenance based on the application name \"claude\", \"agy\" etc. application profiles can be saved at schemas validated against application version. model.displayname and model.id can be transmitted transparently, we don't even need to make up codenames. the application adapters can have schemas for the relevant API surface and commands.",
+      "digest": "4437",
+      "line": 3924,
+      "headingStart": 303017,
+      "bodyStart": 303565,
+      "subtreeEnd": 307241
+    },
+    {
+      "hid": "H0155",
+      "level": 1,
+      "title": "yea, but we can also programmatically use `/` commands which are very similar in both . like i can `/model` in both agy and claude",
+      "digest": "ec82",
+      "line": 4048,
+      "headingStart": 307241,
+      "bodyStart": 307374,
+      "subtreeEnd": 309355
+    },
+    {
+      "hid": "H0156",
+      "level": 1,
+      "title": "lets chat-export this thread to science-facility/issues",
+      "digest": "a93f",
+      "line": 4126,
+      "headingStart": 309355,
+      "bodyStart": 309413,
+      "subtreeEnd": 309413
+    }
+  ],
+  "counts": {
+    "h1": 24,
+    "h2": 71,
+    "h3": 56,
+    "h4": 5
+  },
+  "spine": {
+    "bytes": 7879,
+    "ratio": 0.025464347005458722
+  },
+  "breaks": {
+    "count": 32,
+    "ends": [
+      781,
+      25933,
+      27032,
+      66753,
+      112325,
+      147275,
+      184275,
+      186208,
+      188633,
+      190993,
+      193179,
+      195282,
+      198022,
+      199963,
+      203156,
+      205821,
+      243283,
+      247636,
+      252252,
+      259130,
+      264322,
+      278463,
+      285159,
+      288232,
+      291289,
+      293700,
+      295861,
+      297490,
+      300970,
+      303016,
+      307240,
+      309354
+    ],
+    "aligned": "more-breaks"
+  },
+  "maxLine": {
+    "bytes": 1253,
+    "line": 2386
+  },
+  "noise": {
+    "data-uri": {
+      "count": 0,
+      "bytes": 0
+    },
+    "html": {
+      "count": 26,
+      "bytes": 280
+    },
+    "signed-url": {
+      "count": 0,
+      "bytes": 0
+    },
+    "image-ref": {
+      "count": 0,
+      "bytes": 0
+    },
+    "bytes": 280,
+    "ratio": 0.0009049393529037242
+  },
+  "setextSuspects": [],
+  "frontmatter": {
+    "start": 0,
+    "end": 347
+  },
+  "windows": []
+}
