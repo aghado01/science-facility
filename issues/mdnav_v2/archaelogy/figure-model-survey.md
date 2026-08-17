@@ -1,4 +1,7 @@
-# Figure-model survey — `mcp/mdnav/mdnav.mjs` as read on 2026-08-17
+# Figure-model survey — legacy `skills/doc-dive/mdnav/mdnav.mjs` as read on 2026-08-17
+
+(Read at `mcp/mdnav/mdnav.mjs`; moved back to `skills/doc-dive/mdnav/` in
+`38710e0` the same day, content unchanged. v2 is built in `mcp/mdnav_v2/`.)
 
 **Purpose.** The v2 engine is a rewrite; this document is the homework so the
 rewriter never has to rediscover what the current file knows. Every function
@@ -84,7 +87,7 @@ temp corpus and a temp work root, and reports counts.
 
 Gaps the July review named, still absent: fenced noise, non-`---` breaks, flag-order.
 
-## README (`mcp/mdnav/README.md`, 406 lines) — the second figure model
+## README (`skills/doc-dive/mdnav/README.md`, 406 lines) — the second figure model
 
 Sections and status: Design rule (keep), Address model (keep; add *enter*),
 Verbs table (extend), Reading at grain (keep), Coverage in bytes (keep),

@@ -2,7 +2,9 @@
 
 **Design canon:** [briefs/span-layers-brief.md](../briefs/span-layers-brief.md)
 (the "why" and the shape; do not fork it — amend it). **Homework:**
-[figure-model-survey.md](figure-model-survey.md). **Decisions:**
+[../archaelogy/figure-model-survey.md](../archaelogy/figure-model-survey.md).
+**Locations:** v2 is built in `mcp/mdnav_v2/`; the legacy oracle is
+`skills/doc-dive/mdnav/` and is never edited. **Decisions:**
 [decisions.md](decisions.md). This file is the execution queue: milestones,
 what each delivers, which brief gates it closes, and what it depends on.
 Statuses: `planned` · `in progress` · `done <date>` · `deferred`.
@@ -37,7 +39,7 @@ oracle property tests (≥ 200 random sets). No engine wiring yet.
 
 ## M2 — Claims table, stores, hygiene layout · `planned`
 
-New `mdnav.mjs` skeleton (the v2 file, developed beside the old one):
+New `mcp/mdnav_v2/mdnav.mjs` skeleton (the legacy file stays where it is):
 columnar claims table + `Doc`/`Corpus` shape; `MemoryStore` +
 `SidecarStore` sharing schema 3; corpus-scoped `index/` (inventory +
 `documents/Dnnn.json`) and run-scoped `<stamp>/reads.jsonl` + `run.json`;
@@ -63,7 +65,8 @@ collector + `rules/core.jsonl` carrying today's `data-uri`, `html-tag`,
 `link`, `link-ref`, `link-def`, `footnote-ref`, `footnote-def`,
 `inline-code`, `wikilink`; region-scoped execution (`Total \ inert` by
 default); `--strip-match` as a `custom` rule. Census/triage from claims.
-`coverage` on the algebra. **Old file replaced in one commit at the end.**
+`coverage` on the algebra. Legacy untouched; repointing the doc-dive skill
+is a separate decision (brief §Method 5).
 
 - **Gates:** 4, 5, 6, 7, 9, 12; 16 with the F1/F2 golden deltas explicitly
   inverted and named; suite additions for fenced noise, non-`---` breaks,

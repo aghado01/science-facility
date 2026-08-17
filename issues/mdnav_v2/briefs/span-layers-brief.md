@@ -5,13 +5,16 @@
 > subsets, chip seams), the audit trail in
 > [planning/decisions.md](../planning/decisions.md) (D1–D27), and the
 > figure-model homework in
-> [planning/figure-model-survey.md](../planning/figure-model-survey.md)
+> [archaelogy/figure-model-survey.md](../archaelogy/figure-model-survey.md)
 > (function-by-function dispositions, must-survive behaviors, test map).
 > Amend this brief; do not fork it.
 
 **Status:** filed, not started · **Filed:** 2026-08-17 (rev 2, same day —
 rev 1 framed this as "layers + masks"; superseded) · **Home:**
-[mcp/mdnav/mdnav.mjs](../../../mcp/mdnav/mdnav.mjs) (single-file, zero-dep
+[mcp/mdnav_v2/](../../../mcp/mdnav_v2/) — new, empty at filing; the
+**figure model / oracle** is the legacy
+[skills/doc-dive/mdnav/mdnav.mjs](../../../skills/doc-dive/mdnav/mdnav.mjs),
+which stays in place, untouched, serving the doc-dive skill (single-file, zero-dep
 Node ≥ 18; sibling modules permitted where a primitive is genuinely
 standalone — `span-set.mjs`, `claims.mjs` — a six-module split is not; see
 Non-goals) · **Purpose:** generalize the substrate under every existing verb
@@ -251,7 +254,7 @@ Two collector kinds, both writing to the same table:
   `Total \ coverage(fence ∪ html-comment ∪ frontmatter)` by default, and
   *what is excluded is itself a named policy* the caller can change (a
   `code-review` profile wants `data-uri` found *inside* fences).
-  Built-in rules live in `mcp/mdnav/rules/core.jsonl` (everything in the
+  Built-in rules live in `mcp/mdnav_v2/rules/core.jsonl` (everything in the
   kind table above that is regex-shaped); further inventories are for
   constructs Markdown does *not* define — a corpus-specific tracking pixel, a
   house citation style, an export tool's wrapper tags — loaded via
@@ -309,7 +312,7 @@ first policies.
   doccer `ClaimSelection.Coverage`).
 - **Suppression** = `coverage(selection)`; the caller names the suppressors.
 - **Profiles** are named suppression/entry/emphasis policies as **data**,
-  `mcp/mdnav/profiles/*.json`:
+  `mcp/mdnav_v2/profiles/*.json`:
   ```json
   { "name": "chat-export", "rules": ["core"],
     "strip": ["html-tag", "html-block", "data-uri", "signed-url"],
@@ -589,7 +592,9 @@ within, profile})` is a Selection; `mdnav_read` is a projection.
 
 ## Exit gate
 
-All in [test/acceptance.mjs](../../../mcp/mdnav/test/acceptance.mjs), via
+All in `mcp/mdnav_v2/test/acceptance.mjs` — a verbatim copy of the legacy
+[skills/doc-dive/mdnav/test/acceptance.mjs](../../../skills/doc-dive/mdnav/test/acceptance.mjs)
+made at M0, then extended — via
 the existing runner; the suite must report assert counts, not just PASS.
 
 1. Every pre-existing acceptance test passes unchanged, except those that
@@ -666,18 +671,19 @@ control flow (verbs become queries over a claims table built once), so
 every verb body changes and the three divergent scanners are the thing
 being replaced. Retrofitting a table under functions designed not to have
 one would carry the old seams forward. But it is a rewrite *from a figure
-model*: the current [mdnav.mjs](../../../mcp/mdnav/mdnav.mjs) encodes
-behavior the brief does not restate — PREAMBLE/BODY, setext suspects, the
+model*: the legacy [skills/doc-dive/mdnav/mdnav.mjs](../../../skills/doc-dive/mdnav/mdnav.mjs)
+encodes behavior the brief does not restate — PREAMBLE/BODY, setext suspects, the
 partition invariant on odd documents, CRLF/BOM, unclosed-fence warning,
 `UNBROKEN` windows, `--within` semantics, stamp `-2` suffixes, `LATEST`,
 the work-dir refusal guard, `keepOf`, the blockquote regression the tests
 encode — and that behavior is read and ported, never edited in place.
 
-1. **Tests first, verbatim.** Copy `test/acceptance.mjs` unchanged and
-   write the golden-capture script *before* any engine code. The new binary
-   runs the old suite from day one (gate 1) and matches goldens under
-   `default` (gate 16). The old `mdnav.mjs` stays on disk untouched until
-   parity — it is the oracle; git keeps it after.
+1. **Tests first, verbatim.** Copy the legacy `test/acceptance.mjs` into
+   `mcp/mdnav_v2/test/` unchanged (binary path made configurable) and write
+   the golden-capture script *before* any engine code. The new binary runs
+   the old suite from day one (gate 1) and matches goldens under `default`
+   (gate 16). The legacy file at `skills/doc-dive/mdnav/` is the oracle and
+   is **never edited**; it keeps serving the doc-dive skill throughout.
 2. **New engine, clean:** `SpanSet`, claims, collectors, containment,
    `Selection`, `materialize` — doccer-shaped, no lineage from the old
    scanners.
@@ -687,7 +693,10 @@ encode — and that behavior is read and ported, never edited in place.
    changed only where this brief says.
 4. **README as the second figure model.** Design rule, address model,
    triage philosophy, artifact locality all stay true; amend, don't rewrite.
-5. Replace the old file in one commit at parity; `mdnav.ps1` unchanged.
+5. At parity, **repointing the doc-dive skill** at `mcp/mdnav_v2` (or
+   keeping it pinned to legacy) is a separate, one-line decision recorded
+   in `planning/decisions.md` — not part of the build. Nothing is deleted;
+   v2 carries its own `mdnav.ps1`.
 
 Chip plan follows the seam this creates: **Chip A — parity** (old suite +
 goldens green on the new architecture, F1–F4 fixed; gates 1–7, 9, 13, 14,
