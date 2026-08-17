@@ -1,223 +1,360 @@
-# `mdnav` span layers — kind-labeled span index + interval algebra — brief
+# `mdnav` claims engine — typed span claims, profiles, containment — brief
 
-**Status:** filed, not started · **Filed:** 2026-08-17 · **Home:**
+**Status:** filed, not started · **Filed:** 2026-08-17 (rev 2, same day —
+rev 1 framed this as "layers + masks"; superseded) · **Home:**
 [mcp/mdnav/mdnav.mjs](../../../mcp/mdnav/mdnav.mjs) (single-file, zero-dep
-Node ≥ 18; a sibling `span-set.mjs` is permitted, a six-module split is not —
-see Non-goals) · **Purpose:** generalize the substrate under every existing
-verb so the incubating **mdnav MCP** can import it in-process instead of
-shelling out. **Nothing currently working is discarded.** Every verb keeps
-its CLI, its output format and its anchors; what changes is what they are
-computed *from*.
+Node ≥ 18; sibling modules permitted where a primitive is genuinely
+standalone — `span-set.mjs`, `claims.mjs` — a six-module split is not; see
+Non-goals) · **Purpose:** generalize the substrate under every existing verb
+so mdnav becomes a queryable **markdown-docs-as-virtual-db** backend the
+incubating **mdnav MCP** imports in-process. **Nothing currently working is
+discarded**: every verb keeps its CLI, output format, anchors and byte-fidelity
+covenant; what changes is what they are computed *from* and what else becomes
+askable.
 
 **Lineage** (the conversation this brief closes out, in order):
 
 1. Codex converged spec v0.1 — [codex-design-discussion-full.md](../discussion/codex-design-discussion-full.md)
-   §1–13 (`mdnav outline D002 --depth 3` → H0107–H0141). Contract for
-   discover/index/outline/read; governing principles (attention is the
-   instrument; structure informs navigation without determining meaning;
-   source authoritative; never silently omit bytes); non-goals incl. "MCP
-   wrapping unless later justified". The MCP is now justified — it is being
-   built — so this brief is the substrate work that justification implies.
+   §1–13 (`mdnav outline D002 --depth 3` → H0107–H0141). Verb contract;
+   governing principles (attention is the instrument; structure informs
+   navigation without determining meaning; source authoritative; never
+   silently omit bytes); non-goals incl. "MCP wrapping unless later
+   justified" — now justified, the MCP is being built.
 2. Fable review 2026-07-29 — [fable-review-20260729.md](../discussion/fable-review-20260729.md)
-   §"mdnav tooling" (H0002). F1 noise detection fence-blind (confirmed again
-   today, see Problem), F2 `profile` vs `--by breaks` disagree on what a
-   break is, F3 help/README/comment drift, F4 greedy boolean flags. **All
-   four are still open** — the only commit since is the move to `mcp/`
-   (8d063b8). This brief absorbs them.
-3. Sol XOR note — [sol-XOR-discussion.md](../discussion/sol-XOR-discussion.md).
-   mdnav as a *consumer witness* of doccer primitives, not their definition;
-   the recursive walk (classify delimiter candidates → mask/parity → bounded
-   regions → re-enter with context-specific rules → repeat); every
-   intermediate result keeps its material basis and source coordinates.
-4. Gemini note 2026-08-16 — [gemini-mdnav-next-gen.md](../discussion/gemini-mdnav-next-gen.md).
-   Port doccer's `SpanSet` interval algebra; hierarchical mask layers;
-   slice-program materialization; cadence; a module/MCP blueprint. This brief
-   takes the algebra and the layers, corrects the framing (below), and defers
-   the module split and `server.mjs` to their own brief.
+   §"mdnav tooling" (H0002): F1 noise detection fence-blind, F2 `profile` vs
+   `--by breaks` disagree on breaks, F3 help/README/comment drift, F4 greedy
+   boolean flags. **All four still open** (only commit since: the move to
+   `mcp/`, 8d063b8). Absorbed here.
+3. Sol XOR note — [sol-XOR-discussion.md](../discussion/sol-XOR-discussion.md):
+   mdnav as *consumer witness* of doccer primitives, not their definition; the
+   recursive walk — classify delimiter candidates → mask/parity → bounded
+   regions → **re-enter each region with context-specific rules** → repeat;
+   every intermediate keeps its material basis and source coordinates.
+4. Gemini note 2026-08-16 — [gemini-mdnav-next-gen.md](../discussion/gemini-mdnav-next-gen.md):
+   port doccer's `SpanSet`; hierarchical layers; slice-program
+   materialization; cadence; module/MCP blueprint. This brief takes the
+   algebra and the layering, generalizes "mask" to *claims + suppression
+   query*, and defers the module split and `server.mjs`.
+5. This thread 2026-08-17: (a) masking is an index concept — kinds indexed
+   independently so they can be filtered, read selectively, counted, composed;
+   never "hide"; (b) `# x` inside an html-block is a **nested** heading reached
+   by re-entering the block, not flattened to top level and not ignored;
+   (c) drop the noise/prose binary — documents contain **typed objects**, and
+   whether a type is signal or noise is a **profile** (a skill disposition), the
+   way `nushell-mcp` has nu-skills/nu-modules; (d) span algebra + bitmaps over
+   parsing — an AST tool (markdig) is not opposed, but parsing is brittle;
+   (e) doccer is the inspiration, never the dependency.
 
-**Doccer sources** (read for the port, not a runtime dependency):
-`D:\aghado01\codex-scientiae\src\doccer\Algebra\SpanSet.cs` (263 lines),
-`Algebra\GapCadence.cs`, `Materialization\RewriteMaterialization.cs`.
+**Doccer sources** (read for the port; `D:\aghado01\codex-scientiae\src\doccer`,
+10.6 k lines C#, README is the contract): `Algebra/SpanSet.cs`,
+`Algebra/Suppression.cs`, `Core/SpanBatch.cs` (`SpanClaim`, `SpanLevel`,
+`ClaimOrder`), `Collector/RegexCollector.cs` + `PatternRuleLoader.cs`
+(`PatternRule`, `ExecutionScope`, region-scoped matching), `Algebra/Pairing.cs`,
+`Vectors/BooleanVector.cs` (`PrefixParity`), `Core/TextSlice.cs`,
+`Algebra/LaminarView.cs` + `HierarchyView.cs` (`NearestContainers`),
+`Algebra/GapCadence.cs` (itself transcribed from mdnav's profiler),
+`Materialization/RewritePlan.cs`.
 
-## Framing correction, stated once
+## Doctrine (transcribed, not invented)
 
-A **mask is not a way to hide things.** It is one *layer* of an index: the
-set of spans of one kind, indexed independently so any reader can filter it
-out, read only it, count it, or compose it with other layers. Policy — what a
-given `read` elides, what `outline` counts, what the heading scanner ignores
-— is a *projection over layers chosen at query time*, never a property of
-the layer. Doccer's `SpanSet` "deliberately forgets claim identity" — it is
-the algebra, not the index. mdnav needs both: **kind-labeled span records per
-layer** (what `constructRuns` and `noiseSpans` already emit, but persisted
-and unified) plus **`SpanSet`** for composing queries over them. The Gemini
-note ports only the algebra; do not let the port flatten kinds into one
-anonymous mask.
+Doccer's governing rule, which is also this brief's:
+
+> Claims carry evidence. Queries execute named policies and return results.
+> Orchestration selects policies and interprets results. The engine never
+> pre-resolves.
+
+and its suppression rule, which is the whole answer to "noise vs prose":
+
+> Suppression is a query policy, never a claim property. No claim carries
+> `is_mask` … One code-block claim suppresses heading recognition under one
+> query and is the primary target of a language collector under the next, and
+> both readings must remain available from the same batch.
+
+For mdnav: the engine **discovers typed constructs** and records them as claims
+with source coordinates. `--strip`, "noise", "active heading", "unit boundary"
+are all *queries* a caller (CLI flag, profile, MCP tool, skill) names over
+those claims. mdnav's own design rule — presume about the reading process,
+never about the content — is the same rule from the other side.
 
 ## Problem
 
 Three symptoms, one cause. Probe today (345-byte doc, scratchpad):
 
-- `<!--` … `-->` spanning lines **leaks through `--strip all`**.
-  `noiseSpans` (mdnav.mjs:223) feeds the regex one line at a time, so
-  `<!--[\s\S]*?-->` can never match. The comment at :222 says multi-line
-  HTML is "reported rather than pretended away" — nothing reports it (F3).
-- A `data:image/png;base64,…` inside a ```` ```html ```` fence **is elided**
-  by `--strip all` — the fenced example is destroyed, and `discover`/`index`
-  triage counts quoted example code as noise (F1; the July repro reported a
-  doc as "25.7 % embedded" when every byte was a fenced example).
-- `profile` calls `***` / `----` a `break`; `--by breaks` accepts only exact
-  `---` (mdnav.mjs:416) and returns one segment for the whole file, silently
-  (F2). The documented profile→marks→basis telescope dead-ends.
+- Multi-line `<!-- … -->` **leaks through `--strip all`** — `noiseSpans`
+  (mdnav.mjs:223) is line-scoped so `<!--[\s\S]*?-->` cannot match; the
+  comment at :222 claiming multi-line HTML is "reported" is false (F3).
+- `data:image/png;base64,…` inside a ```` ```html ```` fence **is elided** and
+  triage counts fenced examples as noise (F1; the July repro reported a doc as
+  "25.7 % embedded" when every byte was a quoted example).
+- `profile` calls `***`/`----` a `break`; `--by breaks` accepts only exact
+  `---` (mdnav.mjs:416) and silently returns one segment (F2).
 
-Cause: mdnav has **three independent scanners** with three notions of extent
-— the heading pass in `analyze()` (fence-aware, frontmatter-aware),
-`constructRuns()` (fence-aware, its own break regex), and `noiseSpans()`
-(no fence state, line-scoped regex) — and no shared way to say "search this
-region minus those regions". Every verb re-scans at call time and each
-composes exclusions by hand (`if (n.start < p) continue;`).
+Cause: three independent scanners (`analyze()` headings, `constructRuns()`,
+`noiseSpans()`), three notions of extent, no shared claim table, no shared
+region algebra, and a hard-coded binary — `NOISE` kinds vs everything else —
+baked into `STRIP_ALL`, the triage ratio, and the `noise=` columns. Nothing
+can express "this fence is the thing I want" or "this `[^12]` is a citation,
+keep it, but the `<div>` around it is furniture."
 
 ## Shape
 
-### Layers
+Five primitives, in dependency order. Each is usable without the ones after
+it (doccer's "capability library, not a pipeline").
 
-A **layer** is a kind-labeled list of byte spans over the immutable source:
-`{ kind, start, end, info? }`, half-open, byte coordinates, sorted by start.
-Spans of *different* layers may nest or overlap (a `data-uri` inside an
-`html-block` is both). Within one layer spans are disjoint.
+### 1. `SpanSet` — geometry algebra
 
-| family | kinds | extent rule (end condition) | today |
+Normalized sorted disjoint half-open byte intervals; linear two-pointer
+`union`, `intersect`, `subtract`, `complement(len)`, `coverage`,
+`contains(off)`. ~60 lines. **Identity-forgetting on purpose** — that is what
+makes it usable as a mask. The Gemini sketch's `intersect`/`subtract` are
+correct as written; prove it against a brute-force bitmap, not by inspection.
+
+### 2. Claims — the occurrence table
+
+One table per document, persisted in the sidecar (schema 2 → 3), columnar:
+`starts[]`, `ends[]`, `kinds[]` (interned), `sources[]` (interned:
+which collector), `levels[]` (`char|line|multi`), `priorities[]`,
+`ruleIds[]` (interned, null for built-ins), `containers[]` (ordinal of the
+immediate containing region claim, or −1), `info[]` (kind-specific: fence
+lang, heading level+title, link target, footnote label…). Byte coordinates,
+sorted `ClaimOrder.Geometry` (start asc, end desc, ordinal). **Overlap and
+nesting are preserved** — a `data-uri` inside an `html-block` inside a
+`fence` is three claims. No `noise` flag exists anywhere.
+
+Kind vocabulary is **open**. Built-in kinds this brief must produce (today's
+constructs, plus the ones the discussion named):
+
+| family | kinds | extent rule | today |
 |---|---|---|---|
-| inert | `frontmatter` | `---` at byte 0 … next `---`/`...` line | detected in `analyze` |
-| inert | `fence` | opening ```` ``` ````/`~~~` (char+len tracked) … matching close, else EOF + warn | `constructRuns`, `analyze` (twice) |
-| inert | `html-comment` | `<!--` … first `-->`, any number of lines, no nesting | **missing** |
-| inert | `math-block` | `$$` line … `$$` line | missing (cheap; optional) |
-| structural | `heading` `break` `blockquote` `list` `table` `paragraph` `html-block` | current `LINE_KIND` runs; **`break` = `-{3,}|\*{3,}|_{3,}` everywhere** (F2); `html-block` uses CommonMark block *end conditions* (types 1–5 terminator string, 6–7 blank line) — **never open/close tag pairing** (an unclosed `<div>` in a transcript would swallow the file) | `constructRuns` |
-| noise | `data-uri` `html-tag` `signed-url` `image-ref` `custom` | existing detectors + `keepOf` label rule; scanned over `Total \ (fence ∪ html-comment ∪ frontmatter)` | `noiseSpans` (unmasked) |
+| region (re-enterable) | `frontmatter` `fence` `html-block` `html-comment` `math-block` `blockquote` `list` `list-item` `table` `footnote-def` | frontmatter: `---`@0 … next `---`/`...` line; fence: opener char+len … matching closer or EOF (+ residue claim `fence-unclosed`); html-comment: `<!--` … first `-->` (multi-line, no nesting); html-block: CommonMark block **start conditions 1–7 with their end conditions** (1–5 terminator string, 6–7 blank line) — never open/close tag pairing; math-block: `$$` line … `$$` line; blockquote/list/table: contiguous runs as today; footnote-def: `^\[\^label\]:` … next non-continuation line | fence, html (line-runs), blockquote, list, table exist; rest missing |
+| structural | `heading` `setext-heading` `break` `paragraph` | heading: ATX outside `fence ∪ html-comment ∪ frontmatter` (info: level, title, digest); setext: as today's suspects, promoted to a claim; **`break` = `-{3,}|\*{3,}|_{3,}` with blank line before, one regex shared by every consumer** (F2) | exist, disagree |
+| inline object | `html-tag` `link` `image-ref` `data-uri` `signed-url` `footnote-ref` `citation-ref` `inline-code` `wikilink` `custom:<id>` | today's regexes for the first five (`html-tag` = today's `html` noise kind, single tag, inner text not part of the claim); `footnote-ref` `\[\^[^\]]+\]`; `citation-ref` `\[\d+\]` **not adjacent to `(`/`:`** (Perplexity-style; ships as a rule in the `perplexity` inventory, not built-in); `inline-code` backtick spans; `wikilink` `\[\[…\]\]`; all executed **region-scoped** (below) | first five exist, unmasked |
 
-`html-tag` (single tag, inner text preserved — today's `html` noise kind)
-and `html-block` (whole block) are **two layers**, not one. "Strip tags,
-keep prose" is a projection over the first; "elide the whole `<details>`" is
-a projection over the second. Both must be available; today only the first
-exists and it is the default `--strip all` member. Keep that default.
+Only shape decides membership (README §Triage principle stands): the
+`signed-url` target test, the `data-uri` `![](…)` wrapper rule, the
+`keepOf` label rule all carry over unchanged as claim `info`.
 
-**Scan discipline** (order matters, everything in byte offsets):
+### 3. Collectors — how claims are discovered
 
-- L0 inert extents: one state machine, one pass. Replaces the two duplicated
-  fence trackers.
-- L1 structural: line classification over `Total \ (fence ∪ frontmatter)`.
-  Headings additionally exclude `html-comment`. **Headings inside
-  `html-block` remain headings** — GitHub renders `# x` after a blank line
-  inside `<details>` as a heading, mdnav counts them today, and changing that
-  would move anchors in existing corpora. Flag as a decision; default no
-  change.
-- L2 noise: over `Total \ (fence ∪ html-comment ∪ frontmatter)`. Outer-span-
-  wins dedupe (already there) stays.
+Two kinds, both writing to the same table:
 
-### Algebra — `SpanSet`
+- **State-machine collectors** for region kinds whose extent is a toggle or a
+  block condition (frontmatter, fence, html-comment, html-block, math-block).
+  One pass, replaces the two duplicated fence trackers. Toggle-defined regions
+  (fence, `$$`) are **prefix-parity** over their delimiter claims (doccer
+  `BooleanVector.PrefixParity`): delimiter positions XOR-fold to inside/outside,
+  and an odd carry-out is residue (`fence-unclosed`), reported never repaired.
+  Balanced-pair regions use strict-stack pairing with residue for unclosed
+  opens / dangling closes (doccer `Pairing.Pair`) — used only for kinds a
+  profile nominates as paired (e.g. `<details>` under a `github` profile), never
+  by default.
+- **Rule collectors** — doccer's `PatternRule` in JS: `{ id, pattern, kind,
+  source, level: char|line|multi, scope: line|whole, priority, capture?,
+  info? }`, loaded from **JSONL inventories**. Execution: the rule's `scope`
+  proposes regions (each line's content extent, or the whole master), the
+  caller's `SpanSet` admits regions, and the rule runs over `proposed ∩
+  admitted` **piece by piece so a match can bridge neither an excluded gap nor
+  a line break**. This is F1's structural fix: inline collectors run over
+  `Total \ coverage(fence ∪ html-comment ∪ frontmatter)` by default, and
+  *what is excluded is itself a named policy* the caller can change (a
+  `code-review` profile wants `data-uri` found *inside* fences).
+  Built-in rules live in `mcp/mdnav/rules/core.jsonl`; site/domain rules in
+  further `rules/*.jsonl` (`perplexity.jsonl`, `github.jsonl`, `chatgpt.jsonl`)
+  and via `--rules <file>`. Load-time validation with per-line provenance on
+  failure. `--strip-match <re>` becomes sugar for a one-off rule of kind
+  `custom`.
 
-Port of doccer `SpanSet`: normalized sorted disjoint half-open intervals,
-linear two-pointer `union`, `intersect`, `subtract`, `complement(len)`,
-`coverage` (Σ lengths), `contains(offset)`. ~60 lines. Constructed *from* a
-layer (`SpanSet.of(layer)`) or from anchor spans; identity is dropped on
-purpose at this boundary — that is what makes it a mask. The Gemini sketch's
-`intersect`/`subtract` are correct as written; verify against a brute-force
-bitmap in tests rather than by inspection.
+Collection is **transactional per document**: a failing rule leaves the
+table untouched and names its line.
 
-### Verbs, re-expressed (outputs unchanged unless noted)
+### 4. Containment and re-entry — the recursive walk
 
-- `index`/`discover` — build all layers once; persist in the sidecar
-  (schema 2 → 3); `noise` and `counts` derived from layers; triage no longer
-  counts fenced examples. Sidecar reused when digest matches, as today.
-- `outline` — unit/subtree sizes unchanged; `noise=` column computed as
-  `unit ∩ ∪(STRIP_ALL layers)`; composition (`--comp`) reads layers.
-- `read` — `--strip <kinds>` = `[S,E) \ ∪(kind layers)`; **new dual
-  `--only <kinds>`** = `[S,E) ∩ ∪(kind layers)` (read just the fences of a
-  unit; just the tables). Placeholder ≥ 1 KiB, `keepOf` label rule, ledger of
-  elided spans — all unchanged. Byte fidelity without `--strip`/`--only`
-  unchanged (existing test).
-- `coverage` — `union(reads) \ union(elided)` per doc. Fixes the cosmetic
-  "kept citation label counted as elided" while here.
-- `locate` — unchanged surface; may take `--in <kinds>` / `--not-in <kinds>`
-  later; not required by this brief.
-- `profile`, `marks --kind`, `--by breaks` — all read the same layers, so
-  they agree by construction (F2).
-- `parseArgs` — whitelist value-taking flags so `discover --recursive .`
-  works (F4). Orthogonal, small, touched anyway.
-- Help text / README / :222 comment — made true (F3). README §Triage gains
-  the layer table; §Windowing note about fence-aware headings extends to
-  comments.
+Region claims are containers. After L0 (regions) and L1 (structural over
+`Total \ inert`), the walk **re-enters each region claim** and runs the
+structural collectors over the region's own window with region-specific
+rules — inside `blockquote` the heading rule is `^ {0,3}> {0,3}#{1,6}\s`;
+inside `html-block` it is the ordinary ATX rule; inside `fence` nothing runs
+unless a profile says so; inside `list-item` continuation lines are the
+window. Claims found by re-entry get `container = <region ordinal>` and are
+otherwise ordinary claims **in source coordinates** (no derived masters, no
+prefix stripping, no OffsetMap — doccer defers that too). Nearest-container is
+the containment relation (doccer `LaminarHierarchy.NearestContainers`);
+proper crossings between region claims are residue reported by `profile`,
+not resolved.
+
+**Consequence for headings** — the third projection knob. README §Address
+model has basis / depth / extent; this adds **enter**:
+
+- Heading ids `Hnnnn` stay **ordinal over all heading claims in document
+  order** — a nested heading keeps the same number it has today, so existing
+  anchors do not move.
+- A heading is *active* for units/outline/coverage when its **level ≤ depth
+  AND its container chain is transparent**. The document root is transparent;
+  region kinds become transparent via `--enter <kinds>` (or a profile). Default
+  `--enter` is **empty**: `# x` inside `<details>` or a blockquote is not a
+  unit boundary at top level; `outline` shows the containing region as one
+  unit with a `contains: heading×2` note; `outline --enter html-block` (or
+  `--within H0007 --enter html-block`) descends into it as a nested outline.
+- Partition invariant unchanged: active units tile the source byte-for-byte
+  at every (depth, enter) combination — the invariant test gains the second
+  axis.
+
+This is the deliberate anchor-*activation* change the thread asked for. It is
+opt-in-visible (`outline` names what it is not descending into) so nothing is
+silently omitted.
+
+### 5. Queries — projections over claims
+
+Every verb becomes a query with named policies; existing flags are the
+first policies.
+
+- **Selection**: a set of claim ordinals from predicates (`kind in …`,
+  `container == …`, `within [S,E)`, `ruleId`, `priority ≥`) with
+  union/intersect/subtract; `.coverage()` → `SpanSet` (identity dropped —
+  doccer `ClaimSelection.Coverage`).
+- **Suppression** = `coverage(selection)`; the caller names the suppressors.
+- **Profiles** are named suppression/entry/emphasis policies as **data**,
+  `mcp/mdnav/profiles/*.json`:
+  ```json
+  { "name": "perplexity", "rules": ["core", "perplexity"],
+    "strip": ["html-tag", "html-block", "data-uri", "signed-url"],
+    "keep":  ["footnote-ref", "footnote-def", "citation-ref"],
+    "enter": [], "collect-inside": { "fence": [] },
+    "triage": ["data-uri", "html-tag", "html-block"] }
+  ```
+  `default` profile reproduces today's behavior exactly (`strip` =
+  today's `STRIP_ALL`, `triage` = the same, `enter` = []). Selected by
+  `--profile <name>` or `$MDNAV_PROFILE`; individual flags override. A profile
+  is to mdnav what a nu-module is to `nushell-mcp`: a disposition, loadable,
+  composable, not code.
+- **`read`**: `--strip <kinds|@profile>` = `[S,E) \ coverage(sel)`;
+  **new `--only <kinds>`** = `[S,E) ∩ coverage(sel)`; `--enter` as above.
+  Placeholder ≥ 1 KiB with `@s..e`, `keepOf` label rule, ledger of elided
+  spans, stderr warning before writing >64 KiB of stripped material — all
+  unchanged. Materialization is the existing slice loop expressed as
+  `subtract`; a `RewritePlan`-style ordered piece list is the internal shape
+  so `--only`/`--strip`/`--enter` compose without a second code path.
+- **`coverage`**: `union(reads) \ union(elided)` per doc; kept citation
+  labels no longer counted elided.
+- **`outline`**: unchanged columns; `noise=` becomes `strip=` computed from
+  the active profile's `strip` set (label kept as `noise=` under `default`
+  for output stability); `--enter`; a `contains:` note on units holding
+  non-transparent regions with headings.
+- **`profile`** (verb): census over **all** kinds present — counts, bytes,
+  ratio, cadence — not just construct runs; residue section (unclosed fences,
+  crossing regions, undefined footnote refs).
+- **`marks --kind <k>`**: any kind, incl. rule-defined; `--within`, `--in
+  <container-kind>`.
+- **`locate`**: unchanged surface; may take `--in`/`--not-in <kinds>` later.
+- **`discover`/`index`**: build claims once, persist; Notes column driven by
+  the profile's `triage` set; `--rules`, `--profile`.
+- **`profiles`** / **`rules`** (new, trivial): list what is loaded and from
+  where.
+- `parseArgs`: whitelist value-taking flags (F4). Help/README/:222 made true
+  (F3); README gains the kind table, the profile section, and *enter* as the
+  third knob.
 
 ### Export surface (the MCP foundation)
 
-`mdnav.mjs` gains named exports — `analyze`/`buildIndex`, `layersOf`,
-`SpanSet`, `materialize(buf, spans, {strip, only})`, `coverageOf`. The
-top-level CLI dispatch (last five lines of the file today: `parseArgs` →
-`VERBS[verb](args)`) moves under an `if (isMain) main()` guard keyed on
-`import.meta.url` vs `process.argv[1]` — there is **no guard and no export
-today**, so `import()` currently runs the CLI. After this, `server.mjs` (next
-brief) does `import { … } from './mdnav.mjs'` and never spawns a process. CLI
-behavior is unaffected.
+`mdnav.mjs` gains named exports — `analyze`/`buildIndex`, `claimsOf`,
+`SpanSet`, `Selection`, `loadRules`, `loadProfile`, `materialize(buf, spans,
+policy)`, `coverageOf` — and the top-level CLI dispatch (last five lines
+today: `parseArgs` → `VERBS[verb](args)`) moves under an `if (isMain)` guard
+keyed on `import.meta.url` vs `process.argv[1]`. **There is no guard and no
+export today; `import()` runs the CLI.** After this, `server.mjs` (next
+brief) imports in-process, and MCP tools are thin: `mdnav_query({doc, kind,
+within, profile})` is a Selection; `mdnav_read` is a projection.
 
 ## Non-goals (this brief)
 
-- No six-module split, no `server.mjs`, no "virtual database engine". One
-  file, optionally `span-set.mjs` beside it. Modularization is a later,
-  separate decision once the MCP's needs are concrete.
-- No CommonMark parser. Layers are extents by shape; the codex non-goals
-  (classification, semantic chunking, ranking, repair, rewriting) all stand.
-- No open/close tag-pair HTML masking.
-- No change to anchor ids, `Dnnn:Hnnnn@digest`, unit/subtree partition
-  semantics, `--depth` semantics, or any existing output format except where
-  a fix above says so.
-- Cadence (`GapCadence` port) is not in scope; `profile`'s existing cadence
-  is left as is unless the layer refactor makes the CV thresholds trivially
-  alignable — note it in the report either way.
+- No six-module split, no `server.mjs`, no "virtual database engine"
+  marketing. One file plus at most `span-set.mjs` / `claims.mjs` where a
+  primitive is standalone and testable alone.
+- No CommonMark parser, no markdig. Extents by shape, toggles and block
+  conditions. The codex non-goals (classification, semantic chunking,
+  ranking, repair, rewriting, summarization) all stand — profiles express
+  *disposition*, never *meaning*.
+- No open/close **tag-pair** HTML masking by default; pairing exists as a
+  primitive and only a profile turns it on for named tags.
+- No derived masters / OffsetMap / prefix stripping for re-entry.
+- No changes to `Dnnn:Hnnnn@digest` numbering, `--depth`/`--extent`
+  semantics, the partition invariant, or any output format except the fixes
+  named above and the `enter`-driven activation described in §4.
+- Not ported from doccer: Allen relations, `ClaimPairView`, path selection,
+  facts/saturation, origins, `RewritePlan` as a public type, vectors beyond
+  prefix parity. Cadence stays as is; note in the report whether the
+  claims refactor makes `GapCadence`'s window-basis form a free alignment.
+- Doccer is never a runtime dependency; nothing here calls .NET.
 
 ## Exit gate
 
-All in [test/acceptance.mjs](../../../mcp/mdnav/test/acceptance.mjs), run
-via the existing runner; suite must report the assert count, not just PASS.
+All in [test/acceptance.mjs](../../../mcp/mdnav/test/acceptance.mjs), via
+the existing runner; the suite must report assert counts, not just PASS.
 
-1. Every pre-existing acceptance test passes unchanged, except tests that
+1. Every pre-existing acceptance test passes unchanged, except those that
    encode F1/F2 behavior, which are inverted and named as such.
-2. `SpanSet`: `union`/`intersect`/`subtract`/`complement` agree with a
-   brute-force bitmap over ≥ 200 random small interval sets; normalization
-   merges adjacent `[a,b)[b,c)`; results are always normalized.
-3. Fenced `data:` URI and fenced `<div>` survive `--strip all`; `discover`
-   Notes for that doc show no `embedded=`/`html=`; `profile` counts them as
-   `code`, not noise.
-4. Multi-line `<!-- … -->` is elided by `--strip all` (placeholder when
-   ≥ 1 KiB), counted in `noise.html-comment`, and `# x` inside it is not a
-   heading.
-5. `# x` inside a fence is not a heading (existing regression, kept).
-6. `***` and `----` (blank line before) segment under `--by breaks`;
-   `profile` and `--by breaks` report the same break count.
-7. `read --only fence` on a unit yields exactly the fenced bytes of that unit
-   in order; `--only` ∪ `--strip` of the same kinds reconstruct the unit
-   byte-for-byte (placeholders aside).
-8. `coverage` after reading a unit with `--strip all` reports
-   `unit_bytes − elided_bytes`; a kept citation label is not counted elided.
-9. Sidecar: layers persisted at schema 3; a second `index` on an unchanged
-   file does not rescan (assert via a spy/timing or a `--stats` line on
-   stderr); a schema-2 sidecar is refreshed, not trusted.
-10. `discover --recursive .` and `discover . --recursive` behave identically.
-11. Byte fidelity: `read` without `--strip`/`--only` is byte-identical to the
+2. `SpanSet`: union/intersect/subtract/complement agree with a brute-force
+   bitmap over ≥ 200 random small interval sets; adjacent `[a,b)[b,c)` merge;
+   outputs always normalized.
+3. Claims table: sorted `Geometry` order; nested claims carry the correct
+   `container`; sidecar round-trips at schema 3; unchanged file → no rescan;
+   schema-2 sidecar refreshed, not trusted.
+4. Rule collector: a `scope: line` rule cannot match across a line break; a
+   `scope: whole` rule cannot match across an excluded gap (test with a
+   pattern that would span it); a bad rule fails at load with file:line and
+   leaves the table empty; `--strip-match` still works as a `custom` rule.
+5. Fenced `data:` URI and fenced `<div>` survive `--strip all` under
+   `default`; `discover` Notes for that doc show no `embedded=`/`html=`;
+   `profile` counts them as `fence` content. Under a profile with
+   `collect-inside: {fence: ["data-uri"]}` the same URI *is* found, with
+   `container` = the fence.
+6. Multi-line `<!-- … -->` is a claim, elided by `--strip all` (placeholder
+   ≥ 1 KiB), and `# x` inside it is not a heading at any `--enter`.
+7. `# x` inside a fence is not a heading (existing regression, kept).
+8. `# x` inside `<details>` (blank line before): heading claim exists with
+   `container` = the html-block, keeps its ordinal id; **not active** at
+   `--enter ""` (unit = the whole block, `contains: heading×1` note);
+   **active** under `--enter html-block`; partition invariant holds at both.
+   Same for `> # x` inside a blockquote via the blockquote rule.
+9. `***` and `----` segment under `--by breaks`; `profile` and `--by breaks`
+   report the same break count.
+10. `footnote-ref`/`footnote-def` claims recognized in a fixture with
+    `[^1]`…`[^1]:`; `perplexity` profile strips the `<div>` furniture and
+    keeps refs and defs; `read --only footnote-def` returns just the
+    foot-matter.
+11. `read --only fence` yields exactly the fenced bytes of a unit in order;
+    `--only K` ⊕ `--strip K` reconstruct the unit byte-for-byte modulo
+    placeholders.
+12. `coverage` after `read --strip all` reports `unit − elided`; a kept
+    citation label is not counted elided.
+13. `discover --recursive .` ≡ `discover . --recursive`.
+14. Byte fidelity: `read` without `--strip`/`--only` is byte-identical to the
     source span (existing).
-12. `node -e "import('./mdnav.mjs').then(m => m.SpanSet)"` resolves and does
-    not run the CLI.
+15. `node -e "import('./mdnav.mjs').then(m => m.SpanSet && m.Selection)"`
+    resolves without running the CLI.
+16. `default` profile output for every existing fixture is byte-identical to
+    pre-change output for `outline`, `read`, `coverage`, `locate` (golden
+    files), except where 5/6/9/12 say otherwise.
 
 ## Sequencing
 
-1. `SpanSet` + property tests (2). Standalone; nothing else depends on it yet.
-2. Unify the fence trackers into one L0 pass; add `html-comment`; persist
-   layers in the sidecar (schema 3). Existing tests still green.
-3. Route `noiseSpans` through the L0 mask → (3), (4). Route `analyze` break
-   detection to the shared `break` regex → (6). Reads (7), coverage (8).
-4. `--only`, exports (12), `parseArgs` (10), docs (F3).
-5. Report below; then the `server.mjs` brief.
+1. `SpanSet` + property tests (2). Standalone.
+2. Claims table + sidecar schema 3, populated by the *existing* scanners
+   unchanged (3). Golden files captured here (16).
+3. State-machine collector: unify fence trackers, add html-comment,
+   html-block, math-block, frontmatter as region claims; prefix-parity fences
+   with residue → (6), (7).
+4. Rule collector + `rules/core.jsonl` carrying today's inline regexes;
+   region-scoped execution → (4), (5). Shared `break` rule → (9).
+5. Containment + re-entry + `--enter` → (8).
+6. Selection / suppression / profiles (`default`, `perplexity`) → (10);
+   `read --only`, coverage on the algebra → (11), (12).
+7. Exports + guard (15), `parseArgs` (13), docs (F3), `profile` verb census.
+8. Report below; then the `server.mjs` brief.
 
 ## Report
 
 _(appended by the implementing agent on completion — what shipped, what was
-deferred and why, test counts before/after, anything the layer model turned
-out to get wrong.)_
+deferred and why, assert counts before/after, which kinds the fixtures
+surfaced that this table lacks, and anything the claims/containment model
+turned out to get wrong.)_
