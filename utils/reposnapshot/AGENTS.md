@@ -129,7 +129,7 @@ rewriting history.
   what a match means) — "ignore" is a semantics, not a stage. +
   `processors/` (ISS-loadable, body-only,
   `param($Item, $Config)`, copy-on-enrich, interior helpers allowed).
-  `schema/<stage>.schema.json` — per-stage I/O contracts (`{ stage, in, out }`,
+  `schema/<stage>.contract.json` — per-stage I/O contracts (`{ stage, in, out }`,
   field registers under named shapes; `from: "<stage>.out.<shape>"` marks a
   field taken verbatim from upstream). `tests/contracts.tests.ps1` checks every
   `from` resolves (input ⊆ upstream output) and prints join residues — fields
@@ -137,7 +137,11 @@ rewriting history.
   Assemble reads its own contract's `out.entry.core`/`exclude`. When you add a
   field: stamp it, declare it in the origin's `out`, add `from` where it passes
   through, and add it to `assemble.out.entry.exclude` if it must not reach the
-  payload.
+  payload. (Renamed from `*.schema.json` 2026-08-16: the files are contracts,
+  and "schema" was doing double duty — ledger #34.) `schema/psr.header.json`
+  is the one non-contract in that folder: the **psr** container's admissible
+  header-row declaration, read by `rs.core.container`; the contracts suite
+  globs `*.contract.json` and skips it.
 - `issues/reposnapshot/` — design docs (`design/`, `briefs/`, `planning/`,
   `reports/`, `discussion/`). **`planning/v3-consolidation-plan.md` is the
   sequenced work ledger**; `planning/decisions-ledger.md` the settled calls;

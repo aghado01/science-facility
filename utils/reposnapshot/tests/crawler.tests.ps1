@@ -114,10 +114,10 @@ try
     Assert-True ($null -eq $util.PSObject.Properties['Attributes']) 'no bare Attributes field (name reserved for rs-attributes element)'
 
     # -----------------------------------------------------------------------
-    Enter-Section '3d. Output conforms to schema/crawler.schema.json (out.file / out.node, exactly)'
+    Enter-Section '3d. Output conforms to schema/crawler.contract.json (out.file / out.node, exactly)'
     # -----------------------------------------------------------------------
-    $schemaPath = Join-Path (Split-Path $crawlerPath -Parent) 'schema/crawler.schema.json'
-    Assert-True (Test-Path $schemaPath) 'schema/crawler.schema.json exists'
+    $schemaPath = Join-Path (Split-Path $crawlerPath -Parent) 'schema/crawler.contract.json'
+    Assert-True (Test-Path $schemaPath) 'schema/crawler.contract.json exists'
     $contract = Get-Content -LiteralPath $schemaPath -Raw | ConvertFrom-Json -AsHashtable
     Assert-True ($contract.stage -eq 'crawler') 'contract names its stage'
     $fileFields = @($contract.out.file.Keys)

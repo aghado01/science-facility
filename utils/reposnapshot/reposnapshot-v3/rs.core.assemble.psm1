@@ -48,7 +48,7 @@ using namespace System.Collections.Generic
     coverage diagnostics). A new enrichment processor's element flows
     through with zero changes here.
 
-    Stage contract: schema/assemble.schema.json (in = what is read from the
+    Stage contract: schema/assemble.contract.json (in = what is read from the
     envelope and each bag; out = what an entry IS). Read at import:
       out.entry.core    → guaranteed on every entry; not counted in Elements.
       out.entry.exclude → stripped from entry bags.
@@ -91,12 +91,12 @@ using namespace System.Collections.Generic
 #>
 
 # =============================================================================
-# Stage contract — schema/assemble.schema.json. This module reads its OWN
+# Stage contract — schema/assemble.contract.json. This module reads its OWN
 # contract once at import: out.entry.core (guaranteed fields, not counted in
 # Elements) and out.entry.exclude (dropped from bags). Missing/unparseable file
 # fails the import loudly rather than silently emptying the exclusion set.
 # =============================================================================
-$script:Contract = Get-Content -LiteralPath "$PSScriptRoot/schema/assemble.schema.json" -Raw |
+$script:Contract = Get-Content -LiteralPath "$PSScriptRoot/schema/assemble.contract.json" -Raw |
     ConvertFrom-Json -AsHashtable
 $script:CoreFields = @($script:Contract.out.entry.core.Keys)
 $script:ExcludedFields = @($script:Contract.out.entry.exclude)
@@ -158,7 +158,7 @@ function Invoke-Assemble
 
     $results = @($DispatchOutput.Results)
 
-    # Entry-bag exclusions — schema/assemble.schema.json out.entry.exclude
+    # Entry-bag exclusions — schema/assemble.contract.json out.entry.exclude
     $alwaysExcluded = $script:ExcludedFields
 
     $entries = [List[PSCustomObject]]::new()
@@ -222,7 +222,7 @@ function Invoke-Assemble
     }
 
     # ── Phase: derive (Elements declaration — post-route coverage) ────────
-    $coreFields = $script:CoreFields   # schema/assemble.schema.json out.entry.core
+    $coreFields = $script:CoreFields   # schema/assemble.contract.json out.entry.core
     $elementCounts = [ordered]@{}
     foreach ($entry in $entries)
     {

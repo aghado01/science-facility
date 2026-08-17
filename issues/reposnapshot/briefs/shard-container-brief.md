@@ -97,7 +97,8 @@ extension stays `.txt` as a reader accommodation (tool allowlists,
 preview/truncation windows), not a format marker. Its admissible column set is
 declared once, in `reposnapshot-v3/schema/psr.header.json` — **read by code**
 (`rs.core.container` resolves the run's layout from it; ledger #6), and
-deliberately not `*.schema.json` (stage contracts, ledger #34).
+deliberately not `*.contract.json` (stage contracts, ledger #33/#34 — renamed
+from `*.schema.json` 2026-08-16 so "schema" stops doing double duty).
 
 Wire order and roles:
 

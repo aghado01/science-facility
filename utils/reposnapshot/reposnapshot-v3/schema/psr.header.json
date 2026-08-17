@@ -1,6 +1,6 @@
 {
   "format": "psr",
-  "$comment": "psr — piped snapshot rows. The header row of every shard file is RENDERED FROM THIS DECLARATION, and record rows are the same declaration projected onto one entry. There is no row declaration and there must not be one (see `row`). READ BY CODE: rs.core.container resolves the run's layout from this admissible superset × run configuration (which optional columns / sub-fields are on) × the IR header (widths from EntryCount) — once per run; shards measures with it, serialize renders with it, manifest declares with it. Named psr.header.json, deliberately NOT *.schema.json: those are stage I/O contracts (ledger #34; contracts.tests globs them) — this declares payload columns.",
+  "$comment": "psr — piped snapshot rows. The header row of every shard file is RENDERED FROM THIS DECLARATION, and record rows are the same declaration projected onto one entry. There is no row declaration and there must not be one (see `row`). READ BY CODE: rs.core.container resolves the run's layout from this admissible superset × run configuration (which optional columns / sub-fields are on) × the IR header (widths from EntryCount) — once per run; shards measures with it, serialize renders with it, manifest declares with it. Named psr.header.json, deliberately NOT *.contract.json: those are stage I/O contracts (ledger #33/#34; contracts.tests globs them) — this declares payload columns.",
 
   "identity": {
     "name": "psr",

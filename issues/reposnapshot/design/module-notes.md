@@ -39,7 +39,7 @@ and until 2026-08-15 the only field list anywhere was assemble's hardcoded
 exclusion — knowledge of "which fields are ingestion-side" lived at the end of
 the line, not with the field.
 
-**Stage contracts — `schema/<stage>.schema.json` (2026-08-15).** Each stage
+**Stage contracts — `schema/<stage>.contract.json` (2026-08-15).** Each stage
 declares `{ stage, in, out }` as field registers under named shapes
 (`crawler.out.file`, `ignore.in.node`, `ingest.out.bag`, `assemble.out.entry`,
 …). A field may carry `from: "<stage>.out.<shape>"` — taken verbatim from
@@ -145,14 +145,14 @@ on the crawler-stamped `Extension`, and it does not invert with
 run-config system exists yet; the code path is already the additive
 `-ExtensionBlacklist` param, so when admiral's config projection lands it
 becomes `defaults.membrane.extensionBlacklist` in a one-line change. Co-located
-with `Invoke-Membrane` (not the compiler) and declared in `membrane.schema.json`
+with `Invoke-Membrane` (not the compiler) and declared in `membrane.contract.json`
 so a reader finds it where the guard runs. Do not "unify" it into a glob
 source.
 
 Semantics have their own document: `reports/ignore-semantics-update.md`
 (Ignore / Selection, Design v3, reconciliation with the code — carved out of
 the backport report 2026-08-15; written with the pre-rename names).
-Contract: `schema/membrane.schema.json`. Docstrings slimmed 2026-08-15; the
+Contract: `schema/membrane.contract.json`. Docstrings slimmed 2026-08-15; the
 inline input/output examples were stale (pre-`Extension`) and are replaced by
 the schema, which is tested.
 

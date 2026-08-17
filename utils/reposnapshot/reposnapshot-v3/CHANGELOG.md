@@ -1,5 +1,16 @@
 # Changelog 
 
+## 2026-08-16 — stage contracts renamed `*.schema.json` → `*.contract.json`
+
+`schema/{assemble,crawler,ingest,membrane}.contract.json` (git mv). The files
+are contracts; "schema" was doing double duty with the payload column set
+(ledger #34) — now `schema/` holds contracts plus the one payload declaration
+(`psr.header.json`), and the name says which is which. `contracts.tests`
+globs `*.contract.json`; assemble's import-time load path, membrane docstrings,
+assemble/crawler tests, AGENTS.md, module-notes, briefs, ledger #33 updated.
+History (CHANGELOG-old, discussions, archived briefs, recon) left as written.
+Battery: 15 suites, 869 pass, 0 fail.
+
 ## 2026-08-16 — psr header-row declaration (`schema/psr.header.json`); no row schema
 
 Container spec named **psr** (piped snapshot rows); `.txt` stays as a reader

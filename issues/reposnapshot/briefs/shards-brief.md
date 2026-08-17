@@ -115,7 +115,7 @@ shard:   @{ Ordinal; Key; GroupKey; Class (Normal|Singleton|InBand|Oversized);
 idxmap:  RelativePath → @{ GlobalIdx; ShardOrdinal; ShardKey; ShardIndex }
 ```
 
-`schema/shards.schema.json` declares it in the house convention
+`schema/shards.contract.json` declares it in the house convention
 (`from: "<stage>.out.<shape>"`); `contracts.tests` checks `shards.in ⊆
 assemble.out` and prints the residue.
 
@@ -273,7 +273,7 @@ serialization; the doubled header row of the 0422 sample (an old LTS bug).
   sequence; runt tail absorbed only with tolerance; FFD beats strict; k == LB
   short-circuit; count cap binding; empty group; singleton group; strict +
   tolerance DP arrangement.
-- `contracts.tests` green with `shards.schema.json`; battery green; error
+- `contracts.tests` green with `shards.contract.json`; battery green; error
   stream clean.
 
 ## Roadmap (not v1; recorded so it is not lost)

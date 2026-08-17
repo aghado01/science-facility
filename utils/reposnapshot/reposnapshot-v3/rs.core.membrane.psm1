@@ -12,7 +12,7 @@ using namespace System.Text.RegularExpressions
     the eligibility guards.
 
 .DESCRIPTION
-    Contract: schema/membrane.schema.json (in = a slice of crawler.out; out =
+    Contract: schema/membrane.contract.json (in = a slice of crawler.out; out =
     pruned graph, nodes rebuilt, file descriptors the same objects filtered).
     Enriches nothing; fails fast if a descriptor lacks RelativePath/Extension.
 
@@ -923,7 +923,7 @@ function Invoke-Membrane
              why it stands outside the glob design.
           2. Glob verdict — [GlobCompiler]::TestPath on RelativePath (dual truth
              table on the semantics-stamped CompiledState).
-        Then empty-leaf prune. Contract: schema/membrane.schema.json.
+        Then empty-leaf prune. Contract: schema/membrane.contract.json.
 
     .PARAMETER CompiledNodes
         New-GlobCompiler output: @( @{ NodePath; AbsolutePath; NodeDepth; CompiledState } ).

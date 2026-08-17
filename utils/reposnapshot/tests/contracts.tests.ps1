@@ -3,7 +3,7 @@ Set-StrictMode -Version Latest
 
 <#
 .SYNOPSIS
-    Cross-stage contract checks over reposnapshot-v3/schema/*.schema.json.
+    Cross-stage contract checks over reposnapshot-v3/schema/*.contract.json.
 
 .DESCRIPTION
     Every stage declares { stage, in, out } with field registers under named
@@ -73,16 +73,18 @@ function Get-ShapeFields ([object]$Shape)
 try
 {
     # -----------------------------------------------------------------------
-    Enter-Section '1. Every schema parses and names its stage'
+    Enter-Section '1. Every contract parses and names its stage'
     # -----------------------------------------------------------------------
-    $files = @(Get-ChildItem -LiteralPath $schemaDir -Filter '*.schema.json' | Sort-Object Name)
-    Assert-True ($files.Count -ge 1) "schema files found under schema/" "got $($files.Count)"
+    # *.contract.json only — schema/ also holds payload declarations that are
+    # not stage contracts (psr.header.json) and must not be parsed as one.
+    $files = @(Get-ChildItem -LiteralPath $schemaDir -Filter '*.contract.json' | Sort-Object Name)
+    Assert-True ($files.Count -ge 1) "contract files found under schema/" "got $($files.Count)"
 
     $contracts = @{}
     foreach ($f in $files)
     {
         $c = Get-Content -LiteralPath $f.FullName -Raw | ConvertFrom-Json -AsHashtable
-        $expected = $f.Name -replace '\.schema\.json$', ''
+        $expected = $f.Name -replace '\.contract\.json$', ''
         Assert-True ($c.stage -eq $expected) "$($f.Name): stage = '$expected'" "got '$($c.stage)'"
         Assert-True ($c.ContainsKey('in') -and $c.ContainsKey('out')) "$($f.Name): has in and out"
         $contracts[$c.stage] = $c
