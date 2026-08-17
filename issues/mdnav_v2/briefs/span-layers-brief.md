@@ -1,5 +1,14 @@
 # `mdnav` claims engine — typed span claims, profiles, containment — brief
 
+> **Role:** design canon — the "why" and the shape. Execution lives in
+> [planning/roadmap.md](../planning/roadmap.md) (milestones M0–M6, gate
+> subsets, chip seams), the audit trail in
+> [planning/decisions.md](../planning/decisions.md) (D1–D27), and the
+> figure-model homework in
+> [planning/figure-model-survey.md](../planning/figure-model-survey.md)
+> (function-by-function dispositions, must-survive behaviors, test map).
+> Amend this brief; do not fork it.
+
 **Status:** filed, not started · **Filed:** 2026-08-17 (rev 2, same day —
 rev 1 framed this as "layers + masks"; superseded) · **Home:**
 [mcp/mdnav/mdnav.mjs](../../../mcp/mdnav/mdnav.mjs) (single-file, zero-dep
