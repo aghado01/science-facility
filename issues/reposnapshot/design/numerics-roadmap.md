@@ -1,0 +1,15 @@
+Good one to close out — ledger #4 justified the port with two consumers (`Get-PathHash` for Flat ordering, content hashing for shard metadata), and this session demoted the first. Let me check what's actually in there against what the pipeline now needs.
+
+Facts first: `rs.core.numerics` is byte-identical to `rs.lts.numerics` (the intended divergence hasn't started), it has **zero callers in v3** outside its own test suite (42 pass) and two old scratch cases, and its surface is three families — hashing (`Get-PathHash`, `Get-ContentHash`, `Get-StreamHash`), similarity (`SimHash`, `MinHash`/`Jaccard`, `Hamming`, `Levenshtein`, `Cosine`), and a corpus-level `Get-DocStats` (IDF map, avg doc length — BM25/TF-IDF prep, not per-entry stats).
+
+Against where the pipeline landed this session:
+
+**Has a home now**
+- `Get-PathHash` → the `GroupSort = PathHash` option (already in `shards.contract.json`). Demoted from "the Flat ordering key" (ledger #4's stated purpose) to a reading-order device, because FFD does the dispersion job under flexible packing. Small but real.
+- `Get-ContentHash` → the natural `content_meta` sub-field `hash`, off by default. Two different facts hide under that name, and it's worth choosing before declaring it: a **source** hash (cross-run identity, change detection, dedup — belongs to an enrichment processor, which means numerics loaded into the worker runspace, or the hash computed pre-chain by file-read) vs. a hash of the **encoded span** (what a reader could verify against the bytes it read — computable in the container's encode fold for free, alongside `content_bytes`, but changes whenever the codec does). I'd lean source hash via a processor, and only when something consumes it.
+
+**No consumer on the critical path — roadmap, not dead**
+- Similarity family → near-duplicate detection across entries: either a diagnostics-sidecar report or a reader-facing enrichment ("this file is 0.9-similar to X" — a basin-selection aid, squarely in the reader-cognition frame). Real use, later.
+- `Get-DocStats` → a retrieval/ranking layer that doesn't exist; per ledger #1 that layer is more likely the Node successor's than v3's.
+
+**Bottom line:** ledger #4's "not dead code" still holds, but its stated *reason* is now weaker (one optional sort key) and its real future is enrichment + diagnostics, none of it on the e2e path. Keeping it costs nothing — a leaf module with a green suite, no ISS friction until a processor imports it. What I'd do: amend #4 to say the current consumers honestly (`GroupSort=PathHash` now; `hash` sub-field and similarity diagnostics as roadmap), and declare `hash` in `psr.header.json` as admissible-off only once the source-vs-encoded call is made. Both are two-line edits; say the word and I'll make them, or leave numerics as is until an enrichment processor actually reaches for it.
