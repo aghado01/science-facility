@@ -128,11 +128,37 @@ constructs, plus the ones the discussion named):
 |---|---|---|---|
 | region (re-enterable) | `frontmatter` `fence` `html-block` `html-comment` `math-block` `blockquote` `list` `list-item` `table` `footnote-def` | frontmatter: `---`@0 … next `---`/`...` line; fence: opener char+len … matching closer or EOF (+ residue claim `fence-unclosed`); html-comment: `<!--` … first `-->` (multi-line, no nesting); html-block: CommonMark block **start conditions 1–7 with their end conditions** (1–5 terminator string, 6–7 blank line) — never open/close tag pairing; math-block: `$$` line … `$$` line; blockquote/list/table: contiguous runs as today; footnote-def: `^\[\^label\]:` … next non-continuation line | fence, html (line-runs), blockquote, list, table exist; rest missing |
 | structural | `heading` `setext-heading` `break` `paragraph` | heading: ATX outside `fence ∪ html-comment ∪ frontmatter` (info: level, title, digest); setext: as today's suspects, promoted to a claim; **`break` = `-{3,}|\*{3,}|_{3,}` with blank line before, one regex shared by every consumer** (F2) | exist, disagree |
-| inline object | `html-tag` `link` `image-ref` `data-uri` `signed-url` `footnote-ref` `citation-ref` `inline-code` `wikilink` `custom:<id>` | today's regexes for the first five (`html-tag` = today's `html` noise kind, single tag, inner text not part of the claim); `footnote-ref` `\[\^[^\]]+\]`; `citation-ref` `\[\d+\]` **not adjacent to `(`/`:`** (Perplexity-style; ships as a rule in the `perplexity` inventory, not built-in); `inline-code` backtick spans; `wikilink` `\[\[…\]\]`; all executed **region-scoped** (below) | first five exist, unmasked |
+| inline object | `html-tag` `link` `link-ref` `image-ref` `data-uri` `signed-url` `footnote-ref` `inline-code` `wikilink` `custom:<id>` | today's regexes for `html-tag` (= today's `html` noise kind, single tag, inner text not part of the claim), `link`, `image-ref`, `data-uri`, `signed-url`; `footnote-ref` `\[\^[^\]\s]+\]` (info: label); `link-ref` `\[text\]\[id\]` / collapsed `[id][]` (info: id); `inline-code` backtick spans; `wikilink` `\[\[…\]\]`; all executed **region-scoped** (below) | first five exist, unmasked |
+| definition | `footnote-def` `link-def` | `^\[\^label\]:` … next non-continuation line (region, re-enterable — a def body can hold links, code, even a nested list); `^\[id\]:\s*<?url>?` one line (info: id, target) | missing |
+
+Footnotes (`[^1_1]` in prose, `[^1_1]: https://…` in foot-matter) and link
+reference definitions are **idiomatic Markdown**, not a site disposition —
+they are core kinds, and what matters is the **relation** between the
+reference and its definition (§2b), which is what an interactive preview
+renders as a click.
 
 Only shape decides membership (README §Triage principle stands): the
 `signed-url` target test, the `data-uri` `![](…)` wrapper rule, the
 `keepOf` label rule all carry over unchanged as claim `info`.
+
+### 2b. Relations — keyed joins over claims
+
+Some constructs only mean something in pairs. A **relation** is a keyed
+join between two kinds on a field of `info`, computed at query time (or
+cached in the sidecar) and returned as ordinal pairs plus residue:
+
+| relation | left kind → right kind | key | residue |
+|---|---|---|---|
+| `footnote` | `footnote-ref` → `footnote-def` | label | dangling refs, unused defs |
+| `link-ref` | `link-ref` → `link-def` | id (case-insensitive) | dangling refs, unused defs |
+| `anchor` | `link` with `#fragment` target → `heading` | GFM slug of the heading title | dangling anchors |
+| `contains` | any → region claim | geometry (nearest container) | crossings |
+
+Relations are the query-form of "clickable": from a ref, its def span; from
+a unit, the foot-matter it cites (`read --only footnote-def --for H0007`);
+from a doc, its dangling refs (`profile` residue). They are **not** doccer's
+`ClaimPairView` — no Allen labels, no general occurrence relation — just the
+three keyed joins Markdown idiom actually defines, plus containment.
 
 ### 3. Collectors — how claims are discovered
 
@@ -158,9 +184,11 @@ Two kinds, both writing to the same table:
   `Total \ coverage(fence ∪ html-comment ∪ frontmatter)` by default, and
   *what is excluded is itself a named policy* the caller can change (a
   `code-review` profile wants `data-uri` found *inside* fences).
-  Built-in rules live in `mcp/mdnav/rules/core.jsonl`; site/domain rules in
-  further `rules/*.jsonl` (`perplexity.jsonl`, `github.jsonl`, `chatgpt.jsonl`)
-  and via `--rules <file>`. Load-time validation with per-line provenance on
+  Built-in rules live in `mcp/mdnav/rules/core.jsonl` (everything in the
+  kind table above that is regex-shaped); further inventories are for
+  constructs Markdown does *not* define — a corpus-specific tracking pixel, a
+  house citation style, an export tool's wrapper tags — loaded via
+  `rules/*.jsonl` or `--rules <file>`. Load-time validation with per-line provenance on
   failure. `--strip-match <re>` becomes sugar for a one-off rule of kind
   `custom`.
 
@@ -216,17 +244,20 @@ first policies.
 - **Profiles** are named suppression/entry/emphasis policies as **data**,
   `mcp/mdnav/profiles/*.json`:
   ```json
-  { "name": "perplexity", "rules": ["core", "perplexity"],
+  { "name": "chat-export", "rules": ["core"],
     "strip": ["html-tag", "html-block", "data-uri", "signed-url"],
-    "keep":  ["footnote-ref", "footnote-def", "citation-ref"],
+    "keep":  ["footnote-ref", "footnote-def", "link-def"],
     "enter": [], "collect-inside": { "fence": [] },
     "triage": ["data-uri", "html-tag", "html-block"] }
   ```
-  `default` profile reproduces today's behavior exactly (`strip` =
-  today's `STRIP_ALL`, `triage` = the same, `enter` = []). Selected by
-  `--profile <name>` or `$MDNAV_PROFILE`; individual flags override. A profile
-  is to mdnav what a nu-module is to `nushell-mcp`: a disposition, loadable,
-  composable, not code.
+  A profile says nothing about *what* is in the document — every kind is
+  detected regardless — only which kinds this reader treats as furniture,
+  which it insists on keeping even when a broader strip would take them,
+  which containers it descends into, and what `discover` should warn about.
+  `default` reproduces today's behavior exactly (`strip` = today's
+  `STRIP_ALL`, `triage` = the same, `enter` = []). Selected by `--profile
+  <name>` or `$MDNAV_PROFILE`; individual flags override. A profile is a
+  disposition, loadable and composable, not code.
 - **`read`**: `--strip <kinds|@profile>` = `[S,E) \ coverage(sel)`;
   **new `--only <kinds>`** = `[S,E) ∩ coverage(sel)`; `--enter` as above.
   Placeholder ≥ 1 KiB with `@s..e`, `keepOf` label rule, ledger of elided
@@ -244,7 +275,10 @@ first policies.
   ratio, cadence — not just construct runs; residue section (unclosed fences,
   crossing regions, undefined footnote refs).
 - **`marks --kind <k>`**: any kind, incl. rule-defined; `--within`, `--in
-  <container-kind>`.
+  <container-kind>`; `--resolve` joins through the kind's relation
+  (`marks --kind footnote-ref --resolve` → ref span, def span, label,
+  dangling flag). `read --only footnote-def --for <anchor>` materializes the
+  defs a unit cites.
 - **`locate`**: unchanged surface; may take `--in`/`--not-in <kinds>` later.
 - **`discover`/`index`**: build claims once, persist; Notes column driven by
   the profile's `triage` set; `--rules`, `--profile`.
@@ -253,6 +287,24 @@ first policies.
 - `parseArgs`: whitelist value-taking flags (F4). Help/README/:222 made true
   (F3); README gains the kind table, the profile section, and *enter* as the
   third knob.
+
+### Front-end grammar (constraint on this brief; the server brief owns it)
+
+The model for the MCP tool surface is already running in
+`science-facility/mcp/nushell-mcp`: `nu-skills` and `nu-modules` expose one
+small verb grammar with **typed, pure-content returns** —
+`list → table`, `read <x> → string` (raw), `search <re> → table` of hits,
+`inspect <x> → table` (signature + one doc line), `status → record` — and
+the discipline is **progressive disclosure**: index first, one item on
+demand, search across, never preload. Three layers: Claude adapter skill →
+augmentation layer (config + modules) → native server. mdnav maps onto it
+almost verb-for-verb today (`discover`≈list, `outline`≈inspect,
+`read`≈read, `locate`≈search, `profile`/`coverage`≈status, `marks`≈a typed
+list), so the backend contract is: **every query returns either literal
+source bytes or a flat table/record of claims and anchors — never prose,
+never a summary, never a recommendation beyond stderr triage.** The exports
+below must make that shape natural for `server.mjs`; if a verb's result
+cannot be expressed as bytes-or-table, that is a design smell to report.
 
 ### Export surface (the MCP foundation)
 
@@ -318,10 +370,13 @@ the existing runner; the suite must report assert counts, not just PASS.
    Same for `> # x` inside a blockquote via the blockquote rule.
 9. `***` and `----` segment under `--by breaks`; `profile` and `--by breaks`
    report the same break count.
-10. `footnote-ref`/`footnote-def` claims recognized in a fixture with
-    `[^1]`…`[^1]:`; `perplexity` profile strips the `<div>` furniture and
-    keeps refs and defs; `read --only footnote-def` returns just the
-    foot-matter.
+10. Fixture with `[^1_1]`/`[^1_2]` in prose and `[^1_1]: https://…` defs
+    at the end (one ref dangling, one def unused): both kinds are claims;
+    `marks --kind footnote-ref --resolve` pairs them by label and flags the
+    dangling ref; `profile` residue lists the unused def; `read --only
+    footnote-def --for <unit>` returns just the defs that unit cites;
+    `chat-export` profile strips the surrounding `<div>` furniture and keeps
+    refs and defs. Same shape for `[text][id]` / `[id]: url`.
 11. `read --only fence` yields exactly the fenced bytes of a unit in order;
     `--only K` ⊕ `--strip K` reconstruct the unit byte-for-byte modulo
     placeholders.
@@ -347,7 +402,8 @@ the existing runner; the suite must report assert counts, not just PASS.
 4. Rule collector + `rules/core.jsonl` carrying today's inline regexes;
    region-scoped execution → (4), (5). Shared `break` rule → (9).
 5. Containment + re-entry + `--enter` → (8).
-6. Selection / suppression / profiles (`default`, `perplexity`) → (10);
+6. Relations (§2b) + Selection / suppression / profiles (`default`,
+   `chat-export`) → (10);
    `read --only`, coverage on the algebra → (11), (12).
 7. Exports + guard (15), `parseArgs` (13), docs (F3), `profile` verb census.
 8. Report below; then the `server.mjs` brief.
