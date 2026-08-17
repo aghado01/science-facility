@@ -155,6 +155,33 @@ and `SidecarStore` (one-shot CLI, which has no warm process) — so the CLI
 and a running server pointed at the same work-dir see one index. Views are
 never persisted; they are cheap to recompute and policy-dependent.
 
+**Hygiene — persistence with rehydration, not accretion.** Today every
+`discover` mints `.doc-dive/<stamp>/` with its own `inventory.json` and
+`documents/Dnnn.index.json` per doc, so N discoveries of one small document
+leave N copies of its index, and ids are per-run. Split what is
+*corpus-scoped* from what is *run-scoped*:
+
+```
+<work-dir>/
+├── index/                         corpus-scoped, ONE copy, replaced in place
+│   ├── inventory.json             Dnnn ↔ path — ids stable across runs and restarts
+│   └── documents/Dnnn.json        digest, claims table (compact columnar JSON), no source body
+├── <stamp>/                       run-scoped, small: provenance for one investigation
+│   ├── reads.jsonl                append-only ledger (as today)
+│   └── run.json                   which index digests this run read against
+└── LATEST                         as today
+```
+
+A server **rehydrates** `index/` at start, refreshes a document only when
+its digest changes, and rewrites that one file in place — never a second
+copy. Runs stay stamped because a run *is* provenance, but a run holds one
+ledger, not an index. `--work-dir` / `$MDNAV_WORK_DIR` / `<corpus>/.doc-dive/`
+resolution and the "refuse a work dir the crawler can see" guard are
+unchanged. Add `mdnav runs prune --keep <n>` (trivial) so an interactive
+session's exhaust is one command to trim. The one-shot CLI keeps working
+against the same layout — it has its own exaptations — it just pays the
+rehydrate on each call instead of once.
+
 ### 2b. Relations — keyed joins over claims
 
 Some constructs only mean something in pairs. A **relation** is a keyed
@@ -431,7 +458,11 @@ the existing runner; the suite must report assert counts, not just PASS.
    under either store; a touched-but-identical file (mtime changed, digest
    same) → no rescan; changed bytes → that document only is rebuilt;
    schema-2 sidecar refreshed, not trusted; `Dnnn` ids identical after a
-   `Corpus` is closed and reopened.
+   `Corpus` is closed and reopened **and across successive `discover` runs
+   on the same work-dir**; after 5 `discover` calls the work-dir holds
+   exactly one `index/documents/Dnnn.json` per document and 5 run dirs each
+   containing only `reads.jsonl` + `run.json`; `runs prune --keep 2` leaves
+   two.
 4. Rule collector: a `scope: line` rule cannot match across a line break; a
    `scope: whole` rule cannot match across an excluded gap (test with a
    pattern that would span it); a bad rule fails at load with file:line and
