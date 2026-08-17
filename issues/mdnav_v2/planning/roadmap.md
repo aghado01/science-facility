@@ -13,6 +13,56 @@ Milestones are sequential. Chip A = M0–M3 (parity). Chip B = M4–M5 (query
 surface). M6 is a fresh-context review. The `server.mjs` brief follows and
 is out of scope here.
 
+## Bigger picture — where this is going
+
+**mdnav is the case study, not the destination.** The idea under test is
+*structured context-stream delivery*: every chunk a tool returns to an
+agent's prompt arrives with addressing, provenance, boundaries, and a
+magnitude the agent can plan against, so that as results accumulate across
+many tool calls, many files, and many tools, self-attention is handed
+bounded, attributed, re-mentionable objects instead of an undifferentiated
+span. Markdown documents are the **tractable domain to prove it on**:
+structure is discoverable by delimiter geometry, everything is
+byte-addressable, anchors are digest-stable across sessions, elisions can be
+addressed rather than lost, and one engine (this brief) owns both the index
+and the delivery. That is why the sequence is engine → MCP/REPL → payload
+framing P0 on mdnav results → eval, and only then generalization.
+
+**The destination is para-agent**, where the same principles apply to
+*everything* tools return — shell/exec output, file reads of any type,
+sub-agent replies, scrutiny and quarantine results, logs, MCP results from
+servers we do not control — and where it gets materially harder:
+
+- **No natural anchors.** A Markdown unit has `Dnnn:Hnnnn@digest`; a shell
+  result has a command, an exit code, and bytes. Source identity + semantic
+  sub-address must generalize to things without inherent structure
+  (exchange ids `e17.tool.3`, byte/line offsets into a retained record,
+  content digests) — the transcript store's identifiers, projected.
+- **Heterogeneous content.** Prose, code, JSON, tables, binary-ish dumps,
+  another agent's reply — one wrapper grammar, per-kind magnitude estimates
+  (the token battery's per-kind ratios are what make `~Nt` honest here),
+  and codec/raw decisions per kind, not per stream.
+- **Volume and velocity.** Many results per turn, some huge; budgets, plans,
+  and handles (the REPL contract) become the norm rather than a `read`
+  nicety, and eviction/summarization must keep the pointer when it drops
+  the bytes.
+- **Composition with the harness's own framing.** Tool results already
+  arrive inside the harness's `tool_result` structure; the wrapper composes
+  with that boundary rather than fighting it, and namespaces must not
+  collide with native tools.
+- **Results from tools we do not own.** para-agent can wrap what passes
+  through it; it cannot restructure what it does not mediate. The design
+  has to degrade gracefully to "source identity + boundary" when nothing
+  more is known.
+
+**Path:** (1) this brief — engine; (2) `server.mjs` — REPL/MCP over it;
+(3) payload P0 on mdnav results + the D20 eval; (4) the token battery
+(shared); (5) the atomic payload format brief proper, informed by (3);
+(6) para-agent adopts the wrapper for its mediated tool returns, mdnav
+vendored in as the document channel, the transcript store supplying
+identity for everything else. Each step is checkable on its own; none
+requires the next to be designed first.
+
 ## M0 — Baseline and goldens · `planned`
 
 Nothing in the engine changes. Capture the oracle.
