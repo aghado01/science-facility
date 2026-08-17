@@ -14,9 +14,14 @@
 .antigravity
 .obsidian
 
+# temp dirs 
+**/.doc-dive/**
+**/.snapshot/** 
+**/.para-agent/**
+
 
 **/bin/**
-**/.snapshot/**
+
 **__/pycache__/**
 **/.pytest_cache/**
 **/.mypy_cache/**
