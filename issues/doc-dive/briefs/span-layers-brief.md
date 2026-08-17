@@ -343,6 +343,40 @@ export today; `import()` runs the CLI.** After this, `server.mjs` (next
 brief) imports in-process, and MCP tools are thin: `mdnav_query({doc, kind,
 within, profile})` is a Selection; `mdnav_read` is a projection.
 
+## Implementation notes (things that bite if left to memory)
+
+1. **`isMain` guard on Windows.** `import.meta.url` is `file:///D:/…` with
+   forward slashes; `process.argv[1]` is `D:\…` and the drive letter's case
+   is whatever the caller typed (`mdnav.ps1` passes `Join-Path $PSScriptRoot
+   'mdnav.mjs'`). Compare `realpathSync.native(fileURLToPath(import.meta.url))`
+   against `realpathSync.native(resolve(process.argv[1]))`, case-insensitively
+   on `win32`. Test 15 must run through the `.ps1` wrapper as well as bare
+   `node`.
+2. **GFM slugs for the `anchor` relation.** Use GitHub's algorithm
+   (`github-slugger`): lowercase; remove characters that are not letters,
+   numbers, spaces, hyphens or underscores (Unicode letters kept); spaces →
+   `-`; **duplicate titles get `-1`, `-2`, … in document order**, so the
+   relation builder must slug headings in ordinal order and keep a
+   per-document counter, or `[see](#setup-1)` dangles against the wrong
+   heading. Store the computed slug in the heading claim's `info`.
+3. **CommonMark HTML block conditions, verbatim.** Start conditions and their
+   terminators — 1: `<script`/`<pre`/`<style`/`<textarea` … line containing
+   `</script>` etc.; 2: `<!--` … `-->`; 3: `<?` … `?>`; 4: `<!` + letter …
+   `>`; 5: `<![CDATA[` … `]]>`; 6: one of the ~60 block-level tag names,
+   open or close … **first blank line**; 7: any complete open or close tag
+   alone on the line (cannot interrupt a paragraph) … first blank line. Type
+   2 is emitted as the `html-comment` kind, not as `html-block`, so the two
+   never double-claim. Types 6/7 ending on a blank line — never on a matching
+   close tag — is what keeps malformed transcript HTML bounded.
+4. **`parseArgs` whitelist.** Value-taking today: `by depth max-depth extent
+   from glob heading headings kind max min preview run span strip-match to
+   truncate windows within work-dir`; new here: `only enter rules profile for
+   in not-in out`. Boolean today: `comp composition help i recursive refresh`;
+   new: `resolve`. **`--strip` is optional-value** (bare = `all`): treat it as
+   value-taking only when the next token is `all` or a comma-list whose every
+   member is a known kind or `@profile`; otherwise bare. Anything not in
+   either list is an error, not a guess.
+
 ## Non-goals (this brief)
 
 - No six-module split, no `server.mjs`, no "virtual database engine"
