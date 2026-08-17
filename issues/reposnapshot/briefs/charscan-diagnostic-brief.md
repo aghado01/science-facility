@@ -18,9 +18,9 @@ That is a diagnostic, and the pipeline has a position class for it already.
 
 ## Position and mechanism
 
-**Position class: enrich-only, read-only tail — the `rs-attributes` class.** Runs
+**Position class: enrich-only, read-only tail — the `rs-content_meta` class.** Runs
 after ALL content mutators. Position is a **profile invariant** (admiral's); the
-processor stays position-ignorant, exactly as rs-attributes does.
+processor stays position-ignorant, exactly as rs-content_meta does.
 
 *Why after mutation, specifically:* it must report on the content that actually
 ships. A scan running earlier would report characters later removed and miss
@@ -30,7 +30,7 @@ receives.
 **Mechanism — no new machinery.** The processor attaches an element to the bag;
 `Invoke-Assemble` declares it in `Header.Elements` without knowing what it is
 (open element model, zero per-element branches); the writer decides emission
-("compute-by-default, emission is a writer knob" — rs-attributes' split). That is
+("compute-by-default, emission is a writer knob" — rs-content_meta' split). That is
 how a diagnostic stays out of the payload without the processor knowing sidecars
 exist. Nothing in assemble, colonel, or the manifest changes.
 
@@ -48,7 +48,7 @@ elements"). New detections join when something real asks for them.
 ## Contract
 
 - **Item contract:** enrich-only. Reads `Content`, attaches its element, mutates
-  nothing. Follow rs-attributes' copy-on-enrich via `processors/bag-helpers.ps1`
+  nothing. Follow rs-content_meta' copy-on-enrich via `processors/bag-helpers.ps1`
   rather than re-deriving the clone.
 - **No-Content contract:** a bag carrying no content passes through unenriched, so
   the step is safely appendable to arbitrary profiles including thread envelopes.
@@ -82,7 +82,7 @@ property that makes `format-ws`'s `Skipped` worth reading.
 - Sidecar form, naming, or routing — writer-phase, and open (payload doctrine).
 - The broad anomaly taxonomy (mixed indentation, unpaired surrogates, suspicious
   invisibles). Candidates, not scope.
-- Anything that overlaps `rs-attributes`' per-entry metrics.
+- Anything that overlaps `rs-content_meta`' per-entry metrics.
 
 ## Open calls
 

@@ -502,7 +502,7 @@ Assert-True ($rTp.Text -notmatch '(?s)<#.*?#>') 'Text-keyed bag: Text mutated in
 Assert-True ($null -eq $rTp.PSObject.Properties['Content']) 'Text-keyed bag: no Content key invented'
 Assert-Equal $rTp.Id 'p1' 'Text-keyed bag: Id passed through'
 
-# No-content bag → returned untouched (mirrors rs-attributes' no-Content rule).
+# No-content bag → returned untouched (mirrors rs-content_meta's no-Content rule).
 # A mutator must not fabricate an empty payload: assemble splits EmptyFile from
 # EmptiedByProcessing and routes empty content to Diagnostics.
 $halted = [pscustomobject]@{ RelativePath = 'bin/x.dll'; SizeBytes = 9; ReadError = 'BinaryOrNulContent' }

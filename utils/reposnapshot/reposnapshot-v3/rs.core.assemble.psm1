@@ -12,7 +12,7 @@ using namespace System.Collections.Generic
     Design: issues/reposnapshot/design/rs.core.assemble-design.md (ownership map, monolith
     inventory, open element model, operation-order doctrine, payload
     doctrine). Assemble is a STAGE, not a chain processor: collation is
-    cross-item. It relates to the stage sequence as rs-attributes relates to
+    cross-item. It relates to the stage sequence as rs-content_meta relates to
     the chain — a read-only tail that mutates nothing and adds no row-level
     information.
 

@@ -46,7 +46,7 @@
 
     "content_meta": {
       "type": "block", "role": "content", "presence": "optional",
-      "source": "entry.Attributes (rs-attributes) plus any enrichment element a processor declares",
+      "source": "entry.Attributes (attached by processors/rs-content_meta.ps1 — the processor is named after this block; the in-memory element keeps its Attributes name for now) plus any enrichment element a processor declares",
       "note": "Metadata ABOUT the content span — hence the content_ prefix, pairing it with content_bytes and content. Extensible: which sub-fields are on is run configuration; new enrichment processors add admissible sub-fields here without writer changes (open element model). When the block is on, every row carries it; a sub-field absent on a row renders the empty marker.",
       "fields": {
         "chars":       { "type": "int",   "source": "Attributes.CharCount" },

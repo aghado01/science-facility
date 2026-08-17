@@ -3,7 +3,7 @@ Set-StrictMode -Version Latest
 
 <#
 .SYNOPSIS
-    Formal test harness for processors/rs-attributes.ps1.
+    Formal test harness for processors/rs-content_meta.ps1.
 
 .DESCRIPTION
     Covers:
@@ -14,17 +14,17 @@ Set-StrictMode -Version Latest
       3. Empty-content behavior — Attributes attached with zeroed metrics
       4. Copy-on-enrich — identity fields cloned, Content unmutated, caller's
          object untouched
-      5. Colonel dispatch — file-read → rs-attributes chain in real runspaces
+      5. Colonel dispatch — file-read → rs-content_meta chain in real runspaces
          (also proves GZipStream resolves in worker runspaces)
 
 .NOTES
     Run from any directory:
-        & "$PSScriptRoot\rs-attributes.tests.ps1"
+        & "$PSScriptRoot\rs-content_meta.tests.ps1"
 #>
 
 $procDir = Split-Path $PSScriptRoot -Parent
 $v3 = Split-Path $procDir -Parent
-$attrPath = Join-Path $procDir 'rs-attributes.ps1'
+$attrPath = Join-Path $procDir 'rs-content_meta.ps1'
 
 # Shared ISS helpers (Resolve-BagContent / Copy-Bag) — colonel registers these
 # into worker runspaces; dot-invocation here needs them loaded explicitly.
@@ -135,7 +135,7 @@ Assert-True ($rc.SizeBytes -eq 999 -and $rc.Attributes.CharCount -eq 5) `
     'provenance split: SizeBytes (on-disk) vs Attributes.CharCount (processed)'
 
 # ---------------------------------------------------------------------------
-Enter-Section '5. Colonel dispatch (file-read → rs-attributes)'
+Enter-Section '5. Colonel dispatch (file-read → rs-content_meta)'
 # ---------------------------------------------------------------------------
 Import-Module (Join-Path $v3 'rs.core.colonel.v2.psm1') -Force -WarningAction SilentlyContinue
 
@@ -147,8 +147,8 @@ Set-Content -Path $fixtureFile -Value ("# sample`n" + ('Write-Host "line" # trai
 try
 {
     $compiled = Compile-Plan `
-        -Manifest @{ 'file-read' = (Join-Path $procDir 'file-read.ps1'); 'rs-attributes' = $attrPath } `
-        -Steps @(@{ Key = 'file-read'; Config = @{} }, @{ Key = 'rs-attributes'; Config = @{} }) `
+        -Manifest @{ 'file-read' = (Join-Path $procDir 'file-read.ps1'); 'rs-content_meta' = $attrPath } `
+        -Steps @(@{ Key = 'file-read'; Config = @{} }, @{ Key = 'rs-content_meta'; Config = @{} }) `
         -ChainExecutorPath (Join-Path $procDir 'chain-executor.ps1') `
             -SharedHelperPath (Join-Path $procDir 'bag-helpers.ps1')
     Assert-True (@($compiled.Errors).Count -eq 0) 'chain compiles' ($compiled.Errors -join '; ')
@@ -183,5 +183,5 @@ finally
 }
 
 # ---------------------------------------------------------------------------
-Write-Host "`n═══ rs-attributes.tests: $script:Passed passed, $script:Failed failed ═══" -ForegroundColor $(if ($script:Failed -eq 0) { 'Green' } else { 'Red' })
+Write-Host "`n═══ rs-content_meta.tests: $script:Passed passed, $script:Failed failed ═══" -ForegroundColor $(if ($script:Failed -eq 0) { 'Green' } else { 'Red' })
 if ($script:Failed -gt 0) { exit 1 }

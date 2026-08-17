@@ -19,7 +19,7 @@ Set-StrictMode -Version Latest
          retained in the bag
       6. Skipped/Errors/Warnings pass-through
       7. GOLDEN — full v3 pipeline (crawl → ignore → ingest[file-read,
-         rs-attributes] → assemble) vs a live LTS Get-RepoSnapshot monolith
+         rs-content_meta] → assemble) vs a live LTS Get-RepoSnapshot monolith
          over a normal-form fixture (LF-only, no trailing newline, no blank
          runs ≥2 — Normalize-FileContent is the identity on it, making
          byte-exact content comparison honest). Matching is by path KEY,
@@ -229,9 +229,9 @@ try
     $ingest = Invoke-Ingest -FilteredFsGraph $filtered `
         -Manifest @{
             'file-read'     = (Join-Path $v3 'processors\file-read.ps1')
-            'rs-attributes' = (Join-Path $v3 'processors\rs-attributes.ps1')
+            'rs-content_meta' = (Join-Path $v3 'processors\rs-content_meta.ps1')
         } `
-        -Steps @(@{ Key = 'file-read'; Config = @{} }, @{ Key = 'rs-attributes'; Config = @{} }) `
+        -Steps @(@{ Key = 'file-read'; Config = @{} }, @{ Key = 'rs-content_meta'; Config = @{} }) `
         -ChainExecutorPath (Join-Path $v3 'processors\chain-executor.ps1') `
         -SharedHelperPath (Join-Path $v3 'processors\bag-helpers.ps1')
 

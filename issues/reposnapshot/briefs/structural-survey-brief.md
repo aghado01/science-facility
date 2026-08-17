@@ -73,7 +73,7 @@ Shape of the work:
    `Required IssModules: <path to rs.dev.signatures.psm1>` in its self-doc block.
 2. Body: resolve the content key (`Content` else `Text`, harmonized mutator
    contract — but this step is **enrich-only**, so it must NOT rewrite content;
-   position class is the read-only tail, same as rs-attributes). Call
+   position class is the read-only tail, same as rs-content_meta). Call
    `Get-FunctionSignature -ScriptText $content -SourceName $Item.RelativePath`.
    Attach one element. Pass through unenriched when there is no content key.
 3. Config surface: what to extract (kinds, whether to include nested helpers,
@@ -84,12 +84,12 @@ Shape of the work:
 
 Assemble needs **zero changes**: the open element model collates any attached
 element and declares it in `Header.Elements` without knowing it exists.
-rs-attributes is the working precedent for the shape (one namespaced element
+rs-content_meta is the working precedent for the shape (one namespaced element
 holding a sub-structure).
 
-## Operation-order — read-only tail, same as rs-attributes
+## Operation-order — read-only tail, same as rs-content_meta
 
-**Position: after ALL content mutators.** No tension with rs-attributes'
+**Position: after ALL content mutators.** No tension with rs-content_meta'
 invariant; the survey shares it, for the same reason.
 
 (An earlier draft argued the reverse — that the survey should precede the

@@ -111,7 +111,7 @@ try
     Assert-True ($util.CreationUtc -is [datetime] -and $util.CreationUtc.Kind -eq [System.DateTimeKind]::Utc) 'CreationUtc is a Utc [datetime]'
     Assert-True ($util.FsAttributes -is [IO.FileAttributes]) 'FsAttributes is a [FileAttributes] enum'
     Assert-True (-not $util.FsAttributes.HasFlag([IO.FileAttributes]::Directory)) 'FsAttributes on a file lacks Directory flag'
-    Assert-True ($null -eq $util.PSObject.Properties['Attributes']) 'no bare Attributes field (name reserved for rs-attributes element)'
+    Assert-True ($null -eq $util.PSObject.Properties['Attributes']) 'no bare Attributes field (name reserved for the rs-content_meta element)'
 
     # -----------------------------------------------------------------------
     Enter-Section '3d. Output conforms to schema/crawler.contract.json (out.file / out.node, exactly)'

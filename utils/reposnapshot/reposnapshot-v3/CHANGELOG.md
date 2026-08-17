@@ -1,5 +1,13 @@
 # Changelog 
 
+## 2026-08-17 — processors: rs-attributes → rs-content_meta
+
+Renamed after the psr `content_meta` block it feeds; suite, chain keys,
+run-all roster, sibling comments, AGENTS.md, live briefs, ledger 11b follow;
+metrics untouched. Stale "SpanBytes is the packing input" comment corrected
+(ledger #39). In-memory element stays `Attributes` — flagged as a separate
+contract-level call. Battery 15 · 936 · 0. See processors/CHANGELOG.md.
+
 ## 2026-08-17 — processors: format-ws → rs-whitespace
 
 Rename to say the lane (code ingestion, not markdown; ledger #21). Processor

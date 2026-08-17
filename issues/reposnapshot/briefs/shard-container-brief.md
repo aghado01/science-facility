@@ -35,7 +35,7 @@ tables** too: a declared column set, typed, and rows that conform.
 **Which fields a record row carries is configurable in principle** — the open
 element model attaches whatever the chain produced (`Attributes`,
 `Processing`, `Encoding`, novel enrichments); emission is a writer knob
-(compute-by-default, `rs-attributes` split). So header row and record rows
+(compute-by-default, `rs-content_meta` (né rs-attributes) split). So header row and record rows
 must be generated from **one declaration**, or they drift. LTS solved this
 in an ugly way and it is the reason a verbatim port is refused (ledger #5):
 
@@ -220,7 +220,7 @@ offsets; ByteLength }`. Neither reaches into the other's decision.
   reads them. That is why manifest follows serialize, and why nothing
   "recovers" positions — and why no offset is ever derived from `Measure-Row`.
 
-The knot this cuts: `rs-attributes` was once asked to serve the first question
+The knot this cuts: `rs-content_meta` (né rs-attributes) was once asked to serve the first question
 with a number deliberately invariant to emission settings — wrong tool, wrong
 direction (#26). Now neither stage measures for the other: both call the same
 `rs.core.container` layout function — shards to sum, serialize to write.

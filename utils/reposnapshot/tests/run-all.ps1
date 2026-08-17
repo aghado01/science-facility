@@ -57,7 +57,7 @@ $suitePaths = @(
     (Join-Path $repoRoot 'reposnapshot-v3\processors\tests\rs-indent.tests.ps1')
     (Join-Path $repoRoot 'reposnapshot-v3\processors\tests\rs-psstrip.tests.ps1')
     (Join-Path $repoRoot 'reposnapshot-v3\processors\tests\rs-csstrip.tests.ps1')
-    (Join-Path $repoRoot 'reposnapshot-v3\processors\tests\rs-attributes.tests.ps1')
+    (Join-Path $repoRoot 'reposnapshot-v3\processors\tests\rs-content_meta.tests.ps1')
     (Join-Path $repoRoot 'reposnapshot-v3\processors\tests\rs-numerics.tests.ps1')
     (Join-Path $repoRoot 'tools\tests\rs.dev.signatures.tests.ps1')
 )

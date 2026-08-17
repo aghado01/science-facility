@@ -4,7 +4,7 @@ Set-StrictMode -Version Latest
 <#
 .SYNOPSIS
     Content mutators inside a code-track chain: crawl → ignore →
-    ingest[file-read, rs-whitespace, rs-psstrip, rs-attributes] → assemble.
+    ingest[file-read, rs-whitespace, rs-psstrip, rs-content_meta] → assemble.
 
 .DESCRIPTION
     The regression for consolidation item 6d. Before harmonization, rs-whitespace
@@ -12,7 +12,7 @@ Set-StrictMode -Version Latest
     REPLACED the bag with an Id/Path/Text envelope, so putting either one in a
     code-track chain destroyed the ItemDescriptor identity fields and assemble
     could not key an entry. That is why the golden validation ran a chain of
-    only [file-read, rs-attributes] over normal-form content: content-transform
+    only [file-read, rs-content_meta] over normal-form content: content-transform
     parity was blocked, not merely untested.
 
     This suite asserts the capability 6d unblocked, end to end and through
@@ -115,20 +115,20 @@ try
     $filtered = Invoke-Membrane -CompiledNodes $compiled.CompiledNodes -CrawlerGraph $crawl.Graph
 
     # The profile 6d unblocked: reader → whitespace mutator → language-specific
-    # mutator → enrich-only tail. Position doctrine: rs-attributes LAST, after
+    # mutator → enrich-only tail. Position doctrine: rs-content_meta LAST, after
     # ALL content mutators (its metrics describe what the reader will receive).
     $ingest = Invoke-Ingest -FilteredFsGraph $filtered `
         -Manifest @{
             'file-read'     = (Join-Path $v3 'processors\file-read.ps1')
             'rs-whitespace' = (Join-Path $v3 'processors\rs-whitespace.ps1')
             'rs-psstrip'    = (Join-Path $v3 'processors\rs-psstrip.ps1')
-            'rs-attributes' = (Join-Path $v3 'processors\rs-attributes.ps1')
+            'rs-content_meta' = (Join-Path $v3 'processors\rs-content_meta.ps1')
         } `
         -Steps @(
             @{ Key = 'file-read'; Config = @{} }
             @{ Key = 'rs-whitespace'; Config = @{ Operations = @('lf', 'trim-trailing', 'trim-doc') } }
             @{ Key = 'rs-psstrip'; Config = @{ Operations = @('block-comments', 'doc-strings', 'comment-blocks', 'line-comments') } }
-            @{ Key = 'rs-attributes'; Config = @{} }
+            @{ Key = 'rs-content_meta'; Config = @{} }
         ) `
         -ChainExecutorPath (Join-Path $v3 'processors\chain-executor.ps1') `
         -SharedHelperPath (Join-Path $v3 'processors\bag-helpers.ps1')
@@ -207,13 +207,13 @@ try
             'file-read'     = (Join-Path $v3 'processors\file-read.ps1')
             'rs-whitespace' = (Join-Path $v3 'processors\rs-whitespace.ps1')
             'rs-psstrip'    = (Join-Path $v3 'processors\rs-psstrip.ps1')
-            'rs-attributes' = (Join-Path $v3 'processors\rs-attributes.ps1')
+            'rs-content_meta' = (Join-Path $v3 'processors\rs-content_meta.ps1')
         } `
         -Steps @(
             @{ Key = 'file-read'; Config = @{} }
             @{ Key = 'rs-whitespace'; Config = @{ Operations = @('lf', 'trim-trailing', 'trim-doc') } }
             @{ Key = 'rs-psstrip'; Config = @{ Operations = @('block-comments', 'doc-strings', 'comment-blocks', 'line-comments') } }
-            @{ Key = 'rs-attributes'; Config = @{} }
+            @{ Key = 'rs-content_meta'; Config = @{} }
         ) `
         -ChainExecutorPath (Join-Path $v3 'processors\chain-executor.ps1') `
         -SharedHelperPath (Join-Path $v3 'processors\bag-helpers.ps1') `

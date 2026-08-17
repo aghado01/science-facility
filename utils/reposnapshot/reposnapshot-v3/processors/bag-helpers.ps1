@@ -9,7 +9,7 @@
 # WHY THIS EXISTS
 #   The 6d harmonization put the same content-key resolution and copy-on-mutate
 #   clone in four content mutators, and the same clone-all in file-read and
-#   rs-attributes. `Add-Member` became the fleet's dominant cmdlet purely as a
+#   rs-content_meta. `Add-Member` became the fleet's dominant cmdlet purely as a
 #   side effect. One definition of the contract beats six copies of it, and the
 #   clone gets to be a single ordered-hashtable cast instead of N reflection
 #   calls.
@@ -34,7 +34,7 @@ function Resolve-BagContent
     #
     # Returns $null when there is nothing to mutate, so callers guard with one
     # line and pass the item through untouched:
-    #   - a bag carrying NEITHER key (mirrors rs-attributes' no-Content rule: a
+    #   - a bag carrying NEITHER key (mirrors rs-content_meta' no-Content rule: a
     #     mutator with nothing to mutate must not fabricate an empty payload,
     #     because assemble splits EmptyFile from EmptiedByProcessing and a
     #     phantom '' would forge an entry)
@@ -85,7 +85,7 @@ function Copy-Bag
     #              transformed text; readers/enrichers omit it.
     #   -Add       extra properties to set after cloning (adds or overwrites).
     #              This is how file-read attaches Content/Encoding/ReadError and
-    #              rs-attributes attaches Attributes, without Add-Member.
+    #              rs-content_meta attaches Attributes, without Add-Member.
     #              Typed IDictionary so callers can pass [ordered]@{} — a plain
     #              hashtable enumerates in no guaranteed order, which would make
     #              emitted property order nondeterministic run to run.

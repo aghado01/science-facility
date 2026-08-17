@@ -46,7 +46,9 @@ Most confusion on this project is a category error between these:
 2. **Analysis-for-mutation** — code-analysis tools applied to *ingested
    materials as data* (rs-psstrip's PS-AST comment stripping).
 3. **Analysis-for-enrichment** — metrics over processed content
-   (rs-attributes) as a payload design feature for reader navigation.
+   (rs-content_meta, né rs-attributes — renamed 2026-08-17 after the psr
+   `content_meta` block it feeds) as a payload design feature for reader
+   navigation.
 4. **Reader-directed guidance** — instruction prose shipped *with* the
    payload (tree Instructions block) — functional machinery, not docs.
 

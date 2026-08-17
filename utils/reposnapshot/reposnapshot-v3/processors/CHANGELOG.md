@@ -1,5 +1,20 @@
 # Changelog — processors/
 
+## 2026-08-17 — rs-attributes.ps1 → rs-content_meta.ps1 (rename; named after the psr block it feeds)
+
+- `git mv` of the processor and its suite; chain keys / paths / precedent
+  mentions in sibling processors, tests, AGENTS.md, live briefs, ledger 11b
+  follow. Enrich-only — no `Processing` tag to rename. Metrics untouched.
+- Header: states it is the in-memory source of psr `content_meta`
+  (`schema/psr.header.json` maps `Attributes.*` → wire sub-fields); the stale
+  "SpanBytes IS the right input for shard packing budgets" line corrected —
+  superseded by ledger #39 (packing measures rows via the container), and
+  SpanBytes is not a `content_meta` sub-field (`content_bytes` is that fact).
+- **Left as is (flagged):** the attached element is still named `Attributes`
+  in memory (`Header.Elements` key, golden test, psr `source` paths). Renaming
+  it `ContentMeta` would complete the consistency (wire = snake of in-memory)
+  — a separate, contract-level call.
+
 ## 2026-08-17 — format-ws.ps1 → rs-whitespace.ps1 (rename; code-lane name)
 
 - `git mv` of the processor and its suite (`format.tests.ps1` →

@@ -1,10 +1,13 @@
-# rs-attributes.ps1 — ISS-loadable processor body
+# rs-content_meta.ps1 — ISS-loadable processor body   (né rs-attributes, 2026-08-17)
 # Contract: param($Item, $Config)  →  enriched $Item
 #
-# Entry-metrics processor: attaches an Attributes object of pure string
-# statistics over $Item.Content. Language-agnostic BY POSITION, not by
-# cleverness — the metrics are content-form statistics with zero language
-# knowledge; what makes them meaningful is where this step sits.
+# Per-document metadata processor: attaches an Attributes object of pure
+# string statistics over $Item.Content — the in-memory source of the psr
+# `content_meta` block (schema/psr.header.json maps Attributes.* → wire
+# sub-fields; which are emitted is run configuration). Renamed to match the
+# column it feeds. Language-agnostic BY POSITION, not by cleverness — the
+# metrics are content-form statistics with zero language knowledge; what
+# makes them meaningful is where this step sits.
 #
 # POSITIONAL CONTRACT (profile invariant — enforced by profile construction,
 # not by this processor, which is position-ignorant):
@@ -36,9 +39,12 @@
 #     that moves when a writer knob moves cannot do that job. SpanBytes is
 #     NOT a statement about the artifact's encoding, and no downstream
 #     consumer may publish it where a reader will spend it as an offset or an
-#     exact encoded length. It IS the right input for planning-grade uses —
-#     shard packing budgets, ranking, skip decisions; those neither need nor
-#     wait for serialized bytes (assemble-design §"Planning vs measurement").
+#     exact encoded length. It IS the right input for ranking and skip
+#     decisions. (It is NOT the shard-packing input any more — superseded
+#     2026-08-15/16, ledger #39: packing measures rows exactly via the
+#     container's Measure-Row; the wire `content_bytes` is that measured span.
+#     SpanBytes is not a content_meta sub-field for the same reason: one fact,
+#     one column.)
 #
 # NO-CONTENT CONTRACT: items without a usable Content property pass through
 # unchanged (no Attributes attached). Attributes are optional on IR entries

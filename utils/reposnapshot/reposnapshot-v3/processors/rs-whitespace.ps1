@@ -6,7 +6,7 @@
 
 .DESCRIPTION
     Runs EARLY in the code-lane chain and its `lf` op is what lets every later
-    stage — strippers, rs-indent, rs-attributes, and the container's codec —
+    stage — strippers, rs-indent, rs-content_meta, and the container's codec —
     count on LF-only content. Whitespace normalization is a requirement of the
     lane, not a nicety.
 

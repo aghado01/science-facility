@@ -288,7 +288,7 @@ Assert-True ($rTp.Text -notmatch 'standalone block') 'Text-keyed bag: Text mutat
 Assert-True ($null -eq $rTp.PSObject.Properties['Content']) 'Text-keyed bag: no Content key invented'
 Assert-Equal $rTp.Id 'p1' 'Text-keyed bag: Id passed through'
 
-# No-content bag → returned untouched (mirrors rs-attributes' no-Content rule).
+# No-content bag → returned untouched (mirrors rs-content_meta's no-Content rule).
 $halted = [pscustomobject]@{ RelativePath = 'bin/x.dll'; SizeBytes = 9; ReadError = 'BinaryOrNulContent' }
 $rHalt = Invoke-Processor -Item $halted
 Assert-True ($null -eq $rHalt.PSObject.Properties['Content']) 'no-content bag: no phantom Content fabricated'

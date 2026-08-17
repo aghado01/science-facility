@@ -131,7 +131,7 @@ $targetUnit = if ($null -ne $Config['TargetUnit'] -and [int]$Config['TargetUnit'
 #
 # Read Content (descriptor contract) else Text (tp-era); the key that was read
 # is the key written back, which is what keeps this processor track-agnostic.
-# A bag carrying NEITHER key is returned untouched (mirrors rs-attributes'
+# A bag carrying NEITHER key is returned untouched (mirrors rs-content_meta'
 # no-Content contract): a mutator with nothing to mutate must not fabricate an
 # empty payload — assemble routes empty content to Diagnostics and splits
 # EmptyFile from EmptiedByProcessing, so a phantom '' would forge an entry.
