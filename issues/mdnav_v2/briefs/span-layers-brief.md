@@ -3,7 +3,7 @@
 > **Role:** design canon — the "why" and the shape. Execution lives in
 > [planning/roadmap.md](../planning/roadmap.md) (milestones M0–M6, gate
 > subsets, chip seams), the audit trail in
-> [planning/decisions.md](../planning/decisions.md) (D1–D27), and the
+> [planning/decisions.md](../planning/decisions.md) (D1–D31, ascending), and the
 > figure-model homework in
 > [archaelogy/figure-model-survey.md](../archaelogy/figure-model-survey.md)
 > (function-by-function dispositions, must-survive behaviors, test map).
@@ -471,48 +471,69 @@ stripped), which is the claims table reflected into the stream:
 Field order is fixed: glyph, address, ordinal-of-batch, kind, basis, coarse
 size, policy stamps, then the machine fields (`span`, `len`) last.
 
-*Glyph as coarsest kind (proposed, pending the shared spec freeze):* the
-leading glyph carries the object class and borrows an existing typographic
-prior rather than teaching a new pattern — **`§`** for a document unit
-(section mark: `§ 3.2` already reads as a section reference), **`¶`** for an
-exchange/turn or generic coding region in the transcript stream (paragraph
-mark), and at most one more (`†` for foot-matter, if ever) — with `kind=`
-carrying the fine kind. One grammar, a glyph set of two or three, no more:
-regularity is what keeps the non-coding region low-entropy. Both glyphs are
-Latin-1 Supplement, cheap in every tokenizer, and line-anchored so a
-mid-prose `§` in a legal corpus cannot collide with a header. The `--frame`
-flag name `pilcrow` is kept as the mode name regardless of glyph.
+*The non-coding convention is a **sigil vocabulary**, not a "frame"
+apparatus (proposed, pending the shared spec freeze).* The concept — not
+the characters — comes from reposnapshot's shard format
+(`issues/reposnapshot/design/shard-format-notes.md`, §Sigil selection):
 
-*Syntactic closure — the psr hybrid (proposed, pending the shared spec
-freeze).* Records are **flat, newline-delimited, length-prefixed** (the
-machine layer, as in reposnapshot's `psr`: the prefix replaces escaping;
-`len` is authoritative; nothing nests arithmetically — a unit with an
-elision is emitted as *pieces*, each its own record). A **close line
-`§/ addr`** is a model-facing overlay: it re-mentions the address (a second
-retrieval hook), signals completeness, and makes nesting legible — none of
-which the next-sentinel scheme can express — while for the machine it is
-only a checksum (address/position mismatch → framing fault). If a payload
-does not end in LF the framer inserts one before the close; that LF is
-framing, counted in `framed`, never in `len`.
+1. **The length prefix is the framing authority; sigils are presentation
+   for the reader.** Nothing about parsing depends on a sigil.
+2. **Sigils are chosen by measurement, not taste** — line-start frequency in
+   real corpora (backtick was disqualified there at 64 % of md lines), UTF-8
+   bytes, token cost *in situ* (D29), survival through NFC and strip ops,
+   visibility (no invisible/zero-width marks), and semantic honesty (the
+   glyph should already mean roughly what it marks).
+3. **The correspondence is declared once, ahead of content, as a short
+   legible key** — "a cipher key, not a decoder spec": addressed to the
+   model's in-context bookkeeping so it has read the sigil↔meaning mapping
+   before it meets one. It lives in the adapter skill and as the first
+   record of a session, never per read.
+4. **Payloads are read as-is**, without tooling.
+
+Vocabulary — candidates, roles, and why each glyph (final set ≤ 5, fixed
+at freeze after measurement on the `issues/mdnav_v2/discussion/` corpus and
+one large real transcript):
+
+| sigil | role | prior it borrows |
+|---|---|---|
+| `§` U+00A7 | **open** — document unit (section) | section mark; `§ 3.2` already reads as a section reference |
+| `¶` U+00B6 | **open** — exchange/turn or generic coding region (transcript side) | paragraph mark |
+| `…` U+2026 (or `⋯` U+22EF if `…` proves too frequent at line start) | **elision** — an addressable zero-length region | "something omitted" is what the glyph means |
+| `⁂` U+2042 (asterism; alt `⁋` U+204B reversed pilcrow) | **close** — optional overlay | asterism historically marks a section's end/break |
+| `†` U+2020 | foot-matter / definition region, *if ever* | typographic footnote convention |
+
+Row grammar (unchanged in substance): line-anchored `<sigil> <address>
+<fields…> len=N`, then exactly `N` payload bytes; records are **flat and
+newline-delimited** (a unit with an elision is emitted as *pieces*, each its
+own record — nothing nests arithmetically); the optional close
+`⁂ <address>` re-mentions the address (a second retrieval hook), signals
+completeness, and makes nesting legible — for the machine it is only a
+checksum (address/position mismatch → framing fault). If a payload does not
+end in LF the framer inserts one before the close; that LF is framing,
+counted in `framed`, never in `len`.
 
 ```
+key: § unit · ¶ turn · … elided · ⁂ end · fields addr k/N kind basis ~B ~t span len
 § D002:H0108@fa8a 2/5 unit d2 ~629B ~160t 61234..61863 len=412
 <412 bytes>
-§ D002:H0108@fa8a/elided.1 data-uri ~404KiB 14187..430301 len=0
+… D002:H0108@fa8a/elided.1 data-uri ~404KiB 14187..430301 len=0
 § D002:H0108@fa8a 2/5 unit d2 ~217B 61651..61863 len=217
 <217 bytes>
-§/ D002:H0108@fa8a
+⁂ D002:H0108@fa8a
 ```
 
-Modes: `--frame comment` (CLI default, today's bytes) · `pilcrow` (header +
-len, next-sentinel close) · `closed` (header + len + `§/` close, pieces
-grouped) · `none`. The MCP default between `pilcrow` and `closed` is chosen
-by the behavioral eval (D20), not here. **Header field style is a
-spec-freeze question**: positional pipe-separated fields (terser; a framed
-stream then *is* a psr row grammar — one reader across reposnapshot,
-para-agent, mdnav) vs. `k=v` (self-describing advance organizer). Measure
-both in situ with the token battery (D29) before choosing; lean —
-positional for the fixed core, `k=v` only for optional stamps.
+**Emission is a profile setting, not a mode.** `sigils: legacy-comment |
+typographic | none` (CLI flag `--sigils`, replacing the earlier `--frame`
+naming); within `typographic`, which roles emit — close on/off, elision
+sigil vs a plain zero-`len` open — is also profile data. `legacy-comment`
+is today's `<!-- mdnav … -->` (itself a sigil convention: the HTML comment is
+the Markdown-inert sigil) and stays the CLI default, byte-identical to
+today; `typographic` is the MCP default; close on/off is chosen by the
+behavioral eval (D20). **Header field style is a spec-freeze question**:
+positional pipe-separated (terser; a framed stream then *is* a psr row
+grammar — one reader across reposnapshot, para-agent, mdnav) vs. `k=v`
+(self-describing). Measure both in situ (D29) before choosing; lean —
+positional core, `k=v` only for optional stamps.
 
 - Address = the anchor (`Dnnn:Hnnnn@digest`, or `Snnnn`/`Rnnnn`/`Wnnnn`,
   or a raw `Dnnn:@s..e`), extended compositionally for nested claims and
@@ -533,13 +554,11 @@ positional for the fixed core, `k=v` only for optional stamps.
   not just visible.
 - Every read is framed, including single-anchor reads (today undecorated),
   because the header is what makes the region re-mentionable later.
-- The header grammar is a **shared spec** with para-agent (sentinel `¶`,
-  field order, escaping) and mdnav *conforms* to it; until it is frozen,
-  framing is a projection over the materialization piece list —
-  `--frame pilcrow|comment|none` — with `comment` (today's `<!-- mdnav … -->`,
-  inert when saved as `.md`) remaining the CLI default and `pilcrow` the
-  MCP default. One piece list, two renderings; the piece list is what
-  later context-mode hooks route on.
+- The sigil vocabulary, key, and row grammar are a **shared spec** with
+  para-agent and mdnav *conforms* to it; until it is frozen, emission is a
+  projection over the materialization piece list — `--sigils
+  legacy-comment|typographic|none` — one piece list, several renderings;
+  the piece list is what later context-mode hooks route on.
 
 *Evidence status of the framing claim* (so it is carried honestly): the
 value is real but uneven. Exact, short, re-mentioned addresses are the
@@ -550,7 +569,7 @@ sentinel are cheap and well supported. Byte `len` has **no attention
 benefit** (models do not count bytes; the boundary the model uses is the
 next sentinel) — it is a machine field only. Headers cost ~10–15 tokens
 each, so frame at unit grain by default. The claim must be evaluated behaviorally
-(same tasks, `--frame none` vs `pilcrow`; address-recall accuracy,
+(same tasks, `--sigils none` vs `typographic`, close on/off; address-recall accuracy,
 misattribution rate, tokens-to-answer) — a server-brief gate, not an
 assumption here.
 
@@ -569,15 +588,15 @@ Exit-gate additions: **17.** `select`/`partition`/`marks` honour
 produce a within-budget read; **19.** no table query can return a field
 longer than the preview cap; **20.** the CLI exposes `--max-bytes` and
 `--limit/--offset` so the one-shot path has the same discipline; **21.**
-framing round-trip: under `--frame pilcrow` every header's `len` equals the
+framing round-trip: under `--sigils typographic` every header's `len` equals the
 bytes that follow it exactly (incl. multi-byte UTF-8 and CRLF sources), the
-concatenated coding regions of a multi-anchor read equal the `--frame none`
+concatenated coding regions of a multi-anchor read equal the `--sigils none`
 read byte-for-byte, an elision emits a zero-`len` header whose address
-`read` accepts and resolves to the elided source span, and `--frame comment`
+`read` accepts and resolves to the elided source span, and `--sigils legacy-comment`
 output is byte-identical to today's for the golden fixtures; **21b.** byte
 accounting: total bytes written == Σ `Buffer.byteLength(header line)` + Σ
 `len`; each header line's byte length == its char length + 1 (the glyph is
-the only non-ASCII byte pair — asserted for `§` and `¶`); a header parser
+the only non-ASCII bytes — asserted for every sigil in the vocabulary, incl. the 3-byte `…`/`⁂`); a header parser
 that reads the stream back recovers every address, `k/N`, `span`, `len`
 exactly; the plan's `framed` total equals the bytes a subsequent read
 within budget actually writes; a `maxBytes` that admits the payload but not

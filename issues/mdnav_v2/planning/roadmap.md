@@ -96,12 +96,13 @@ today; `chat-export`); `read --only`; generic `--by <kind|pattern:>` with
 counted queries (`limit/offset/columns` → `{total, rows}`), memoization by
 `(digest, policy, args)`; budgeted `materialize` returning a **plan** over
 `maxBytes`; CLI `--max-bytes`, `--limit/--offset`; framing as a projection
-over the piece list — `--frame comment` (default CLI, byte-identical to
-today) | `pilcrow` | `none`, header field order fixed, addressable
+over the piece list — `--sigils legacy-comment` (default CLI, byte-identical
+to today) | `typographic` | `none`; sigil vocabulary + key measured and
+fixed at freeze; header field order fixed, addressable
 placeholders, `len`/`span` distinct; `notes[]` out of band.
 
 - **Gates:** 15, 17, 18, 19, 20, 21, 21b (byte accounting: headers count
-  toward `maxBytes`; `§`/`¶` are 2 UTF-8 bytes; all framer arithmetic is
+  toward `maxBytes`; `§`/`¶` are 2 UTF-8 bytes, `…`/`⁂` are 3; all framer arithmetic is
   `Buffer.byteLength`, and the test asserts header bytes == chars + 1).
 - **Depends on:** M4. **Brief:** §Front-end grammar, §REPL contract,
   §Stream framing, §Export surface.
