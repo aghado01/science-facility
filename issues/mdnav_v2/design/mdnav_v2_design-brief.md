@@ -2,23 +2,23 @@
 
 > **Role:** design canon — the "why" and the shape, at the altitude that
 > applies across every phase. Execution is five sequential phase briefs in
-> this directory ([01-spanset-claims.md](01-spanset-claims.md),
-> [02-collectors-parity.md](02-collectors-parity.md),
-> [03-containment-queries.md](03-containment-queries.md),
-> [04-repl-contract.md](04-repl-contract.md),
-> [05-framing-p0.md](05-framing-p0.md)), sequenced and gated in
+> [../briefs/](../briefs/) ([01-spanset-claims.md](../briefs/01-spanset-claims.md),
+> [02-collectors-parity.md](../briefs/02-collectors-parity.md),
+> [03-containment-queries.md](../briefs/03-containment-queries.md),
+> [04-repl-contract.md](../briefs/04-repl-contract.md),
+> [05-framing-p0.md](../briefs/05-framing-p0.md)), sequenced and gated in
 > [planning/roadmap.md](../planning/roadmap.md) (milestones M0–M6, chip
 > seams), the audit trail in [planning/decisions.md](../planning/decisions.md)
-> (D1–D36, ascending), and the figure-model homework in
+> (D1–D38, ascending), and the figure-model homework in
 > [archaelogy/figure-model-survey.md](../archaelogy/figure-model-survey.md)
 > (function-by-function dispositions, must-survive behaviors, test map).
 > Amend this brief and the phase briefs; do not fork them.
 
-**Status:** filed, not started · **Filed:** 2026-08-17 (rev 3, same day —
-rev 1 framed this as "layers + masks", superseded by rev 2; rev 2 was one
-886-line document mixing doctrine, per-milestone implementation detail, and
-~200 lines of flagged ideation at one altitude — split into this canon plus
-five phase briefs per D36, nothing discarded) · **Home:**
+**Status:** filed, not started · **Filed:** 2026-08-17 (rev 3 split this
+into canon plus five phase briefs per D36, nothing discarded; rev 4 moved
+canon out of `briefs/` into `design/mdnav_v2_design-brief.md` per D38 — it
+is a design document, not something executed directly, and `briefs/` now
+holds only execution-ready phase specs) · **Home:**
 [mcp/mdnav_v2/](../../../mcp/mdnav_v2/) — new, empty at filing; the
 **figure model / oracle** is the legacy
 [skills/doc-dive/mdnav/mdnav.mjs](../../../skills/doc-dive/mdnav/mdnav.mjs),
@@ -130,31 +130,31 @@ its phase brief; this is the map.
 
 1. **`SpanSet`** — geometry algebra over normalized sorted disjoint half-open
    byte intervals (union/intersect/subtract/complement/coverage/contains),
-   identity-forgetting on purpose. → [01-spanset-claims.md](01-spanset-claims.md)
+   identity-forgetting on purpose. → [01-spanset-claims.md](../briefs/01-spanset-claims.md)
 2. **Claims** — the occurrence table: one columnar record per document
    (starts/ends/kinds/sources/levels/priorities/ruleIds/containers/info), an
    open kind vocabulary, overlap and nesting preserved, backed by
    `MemoryStore`/`SidecarStore` over a corpus-scoped `index/` +
-   run-scoped ledger layout. → [01-spanset-claims.md](01-spanset-claims.md)
+   run-scoped ledger layout. → [01-spanset-claims.md](../briefs/01-spanset-claims.md)
    (table/stores/hygiene) and **2b. Relations** — keyed joins over claims
    (`footnote`, `link-ref`, `anchor`, `contains`) →
-   [03-containment-queries.md](03-containment-queries.md)
+   [03-containment-queries.md](../briefs/03-containment-queries.md)
 3. **Collectors** — how claims are discovered: delimiter geometry (boundary /
    toggle / pair) as the unifying spec; state-machine collectors for region
    kinds, rule collectors (doccer `PatternRule`) loaded from JSONL, executed
-   region-scoped. → [02-collectors-parity.md](02-collectors-parity.md)
+   region-scoped. → [02-collectors-parity.md](../briefs/02-collectors-parity.md)
 4. **Containment and re-entry** — the recursive walk: region claims are
    containers, structural collectors re-enter each region window with
    region-specific rules, in source coordinates; `--enter <kinds>` is the
    third projection knob (basis / depth / extent / *enter*) governing heading
-   activation. → [03-containment-queries.md](03-containment-queries.md)
+   activation. → [03-containment-queries.md](../briefs/03-containment-queries.md)
 5. **Queries** — projections over claims: Selection, suppression, profiles as
    data, generalized `--by`, `read --only`/`--strip`, `coverage`, `marks
-   --resolve`. → [03-containment-queries.md](03-containment-queries.md).
+   --resolve`. → [03-containment-queries.md](../briefs/03-containment-queries.md).
    Export surface, the REPL/paging/budget contract, and stream framing (P0)
    are downstream of the query layer and live in
-   [04-repl-contract.md](04-repl-contract.md) and
-   [05-framing-p0.md](05-framing-p0.md).
+   [04-repl-contract.md](../briefs/04-repl-contract.md) and
+   [05-framing-p0.md](../briefs/05-framing-p0.md).
 
 ## Non-goals (the whole brief — every phase inherits these)
 
@@ -171,7 +171,7 @@ its phase brief; this is the map.
 - No changes to `Dnnn:Hnnnn@digest` numbering, `--depth`/`--extent`
   semantics, the partition invariant, or any output format except the fixes
   named in the phase briefs and the `enter`-driven activation described in
-  [03-containment-queries.md](03-containment-queries.md).
+  [03-containment-queries.md](../briefs/03-containment-queries.md).
 - Not ported from doccer: Allen relations, `ClaimPairView`, path selection,
   facts/saturation, origins, `RewritePlan` as a public type, vectors beyond
   prefix parity. Cadence stays as is; note in the report whether the

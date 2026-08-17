@@ -2,7 +2,7 @@
 
 > **Role:** execution-ready spec for roadmap milestones **M1 + M2**. Canon
 > (doctrine, non-goals, method, master exit-gate list) is
-> [span-layers-brief.md](span-layers-brief.md); do not restate it here —
+> [mdnav_v2_design-brief.md](../design/mdnav_v2_design-brief.md); do not restate it here —
 > read it first for the "why." Sequencing, dependencies and status live in
 > [planning/roadmap.md](../planning/roadmap.md); decisions in
 > [planning/decisions.md](../planning/decisions.md). Amend this file; do not
@@ -124,7 +124,7 @@ not in either list is an error, not a guess.
 
 ## Exit gate (this phase)
 
-Full text is the master list in [span-layers-brief.md](span-layers-brief.md)
+Full text is the master list in [mdnav_v2_design-brief.md](../design/mdnav_v2_design-brief.md)
 §Exit gate. This phase closes:
 
 - **1.** Every pre-existing acceptance test passes unchanged (F1/F2-encoding

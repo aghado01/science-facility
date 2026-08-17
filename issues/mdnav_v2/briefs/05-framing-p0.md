@@ -1,7 +1,7 @@
 # Phase 05 — stream framing P0 (sigil emission, byte accounting)
 
 > **Role:** execution-ready spec for roadmap milestone **M5b**. Canon is
-> [span-layers-brief.md](span-layers-brief.md). Sequencing/decisions in
+> [mdnav_v2_design-brief.md](../design/mdnav_v2_design-brief.md). Sequencing/decisions in
 > [planning/roadmap.md](../planning/roadmap.md) /
 > [planning/decisions.md](../planning/decisions.md). Amend; do not fork.
 
@@ -244,7 +244,7 @@ server-brief gate, not an assumption here.
 
 ## Exit gate (this phase)
 
-Full text is the master list in [span-layers-brief.md](span-layers-brief.md)
+Full text is the master list in [mdnav_v2_design-brief.md](../design/mdnav_v2_design-brief.md)
 §Exit gate. This phase closes:
 
 - **21.** Framing round-trip: `content_bytes` exactness under `--sigils

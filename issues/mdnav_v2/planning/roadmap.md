@@ -1,6 +1,6 @@
 # mdnav v2 — roadmap
 
-**Design canon:** [briefs/span-layers-brief.md](../briefs/span-layers-brief.md)
+**Design canon:** [design/mdnav_v2_design-brief.md](../design/mdnav_v2_design-brief.md)
 (the "why" and the shape; do not fork it — amend it). **Homework:**
 [../archaelogy/figure-model-survey.md](../archaelogy/figure-model-survey.md).
 **Locations:** v2 is built in `mcp/mdnav_v2/`; the legacy oracle is

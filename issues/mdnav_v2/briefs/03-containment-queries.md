@@ -1,7 +1,7 @@
 # Phase 03 — containment, relations, profiles, generalized queries
 
 > **Role:** execution-ready spec for roadmap milestone **M4**. Canon is
-> [span-layers-brief.md](span-layers-brief.md); depends on the claims table
+> [mdnav_v2_design-brief.md](../design/mdnav_v2_design-brief.md); depends on the claims table
 > ([01-spanset-claims.md](01-spanset-claims.md)) and collectors
 > ([02-collectors-parity.md](02-collectors-parity.md)) being in place.
 > Sequencing/decisions in [planning/roadmap.md](../planning/roadmap.md) /
@@ -148,7 +148,7 @@ heading. Store the computed slug in the heading claim's `info`.
 
 ## Exit gate (this phase)
 
-Full text is the master list in [span-layers-brief.md](span-layers-brief.md)
+Full text is the master list in [mdnav_v2_design-brief.md](../design/mdnav_v2_design-brief.md)
 §Exit gate. This phase closes:
 
 - **8.** `# x` inside `<details>`: claim exists, container correct, ordinal

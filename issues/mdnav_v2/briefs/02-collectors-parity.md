@@ -1,7 +1,7 @@
 # Phase 02 — collectors: state-machine + rule, parity with F1–F4 fixed
 
 > **Role:** execution-ready spec for roadmap milestone **M3**. Canon is
-> [span-layers-brief.md](span-layers-brief.md); the claims table this phase
+> [mdnav_v2_design-brief.md](../design/mdnav_v2_design-brief.md); the claims table this phase
 > populates is specified in [01-spanset-claims.md](01-spanset-claims.md).
 > Sequencing/decisions in [planning/roadmap.md](../planning/roadmap.md) /
 > [planning/decisions.md](../planning/decisions.md). Amend; do not fork.
@@ -89,7 +89,7 @@ close tag — is what keeps malformed transcript HTML bounded.
 
 ## Exit gate (this phase)
 
-Full text is the master list in [span-layers-brief.md](span-layers-brief.md)
+Full text is the master list in [mdnav_v2_design-brief.md](../design/mdnav_v2_design-brief.md)
 §Exit gate. This phase closes:
 
 - **4.** Rule collector: `scope: line` cannot cross a line break; `scope:
