@@ -5,8 +5,11 @@
 Renamed after the psr `content_meta` block it feeds; suite, chain keys,
 run-all roster, sibling comments, AGENTS.md, live briefs, ledger 11b follow;
 metrics untouched. Stale "SpanBytes is the packing input" comment corrected
-(ledger #39). In-memory element stays `Attributes` — flagged as a separate
-contract-level call. Battery 15 · 936 · 0. See processors/CHANGELOG.md.
+(ledger #39). **Element renamed too:** `Attributes` → `ContentMeta` in memory —
+one concept, three casings (wire `content_meta` · in-memory `ContentMeta` ·
+processor `rs-content_meta`); psr `source` paths, contract notes, tests,
+AGENTS.md byte-semantics section, ledger #26 note follow. Battery
+15 · 937 · 0. See processors/CHANGELOG.md.
 
 ## 2026-08-17 — processors: format-ws → rs-whitespace
 

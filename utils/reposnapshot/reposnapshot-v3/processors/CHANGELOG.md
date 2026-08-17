@@ -10,10 +10,13 @@
   "SpanBytes IS the right input for shard packing budgets" line corrected —
   superseded by ledger #39 (packing measures rows via the container), and
   SpanBytes is not a `content_meta` sub-field (`content_bytes` is that fact).
-- **Left as is (flagged):** the attached element is still named `Attributes`
-  in memory (`Header.Elements` key, golden test, psr `source` paths). Renaming
-  it `ContentMeta` would complete the consistency (wire = snake of in-memory)
-  — a separate, contract-level call.
+- **Element renamed too (follow-up, same day):** `Attributes` → `ContentMeta`
+  in memory. One concept, three casings by convention: wire `content_meta`
+  (snake) · in-memory `ContentMeta` (Pascal) · processor `rs-content_meta`.
+  psr `source` paths, contract notes, golden/mutator-chain/crawler tests
+  follow (crawler gains a "no ContentMeta field" reservation assert alongside
+  the existing "no bare Attributes" one — `FsAttributes` is the crawler's).
+  Ledger #26 amended in place; decision unchanged.
 
 ## 2026-08-17 — format-ws.ps1 → rs-whitespace.ps1 (rename; code-lane name)
 

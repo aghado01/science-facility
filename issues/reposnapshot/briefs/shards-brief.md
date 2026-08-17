@@ -89,7 +89,7 @@ write time). **Offsets remain the writer's receipt** — nobody derives an offse
 from `Measure-Row`; serialize never reports back into the plan.
 
 What this replaced (unchanged from the 08-15 filing): the doctrine "planning is
-not measurement — pack on `Attributes.SpanBytes`". Ledger #26 stands
+not measurement — pack on `Attributes.SpanBytes`" (element now `ContentMeta`). Ledger #26 stands
 (`SpanBytes` is a reader-facing attribute, not the packing input); `SizeBytes`
 is not needed for packing.
 

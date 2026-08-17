@@ -59,8 +59,9 @@ Same construct can play different roles per relationship: `#Requires` is
 ## Known conflation hotspots
 
 - **Byte semantics, three layers, never conflated**: `SizeBytes` (on-disk,
-  eligibility only) · `Attributes.SpanBytes` (UTF-8 span of processed
-  content — payload semantics) · rendered row `length` (encoded span,
+  eligibility only) · `ContentMeta.SpanBytes` (UTF-8 span of processed
+  content — payload semantics; element renamed from `Attributes` 2026-08-17,
+  wire block `content_meta`) · rendered row `content_bytes` (né `length`; encoded span,
   writer-side). See `issues/reposnapshot/design/rs.core.assemble-design.md` §Payload doctrine.
 - **Encoding and codec belong to the serializer** (2026-08-09). Upstream
   stages measure in *canonical UTF-8 by convention* — deliberately invariant
@@ -76,15 +77,15 @@ Same construct can play different roles per relationship: `#Requires` is
   writes with. Shards packs on it exactly; there is no estimate. What stays
   true: **offsets are the writer's receipt** (`Render-Row`'s running cursor),
   never derived from a measure and never recovered from a written file; and
-  never publish a layer 2 number (`Attributes.SpanBytes`) where a reader will
+  never publish a layer 2 number (`ContentMeta.SpanBytes`) where a reader will
   spend it as an offset or an exact length. `SpanBytes` remains the
   emission-invariant reader-facing attribute; it is not the packing input
   (ledger #26 stands). See `briefs/shards-brief.md`.
 - **Naming grade: `Span` measures content, `Size` bounds a container** (user,
   2026-08-10). The naming corollary of the rule above, and it binds on code
   **not yet written**. `Span` belongs to numbers stating how much *content*
-  something actually is — `Attributes.SpanBytes`, the tree manifest's byte
-  spans, the rendered row `length`. `Size` belongs to numbers stating what a
+  something actually is — `ContentMeta.SpanBytes`, the tree manifest's byte
+  spans, the rendered row `content_bytes`. `Size` belongs to numbers stating what a
   *container* holds or may hold — on-disk `SizeBytes`, and every packing
   budget. A budget named `…SpanBytes` borrows the measurement family's
   vocabulary for what is only a policy knob, which is precisely the conflation

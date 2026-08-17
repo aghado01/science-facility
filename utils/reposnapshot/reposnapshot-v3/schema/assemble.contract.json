@@ -43,7 +43,7 @@
         "Content":      { "from": "ingest.out.bag", "note": "may be absent/empty only under KeepContentless" }
       },
       "exclude": [ "AbsolutePath", "SizeBytes", "Extension", "CreationUtc", "FsAttributes", "_ChainHalt" ],
-      "elements": { "type": "open", "note": "every other bag field, arrival order preserved (Encoding, Attributes, Processing, …); ReadError is an element only under KeepContentless" }
+      "elements": { "type": "open", "note": "every other bag field, arrival order preserved (Encoding, ContentMeta, Processing, …); ReadError is an element only under KeepContentless" }
     },
     "diagnostics": {
       "Routed":   { "type": "routed[]", "note": "@{ Index; RelativePath; Reason } — NullResult | <ReadError kind> | ChainHalt | NoContent | EmptyFile | EmptiedByProcessing" },

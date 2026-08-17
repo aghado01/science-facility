@@ -1,11 +1,13 @@
 # rs-content_meta.ps1 — ISS-loadable processor body   (né rs-attributes, 2026-08-17)
 # Contract: param($Item, $Config)  →  enriched $Item
 #
-# Per-document metadata processor: attaches an Attributes object of pure
+# Per-document metadata processor: attaches a ContentMeta object of pure
 # string statistics over $Item.Content — the in-memory source of the psr
-# `content_meta` block (schema/psr.header.json maps Attributes.* → wire
-# sub-fields; which are emitted is run configuration). Renamed to match the
-# column it feeds. Language-agnostic BY POSITION, not by cleverness — the
+# `content_meta` block (schema/psr.header.json maps ContentMeta.* → wire
+# sub-fields; which are emitted is run configuration). One concept, three
+# spellings by convention: wire `content_meta` (snake), in-memory `ContentMeta`
+# (Pascal), processor `rs-content_meta` (after the wire block). Element renamed
+# from `Attributes` 2026-08-17. Language-agnostic BY POSITION, not by cleverness — the
 # metrics are content-form statistics with zero language knowledge; what
 # makes them meaningful is where this step sits.
 #
@@ -15,11 +17,11 @@
 #     kind (language-specific strippers AND generic transforms like
 #     rs-whitespace). Nothing needs to run after it; order relative to other
 #     enrich-only tail steps is immaterial.
-#   - Attributes describe the PROCESSED content — the payload as it moves
+#   - ContentMeta describes the PROCESSED content — the payload as it moves
 #     forward in the pipeline — deliberately NOT the on-disk original.
 #     Provenance split on the descriptor: SizeBytes (crawler identity) is
-#     the on-disk stat; Attributes.* are processed-content stats.
-#   - BYTE SEMANTICS (user, 2026-07-28): attributes deal in SpanBytes — the
+#     the on-disk stat; ContentMeta.* are processed-content stats.
+#   - BYTE SEMANTICS (user, 2026-07-28): the metrics deal in SpanBytes — the
 #     UTF-8 byte span of the processed content — never SizeBytes. The
 #     enrichment describes payload contents for strategic reader navigation;
 #     on-disk size is filesystem bookkeeping, irrelevant to the reader (its
@@ -47,7 +49,7 @@
 #     one column.)
 #
 # NO-CONTENT CONTRACT: items without a usable Content property pass through
-# unchanged (no Attributes attached). Attributes are optional on IR entries
+# unchanged (no ContentMeta attached). ContentMeta is optional on IR entries
 # (rs.core.assemble-design.md), so absence is legal — this is what makes the
 # step safely appendable to profiles whose items are not file-content-shaped
 # (e.g. thread envelopes carrying Exchanges[] instead of Content).
@@ -168,7 +170,7 @@ if ($content -and $charCount -gt 0)
 # Copy-on-enrich via the shared Copy-Bag helper (processors/bag-helpers.ps1):
 # clone ALL input properties, then attach. Never mutates the caller's reference.
 return Copy-Bag -Item $Item -Add ([ordered]@{
-        Attributes = [PSCustomObject]@{
+        ContentMeta = [PSCustomObject]@{
             SpanBytes        = if ($content) { [System.Text.Encoding]::UTF8.GetByteCount($content) } else { 0 }
             CharCount        = $charCount
             WordCount        = $wordCount

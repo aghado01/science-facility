@@ -30,7 +30,7 @@ Set-StrictMode -Version Latest
          chain order, and Header.Elements declares it without assemble
          knowing the element exists (open element model, zero per-element
          branches).
-      4. Byte layers stay distinct after mutation: Attributes.SpanBytes is the
+      4. Byte layers stay distinct after mutation: ContentMeta.SpanBytes is the
          UTF-8 span of the POST-mutation content and is smaller than the
          on-disk size; SizeBytes is absent from the entry (descriptor
          bookkeeping, excluded by assemble). See the payload doctrine —
@@ -186,10 +186,10 @@ try
     # -----------------------------------------------------------------------
     Enter-Section '5. Byte layers stay distinct after mutation'
     # -----------------------------------------------------------------------
-    Assert-True ($null -ne $entry.PSObject.Properties['Attributes']) 'Attributes element present (enrich-only tail ran last)'
+    Assert-True ($null -ne $entry.PSObject.Properties['ContentMeta']) 'ContentMeta element present (enrich-only tail ran last)'
     $spanBytes = [System.Text.Encoding]::UTF8.GetByteCount($entry.Content)
-    Assert-True ($entry.Attributes.SpanBytes -eq $spanBytes) 'SpanBytes = UTF-8 span of the POST-mutation content'
-    Assert-True ($entry.Attributes.SpanBytes -lt $onDiskBytes) 'SpanBytes < on-disk size (mutation shrank the payload)' "span=$($entry.Attributes.SpanBytes) disk=$onDiskBytes"
+    Assert-True ($entry.ContentMeta.SpanBytes -eq $spanBytes) 'SpanBytes = UTF-8 span of the POST-mutation content'
+    Assert-True ($entry.ContentMeta.SpanBytes -lt $onDiskBytes) 'SpanBytes < on-disk size (mutation shrank the payload)' "span=$($entry.ContentMeta.SpanBytes) disk=$onDiskBytes"
     Assert-True ($null -eq $entry.PSObject.Properties['SizeBytes']) 'SizeBytes absent from the entry (descriptor bookkeeping)'
 
     # -----------------------------------------------------------------------
@@ -229,7 +229,7 @@ try
     Assert-True ($bareEntry.Content -eq $entry.Content) 'Bare output byte-identical to the Core run'
     $bareRecords = @($bareEntry.Processing)
     Assert-True ($bareRecords.Count -eq 2) 'Bare: Processing trail intact' "got $($bareRecords.Count)"
-    Assert-True ($null -ne $bareEntry.PSObject.Properties['Attributes']) 'Bare: enrich-only tail ran'
+    Assert-True ($null -ne $bareEntry.PSObject.Properties['ContentMeta']) 'Bare: enrich-only tail ran'
     Assert-True (@($bareIngest.Streams).Count -eq 0) 'Bare: Streams forwarded through ingest and empty on a clean run'
 
     # -----------------------------------------------------------------------

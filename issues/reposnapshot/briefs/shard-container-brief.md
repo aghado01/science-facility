@@ -33,7 +33,7 @@ tables** too: a declared column set, typed, and rows that conform.
 ## The problem this closes — coordination
 
 **Which fields a record row carries is configurable in principle** — the open
-element model attaches whatever the chain produced (`Attributes`,
+element model attaches whatever the chain produced (`ContentMeta` — né `Attributes`,
 `Processing`, `Encoding`, novel enrichments); emission is a writer knob
 (compute-by-default, `rs-content_meta` (né rs-attributes) split). So header row and record rows
 must be generated from **one declaration**, or they drift. LTS solved this

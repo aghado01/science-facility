@@ -11,7 +11,7 @@ Set-StrictMode -Version Latest
          whitespace ratio, line stats incl. the upper-median quirk,
          compression gate at >100 chars)
       2. No-Content contract — pass-through unenriched (envelope-shaped item)
-      3. Empty-content behavior — Attributes attached with zeroed metrics
+      3. Empty-content behavior — ContentMeta attached with zeroed metrics
       4. Copy-on-enrich — identity fields cloned, Content unmutated, caller's
          object untouched
       5. Colonel dispatch — file-read → rs-content_meta chain in real runspaces
@@ -70,7 +70,7 @@ Enter-Section '1. Metric parity (LTS formulas)'
 # ws ratio 1/7 ≈ 0.1429, lines 'aaaa'(4) 'bb'(2): mean 3, upper-median 4,
 # stddev 1, max 4; ≤100 chars → compression gate closed (1.0).
 $r = Invoke-Attr ([pscustomobject]@{ RelativePath = 'x.txt'; Content = "aaaa`nbb" })
-$a = $r.Attributes
+$a = $r.ContentMeta
 Assert-True ($a.SpanBytes -eq 7) 'SpanBytes = 7 (ASCII: bytes == chars)' "got $($a.SpanBytes)"
 Assert-True ($a.CharCount -eq 7) 'CharCount = 7' "got $($a.CharCount)"
 Assert-True ($a.WordCount -eq 2) 'WordCount = 2' "got $($a.WordCount)"
@@ -85,34 +85,34 @@ Assert-True ($a.LineStats.StdDev -eq 1) 'LineStats.StdDev = 1' "got $($a.LineSta
 Assert-True ($a.LineStats.Max -eq 4) 'LineStats.Max = 4'
 
 $r2 = Invoke-Attr ([pscustomobject]@{ Content = 'aabb' })
-Assert-True ($r2.Attributes.Entropy -eq 1.0) 'Entropy("aabb") = 1.0 exactly'
+Assert-True ($r2.ContentMeta.Entropy -eq 1.0) 'Entropy("aabb") = 1.0 exactly'
 
 $r3 = Invoke-Attr ([pscustomobject]@{ Content = 'a,b.' })
-Assert-True ($r3.Attributes.PunctuationCount -eq 2) 'PunctuationCount("a,b.") = 2'
+Assert-True ($r3.ContentMeta.PunctuationCount -eq 2) 'PunctuationCount("a,b.") = 2'
 
 $rm = Invoke-Attr ([pscustomobject]@{ Content = 'héllo' })
-Assert-True ($rm.Attributes.CharCount -eq 5 -and $rm.Attributes.SpanBytes -eq 6) `
-    'multibyte: CharCount 5 vs SpanBytes 6 (UTF-8 é)' "chars=$($rm.Attributes.CharCount) span=$($rm.Attributes.SpanBytes)"
+Assert-True ($rm.ContentMeta.CharCount -eq 5 -and $rm.ContentMeta.SpanBytes -eq 6) `
+    'multibyte: CharCount 5 vs SpanBytes 6 (UTF-8 é)' "chars=$($rm.ContentMeta.CharCount) span=$($rm.ContentMeta.SpanBytes)"
 
 $big = 'a' * 300
 $r4 = Invoke-Attr ([pscustomobject]@{ Content = $big })
-Assert-True ($r4.Attributes.CompressionRatio -lt 1.0 -and $r4.Attributes.CompressionRatio -gt 0) `
-    'CompressionRatio < 1 for repetitive >100-char content' "got $($r4.Attributes.CompressionRatio)"
+Assert-True ($r4.ContentMeta.CompressionRatio -lt 1.0 -and $r4.ContentMeta.CompressionRatio -gt 0) `
+    'CompressionRatio < 1 for repetitive >100-char content' "got $($r4.ContentMeta.CompressionRatio)"
 
 # ---------------------------------------------------------------------------
 Enter-Section '2. No-Content contract'
 # ---------------------------------------------------------------------------
 $envelope = [pscustomobject]@{ Id = 'thread-1'; Path = 't.md'; Exchanges = @(1, 2, 3) }
 $re = Invoke-Attr $envelope
-Assert-True ($null -eq $re.PSObject.Properties['Attributes']) 'envelope passes through unenriched'
+Assert-True ($null -eq $re.PSObject.Properties['ContentMeta']) 'envelope passes through unenriched'
 Assert-True ($re.Id -eq 'thread-1' -and $re.Exchanges.Count -eq 3) 'envelope properties preserved'
 
 # ---------------------------------------------------------------------------
 Enter-Section '3. Empty content'
 # ---------------------------------------------------------------------------
 $rz = Invoke-Attr ([pscustomobject]@{ RelativePath = 'empty.txt'; Content = '' })
-$az = $rz.Attributes
-Assert-True ($null -ne $az) 'empty string still gets Attributes'
+$az = $rz.ContentMeta
+Assert-True ($null -ne $az) 'empty string still gets ContentMeta'
 Assert-True ($az.SpanBytes -eq 0 -and $az.CharCount -eq 0 -and $az.WordCount -eq 0 -and $az.Entropy -eq 0) 'zeroed count metrics (incl. SpanBytes)'
 Assert-True ($az.CompressionRatio -eq 1.0 -and $az.WhitespaceRatio -eq 0) 'zeroed ratio metrics'
 Assert-True ($az.LineStats.Mean -eq 0 -and $az.LineStats.Max -eq 0) 'zeroed line stats'
@@ -130,9 +130,9 @@ foreach ($field in @('AbsolutePath', 'RelativePath', 'NodePath', 'SizeBytes', 'L
     Assert-True ($null -ne $rc.PSObject.Properties[$field]) "identity cloned: $field"
 }
 Assert-True ($rc.Content -eq 'x y z') 'Content unmutated'
-Assert-True ($null -eq $src.PSObject.Properties['Attributes']) "caller's object untouched"
-Assert-True ($rc.SizeBytes -eq 999 -and $rc.Attributes.CharCount -eq 5) `
-    'provenance split: SizeBytes (on-disk) vs Attributes.CharCount (processed)'
+Assert-True ($null -eq $src.PSObject.Properties['ContentMeta']) "caller's object untouched"
+Assert-True ($rc.SizeBytes -eq 999 -and $rc.ContentMeta.CharCount -eq 5) `
+    'provenance split: SizeBytes (on-disk) vs ContentMeta.CharCount (processed)'
 
 # ---------------------------------------------------------------------------
 Enter-Section '5. Colonel dispatch (file-read → rs-content_meta)'
@@ -161,9 +161,9 @@ try
     $run = Invoke-Plan -Items $items -Plan $compiled.Plan
     Assert-True (@($run.Errors).Count -eq 0) 'dispatch clean' ($run.Errors -join '; ')
     $out = $run.Results[0]
-    Assert-True ($null -ne $out.Attributes) 'Attributes attached in worker runspace'
-    Assert-True ($out.Attributes.CharCount -gt 100) 'metrics computed on read content'
-    Assert-True ($out.Attributes.CompressionRatio -lt 1.0) 'GZipStream resolves in worker runspace'
+    Assert-True ($null -ne $out.ContentMeta) 'ContentMeta attached in worker runspace'
+    Assert-True ($out.ContentMeta.CharCount -gt 100) 'metrics computed on read content'
+    Assert-True ($out.ContentMeta.CompressionRatio -lt 1.0) 'GZipStream resolves in worker runspace'
     Assert-True ($out.RelativePath -eq 'sample.ps1' -and $null -ne $out.PSObject.Properties['LastWriteUtc']) `
         'identity survives two-step chain'
 }

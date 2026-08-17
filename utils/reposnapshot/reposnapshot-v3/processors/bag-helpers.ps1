@@ -85,7 +85,7 @@ function Copy-Bag
     #              transformed text; readers/enrichers omit it.
     #   -Add       extra properties to set after cloning (adds or overwrites).
     #              This is how file-read attaches Content/Encoding/ReadError and
-    #              rs-content_meta attaches Attributes, without Add-Member.
+    #              rs-content_meta attaches ContentMeta, without Add-Member.
     #              Typed IDictionary so callers can pass [ordered]@{} — a plain
     #              hashtable enumerates in no guaranteed order, which would make
     #              emitted property order nondeterministic run to run.

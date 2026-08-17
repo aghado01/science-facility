@@ -46,21 +46,21 @@
 
     "content_meta": {
       "type": "block", "role": "content", "presence": "optional",
-      "source": "entry.Attributes (attached by processors/rs-content_meta.ps1 — the processor is named after this block; the in-memory element keeps its Attributes name for now) plus any enrichment element a processor declares",
+      "source": "entry.ContentMeta (attached by processors/rs-content_meta.ps1) plus any enrichment element a processor declares. One concept, three spellings by convention: wire content_meta (snake) · in-memory ContentMeta (Pascal) · processor rs-content_meta. Element renamed from Attributes 2026-08-17.",
       "note": "Metadata ABOUT the content span — hence the content_ prefix, pairing it with content_bytes and content. Extensible: which sub-fields are on is run configuration; new enrichment processors add admissible sub-fields here without writer changes (open element model). When the block is on, every row carries it; a sub-field absent on a row renders the empty marker.",
       "fields": {
-        "chars":       { "type": "int",   "source": "Attributes.CharCount" },
-        "words":       { "type": "int",   "source": "Attributes.WordCount" },
-        "punct":       { "type": "int",   "source": "Attributes.PunctuationCount" },
-        "uniq_chars":  { "type": "int",   "source": "Attributes.UniqueChars" },
-        "entropy":     { "type": "float", "source": "Attributes.Entropy" },
-        "ws_ratio":    { "type": "float", "source": "Attributes.WhitespaceRatio" },
-        "compression": { "type": "float", "source": "Attributes.CompressionRatio", "note": "LTS defect: always 0 (AGENTS). Admissible only once the metric is real; off by default." },
-        "line_mean":   { "type": "float", "source": "Attributes.LineStats.Mean" },
-        "line_median": { "type": "float", "source": "Attributes.LineStats.Median" },
-        "line_sd":     { "type": "float", "source": "Attributes.LineStats.StdDev" },
-        "line_max":    { "type": "int",   "source": "Attributes.LineStats.Max" },
-        "$comment": "LineStats is nested in memory; blocks are one level deep on the wire, so it flattens with a line_ prefix. Attributes.SpanBytes is deliberately NOT a sub-field: content_bytes is that quantity as the container measures it at write time — one fact, one column."
+        "chars":       { "type": "int",   "source": "ContentMeta.CharCount" },
+        "words":       { "type": "int",   "source": "ContentMeta.WordCount" },
+        "punct":       { "type": "int",   "source": "ContentMeta.PunctuationCount" },
+        "uniq_chars":  { "type": "int",   "source": "ContentMeta.UniqueChars" },
+        "entropy":     { "type": "float", "source": "ContentMeta.Entropy" },
+        "ws_ratio":    { "type": "float", "source": "ContentMeta.WhitespaceRatio" },
+        "compression": { "type": "float", "source": "ContentMeta.CompressionRatio", "note": "LTS defect: always 0 (AGENTS). Admissible only once the metric is real; off by default." },
+        "line_mean":   { "type": "float", "source": "ContentMeta.LineStats.Mean" },
+        "line_median": { "type": "float", "source": "ContentMeta.LineStats.Median" },
+        "line_sd":     { "type": "float", "source": "ContentMeta.LineStats.StdDev" },
+        "line_max":    { "type": "int",   "source": "ContentMeta.LineStats.Max" },
+        "$comment": "LineStats is nested in memory; blocks are one level deep on the wire, so it flattens with a line_ prefix. ContentMeta.SpanBytes is deliberately NOT a sub-field: content_bytes is that quantity as the container measures it at write time — one fact, one column."
       },
       "$default_on": [ "chars", "words", "ws_ratio", "entropy" ],
       "$default_on_comment": "LTS parity set (char_count word_count whitespace_ratio entropy). Working default; final is a config-surface call."

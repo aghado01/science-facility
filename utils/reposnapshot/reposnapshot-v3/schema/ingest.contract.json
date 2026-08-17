@@ -48,7 +48,7 @@
       "Encoding":     { "type": "string", "origin": "file-read", "optional": true, "note": "'UTF-8' — an asserted decode policy, not yet a measurement (decisions-ledger #28)" },
       "ReadError":    { "type": "string", "origin": "file-read", "optional": true, "note": "BinaryOrNulContent | <exception message>; always paired with _ChainHalt" },
       "_ChainHalt":   { "type": "bool",   "origin": "chain",     "optional": true, "note": "set by any processor that halts the chain" },
-      "…":            { "type": "open",   "note": "Attributes, Processing, Operations, … — anything a processor attaches" }
+      "…":            { "type": "open",   "note": "ContentMeta, Processing, Operations, … — anything a processor attaches" }
     },
     "skipped": {
       "Path":      { "from": "membrane.out.skipped", "note": "the membrane stage's records are merged verbatim" },

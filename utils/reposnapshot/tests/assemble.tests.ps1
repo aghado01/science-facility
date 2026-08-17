@@ -79,12 +79,12 @@ function New-Result ([hashtable]$Props)
 $now = [datetime]::UtcNow
 $unitEnvelope = [pscustomobject]@{
     Results  = @(
-        (New-Result @{ AbsolutePath = 'C:/r/a.ps1'; RelativePath = 'a.ps1'; NodePath = ''; Extension = '.ps1'; SizeBytes = 10L; LastWriteUtc = $now; CreationUtc = $now; FsAttributes = [IO.FileAttributes]::Archive; Content = 'alpha'; Encoding = 'UTF-8'; Attributes = [pscustomobject]@{ SpanBytes = 5 } }),
+        (New-Result @{ AbsolutePath = 'C:/r/a.ps1'; RelativePath = 'a.ps1'; NodePath = ''; Extension = '.ps1'; SizeBytes = 10L; LastWriteUtc = $now; CreationUtc = $now; FsAttributes = [IO.FileAttributes]::Archive; Content = 'alpha'; Encoding = 'UTF-8'; ContentMeta = [pscustomobject]@{ SpanBytes = 5 } }),
         (New-Result @{ AbsolutePath = 'C:/r/bin.dat'; RelativePath = 'bin.dat'; NodePath = ''; SizeBytes = 4L; LastWriteUtc = $now; ReadError = 'BinaryOrNulContent'; _ChainHalt = $true }),
         $null,
         (New-Result @{ AbsolutePath = 'C:/r/empty.txt'; RelativePath = 'empty.txt'; NodePath = ''; SizeBytes = 0L; LastWriteUtc = $now; Content = ''; Encoding = 'UTF-8' }),
         (New-Result @{ AbsolutePath = 'C:/r/gutted.ps1'; RelativePath = 'gutted.ps1'; NodePath = ''; SizeBytes = 99L; LastWriteUtc = $now; Content = ''; Encoding = 'UTF-8' }),
-        (New-Result @{ AbsolutePath = 'C:/r/sub/b.ps1'; RelativePath = 'sub/b.ps1'; NodePath = 'sub/'; SizeBytes = 20L; LastWriteUtc = $now; Content = 'beta'; Encoding = 'UTF-8'; Attributes = [pscustomobject]@{ SpanBytes = 4 }; WordCloud = @('beta') })
+        (New-Result @{ AbsolutePath = 'C:/r/sub/b.ps1'; RelativePath = 'sub/b.ps1'; NodePath = 'sub/'; SizeBytes = 20L; LastWriteUtc = $now; Content = 'beta'; Encoding = 'UTF-8'; ContentMeta = [pscustomobject]@{ SpanBytes = 4 }; WordCloud = @('beta') })
     )
     Skipped  = @([pscustomobject]@{ Path = 'C:/r/x.png'; Reason = 'ExtensionBlacklisted' })
     Errors   = @('one error')
@@ -126,7 +126,7 @@ $contractCore = @($contract.out.entry.core.Keys) | Sort-Object
 $moduleCore = @(& (Get-Module rs.core.assemble) { $script:CoreFields }) | Sort-Object
 Assert-True (($contractCore -join ',') -eq ($moduleCore -join ',')) 'assemble core set = contract out.entry.core' "contract: $($contractCore -join ','); module: $($moduleCore -join ',')"
 Assert-True ($null -eq $ir.Header.Elements.PSObject.Properties['Extension'] -and $null -eq $ir.Header.Elements.PSObject.Properties['FsAttributes']) 'excluded fields never reach Header.Elements'
-foreach ($kept in @('RelativePath', 'NodePath', 'LastWriteUtc', 'Content', 'Encoding', 'Attributes'))
+foreach ($kept in @('RelativePath', 'NodePath', 'LastWriteUtc', 'Content', 'Encoding', 'ContentMeta'))
 {
     Assert-True ($null -ne $ir.Entries[0].PSObject.Properties[$kept]) "entry bag keeps $kept"
 }
@@ -146,7 +146,7 @@ Assert-True ($reasons.ContainsKey('EmptiedByProcessing') -and $reasons['EmptiedB
 Enter-Section '3. Open element model'
 # ---------------------------------------------------------------------------
 $el = $ir.Header.Elements
-Assert-True ($el.Attributes.Count -eq 2 -and $el.Attributes.Total -eq 2) 'Attributes declared 2/2'
+Assert-True ($el.ContentMeta.Count -eq 2 -and $el.ContentMeta.Total -eq 2) 'ContentMeta declared 2/2'
 Assert-True ($el.Encoding.Count -eq 2) 'Encoding declared (an element like any other)'
 Assert-True ($el.WordCloud.Count -eq 1 -and $el.WordCloud.Total -eq 2) `
     'unknown future element (WordCloud) declared 1/2 — zero assemble knowledge'
@@ -254,7 +254,7 @@ try
     foreach ($entry in $golden.Entries)
     {
         $l = $ltsByPath[$entry.RelativePath]
-        $a = $entry.Attributes
+        $a = $entry.ContentMeta
         if ($entry.Content -cne $l.content) { $contentOk = $false }
         if ($a.CharCount -ne $l.attributes.char_count) { $charOk = $false }
         if ($a.WordCount -ne $l.attributes.word_count) { $wordOk = $false }
@@ -277,17 +277,17 @@ try
         if ($ltsLw.ToUniversalTime().Ticks -ne $entry.LastWriteUtc.Ticks) { $lwOk = $false }
     }
     Assert-True $contentOk 'content byte-exact per path (Normalize identity on normal-form fixture)'
-    Assert-True $charOk 'char_count == Attributes.CharCount'
-    Assert-True $wordOk 'word_count == Attributes.WordCount'
-    Assert-True $entOk 'entropy == Attributes.Entropy'
-    Assert-True $wsOk 'whitespace_ratio == Attributes.WhitespaceRatio'
-    Assert-True $lsOk 'line_stats == Attributes.LineStats (all four)'
+    Assert-True $charOk 'char_count == ContentMeta.CharCount'
+    Assert-True $wordOk 'word_count == ContentMeta.WordCount'
+    Assert-True $entOk 'entropy == ContentMeta.Entropy'
+    Assert-True $wsOk 'whitespace_ratio == ContentMeta.WhitespaceRatio'
+    Assert-True $lsOk 'line_stats == ContentMeta.LineStats (all four)'
     Assert-True $spanOk 'size_bytes == SpanBytes (UTF-8 no-BOM: disk bytes == content bytes)'
     Assert-True $crDelta 'compression_ratio: documented delta (LTS defect 0 vs v3 real; both 1 when gated)'
     Assert-True $lwOk 'last_write round-trips to LastWriteUtc (tick-equal)'
 
-    Assert-True ($golden.Header.Elements.Attributes.Count -eq 3 -and $golden.Header.Elements.Attributes.Total -eq 3) `
-        'Elements: Attributes 3/3 in golden IR'
+    Assert-True ($golden.Header.Elements.ContentMeta.Count -eq 3 -and $golden.Header.Elements.ContentMeta.Total -eq 3) `
+        'Elements: ContentMeta 3/3 in golden IR'
     Assert-True ($golden.Header.EntryCount -eq 3 -and $golden.Header.Root -eq $fixtureRoot) `
         'Header: derived + stamped coexist'
 }

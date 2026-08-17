@@ -29,7 +29,7 @@
       "Type":   { "type": "int|float|str|block" },
       "Width":  { "type": "int",    "optional": true, "note": "fixed width (zero-padded) for position-dependent int columns; absent = variable" },
       "Role":   { "type": "record|content" },
-      "Source": { "type": "string", "note": "in-memory origin — an entry path (RelativePath, Attributes.CharCount, Content via codec) or 'plan' (gidx, assigned after packing). This is the wire-naming map (PascalCase → snake_case), taken from psr.header.json" },
+      "Source": { "type": "string", "note": "in-memory origin — an entry path (RelativePath, ContentMeta.CharCount, Content via codec) or 'plan' (gidx, assigned after packing). This is the wire-naming map (PascalCase → snake_case), taken from psr.header.json" },
       "Fields": { "type": "column[]", "optional": true, "note": "block sub-columns, one level deep, in declared order" }
     }
   }
