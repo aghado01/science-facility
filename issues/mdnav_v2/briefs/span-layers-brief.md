@@ -650,6 +650,45 @@ the existing runner; the suite must report assert counts, not just PASS.
     report must list which real-corpus documents changed under 8, so the
     `default` `enter` decision can be revisited with evidence.
 
+## Method — new engine, ported presentation, old file as figure model
+
+This is a **rewrite of the engine**, not a refactor: the brief inverts the
+control flow (verbs become queries over a claims table built once), so
+every verb body changes and the three divergent scanners are the thing
+being replaced. Retrofitting a table under functions designed not to have
+one would carry the old seams forward. But it is a rewrite *from a figure
+model*: the current [mdnav.mjs](../../../mcp/mdnav/mdnav.mjs) encodes
+behavior the brief does not restate — PREAMBLE/BODY, setext suspects, the
+partition invariant on odd documents, CRLF/BOM, unclosed-fence warning,
+`UNBROKEN` windows, `--within` semantics, stamp `-2` suffixes, `LATEST`,
+the work-dir refusal guard, `keepOf`, the blockquote regression the tests
+encode — and that behavior is read and ported, never edited in place.
+
+1. **Tests first, verbatim.** Copy `test/acceptance.mjs` unchanged and
+   write the golden-capture script *before* any engine code. The new binary
+   runs the old suite from day one (gate 1) and matches goldens under
+   `default` (gate 16). The old `mdnav.mjs` stays on disk untouched until
+   parity — it is the oracle; git keeps it after.
+2. **New engine, clean:** `SpanSet`, claims, collectors, containment,
+   `Selection`, `materialize` — doccer-shaped, no lineage from the old
+   scanners.
+3. **Ported presentation and IO, with intent:** `parseArgs` (fixed),
+   work-dir resolution + guard, inventory/ledger IO, `outline`/`discover`
+   formatting, HELP, stderr conventions — copied because they are right,
+   changed only where this brief says.
+4. **README as the second figure model.** Design rule, address model,
+   triage philosophy, artifact locality all stay true; amend, don't rewrite.
+5. Replace the old file in one commit at parity; `mdnav.ps1` unchanged.
+
+Chip plan follows the seam this creates: **Chip A — parity** (old suite +
+goldens green on the new architecture, F1–F4 fixed; gates 1–7, 9, 13, 14,
+16); **Chip B — the query surface** (containment/`--enter`, relations,
+profiles, `--only`, generic `--by`, exports, budgets/paging, framing; gates
+8, 10–12, 15, 17–21); then a **fresh-context review** against the gates.
+Sequential, worktree-isolated, each appends its report below. Not parallel
+sub-agents: one file, hard ordering, and a golden baseline that must be
+captured before anything moves.
+
 ## Sequencing
 
 1. `SpanSet` + property tests (2). Standalone.
