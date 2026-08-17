@@ -143,6 +143,25 @@ token estimate (`~Nt`, from the token battery) rather than bytes; source
 identity + semantic sub-address on every chunk; addressable elisions;
 budgets counting emitted bytes/tokens including wrappers.
 
+**P0 — the first prototype, deliberately narrow: atomic payload framing
+per tool-call result.** Not the cross-document/file scheme in one go. The
+mdnav backend wraps *every result it returns to the prompt* — bytes or
+table — in one barebones structure, because agents make many tool calls
+across many files and tools and those results accumulate sequentially; the
+wrapper gives each accumulated chunk **addressing, provenance, and
+boundaries** so self-attention has reliable structure to work with instead
+of an undifferentiated span. Minimum a P0 wrapper carries, and nothing
+more: opening sigil (`§` document unit / `¶` other), **source identity**
+(tool + document/corpus — the provenance that makes results from different
+tools distinguishable when interleaved), **semantic sub-address** (anchor,
+claim address, or query id — what the agent re-mentions), **magnitude**
+(bytes; `~Nt` once a token profile exists), the content, and a close.
+Key/legend delivered once via the adapter skill. Everything else in this
+item (key-once vs self-identifying rows, codec vs raw, `||` vs LF, `⁂`
+close, cross-document interleaving rules) is layered on P0 after it has
+been *used* — the eval (D20) runs against P0 first, and P0's shape is
+allowed to be wrong.
+
 **Open questions the brief must answer:** (1) rough shape `<sigil> |
 <source identity> | <semantic sub-address> | <token estimate> | <content>
 ||` — which cells are per-row vs declared once in a key, given that the

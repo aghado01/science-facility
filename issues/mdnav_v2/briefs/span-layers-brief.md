@@ -3,7 +3,7 @@
 > **Role:** design canon — the "why" and the shape. Execution lives in
 > [planning/roadmap.md](../planning/roadmap.md) (milestones M0–M6, gate
 > subsets, chip seams), the audit trail in
-> [planning/decisions.md](../planning/decisions.md) (D1–D34, ascending), and the
+> [planning/decisions.md](../planning/decisions.md) (D1–D35, ascending), and the
 > figure-model homework in
 > [archaelogy/figure-model-survey.md](../archaelogy/figure-model-survey.md)
 > (function-by-function dispositions, must-survive behaviors, test map).
