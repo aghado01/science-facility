@@ -1,8 +1,15 @@
 <#
 .SYNOPSIS
-    Language-agnostic text formatter (whitespace and encoding normalization).
+    Code-lane whitespace normalizer (line endings, trailing whitespace, blank
+    runs, encoding residue). Renamed from format-ws 2026-08-17 to say its lane:
+    code ingestion, not markdown/document ingestion (ledger #21 lane split).
 
 .DESCRIPTION
+    Runs EARLY in the code-lane chain and its `lf` op is what lets every later
+    stage — strippers, rs-indent, rs-attributes, and the container's codec —
+    count on LF-only content. Whitespace normalization is a requirement of the
+    lane, not a nicety.
+
     This file is loaded as a function body through SessionStateFunctionEntry.
     ISS-load-safe: no #Requires, top-level param contract (interior helpers
     permitted per colonel AST validation).
@@ -292,7 +299,7 @@ foreach ($requested in ($ops | Select-Object -Unique))
 # 'lf' and Operations[0] would be 'l'. Same trap assemble hit.
 $record = if ($includeMeta)
 {
-    $fields = [ordered]@{ Processor = 'format'; Operations = @($ran) }
+    $fields = [ordered]@{ Processor = 'rs-whitespace'; Operations = @($ran) }
     if ($skipped.Count) { $fields['Skipped'] = @($skipped) }
     [pscustomobject]$fields
 }

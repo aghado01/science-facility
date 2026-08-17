@@ -1,5 +1,14 @@
 # Changelog 
 
+## 2026-08-17 — processors: format-ws → rs-whitespace
+
+Rename to say the lane (code ingestion, not markdown; ledger #21). Processor
+tag, test suite name, chain keys, `run-all` roster, and source comments follow;
+transforms untouched. Whitespace normalization stated as a code-lane
+requirement — `lf` is what lets `rs.core.container`'s codec (SPEC rules 1–4,
+in the container, not a processor) count on LF-only content. Battery
+15 · 936 · 0. See processors/CHANGELOG.md.
+
 ## 2026-08-17 — export contracts minted: container, shards, serialize, manifest
 
 `schema/{container,shards,serialize,manifest}.contract.json` — the four export

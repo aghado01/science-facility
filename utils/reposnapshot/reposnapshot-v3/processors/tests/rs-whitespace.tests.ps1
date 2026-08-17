@@ -3,9 +3,10 @@ Set-StrictMode -Version Latest
 
 <#
 .SYNOPSIS
-    Unit tests for processors/format-ws.ps1.
-    (PowerShellCore-era name: format.ps1 / tp-generic — renamed in the v3
-    copy-over; the processor still self-identifies as Processor = 'format'.)
+    Unit tests for processors/rs-whitespace.ps1.
+    (PowerShellCore-era name: format.ps1 / tp-generic → format-ws in the v3
+    copy-over → rs-whitespace 2026-08-17 (code-lane name; self-identifies as
+    Processor = 'rs-whitespace').)
 
 .DESCRIPTION
     Tests the processor directly (dot-invoked, not via colonel).
@@ -42,10 +43,10 @@ Set-StrictMode -Version Latest
 
 .NOTES
     Run from any directory:
-        & "$PSScriptRoot\format.tests.ps1"
+        & "$PSScriptRoot\rs-whitespace.tests.ps1"
 #>
 
-$processorPath = Join-Path $PSScriptRoot '..\format-ws.ps1'
+$processorPath = Join-Path $PSScriptRoot '..\rs-whitespace.ps1'
 
 # Shared ISS helpers (Resolve-BagContent / Copy-Bag) — colonel registers these
 # into worker runspaces; dot-invocation here needs them loaded explicitly.
@@ -100,7 +101,7 @@ function Invoke-ProcessorRaw ([object]$Item, [hashtable]$Config = @{})
 }
 
 Write-Host '============================================================' -ForegroundColor Yellow
-Write-Host ' format.tests.ps1 (format-ws)' -ForegroundColor Yellow
+Write-Host ' rs-whitespace.tests.ps1 (rs-whitespace)' -ForegroundColor Yellow
 Write-Host '============================================================' -ForegroundColor Yellow
 
 # ============================================================
@@ -122,7 +123,7 @@ Assert-Equal $rPsco.Id 'p1' 'PSCustomObject item: Id propagated'
 Assert-Equal $rPsco.Path 'y.txt' 'PSCustomObject item: Path propagated'
 Assert-Equal $rPsco.Text "hello`nworld`n" 'Text-keyed bag: Text mutated in place (key preserved)'
 Assert-True ($null -eq $rPsco.PSObject.Properties['Content']) 'Text-keyed bag: no Content key invented'
-Assert-Equal $rPsco.Processing[0].Processor 'format' 'Processing record names the processor'
+Assert-Equal $rPsco.Processing[0].Processor 'rs-whitespace' 'Processing record names the processor'
 
 # ============================================================
 # 2. Default ops applied when Operations omitted

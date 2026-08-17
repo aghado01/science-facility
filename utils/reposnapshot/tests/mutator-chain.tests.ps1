@@ -4,10 +4,10 @@ Set-StrictMode -Version Latest
 <#
 .SYNOPSIS
     Content mutators inside a code-track chain: crawl → ignore →
-    ingest[file-read, format-ws, rs-psstrip, rs-attributes] → assemble.
+    ingest[file-read, rs-whitespace, rs-psstrip, rs-attributes] → assemble.
 
 .DESCRIPTION
-    The regression for consolidation item 6d. Before harmonization, format-ws
+    The regression for consolidation item 6d. Before harmonization, rs-whitespace
     and rs-psstrip spoke the tp-era contract — they unpacked $Item.Text and
     REPLACED the bag with an Id/Path/Text envelope, so putting either one in a
     code-track chain destroyed the ItemDescriptor identity fields and assemble
@@ -24,7 +24,7 @@ Set-StrictMode -Version Latest
          envelope residue anywhere in the IR.
       2. Both mutations actually applied (the chain is doing work, not
          passing through): CRLF normalized + trailing whitespace gone by
-         format-ws; comment kinds stripped and FrontMatter preserved by
+         rs-whitespace; comment kinds stripped and FrontMatter preserved by
          rs-psstrip.
       3. The `Processing` trail is collated as an ORDINARY element — order is
          chain order, and Header.Elements declares it without assemble
@@ -92,7 +92,7 @@ function Get-Thing
     return `$x
 }
 "@
-# CRLF + trailing whitespace + trailing blank lines, so format-ws has real work
+# CRLF + trailing whitespace + trailing blank lines, so rs-whitespace has real work
 $psSource = ($psSource -replace "`n", "`r`n") + "   `r`n`r`n`r`n`r`n"
 [IO.File]::WriteAllText((Join-Path $fixtureRoot 'src\thing.ps1'), $psSource, [System.Text.UTF8Encoding]::new($false))
 [IO.File]::WriteAllText((Join-Path $fixtureRoot 'src\plain.txt'), "just text`r`nsecond   line", [System.Text.UTF8Encoding]::new($false))
@@ -120,13 +120,13 @@ try
     $ingest = Invoke-Ingest -FilteredFsGraph $filtered `
         -Manifest @{
             'file-read'     = (Join-Path $v3 'processors\file-read.ps1')
-            'format'        = (Join-Path $v3 'processors\format-ws.ps1')
+            'rs-whitespace' = (Join-Path $v3 'processors\rs-whitespace.ps1')
             'rs-psstrip'    = (Join-Path $v3 'processors\rs-psstrip.ps1')
             'rs-attributes' = (Join-Path $v3 'processors\rs-attributes.ps1')
         } `
         -Steps @(
             @{ Key = 'file-read'; Config = @{} }
-            @{ Key = 'format'; Config = @{ Operations = @('lf', 'trim-trailing', 'trim-doc') } }
+            @{ Key = 'rs-whitespace'; Config = @{ Operations = @('lf', 'trim-trailing', 'trim-doc') } }
             @{ Key = 'rs-psstrip'; Config = @{ Operations = @('block-comments', 'doc-strings', 'comment-blocks', 'line-comments') } }
             @{ Key = 'rs-attributes'; Config = @{} }
         ) `
@@ -148,7 +148,7 @@ try
     # -----------------------------------------------------------------------
     Enter-Section '2. Identity survives the mutator chain (the 6d fault line)'
     # -----------------------------------------------------------------------
-    Assert-True ($entry.RelativePath -eq 'src/thing.ps1') 'RelativePath intact after format-ws + rs-psstrip'
+    Assert-True ($entry.RelativePath -eq 'src/thing.ps1') 'RelativePath intact after rs-whitespace + rs-psstrip'
     Assert-True ($entry.NodePath -eq 'src/') 'NodePath intact'
     Assert-True ($entry.LastWriteUtc -is [datetime]) 'LastWriteUtc intact and still typed'
     Assert-True ($null -ne $entry.PSObject.Properties['Content']) 'Content key present (never renamed to Text)'
@@ -159,9 +159,9 @@ try
     # -----------------------------------------------------------------------
     Enter-Section '3. Both mutations actually applied'
     # -----------------------------------------------------------------------
-    Assert-True ($entry.Content -notmatch "`r") 'format-ws: CRLF normalized to LF'
-    Assert-True ($entry.Content -notmatch '(?m)[ \t]+$') 'format-ws: per-line trailing whitespace gone'
-    Assert-True ($entry.Content -notmatch '\n\s*$') 'format-ws: trailing blank lines trimmed (trim-doc)'
+    Assert-True ($entry.Content -notmatch "`r") 'rs-whitespace: CRLF normalized to LF'
+    Assert-True ($entry.Content -notmatch '(?m)[ \t]+$') 'rs-whitespace: per-line trailing whitespace gone'
+    Assert-True ($entry.Content -notmatch '\n\s*$') 'rs-whitespace: trailing blank lines trimmed (trim-doc)'
     Assert-True ($entry.Content -notmatch 'a standalone comment') 'rs-psstrip: CommentBlock stripped'
     Assert-True ($entry.Content -notmatch 'docstring') 'rs-psstrip: DocString stripped'
     Assert-True ($entry.Content -match '(?m)^#Requires -Version 7\.0') 'rs-psstrip: FrontMatter preserved under mutation'
@@ -173,7 +173,7 @@ try
     # -----------------------------------------------------------------------
     Assert-True ($null -ne $entry.PSObject.Properties['Processing']) 'Processing element present on the entry'
     Assert-True (@($entry.Processing).Count -eq 2) 'one record per mutator invocation' "got $(@($entry.Processing).Count)"
-    Assert-True ($entry.Processing[0].Processor -eq 'format') 'trail order[0] = format (chain order)'
+    Assert-True ($entry.Processing[0].Processor -eq 'rs-whitespace') 'trail order[0] = rs-whitespace (chain order)'
     Assert-True ($entry.Processing[1].Processor -eq 'rs-psstrip') 'trail order[1] = rs-psstrip'
     Assert-True (@($entry.Processing[0].Operations).Count -eq 3) 'first record carries its own resolved ops'
     Assert-True (@($entry.Processing[1].Operations).Count -eq 4) 'second record carries its own resolved ops'
@@ -205,13 +205,13 @@ try
     $bareIngest = Invoke-Ingest -FilteredFsGraph $filtered `
         -Manifest @{
             'file-read'     = (Join-Path $v3 'processors\file-read.ps1')
-            'format'        = (Join-Path $v3 'processors\format-ws.ps1')
+            'rs-whitespace' = (Join-Path $v3 'processors\rs-whitespace.ps1')
             'rs-psstrip'    = (Join-Path $v3 'processors\rs-psstrip.ps1')
             'rs-attributes' = (Join-Path $v3 'processors\rs-attributes.ps1')
         } `
         -Steps @(
             @{ Key = 'file-read'; Config = @{} }
-            @{ Key = 'format'; Config = @{ Operations = @('lf', 'trim-trailing', 'trim-doc') } }
+            @{ Key = 'rs-whitespace'; Config = @{ Operations = @('lf', 'trim-trailing', 'trim-doc') } }
             @{ Key = 'rs-psstrip'; Config = @{ Operations = @('block-comments', 'doc-strings', 'comment-blocks', 'line-comments') } }
             @{ Key = 'rs-attributes'; Config = @{} }
         ) `
@@ -240,12 +240,12 @@ try
     $serial = Invoke-Ingest -FilteredFsGraph $filtered `
         -Manifest @{
             'file-read'  = (Join-Path $v3 'processors\file-read.ps1')
-            'format'     = (Join-Path $v3 'processors\format-ws.ps1')
+            'rs-whitespace' = (Join-Path $v3 'processors\rs-whitespace.ps1')
             'rs-psstrip' = (Join-Path $v3 'processors\rs-psstrip.ps1')
         } `
         -Steps @(
             @{ Key = 'file-read'; Config = @{} }
-            @{ Key = 'format'; Config = @{ Operations = @('lf', 'trim-trailing', 'trim-doc') } }
+            @{ Key = 'rs-whitespace'; Config = @{ Operations = @('lf', 'trim-trailing', 'trim-doc') } }
             @{ Key = 'rs-psstrip'; Config = @{ Operations = @('block-comments', 'doc-strings', 'comment-blocks', 'line-comments') } }
         ) `
         -ChainExecutorPath (Join-Path $v3 'processors\chain-executor.ps1') `

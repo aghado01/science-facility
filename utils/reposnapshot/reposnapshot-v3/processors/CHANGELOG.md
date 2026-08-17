@@ -1,5 +1,16 @@
 # Changelog — processors/
 
+## 2026-08-17 — format-ws.ps1 → rs-whitespace.ps1 (rename; code-lane name)
+
+- `git mv` of the processor and its suite (`format.tests.ps1` →
+  `rs-whitespace.tests.ps1`); `Processor = 'rs-whitespace'` in the `Processing`
+  record (siblings self-name after their file); chain-map keys in tests follow.
+  Synopsis now states the lane (code ingestion, not markdown — ledger #21) and
+  that whitespace normalization is a lane requirement: `lf` is what lets the
+  container's codec count on LF-only content. Transforms untouched.
+- Left as is: `tests/colonel-bench.ps1` (already pointed at a PowerShellCore-era
+  path; not in the battery); historical mentions in design notes / plans.
+
 ## 2026-07-22 — rs-psstrip.ps1 — tolerant routing, here-string masking, shebang
 
 - **Route gate inverted per the tolerance constraint**: the token walk now runs even when

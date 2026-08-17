@@ -17,7 +17,7 @@ using namespace System.Collections.Generic
     information.
 
     Fixed internal phase sequence (config selects members, implementation
-    owns sequence — format-ws doctrine):
+    owns sequence — rs-whitespace (né format-ws) doctrine):
 
       adapt   track adapter: results → entry candidates (Code: 1 → 1)
       route   entry vs diagnostics (lean-payload policy by default)

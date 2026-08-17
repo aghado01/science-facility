@@ -53,7 +53,7 @@ $suitePaths = @(
     (Join-Path $PSScriptRoot 'colonel-dispatch.tests.ps1')
     (Join-Path $PSScriptRoot 'assemble.tests.ps1')
     (Join-Path $PSScriptRoot 'mutator-chain.tests.ps1')
-    (Join-Path $repoRoot 'reposnapshot-v3\processors\tests\format.tests.ps1')
+    (Join-Path $repoRoot 'reposnapshot-v3\processors\tests\rs-whitespace.tests.ps1')
     (Join-Path $repoRoot 'reposnapshot-v3\processors\tests\rs-indent.tests.ps1')
     (Join-Path $repoRoot 'reposnapshot-v3\processors\tests\rs-psstrip.tests.ps1')
     (Join-Path $repoRoot 'reposnapshot-v3\processors\tests\rs-csstrip.tests.ps1')

@@ -512,11 +512,11 @@ Assert-True ($null -eq $rHalt.PSObject.Properties['Processing']) 'no-content bag
 Assert-Equal $rHalt.ReadError 'BinaryOrNulContent' 'no-content bag: returned intact'
 
 # Chained mutators: the trail accumulates in chain order and identity survives.
-$fmt = Join-Path $PSScriptRoot '..\format-ws.ps1'
+$fmt = Join-Path $PSScriptRoot '..\rs-whitespace.ps1'
 $step1 = & $fmt $descriptor @{ Operations = @('lf') }
 $step2 = Invoke-Processor -Item $step1
 Assert-Equal $step2.Processing.Count 2 'chain: two records accumulated'
-Assert-Equal $step2.Processing[0].Processor 'format' 'chain: order[0] = format'
+Assert-Equal $step2.Processing[0].Processor 'rs-whitespace' 'chain: order[0] = rs-whitespace'
 Assert-Equal $step2.Processing[1].Processor 'rs-psstrip' 'chain: order[1] = rs-psstrip'
 Assert-Equal $step2.RelativePath 'src/a.ps1' 'chain: identity survives cross-processor chain'
 Assert-Equal $step2.SizeBytes 120 'chain: SizeBytes survives cross-processor chain'

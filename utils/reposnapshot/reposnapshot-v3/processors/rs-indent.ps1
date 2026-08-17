@@ -96,7 +96,7 @@
         # run first for accurate common-indent measurement. Currently strip-common
         # measures leading spaces only; the common-tab case is a no-op.
         # Colonel chaining IS available (v2, plan-driven); the cleaner stack —
-        #   format-ws(lf) → rs-indent(detab) → rs-indent(strip-common, min-indent-2)
+        #   rs-whitespace(lf) → rs-indent(detab) → rs-indent(strip-common, min-indent-2)
         # — now works in code-track descriptor chains as well: 6d harmonized all
         # four content mutators onto copy-on-mutate, so identity fields survive
         # and each pass appends its own Processing record.

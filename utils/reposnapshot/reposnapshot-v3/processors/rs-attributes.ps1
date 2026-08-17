@@ -10,7 +10,7 @@
 # not by this processor, which is position-ignorant):
 #   - Enrich-only TAIL step: place after ALL content-mutating steps of any
 #     kind (language-specific strippers AND generic transforms like
-#     format-ws). Nothing needs to run after it; order relative to other
+#     rs-whitespace). Nothing needs to run after it; order relative to other
 #     enrich-only tail steps is immaterial.
 #   - Attributes describe the PROCESSED content — the payload as it moves
 #     forward in the pipeline — deliberately NOT the on-disk original.

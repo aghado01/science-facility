@@ -217,7 +217,8 @@ rewriting history.
   a single `[ordered]` cast, which also works under Bare where `Add-Member`
   does not exist. `chain-executor.ps1` and `bag-helpers.ps1` use no cmdlets at
   all. What remains is four Utility calls: `Sort-Object` (rs-csstrip,
-  rs-psstrip), `ForEach-Object` (format-ws, rs-psstrip), `Where-Object`
+  rs-psstrip), `ForEach-Object` (rs-whitespace — né format-ws, renamed
+  2026-08-17 to say its lane: code ingestion, not markdown — rs-psstrip), `Where-Object`
   (rs-indent, tp-perplexity), `Measure-Object` (rs-indent) — all with
   verified language-level equivalents, none load-bearing for stability
   (consolidation §E). Incidental debt, not structural dependency.
