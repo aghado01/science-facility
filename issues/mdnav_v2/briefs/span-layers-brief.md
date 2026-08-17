@@ -3,7 +3,7 @@
 > **Role:** design canon — the "why" and the shape. Execution lives in
 > [planning/roadmap.md](../planning/roadmap.md) (milestones M0–M6, gate
 > subsets, chip seams), the audit trail in
-> [planning/decisions.md](../planning/decisions.md) (D1–D32, ascending), and the
+> [planning/decisions.md](../planning/decisions.md) (D1–D33, ascending), and the
 > figure-model homework in
 > [archaelogy/figure-model-survey.md](../archaelogy/figure-model-survey.md)
 > (function-by-function dispositions, must-survive behaviors, test map).
@@ -414,7 +414,7 @@ session store; the engine must make these natural):
   because once bytes are in context the cost is paid.
   **Budgets count emitted bytes, headers included.** `maxBytes` is compared
   against the total the framer will actually write — every header line
-  (UTF-8, so `§`/`¶` are 2 bytes each) plus every `len` — never against
+  (UTF-8, so `§`/`¶` are 2 bytes each) plus every `content_bytes` — never against
   payload alone; the plan reports both `payload` and `framed` totals. All
   framing arithmetic is `Buffer.byteLength`, never string length.
 - **Bytes-or-table, never both.** A read result is bytes plus a one-line
@@ -458,18 +458,10 @@ address** for random access. mdnav's `read` is the document-side instance
 and emits the same framing, so documents and exchanges are one kind of
 object in the Primary's stream — and the header declares the *interpretive
 frame the backend already knows* (the claim kind, the basis, what was
-stripped), which is the claims table reflected into the stream:
-
-```
-§ D002:H0108@fa8a 2/5 kind=unit basis=d2 ~629B strip=html-tag span=61234..61863 len=629
-<629 bytes of source>
-§ D002:H0108@fa8a/elided.1 kind=data-uri ~404KiB span=14187..430301 len=0
-§ D002:H0117@aabc 3/5 kind=unit basis=d2 ~540B span=… len=540
-…
-```
-
-Field order is fixed: glyph, address, ordinal-of-batch, kind, basis, coarse
-size, policy stamps, then the machine fields (`span`, `len`) last.
+stripped), which is the claims table reflected into the stream. The row
+grammar is **psr** (below): sigil, address, ordinal-of-batch, kind, basis,
+`content_meta {…}` for composition/size/stamps, then `span`,
+`content_bytes`, `content` — machine fields last, `content` always final.
 
 *The non-coding convention is a **sigil vocabulary**, not a "frame"
 apparatus (proposed, pending the shared spec freeze).* The concept — not
@@ -502,71 +494,91 @@ one large real transcript):
 | `⁂` U+2042 (asterism; alt `⁋` U+204B reversed pilcrow) | **close** — optional overlay | asterism historically marks a section's end/break |
 | `†` U+2020 | foot-matter / definition region, *if ever* | typographic footnote convention |
 
-Row grammar — **the metadata block is a pipe-celled row; the payload is a
-raw multi-line cell.** The evidence is a reposnapshot shard read directly
-(`D:\aghado01\project-snapshots\ThermoMapper\src_20260701_122622_s024_hashish.txt`,
-2026-08-17): its typed header row (`idx<int> | path<str> |
-attributes:{…} | length<int> | content<str> |`) is a key read once and used
-positionally thereafter; its front-loaded metadata cells (`246 |
-hashish/tokenizer.cs | {1916 145 0.2526 4.6996} | 1982 |`) primed the read
-— address, identity, composition, size, before a byte of content; pipes cut
-the line into cells that attention treats as a header without being told;
-the trailing pipe is a one-character close. The content cell was
-single-line with `\n` escapes — and comprehension was **intact**:
-indentation spaces are literal, only the physical newline is encoded, and
-whitespace tokens read no differently from printed ones. That encoding is
-reposnapshot's deliberate invariant, **one physical line per row**, and its
-benefits transfer: a physical newline always and only means "next record",
-rows are line-addressable and tool-friendly, and a header can never be
-confused with content. mdnav adopts it **by record class**: table/record
-outputs (outline rows, locate hits, marks/claims rows, coverage, plans) are
-one physical line per row with content cells escaped (previews are already
-whitespace-collapsed today). The one exception is **source
-materialization**: `read`'s payload is a raw, multi-line, unescaped cell of
-exactly `len` bytes — not for legibility, but because the covenant is
-*literal source bytes* (gate 14; `legacy-comment` byte-identical to today) —
-and the length prefix is what makes that exception safe.
+Row grammar — **psr, adopted.** The design is
+`utils/reposnapshot/reposnapshot-v3/schema/psr.header.json` (piped
+snapshot rows; lineage CSV · JSONL · LPAC · SQL table), and its framing
+transfers verbatim because its *raison d'être* is the same as this
+section's — a container designed for direct sequential consumption by a
+model, proven on real artifacts read into context:
 
-Records are **flat and newline-delimited** (a unit with an elision is
-emitted as *pieces*, each its own record — nothing nests arithmetically);
-the optional close row `⁂ | <address> |` re-mentions the address (a second
-retrieval hook), signals completeness, and makes nesting legible — for the
-machine it is only a checksum (address/position mismatch → framing fault).
-If a payload does not end in LF the framer inserts one before the next row;
-that LF is framing, counted in `framed`, never in `len`. The key row is
-declared once per session (adapter skill + first record), not per read; a
-`{…}` group is a positional sub-block declared in the key, as in the shard.
+- `record_terminator` LF; `field_delimiter` ` | `; `{…}` blocks one level
+  deep with space-separated sub-fields; `<type>` / `<type:width>` appended
+  to column names in the header row; **empty marker = nothing between
+  delimiters** (`|  |`); header row is the first physical line and
+  byte-identical across a run.
+- **The header row IS the grammar; a row is the header projected onto one
+  entry; there is no row schema** — the anti-drift doctrine (LTS wrote the
+  row grammar three times and nothing checked). mdnav's key row is rendered
+  from one declaration and every row from the same object.
+- **`content_bytes` immediately precedes `content`; adjacency is the seek
+  contract.** mdnav's `len` *is* `content_bytes` and takes that name.
+  `span` (source geometry) stays mdnav's and is deliberately not that column
+  — one fact, one column.
+- `content_meta {…}` is an **open element model**: mdnav's composition
+  block is a `content_meta` with mdnav sub-fields (`prose code tbl … ~t`),
+  declared in the key like any other.
+- **One physical line per row.** Line breaks inside a content cell are
+  encoded by the **codec** — 1:1 visible codepoint substitution (the
+  Control Pictures direction of the shard notes), *never* `\n` escaping:
+  escaping degrades legibility and its token cost grows linearly with
+  volume, which is exactly why psr exists. (An earlier reading of an LTS
+  prototype shard — `…s024_hashish.txt`, escaped — was a 2 KB sample and is
+  not evidence against this; the v3 codec is the design.)
+
+Records are **flat** (a unit with an elision is emitted as *pieces*, each
+its own row — nothing nests arithmetically). The optional close row
+`⁂ | <address>` re-mentions the address (a second retrieval hook), signals
+completeness, and makes nesting legible — for the machine it is only a
+checksum (address/position mismatch → framing fault). The key row is
+declared once per session (adapter skill + first record), never per read.
+
+**Row terminator in the stream.** psr files lean *no trailing delimiter*
+(ledger #45); LF alone frames a row for a seek reader because
+`content_bytes` frames the content. The stream reader is attention, not a
+seek, and cannot count bytes, so an explicit **`||` row-close** (~1 token)
+gives it what LF cannot: a visible "row complete" and an unmistakable end
+to a text cell. Lean: `||` in the stream, LF alone in files — reconciled
+deliberately at spec freeze, not by accident.
+
+**The one real fork — `read`'s content cell.** psr-conformant is
+codec-encoded, one physical line, exactly what has been seen to work at
+scale for direct consumption. mdnav's CLI covenant is *literal source
+bytes* (gate 14). Both are renderings of the same piece list, so
+`content: codec | raw` is profile data: `legacy-comment` (CLI default)
+stays raw and byte-identical to today; the MCP default is decided by the
+behavioral eval (D20) with **codec as the psr-conformant candidate**, not
+pre-decided here.
 
 ```
-key | sigil | addr | k/N | kind | basis | {comp} | ~B | ~t | span | len |
-§ | D002:H0108@fa8a | 2/5 | unit | d2 | {prose72 code20} | ~629B | ~160t | 61234..61863 | 412 |
-<412 bytes of raw source, multi-line>
-… | D002:H0108@fa8a/elided.1 | | data-uri | | | ~404KiB | | 14187..430301 | 0 |
-§ | D002:H0108@fa8a | 2/5 | unit | d2 | {prose100} | ~217B | ~55t | 61651..61863 | 217 |
-<217 bytes>
-⁂ | D002:H0108@fa8a |
+key | sigil<str> | addr<str> | k/N<str> | kind<str> | basis<str> | content_meta:{prose<int> code<int> t<int>} | span<str> | content_bytes<int> | content<str> ||
+§ | D002:H0108@fa8a | 2/5 | unit | d2 | {72 20 160} | 61234..61863 | 412 | # Heading␊␊First paragraph of the unit…␊ ||
+… | D002:H0108@fa8a/elided.1 |  | data-uri |  | {  } | 14187..430301 | 0 |  ||
+§ | D002:H0108@fa8a | 2/5 | unit | d2 | {100 0 55} | 61651..61863 | 217 | …trailing prose of the same unit.␊ ||
+⁂ | D002:H0108@fa8a ||
 ```
+
+(`raw` rendering: identical rows, but the `content` cell is the literal
+multi-line source of exactly `content_bytes` bytes and the `||` follows on
+its own line.)
 
 **Emission is a profile setting, not a mode.** `sigils: legacy-comment |
 typographic | none` (CLI flag `--sigils`, replacing the earlier `--frame`
 naming); within `typographic`, which roles emit — close on/off, elision
-sigil vs a plain zero-`len` open — is also profile data. `legacy-comment`
+sigil vs a plain zero-`content_bytes` open, `content: codec | raw` — is also profile data. `legacy-comment`
 is today's `<!-- mdnav … -->` (itself a sigil convention: the HTML comment is
 the Markdown-inert sigil) and stays the CLI default, byte-identical to
 today; `typographic` is the MCP default; close on/off is chosen by the
-behavioral eval (D20). **Header field style: pipe-celled, positional,
-declared by a key row** — decided on direct reading evidence (above), with
-D29 confirming the token cost rather than choosing the style. A framed
-mdnav stream is then a psr row grammar with one multi-line cell — one
-reader across reposnapshot, para-agent, mdnav. Optional stamps that vary
-per profile go in a trailing `{…}` group declared in the key, never as
-`k=v` in the row.
+behavioral eval (D20). **Header field style: psr** — pipe-celled,
+positional, typed in the key row, `content_meta` block for stamps — decided
+(above); D29 measures the token cost of the row and of the codec glyphs, it
+does not choose the style. A framed mdnav stream is a psr row grammar; one
+reader across reposnapshot, para-agent, mdnav. Nothing is ever `k=v`.
 
 - Address = the anchor (`Dnnn:Hnnnn@digest`, or `Snnnn`/`Rnnnn`/`Wnnnn`,
   or a raw `Dnnn:@s..e`), extended compositionally for nested claims and
   placeholders (`…/fence.2`, `…/elided.1`) — every header is something the
   Primary can hand back to `read`.
-- **`len` is emitted UTF-8 bytes; `span` is source geometry. Never the same
+- **`content_bytes` is emitted UTF-8 bytes of the content cell (post-codec); `span` is source geometry. Never the same
   field** — under `--strip`/`--only` they differ, and conflating them is the
   historic byte-semantics trap. Both are *machine* fields (round-trip,
   audit, tooling); the model-facing magnitude is the coarse `~629B` /
@@ -592,7 +604,7 @@ value is real but uneven. Exact, short, re-mentioned addresses are the
 best-grounded part — repeated exact token sequences are the strongest
 in-context retrieval cue transformers have; declare-before-payload has a
 causal-attention rationale; provenance/kind labels, `k/N`, and a regular
-sentinel are cheap and well supported. Byte `len` has **no attention
+sentinel are cheap and well supported. Byte `content_bytes` has **no attention
 benefit** (models do not count bytes; the boundary the model uses is the
 next sentinel) — it is a machine field only. Headers cost ~10–15 tokens
 each, so frame at unit grain by default. The claim must be evaluated behaviorally
@@ -615,16 +627,16 @@ Exit-gate additions: **17.** `select`/`partition`/`marks` honour
 produce a within-budget read; **19.** no table query can return a field
 longer than the preview cap; **20.** the CLI exposes `--max-bytes` and
 `--limit/--offset` so the one-shot path has the same discipline; **21.**
-framing round-trip: under `--sigils typographic` every header's `len` equals the
-bytes that follow it exactly (incl. multi-byte UTF-8 and CRLF sources), the
+framing round-trip: under `--sigils typographic` every row's `content_bytes` equals the
+content cell's bytes exactly (post-codec under `codec`, raw under `raw`) (incl. multi-byte UTF-8 and CRLF sources), the
 concatenated coding regions of a multi-anchor read equal the `--sigils none`
-read byte-for-byte, an elision emits a zero-`len` header whose address
+read byte-for-byte, an elision emits a zero-`content_bytes` row whose address
 `read` accepts and resolves to the elided source span, and `--sigils legacy-comment`
 output is byte-identical to today's for the golden fixtures; **21b.** byte
-accounting: total bytes written == Σ `Buffer.byteLength(header line)` + Σ
-`len`; each header line's byte length == its char length + 1 (the glyph is
+accounting: total bytes written == Σ `Buffer.byteLength(row bytes excluding content)` + Σ
+`content_bytes`; each header line's byte length == its char length + 1 (the glyph is
 the only non-ASCII bytes — asserted for every sigil in the vocabulary, incl. the 3-byte `…`/`⁂`); a header parser
-that reads the stream back recovers every address, `k/N`, `span`, `len`
+that reads the stream back recovers every address, `k/N`, `span`, `content_bytes`
 exactly; the plan's `framed` total equals the bytes a subsequent read
 within budget actually writes; a `maxBytes` that admits the payload but not
 payload + headers returns a plan, not bytes.
@@ -678,7 +690,7 @@ within, profile})` is a Selection; `mdnav_read` is a projection.
    either list is an error, not a guess.
 5. **Framer arithmetic is bytes, period.** The header glyphs `§` (U+00A7,
    `C2 A7`) and `¶` (U+00B6, `C2 B6`) are two UTF-8 bytes; every header
-   line's cost is `Buffer.byteLength(line)`, every payload's is its `len`,
+   line's cost is `Buffer.byteLength(line)`, every content cell's is its `content_bytes`,
    and `maxBytes` compares against their sum. A framer written with
    `.length` passes every gate except 21b and then lies in the field by one
    byte per header — the historic byte-semantics trap wearing a new hat.
