@@ -5,13 +5,24 @@
 [../archaelogy/figure-model-survey.md](../archaelogy/figure-model-survey.md).
 **Locations:** v2 is built in `mcp/mdnav_v2/`; the legacy oracle is
 `skills/doc-dive/mdnav/` and is never edited. **Decisions:**
-[decisions.md](decisions.md). This file is the execution queue: milestones,
-what each delivers, which brief gates it closes, and what it depends on.
-Statuses: `planned` · `in progress` · `done <date>` · `deferred`.
+[decisions.md](decisions.md). **Phase briefs** (execution-ready specs, one
+per milestone group; the canon above stays doctrine/shape/non-goals only,
+per D36): [01-spanset-claims.md](../briefs/01-spanset-claims.md) (M1+M2) ·
+[02-collectors-parity.md](../briefs/02-collectors-parity.md) (M3) ·
+[03-containment-queries.md](../briefs/03-containment-queries.md) (M4) ·
+[04-repl-contract.md](../briefs/04-repl-contract.md) (M5a) ·
+[05-framing-p0.md](../briefs/05-framing-p0.md) (M5b). This file is the
+execution queue: milestones, what each delivers, which brief gates it
+closes, and what it depends on. Statuses: `planned` · `in progress` ·
+`done <date>` · `deferred`.
 
-Milestones are sequential. Chip A = M0–M3 (parity). Chip B = M4–M5 (query
-surface). M6 is a fresh-context review. The `server.mjs` brief follows and
-is out of scope here.
+Milestones are sequential. Chip A = M0–M3 (parity). Chip B = M4–M5b (query
+surface). M5 splits into **M5a** (exports/paging/budgets — settled,
+mechanical) and **M5b** (sigil/framing emission — the newer, less-settled
+part of the design, developed with para-agent's trajectory in mind; see M5b
+below) so the two don't have to move at the same pace. M6 is a
+fresh-context review. The `server.mjs` brief follows and is out of scope
+here.
 
 ## Bigger picture — where this is going
 
@@ -85,7 +96,8 @@ Standalone `span-set.mjs` (permitted sibling): normalize, `union`,
 `intersect`, `subtract`, `complement(len)`, `coverage`, `contains`. Bitmap
 oracle property tests (≥ 200 random sets). No engine wiring yet.
 
-- **Gates:** 2. **Depends on:** nothing. **Brief:** §1.
+- **Gates:** 2. **Depends on:** nothing. **Brief:**
+  [01-spanset-claims.md](../briefs/01-spanset-claims.md) §1 SpanSet.
 
 ## M2 — Claims table, stores, hygiene layout · `planned`
 
@@ -101,7 +113,9 @@ resolution + refusal guard, inventory/ledger IO, all verb formatters, HELP.
 - **Gates:** 3, 13, 14, 16 (goldens still byte-identical), suite §hygiene
   re-pointed at the new layout **without weakening** (dot-skip, refusal,
   LATEST, `-2` suffix, precedence all still asserted).
-- **Depends on:** M0, M1. **Brief:** §2 (table, stores, hygiene), F4.
+- **Depends on:** M0, M1. **Brief:**
+  [01-spanset-claims.md](../briefs/01-spanset-claims.md) §2 (table, stores,
+  hygiene), F4.
 
 ## M3 — Collectors → parity · `planned`
 
@@ -118,10 +132,15 @@ default); `--strip-match` as a `custom` rule. Census/triage from claims.
 `coverage` on the algebra. Legacy untouched; repointing the doc-dive skill
 is a separate decision (brief §Method 5).
 
-- **Gates:** 4, 5, 6, 7, 9, 12; 16 with the F1/F2 golden deltas explicitly
+- **Gates:** 4, 5, 6, 7, 9; 16 with the F1/F2 golden deltas explicitly
   inverted and named; suite additions for fenced noise, non-`---` breaks,
-  multi-line comment, flag order.
-- **Depends on:** M2. **Brief:** §3, F1–F3, cosmetic fixes.
+  multi-line comment, flag order. (Gate 12 — `coverage`/kept-label — moved
+  to M4 by D36: the brief's own Sequencing text and Chip-plan paragraph both
+  tie it to relations/`--only`/profiles landing, not to this milestone;
+  this list previously carried it in error.)
+- **Depends on:** M2. **Brief:**
+  [02-collectors-parity.md](../briefs/02-collectors-parity.md), F1–F3,
+  cosmetic fixes.
 - **Exit = Chip A done.** Report appended to the brief.
 
 ## M4 — Containment, relations, profiles, generic basis, `--only` · `planned`
@@ -135,33 +154,49 @@ today; `chat-export`); `read --only`; generic `--by <kind|pattern:>` with
 `S`/`R` addressing and per-basis partition invariant; `marks --resolve`,
 `read --only footnote-def --for`; `profile` verb as full census + residue.
 
-- **Gates:** 8, 10, 10b, 11; partition invariant re-asserted per (basis,
-  depth, enter).
-- **Depends on:** M3. **Brief:** §2b, §4, §5 (basis, read, marks, profile).
+- **Gates:** 8, 10, 10b, 11, 12 (12 moved here from M3 by D36 — see that
+  milestone's note); partition invariant re-asserted per (basis, depth,
+  enter).
+- **Depends on:** M3. **Brief:**
+  [03-containment-queries.md](../briefs/03-containment-queries.md) §2b, §4,
+  §5 (basis, read, marks, profile).
 
-## M5 — Exports, REPL contract, framing · `planned`
+## M5a — Exports, REPL/paging/budget contract · `planned`
 
 `isMain` guard (win32-safe) + named exports (`Corpus`, `Doc`, `SpanSet`,
 `Selection`, `loadRules`, `loadProfile`, `materialize`, `Ledger`); paged +
 counted queries (`limit/offset/columns` → `{total, rows}`), memoization by
 `(digest, policy, args)`; budgeted `materialize` returning a **plan** over
-`maxBytes`; CLI `--max-bytes`, `--limit/--offset`; framing as a projection
-over the piece list — `--sigils legacy-comment` (default CLI, byte-identical
-to today) | `typographic` | `none`; sigil vocabulary + key measured and
-fixed at freeze; header field order fixed, addressable
-placeholders, `len`/`span` distinct; `notes[]` out of band.
+`maxBytes`; CLI `--max-bytes`, `--limit/--offset`; `notes[]` out of band.
 
-- **Gates:** 15, 17, 18, 19, 20, 21, 21b (byte accounting: headers count
-  toward `maxBytes`; `§`/`¶` are 2 UTF-8 bytes, `…`/`⁂` are 3; all framer arithmetic is
+- **Gates:** 15, 17, 18, 19, 20.
+- **Depends on:** M4. **Brief:**
+  [04-repl-contract.md](../briefs/04-repl-contract.md).
+
+## M5b — Framing P0 (sigil emission, byte accounting) · `planned`
+
+Framing as a projection over the piece list — `--sigils legacy-comment`
+(default CLI, byte-identical to today) | `typographic` | `none`; sigil
+vocabulary + key measured and fixed at freeze; header field order fixed,
+addressable placeholders, `content_bytes`/`span` distinct. **Trajectory
+note, not a gate** (D37): the sigil vocabulary and row grammar are
+co-developed with para-agent (D28/D30/D31), which is itself in active
+development alongside mdnav_v2 — build with that direction in mind, decide
+and ship on the design as it stands, reconcile later as its own roadmap
+item.
+
+- **Gates:** 21, 21b (byte accounting: headers count toward `maxBytes`;
+  `§`/`¶` are 2 UTF-8 bytes, `…`/`⁂` are 3; all framer arithmetic is
   `Buffer.byteLength`, and the test asserts header bytes == chars + 1).
-- **Depends on:** M4. **Brief:** §Front-end grammar, §REPL contract,
-  §Stream framing, §Export surface.
+- **Depends on:** M5a (for the `materialize`/plan contract its framer fills
+  in). **Brief:** [05-framing-p0.md](../briefs/05-framing-p0.md).
 - **Exit = Chip B done.** Report appended.
 
 ## M6 — Fresh-context review · `planned`
 
-A reviewer that has not seen the build: given the brief, the survey, and
-both reports; tries to break every gate; dogfoods v2 on the
+A reviewer that has not seen the build: given the canon, the five phase
+briefs, the survey, and all five phase reports; tries to break every gate;
+dogfoods v2 on the
 `issues/mdnav_v2/discussion/` corpus and one large real transcript; checks
 README/HELP against behavior (F3 closed for real). Findings appended as a
 dated review under `discussion/`.
