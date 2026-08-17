@@ -162,7 +162,24 @@ three keyed joins Markdown idiom actually defines, plus containment.
 
 ### 3. Collectors — how claims are discovered
 
-Two kinds, both writing to the same table:
+**Delimiter geometry is the unifying idea.** Idiomatic Markdown constructs
+are recognizable by their delimiters, and delimiters come in exactly three
+geometries; a collector is a delimiter spec plus one of these, and masking,
+isolating and segmenting are the same operation with different arguments:
+
+| geometry | examples | mechanism | yields |
+|---|---|---|---|
+| **boundary** (singleton) | ATX heading line, thematic break, `[^n]:` def start, blank line, fixed byte window after a newline | candidate boundaries → ordinal partition of the window; first viable boundary is the only policy | a **partition** that tiles the window byte-for-byte (today's `--depth`, `--by breaks`, `--windows`) |
+| **toggle** (one token opens and closes) | ```` ``` ````/`~~~`, `$$`, `` ` ``, `<!--`/`-->` as a token pair | delimiter positions → **prefix parity** (XOR fold) → inside/outside; odd carry-out is residue | **regions** + `unclosed` residue |
+| **pair** (distinct open/close) | `<details>`…`</details>`, `[`…`]`, `\begin{}`…`\end{}` | strict-stack pairing under a named compatibility policy | **nested regions** + unclosed-open / dangling-close residue |
+
+A delimiter spec is data: `{ pattern, geometry: boundary|toggle|pair(open,
+close), scope: line|whole, kind }`. Built-in kinds are just shipped specs;
+a caller may pass one ad hoc. Partitions are **validated values** (shared
+endpoints, disjoint, exact window coverage) — the existing partition
+invariant, applied to every basis, not just headings.
+
+Two collector kinds, both writing to the same table:
 
 - **State-machine collectors** for region kinds whose extent is a toggle or a
   block condition (frontmatter, fence, html-comment, html-block, math-block).
@@ -258,6 +275,15 @@ first policies.
   `STRIP_ALL`, `triage` = the same, `enter` = []). Selected by `--profile
   <name>` or `$MDNAV_PROFILE`; individual flags override. A profile is a
   disposition, loadable and composable, not code.
+- **Basis, generalized**: `--by <kind | pattern:<re>>` on `outline`, `read`,
+  `coverage`, `locate`. Today's three bases become cases: `--by heading`
+  (default, with `--depth`), `--by break`, `--windows <n>`. New: `--by
+  footnote-def` (foot-matter as units), `--by fence` (regions as units;
+  gaps between regions are units too, so the tiling holds), `--by
+  pattern:'^\[\^[^\]\s]+\]:'` (ad-hoc boundary). Boundary bases address as
+  `Snnnn`, region bases as `Rnnnn`; all share one address space and one
+  ledger. Segmenting is recursive: `--within <anchor> --by <other>` re-enters
+  a unit with a different delimiter — the XOR walk in CLI form.
 - **`read`**: `--strip <kinds|@profile>` = `[S,E) \ coverage(sel)`;
   **new `--only <kinds>`** = `[S,E) ∩ coverage(sel)`; `--enter` as above.
   Placeholder ≥ 1 KiB with `@s..e`, `keepOf` label rule, ledger of elided
@@ -377,6 +403,11 @@ the existing runner; the suite must report assert counts, not just PASS.
     footnote-def --for <unit>` returns just the defs that unit cites;
     `chat-export` profile strips the surrounding `<div>` furniture and keeps
     refs and defs. Same shape for `[text][id]` / `[id]: url`.
+10b. Generic basis: `outline --by fence` and `--by pattern:'^\[\^[^\]\s]+\]:'`
+    each produce units that tile the document byte-for-byte (partition
+    invariant asserted per basis); `outline --within H0003 --by break`
+    re-segments one unit; a toggle basis with an unclosed opener reports
+    `unclosed` residue and still tiles.
 11. `read --only fence` yields exactly the fenced bytes of a unit in order;
     `--only K` ⊕ `--strip K` reconstruct the unit byte-for-byte modulo
     placeholders.
