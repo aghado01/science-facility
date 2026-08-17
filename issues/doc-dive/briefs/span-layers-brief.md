@@ -460,6 +460,19 @@ Primary's stream:
   MCP default. One piece list, two renderings; the piece list is what
   later context-mode hooks route on.
 
+*Evidence status of the framing claim* (so it is carried honestly): the
+value is real but uneven. Exact, short, re-mentioned addresses are the
+best-grounded part — repeated exact token sequences are the strongest
+in-context retrieval cue transformers have — and provenance labels and a
+regular sentinel are cheap and well supported. `len` has **no attention
+benefit** (models do not count bytes; the boundary the model uses is the
+next sentinel) — keep it for machine consumers, audit, and coarse size
+awareness, not as a boundary claim. Headers cost ~10–15 tokens each, so
+frame at unit grain by default. The claim must be evaluated behaviorally
+(same tasks, `--frame none` vs `pilcrow`; address-recall accuracy,
+misattribution rate, tokens-to-answer) — a server-brief gate, not an
+assumption here.
+
 **Vendoring.** mdnav 2.0 is expected to become an internally vendored MCP
 subsystem of para-agent, as `nushell-mcp` will. Constraints that follow:
 the engine stays single-file zero-dep; the server is an embeddable
