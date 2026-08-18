@@ -1,7 +1,7 @@
 {
   "name": "Piped Snapshot Rows (`psr`)",
-  "version": "0.",
-  "description": "psr — piped snapshot rows. header/zero-row declares pipe-separated column names and data types formatted as `name` : `type` pairs. each psr file contains exactly one header row, and at least one record row, with all rows occupying a single physical line.",
+  "version": "0.2",
+  "description": "PSR — piped snapshot rows. header/zero-row declares pipe-separated column names and data types formatted as `name` : `type` pairs. each psr file contains exactly one header row, and at least one record row, with all rows occupying a single physical line.",
   "properties": {
     "file_ext": ".txt",
     "encoding": "utf-8",
@@ -25,17 +25,16 @@
           "type": "string",
           "name": "path",
           "type_name": "string",
-          "pattern": "",
           "required": true,
           "description": "Relative to snapshot-scoped root"
         },
         {
           "type": "array",
           "name": "content_meta",
-          "description": "A nested array of values corresponding to the declared names and datatypes in the header row of the file. Calculated during ingestion with content_metadata processor",
           "type_name": "array",
-          "construction": "{item[1].field_name;item[1].type_name;...}",
           "required": false,
+          "description": "A nested array of values corresponding to the declared names and datatypes in the header row of the file. Calculated during ingestion with content_metadata processor",
+          "construction": "{item[1].field_name;item[1].type_name;...}",
           "items": [
             {
               "type": "object",
@@ -99,16 +98,16 @@
           {
             "name": "content_bytes",
             "type": "string",
-            "description": "the byte length prefix. encodes the span of encoded byte width of the subsequent content block",
             "type_name": "int",
-            "required": true
+            "required": true,
+            "description": "the byte length prefix. encodes the span of encoded byte width of the subsequent content block"
           },
           {
             "name": "content",
             "type": "string",
-            "description": "Processed content with line break substitutions encoded with idiomatic C-style escape sequence substitutions",
             "type_name": "string",
-            "required": true
+            "required": true,
+            "description": "Processed content with line break substitutions encoded with idiomatic C-style escape sequence substitutions"
           }
         ]
       }
