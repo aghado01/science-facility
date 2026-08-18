@@ -109,13 +109,14 @@ resolved header schema, so field presence and widths are known) and `Entries`
 result:    @{ Plan; Groups[]; Shards[]; IdxMap }        # no Header — the plan
                                                         # embeds nothing upstream
 plan:      @{ TotalEntries; TotalPlannedSizeBytes; ShardCount; OversizedCount;
-              SingletonCount; InBandCount; SumOvershootBytes;
+              SingletonCount; InBandCount;
+              TotalOvershootBytes; MaxOvershootBytes;   # overshoot-facing / tolerance-facing
               MaxFillBytes; MinFillBytes; HeaderOverheadBytes;
               Grouping; GroupSort; OrderStrict; PackObjective;
               ShardQuotaBytes; ShardToleranceBytes; HeaderBytes; IdxWidth }
 group:     @{ GroupKey; EntryCount; SumRowBytes; ShardCount; LowerBound; Gap;
-              OversizedCount; SingletonCount; InBandCount; SumOvershootBytes;
-              MaxFillBytes; MinFillBytes }
+              OversizedCount; SingletonCount; InBandCount;
+              TotalOvershootBytes; MaxOvershootBytes; MaxFillBytes; MinFillBytes }
 shard:     @{ Ordinal; Key; GroupKey; Class (Normal|Singleton|InBand|Oversized);
               IsOversized; PlannedSizeBytes; OvershootBytes; EntryCount;
               Entries[] (references into assemble.out.result.Entries, shard order) }
@@ -198,7 +199,7 @@ both shapes.
 - **Overflow** — `headerBytes + rowBytes > ceiling` → the record gets its own
   shard, header + one row, whatever its size (`Class = Oversized`,
   `IsOversized`). Rare; more likely as quota shrinks. Pinned before packing;
-  never enters FFD/elimination; **excluded from Σ overshoot and from
+  never enters FFD/elimination; **excluded from total/max overshoot and from
   lower-bound comparisons** (its excess is atomicity honored, not overshoot). A declared **reader hazard**: the tree names each oversized shard and
   its size (payload-manifest-ledger, same class as #8/#16). (Stage 4.)
 - **Quota / ceiling** — quota is the packing capacity; ceiling is the
@@ -269,7 +270,7 @@ both shapes.
    approximate**, so an `Even` payload is more even under `OrderStrict` than
    without it. That inverts the usual expectation that flexible dominates, and
    it is a real reason to pick `OrderStrict` rather than a concession.
-   d. *Repair pass* (reduce Σ overshoot by moves that cost no shard) —
+   d. *Repair pass* (reduce total overshoot by moves that cost no shard) —
       **roadmap item, gated on v1 MVP results** (not "defer and forget").
 7. **Sequence.** Within each group order bins by the nominal position of their
    first record, then **move the group's minimum-fill bin to the tail** (ties →
@@ -317,8 +318,11 @@ serialization; the doubled header row of the 0422 sample (an old LTS bug).
 - **Ceiling with carve-out**: every shard with `Class ≠ Oversized` has
   `PlannedSizeBytes ≤ ShardQuotaBytes + ShardToleranceBytes`; every `Oversized`
   shard has `EntryCount = 1`.
-- **Overshoot bounded**: every non-oversized shard's `OvershootBytes ≤
-  ShardToleranceBytes`; `Tolerance == 0` ⇒ all `OvershootBytes == 0`.
+- **Overshoot bounded** (the tolerance-facing check): per group and plan,
+  `MaxOvershootBytes ≤ ShardToleranceBytes` — equivalently every non-oversized
+  shard's `OvershootBytes ≤ ShardToleranceBytes`; `Tolerance == 0` ⇒
+  `MaxOvershootBytes == 0`. `TotalOvershootBytes` is the overshoot-facing
+  aggregate (clause 3, harness), not a bound.
 - **Never worse than strict**: per group, `ShardCount ≤ k₀_g`; and
   `ShardCount ≥ LowerBound` with `Gap` reported.
 - **Tail rule**: within a group, the minimum-fill non-oversized bin is last.
@@ -327,13 +331,13 @@ serialization; the doubled header row of the 0422 sample (an old LTS bug).
   quota (or ceiling where a merge was forced), and `Even` admits no
   rearrangement with smaller lexicographic max fill — checked by brute force
   over all partitions on small vectors. Under both, no arrangement of the same
-  shape has smaller `SumOvershootBytes` (clause 3). `ShardCount` is identical
+  shape has smaller `TotalOvershootBytes` (clause 3). `ShardCount` is identical
   under both shapes for the same knobs — clause 1 is lexicographically first.
   **"Never worse than strict" is a claim about count only** — under `Even`,
   flexible may be *less* even than strict, since stage 5 is exact and stage 6
   is LPT.
 - **Overflow outranks shape**: an `Oversized` shard is never touched by either
-  objective, never enters `SumOvershootBytes` / `MaxFillBytes`, and is present
+  objective, never enters `TotalOvershootBytes` / `MaxOvershootBytes` / `MaxFillBytes`, and is present
   in the plan under both values with identical `PlannedSizeBytes`.
 - **Idx**: `IdxMap` values `0..N−1`, monotone in reading order; widths fixed.
 - **Synthetic vectors**: the packer passes the above on hand-built size vectors
@@ -345,7 +349,7 @@ serialization; the doubled header row of the 0422 sample (an old LTS bug).
   two near-equal); an oversized record present under both shapes.
 - **Shape comparison harness** (the science): both shapes × both `OrderStrict`
   values over the *same* enumerated dataset — only stages 5–7 rerun, never
-  ingestion — reporting `ShardCount / LowerBound / Gap / SumOvershootBytes /
+  ingestion — reporting `ShardCount / LowerBound / Gap / TotalOvershootBytes / MaxOvershootBytes /
   MaxFillBytes / MinFillBytes / HeaderOverheadBytes` per cell. Four rows, one
   table, one dataset. Lives in the battery, not the shipping path. Without it,
   "implement both" produces two black boxes and no basis for choosing a
