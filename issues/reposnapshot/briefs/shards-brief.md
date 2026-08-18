@@ -4,7 +4,7 @@
 (packing algorithm and policy stack resolved; supersedes the five-phase LTS
 algorithm and the `Greedy | Balanced | Loose` knob), 2026-08-18 (objective
 clause 2 is a *shape* — `PackObjective = FrontLoad | Even`, both implemented;
-least-tolerance-spent demoted to an invariant; overflow restated as outranking
+least-overshoot demoted to an invariant; overflow restated as outranking
 the objectives; strict+tolerance open call closed; comparison harness added to
 the gate) · **Track:** V3 e2e sprint,
 export phase 1 (assemble → **shards** → serialize → manifest) ·
@@ -137,7 +137,7 @@ the residue. Layout (`HeaderBytes`, `IdxWidth`, `Columns`) is an input from
 | `MaxShardSpanBytes` / `MaxShardSizeKB` | `ShardQuotaBytes` | long · 32 768 (working) | consolidate, rename — a **Size** (whole written file: header + rows). "Span" was meant as the file's whole span; the word is now content-measure vocabulary, so it leaves the knob name |
 | — | `ShardToleranceBytes` | long · 4 096 (working) | **new** (ledger #41). Exact bytes above quota that a *packed* shard may reach when doing so eliminates a shard. Ceiling = quota + tolerance |
 | — | `OrderStrict` | switch · `$false` (working) | **new** (ledger #43). `$true`: shards are contiguous runs of the group's sorted order. `$false`: membership is optimized within the group; sort restored within each shard for rendering |
-| — | `PackObjective` | `FrontLoad \| Even` · `FrontLoad` (working) | **new** (ledger #48). Clause 2 of §Objective — the *shape*: how the sub-shard remainder is distributed at the minimum shard count. `FrontLoad` = fill to quota in order, remainder as the group's tail; `Even` = spread it. Both implemented; least tolerance spent is an invariant of both, not a third value. Never overrides overflow (atomicity) |
+| — | `PackObjective` | `FrontLoad \| Even` · `FrontLoad` (working) | **new** (ledger #48). Clause 2 of §Objective — the *shape*: how the sub-shard remainder is distributed at the minimum shard count. `FrontLoad` = fill to quota in order, remainder as the group's tail; `Even` = spread it. Both implemented; least overshoot is an invariant of both, not a third value. Never overrides overflow (atomicity) |
 | *(implicit)* | `GroupSort` | `PathAsc \| PathHash \| …` · `PathAsc` | **new**, per-group sort key. `PathAsc` = `RelativePath` ordinal ascending. `PathHash` (`Get-PathHash`, ledger #4) survives as an option — under flexible packing FFD does the dispersion job, so it is a reading-order device, not a packing input |
 | `MaxFilesPerShard` | `MaxFilesPerShard` | int · 100 000 | keep — a second capacity dimension the packer honors alongside bytes |
 | `AllowOversizedShards` | — | — | **retire** (leaning, ledger #42): overflow is policy, not a switch. A fail-fast diagnostic gate, if ever wanted, is not a packing knob |
@@ -169,12 +169,19 @@ Per group, lexicographic:
    | value | shape | contiguous procedure (exact) |
    |---|---|---|
    | `FrontLoad` (working default) | fill to quota in nominal order; the remainder is the group's tail. "Pack as much as possible" — `k−1` full shards + one tail | greedy at quota; if that yields more than `k` shards, absorb the last shard backward into predecessors within the ceiling (adjacent merge) |
-   | `Even` | spread the remainder; minimize the largest shard, then the next (lexicographic min-max) — `k` shards near `Σ_g / k` | linear partition — binary search on the bound + greedy feasibility, or DP over cut points |
+   | `Even` | spread the remainder; minimize the largest shard, then the next largest, and so on — `k` shards near `Σ_g / k` | linear partition — binary search on the bound + greedy feasibility, or DP over cut points |
 
-3. **Least tolerance spent** *within the chosen shape*: among arrangements that
-   satisfy 1 and 2, minimize Σ per-shard `max(0, PlannedSizeBytes −
-   ShardQuotaBytes)`. This is an invariant both shapes honor, **not a shape of
-   its own** — see #48 for why a "minimize overshoot" objective is dominated.
+3. **Least overshoot** *within the chosen shape*: among arrangements that
+   satisfy 1 and 2, minimize Σ per-shard `overshoot = max(0, PlannedSizeBytes −
+   ShardQuotaBytes)`. An invariant both shapes honor, **not a shape of its
+   own** — see #48 for why a "minimize overshoot" objective is dominated.
+
+**Tolerance is a per-shard bound, not a pool.** It is the wiggle room the
+optimizer may use when considering candidates for an underutilized shard —
+each shard independently may reach `quota + tolerance`; nothing is "consumed"
+across shards. *Overshoot* is the measurement: how far a given shard actually
+sits above quota, always `≤ tolerance`. Same relation as quota (bound) to fill
+(measurement).
 
 Without clause 2, quota is decorative in flexible mode (the packer would just
 fill to the ceiling); clause 3 is what keeps tolerance a bound for
@@ -192,8 +199,7 @@ both shapes.
   shard, header + one row, whatever its size (`Class = Oversized`,
   `IsOversized`). Rare; more likely as quota shrinks. Pinned before packing;
   never enters FFD/elimination; **excluded from Σ overshoot and from
-  lower-bound comparisons** (its excess is atomicity honored, not tolerance
-  spent). A declared **reader hazard**: the tree names each oversized shard and
+  lower-bound comparisons** (its excess is atomicity honored, not overshoot). A declared **reader hazard**: the tree names each oversized shard and
   its size (payload-manifest-ledger, same class as #8/#16). (Stage 4.)
 - **Quota / ceiling** — quota is the packing capacity; ceiling is the
   feasibility bound for shard-eliminating moves only, never routine fill.
@@ -235,10 +241,10 @@ both shapes.
      the shape, exact under **either**:
      - `FrontLoad`: greedy at quota; while it yields more than `k_min` shards,
        absorb the last shard backward into predecessors within the ceiling
-       (adjacent merge, latest-first). Tolerance is spent only where the merge
+       (adjacent merge, latest-first). Overshoot arises only where the merge
        forces it — clause 3 falls out.
-     - `Even`: linear-partition into `k_min` contiguous parts, lexicographic
-       min-max — binary search on the bound + greedy feasibility, `O(n log Σ)`;
+     - `Even`: linear-partition into `k_min` contiguous parts, minimize the
+       largest part, then the next — binary search on the bound + greedy feasibility, `O(n log Σ)`;
        or DP over cut points. Clause 3 holds by Schur-convexity (#48).
      The two procedures the 08-16 revision listed as competing candidates for
      one objective *are* the two objectives; that open call is closed.
@@ -255,8 +261,8 @@ both shapes.
       (ledger #44).
 
    **Shape pass**, at the settled `k`, before sequencing: `FrontLoad` is
-   already served — FFD fills bins to quota in turn and elimination only spends
-   tolerance to remove a bin; the small bin FFD leaves is the tail (stage 7).
+   already served — FFD fills bins to quota in turn and elimination only uses
+   the tolerance band to remove a bin; the small bin FFD leaves is the tail (stage 7).
    `Even` needs a distribution step: LPT over the `k` bins (longest row first
    into the least-filled bin), deterministic, within ~4/3 of optimal. Note the
    asymmetry with stage 5 — **the ordered case is exact, the flexible case is
