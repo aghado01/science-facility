@@ -1,5 +1,30 @@
 # Changelog 
 
+## 2026-08-17 — rs.core.container landed (psr layout, codec, header/row pair)
+
+`rs.core.container.psm1` — export phase 0. `Resolve-Layout(-Header
+[-Declaration] [-Columns] [-MetaFields])` reads `schema/psr.header.json`
+(admissible superset × run config × EntryCount → gidx width) and returns the
+layout object three stages consume; validates admissibility, the two order
+invariants (content last, content_bytes before it), and warns — never decides —
+on ContentMeta presence from `Header.Elements`. Codec: ONE compiled regex rule
+table, two functions — `Encode-Content` materializes, `Measure-Content` counts
+(whole-string UTF-8 width ± per-match deltas; exact against encode incl.
+surrogates); SPEC rules 1–4 (all terminators → `\n`, backslash never doubled,
+C0/DEL stripped, TAB literal). `Format-Row` is the one layout function
+(pieces, content never materialized); `Measure-Row` sums, `Render-Row` writes
+and returns the receipt (0-based, inclusive ends, `RowContentEnd ==
+RowContentBegin` when empty — LTS convention kept); header-row pair. Fixed
+widths are plan-time bounds — overflow throws. UTF-8 no BOM, LF only.
+`psr.header.json`: `source` tightened to a four-form grammar READ BY CODE
+(`entry.<path>` · `plan.GlobalIdx` · `codec.bytes` · `codec.text`); `ws_ratio`
+moved before `entropy` (declaration order = wire order; LTS parity).
+`tests/container.tests.ps1` (70) added to run-all; includes the value walk of
+every source against a real rs-content_meta entry (contracts check #5, in
+its natural home). Functions at the boundary, PSCustomObject layout —
+per-char work is regex, per-row overhead negligible. `Render-`/`Encode-` are
+brief vocabulary, imported with -DisableNameChecking. Battery 16 · 1007 · 0.
+
 ## 2026-08-17 — processors: rs-attributes → rs-content_meta
 
 Renamed after the psr `content_meta` block it feeds; suite, chain keys,

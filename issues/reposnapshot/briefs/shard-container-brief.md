@@ -1,6 +1,13 @@
 # Shard container — header row, record rows, and the grammar that keeps them coherent — brief
 
-**Status:** filed, not started · **Filed:** 2026-08-15, merging
+**Status:** **landed 2026-08-17** — `reposnapshot-v3/rs.core.container.psm1`
+(`Resolve-Layout` · `Measure-Content`/`Encode-Content` · `Format-Row` →
+`Measure-Row`/`Render-Row` · header-row pair), `tests/container.tests.ps1`
+(70 asserts: plan = file by construction, codec SPEC rules 1–4 with
+measure == encode across a surrogate/terminator/control battery, offsets with
+inclusive ends and the seek round-trip, empty markers, width overflow, and the
+value walk of every `psr.header.json` source against a real `rs-content_meta`
+entry). Open calls below still stand where marked. · **Filed:** 2026-08-15, merging
 `schema-derivation-brief.md` (2026-08-15) and `row-grammar-brief.md`
 (2026-08-15), both archived under `briefs/.archive/` · **Track:** V3 e2e
 sprint, export phase (`rs.core.shards` → `rs.core.serialize` →

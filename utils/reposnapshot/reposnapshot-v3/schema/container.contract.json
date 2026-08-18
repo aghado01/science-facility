@@ -1,6 +1,6 @@
 {
   "stage": "container",
-  "module": "rs.core.container.psm1 — Resolve-Layout(-Header [-Declaration] [-Columns] [-MetaFields]) → layout; then Measure-HeaderRow / Measure-Row / Render-HeaderRow / Render-Row (-Layout …) and Measure-Content / Encode-Content over the one codec table. FILED, NOT STARTED (shard-container-brief).",
+  "module": "rs.core.container.psm1 — Resolve-Layout(-Header [-Declaration] [-Columns] [-MetaFields]) → layout; Format-Row(-Layout -Entry [-GlobalIdx]) → pieces; Measure-Row / Render-Row(-Layout -Entry -Cursor [-GlobalIdx]); Measure-HeaderRow / Render-HeaderRow(-Layout); Measure-Content / Encode-Content over the one codec table. LANDED 2026-08-17 (tests/container.tests.ps1, 70 asserts incl. plan=file and the value walk).",
   "$comment": "Export phase 0 — resolve the run's psr layout ONCE, before packing. Input is the admissible superset in schema/psr.header.json × run configuration (which optional columns / sub-fields are on) × the IR header (EntryCount → idx width). Output is the layout object that three stages consume: shards (Measure-Row sums), serialize (Render-Row writes), manifest (ColumnHeader declares). One declaration, one object, three `from` lines downstream — 'computed once, three sinks' is checkable here, not a discipline. In-memory only; nothing is written. Measure-* / Render-* are functions over (layout, entry), not shapes — their receipts are declared where they land (serialize.out.row).",
   "in": {
     "params": {

@@ -29,13 +29,21 @@
     "block": "positional sub-fields between braces, one level deep, sub-field names and types declared inline in the header row: `name:{a<int> b<float>}`"
   },
 
+  "source_grammar": {
+    "$comment": "`source` is READ BY CODE (rs.core.container Format-Row) and takes exactly one of four forms.",
+    "entry.<PropertyPath>": "walk the property path on the IR entry (dots descend; absent → empty marker), e.g. entry.RelativePath, entry.ContentMeta.LineStats.Mean",
+    "plan.GlobalIdx":       "the value the shard plan assigned after packing (passed to Render-Row); fixed width from the layout",
+    "codec.bytes":          "Measure-Content(entry.Content) — UTF-8 byte width of the encoded content span, counted without materializing",
+    "codec.text":           "Encode-Content(entry.Content) — the encoded content span itself"
+  },
+
   "columns": {
-    "$comment": "Admissible superset, in WIRE ORDER. `presence` = required (every run) | optional (on/off per run configuration). `role` = record (about the file) | content (about the content span). Wire names are snake_case; `source` gives the in-memory (PascalCase) origin — this table IS the wire-naming map.",
+    "$comment": "Admissible superset, in WIRE ORDER. `presence` = required (every run) | optional (on/off per run configuration). `role` = record (about the file) | content (about the content span). Wire names are snake_case; `source` gives the in-memory (PascalCase) origin per source_grammar — this table IS the wire-naming map.",
 
     "gidx": {
       "type": "int", "width": "digits(EntryCount)", "role": "record", "presence": "optional",
-      "source": "shard plan — assigned after packing (final reading order across all shards)",
-      "note": "Global record ordinal; ONE address scheme among several (path; tree byte offsets). Fixed width from a bound known before packing (EntryCount, at enumerate) is what lets the value be assigned after packing while row bytes stay exact (ledger #46). Which address columns v3 carries is still open; if none, this column is off."
+      "source": "plan.GlobalIdx",
+      "note": "Global record ordinal, assigned by the shard plan after packing (final reading order across all shards); ONE address scheme among several (path; tree byte offsets). Fixed width from a bound known before packing (EntryCount, at enumerate) is what lets the value be assigned after packing while row bytes stay exact (ledger #46). Which address columns v3 carries is still open; if none, this column is off."
     },
 
     "path": {
@@ -46,21 +54,21 @@
 
     "content_meta": {
       "type": "block", "role": "content", "presence": "optional",
-      "source": "entry.ContentMeta (attached by processors/rs-content_meta.ps1) plus any enrichment element a processor declares. One concept, three spellings by convention: wire content_meta (snake) · in-memory ContentMeta (Pascal) · processor rs-content_meta. Element renamed from Attributes 2026-08-17.",
-      "note": "Metadata ABOUT the content span — hence the content_ prefix, pairing it with content_bytes and content. Extensible: which sub-fields are on is run configuration; new enrichment processors add admissible sub-fields here without writer changes (open element model). When the block is on, every row carries it; a sub-field absent on a row renders the empty marker.",
+      "source": "entry.ContentMeta",
+      "note": "Metadata ABOUT the content span — hence the content_ prefix, pairing it with content_bytes and content. Attached by processors/rs-content_meta.ps1 (one concept, three spellings by convention: wire content_meta · in-memory ContentMeta · processor rs-content_meta; element renamed from Attributes 2026-08-17). Extensible: which sub-fields are on is run configuration; new enrichment processors add admissible sub-fields here without writer changes (open element model). When the block is on, every row carries it; a sub-field absent on a row renders the empty marker.",
       "fields": {
-        "chars":       { "type": "int",   "source": "ContentMeta.CharCount" },
-        "words":       { "type": "int",   "source": "ContentMeta.WordCount" },
-        "punct":       { "type": "int",   "source": "ContentMeta.PunctuationCount" },
-        "uniq_chars":  { "type": "int",   "source": "ContentMeta.UniqueChars" },
-        "entropy":     { "type": "float", "source": "ContentMeta.Entropy" },
-        "ws_ratio":    { "type": "float", "source": "ContentMeta.WhitespaceRatio" },
-        "compression": { "type": "float", "source": "ContentMeta.CompressionRatio", "note": "LTS defect: always 0 (AGENTS). Admissible only once the metric is real; off by default." },
-        "line_mean":   { "type": "float", "source": "ContentMeta.LineStats.Mean" },
-        "line_median": { "type": "float", "source": "ContentMeta.LineStats.Median" },
-        "line_sd":     { "type": "float", "source": "ContentMeta.LineStats.StdDev" },
-        "line_max":    { "type": "int",   "source": "ContentMeta.LineStats.Max" },
-        "$comment": "LineStats is nested in memory; blocks are one level deep on the wire, so it flattens with a line_ prefix. ContentMeta.SpanBytes is deliberately NOT a sub-field: content_bytes is that quantity as the container measures it at write time — one fact, one column."
+        "chars":       { "type": "int",   "source": "entry.ContentMeta.CharCount" },
+        "words":       { "type": "int",   "source": "entry.ContentMeta.WordCount" },
+        "punct":       { "type": "int",   "source": "entry.ContentMeta.PunctuationCount" },
+        "uniq_chars":  { "type": "int",   "source": "entry.ContentMeta.UniqueChars" },
+        "ws_ratio":    { "type": "float", "source": "entry.ContentMeta.WhitespaceRatio" },
+        "entropy":     { "type": "float", "source": "entry.ContentMeta.Entropy" },
+        "compression": { "type": "float", "source": "entry.ContentMeta.CompressionRatio", "note": "LTS defect: always 0 (AGENTS). Admissible only once the metric is real; off by default." },
+        "line_mean":   { "type": "float", "source": "entry.ContentMeta.LineStats.Mean" },
+        "line_median": { "type": "float", "source": "entry.ContentMeta.LineStats.Median" },
+        "line_sd":     { "type": "float", "source": "entry.ContentMeta.LineStats.StdDev" },
+        "line_max":    { "type": "int",   "source": "entry.ContentMeta.LineStats.Max" },
+        "$comment": "Sub-fields render in THIS order (declaration order = wire order; a run's enabled subset keeps it) — chars/words/ws_ratio/entropy first for LTS parity. LineStats is nested in memory; blocks are one level deep on the wire, so it flattens with a line_ prefix. ContentMeta.SpanBytes is deliberately NOT a sub-field: content_bytes is that quantity as the container measures it at write time — one fact, one column."
       },
       "$default_on": [ "chars", "words", "ws_ratio", "entropy" ],
       "$default_on_comment": "LTS parity set (char_count word_count whitespace_ratio entropy). Working default; final is a config-surface call."
@@ -68,13 +76,13 @@
 
     "content_bytes": {
       "type": "int", "role": "content", "presence": "required",
-      "source": "Measure-Content(entry.Content) = utf8(codec(Content)) — rs.core.container, counted without allocating",
+      "source": "codec.bytes",
       "note": "The EXACT byte width of the content span as it sits in the file (UTF-8, post-codec) — the number a reader hands to a seek. NOT the source file's on-disk size (SizeBytes, excluded from the IR) and NOT a character count (chars). Immediately precedes content: that adjacency is the seek contract (row_meta_end / row_content_begin in the tree). Vocabulary: this is the content SPAN; the row span is the whole physical line and is not a column."
     },
 
     "content": {
       "type": "str", "role": "content", "presence": "required", "position": "last",
-      "source": "codec(entry.Content)",
+      "source": "codec.text",
       "note": "Always the final column; never parsed for delimiters — framed by content_bytes."
     }
   },
