@@ -274,11 +274,30 @@ milestone → gate map kept in sync with this list.
 6. Multi-line `<!-- … -->` is a claim, elided by `--strip all` (placeholder
    ≥ 1 KiB), and `# x` inside it is not a heading at any `--enter`. — *02*
 7. `# x` inside a fence is not a heading (existing regression, kept). — *02*
-8. `# x` inside `<details>` (blank line before): heading claim exists with
-   `container` = the html-block, keeps its ordinal id; **not active** at
-   `--enter ""` (unit = the whole block, `contains: heading×1` note);
-   **active** under `--enter html-block`; partition invariant holds at both.
-   Same for `> # x` inside a blockquote via the blockquote rule. — *03*
+8. `# x` inside `<details>` (blank line before): heading claim exists at
+   path `…/x1/H1` with `container` = the html-block; **root ordinals after
+   it are unchanged from legacy** (a nested heading is addressed by path,
+   never counted into the root spine); **not active** at `--enter ""` (unit
+   = the whole block; its `tree` row's census reads `heading×1`); **active**
+   under `--enter html-block`; per-node tiling (8b) holds at both. Same for
+   `> # x` at path `…/q1/H1` via the blockquote rule. The gate-16 report
+   lists every fixture/real document whose *root* numbering differs from
+   legacy — admissible causes are only gate 6 (comment-interior `# x` no
+   longer a heading) and this gate (html-block-interior `# x` no longer
+   counted at root). — *03*
+8b. **Agreement.** For every fixture and ≥ 200 generated documents, the
+   top-down tree (parent = the window a claim was found in, by the carve /
+   mask / partition / recurse / collect construction) equals the bottom-up
+   tree (parent = smallest strictly-containing span; sections by a stack
+   walk per window); every node satisfies `span == union(children) ∪ gaps`;
+   each residue kind — `crossing`, `escape`, `unclosed`+`alternative`,
+   `setext-suspect`, `unaligned`, `dangling`/`unused` — is exercised by a
+   fixture and surfaces in `status`/`profile` residue, never resolved. — *03*
+8c. **Selection identity.** For every node `P`, `select path startsWith P`
+   ≡ `select span ⊂ span(P)`; `read P` materializes exactly `span(P)`;
+   `resolve()` accepts a full path or a unique suffix, dies listing
+   candidates on ambiguity, and resolves every legacy `Dnnn:Hnnnn@dig`
+   anchor from the goldens to the same bytes. — *03*
 9. `***` and `----` segment under `--by breaks`; `profile` and `--by breaks`
    report the same break count. — *02*
 10. Fixture with `[^1_1]`/`[^1_2]` in prose and `[^1_1]: https://…` defs
@@ -289,10 +308,11 @@ milestone → gate map kept in sync with this list.
     `chat-export` profile strips the surrounding `<div>` furniture and keeps
     refs and defs. Same shape for `[text][id]` / `[id]: url`. — *03*
 10b. Generic basis: `outline --by fence` and `--by pattern:'^\[\^[^\]\s]+\]:'`
-    each produce units that tile the document byte-for-byte (partition
+    each produce **projections addressed under the node they cut**
+    (`<node>/Sn`, `<node>/Wn`) that tile that node byte-for-byte (partition
     invariant asserted per basis); `outline --within H0003 --by break`
-    re-segments one unit; a toggle basis with an unclosed opener reports
-    `unclosed` residue and still tiles. — *03*
+    re-segments one node; a toggle basis with an unclosed opener reports
+    `unclosed` + `alternative` residue and still tiles. — *03*
 11. `read --only fence` yields exactly the fenced bytes of a unit in order;
     `--only K` ⊕ `--strip K` reconstruct the unit byte-for-byte modulo
     placeholders. — *03*
@@ -306,16 +326,18 @@ milestone → gate map kept in sync with this list.
     source span (existing). — *01*
 15. `node -e "import('./mdnav.mjs').then(m => m.SpanSet && m.Selection)"`
     resolves without running the CLI. — *04*
-16. `default` profile output for every existing fixture **and the 3.5 MB real
-    corpus the README cites** is byte-identical to pre-change output for
+16. `default` profile output for every existing fixture **and the named
+    real-document set** (`issues/mdnav_v2/discussion/` — the legacy
+    README's "3.5 MB real corpus" has no known location and is struck, per
+    the M0 capture report) is byte-identical to pre-change output for
     `outline`, `read`, `coverage`, `locate` (golden files captured in M0,
-    before any scanner changes), except where 5/6/9/12 (bug fixes) and 8
-    (html-block-contained headings inactive by default) say otherwise. Every
-    diff against the goldens must be attributable to one of those items by
-    name; an unattributed diff fails the gate. The report must list which
-    real-corpus documents changed under 8, so the `default` `enter` decision
-    can be revisited with evidence. — *01 (capture) / 02 (F1/F2 deltas) / 03
-    (item 8 delta)*
+    before any scanner changes), except where 5/6/9/12 (bug fixes) and
+    8/8b (nested-heading path addressing, html-block-contained headings
+    inactive by default) say otherwise. Every diff against the goldens must
+    be attributable to one of those items by name; an unattributed diff
+    fails the gate. The report must list which real-document-set documents
+    changed under 8, so the `default` `enter` decision can be revisited
+    with evidence. — *01 (capture) / 02 (F1/F2 deltas) / 03 (item 8 delta)*
 17. `select`/`partition`/`marks` honour `limit/offset` and always return
     `total`. — *04*
 18. `materialize` over `maxBytes` returns a plan with zero bytes and anchors

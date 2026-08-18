@@ -28,23 +28,42 @@ and should be built and tested first, alone.
 
 ## 2. Claims — the occurrence table
 
-> **Superseded in part by D41 / [design/mdnav_v2_structure-brief.md](../design/mdnav_v2_structure-brief.md) §4:**
-> the column list below is amended — rows carry `ord` (reading order),
-> `path` (structural address; root spine `Hnnnn` flat, nested `…/q1/H1`)
-> and `digest` explicitly; `containers[]` is derived from `path`, not
-> authoritative. The kind table below stands. Amend this section to match
-> before phase 01 is chipped.
-
 One table per document, **an in-memory value first** (typed arrays,
 ≈12–16 B/claim; buffers + claims ≈ 1.2× corpus bytes), columnar:
 `starts[]`, `ends[]`, `kinds[]` (interned), `sources[]` (interned:
 which collector), `levels[]` (`char|line|multi`), `priorities[]`,
-`ruleIds[]` (interned, null for built-ins), `containers[]` (ordinal of the
-immediate containing region claim, or −1), `info[]` (kind-specific: fence
-lang, heading level+title, link target, footnote label…). Byte coordinates,
-sorted `ClaimOrder.Geometry` (start asc, end desc, ordinal). **Overlap and
-nesting are preserved** — a `data-uri` inside an `html-block` inside a
-`fence` is three claims. No `noise` flag exists anywhere.
+`ruleIds[]` (interned, null for built-ins), `info[]` (kind-specific: fence
+lang, heading level+title, link target, footnote label…), plus three
+identity columns (design canon
+[mdnav_v2_structure-brief.md](../design/mdnav_v2_structure-brief.md) §4):
+`ord[]` (this build's reading-order index — Geometry sort, start asc, end
+desc, discovery order), `path[]` (the structural address — see the code
+table below), `digest[]` (4 hex of title text, kind-appropriate claims
+only). `containers[]` (ordinal of the immediate containing region claim, or
+−1) is **derived from `path`**, not stored authoritatively — a claim's
+container is whatever `path` minus its last segment resolves to. Byte
+coordinates throughout, sorted `ClaimOrder.Geometry`. **Overlap and nesting
+are preserved** — a `data-uri` inside an `html-block` inside a `fence` is
+three claims, three rows, three paths. No `noise` flag exists anywhere.
+
+**Path grammar** (structure brief §4): `/` separates segments, each
+`<code><n>` — `n` 1-based among siblings of that kind under the same
+parent, in reading order. Root heading claims keep the flat 4-digit legacy
+spine (`Hnnnn`, `H0000` = PREAMBLE/BODY); a heading found by re-entry (phase
+03) is `Hn` local to its container window, so `/H0007/q1/H1` is the first
+heading inside the first blockquote under root section 7 — **root ordinals
+never renumber when a new container kind becomes enterable**. Other codes:
+`p` paragraph, `q` blockquote, `f` fence, `x` html-block, `c` html-comment,
+`m` math-block, `l`/`i` list/list-item, `t` table, `d` footnote-def, `fm`
+frontmatter; inline kinds spelled out (`link1`, `footnote-ref2`,
+`data-uri1`, `custom:pixel1`); `S`/`W` for basis projections cut under a
+node (`/H0007/S3`); `elided` for read-time placeholders (`/H0007/elided1`,
+phase 05). `resolve()` accepts a full path or any document-unique suffix,
+so legacy `Dnnn:Hnnnn@dig` anchors keep resolving unchanged; an ambiguous
+suffix dies listing the candidates. This phase emits `path` for the region
+and structural kinds it produces (ported scanners have no nesting yet, so
+every claim is a root-level segment — `container` universally −1, `path`
+one segment deep); phase 02/03 populate nested paths as re-entry lands.
 
 Kind vocabulary is **open**. Built-in kinds this phase must produce (today's
 constructs, plus the ones the discussion named — the *collectors* that
@@ -168,9 +187,10 @@ Full text is the master list in [mdnav_v2_design-brief.md](../design/mdnav_v2_de
   in the master gate).
 - **13.** `discover --recursive .` ≡ `discover . --recursive`.
 - **14.** Byte fidelity: unmodified `read` is byte-identical to source.
-- **16 (capture only).** Golden files for every fixture and the 3.5 MB real
-  corpus, captured against the *old* binary, before any scanner changes —
-  the baseline every later phase's gate-16 delta is measured against.
+- **16 (capture only).** Golden files for every fixture and the named
+  real-document set (`issues/mdnav_v2/discussion/`), captured against the
+  *old* binary, before any scanner changes — the baseline every later
+  phase's gate-16 delta is measured against.
 
 ## Sequencing (within this phase)
 

@@ -275,31 +275,12 @@ lens.
 
 ## 8. Exit gates (this brief's contribution to the master list)
 
-- **8 (reworded).** `# x` inside `<details>` (blank line before): a heading
-  claim exists at `…/x1/H1` with `container` = the html-block; root ordinals
-  after it are what they would be if the block were opaque; not active at
-  `--enter ""` (unit = the whole block; the `tree` row's census shows
-  `heading×1`); active under `--enter html-block`; per-node tiling holds at
-  both. Same for `> # x` at `…/q1/H1`. The gate-16 report lists every
-  fixture/real document whose *root* numbering differs from legacy — the
-  only admissible causes are gate 6 (comment-interior `# x` no longer a
-  heading) and this gate (html-block-interior `# x` no longer at root).
-- **8b (new) — agreement.** For every fixture and ≥ 200 generated
-  documents, the top-down tree (parent by window) equals the bottom-up tree
-  (parent by smallest strictly-containing span; sections by stack walk per
-  window); every node satisfies span == union(children) ∪ gaps; each residue
-  kind in §3 is exercised by a fixture and appears in `status`/`profile`
-  residue, never resolved.
-- **8c (new) — selection identity.** For every node, `select path
-  startsWith P` ≡ `select span ⊂ span(P)`; `read P` materializes exactly
-  `span(P)`; `resolve()` accepts full paths and unique suffixes, dies listing
-  candidates on ambiguity, and resolves every legacy `Dnnn:Hnnnn@dig` anchor
-  from the goldens to the same bytes.
-- **10b (reworded).** Generic basis: `--by fence` / `--by pattern:…` /
-  `--by breaks` / `--windows N` under a node produce projections addressed
-  `<node>/Sn` or `<node>/Wn` that tile that node byte-for-byte; `--within
-  <node> --by <spec>` re-segments one node; an unclosed toggle basis reports
-  `unclosed` + `alternative` and still tiles.
+Gate text is canon's alone (the master list's own rule — phase briefs cite
+by number, never restate). This brief's contribution: gate 8 reworded for
+path addressing, gate 10b reworded for node-scoped projections, gates 8b
+(agreement) and 8c (selection identity) added — see
+[mdnav_v2_design-brief.md](mdnav_v2_design-brief.md) §Exit gate for the
+text.
 
 ## Report
 

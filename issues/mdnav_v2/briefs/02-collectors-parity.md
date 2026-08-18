@@ -24,8 +24,8 @@ isolating and segmenting are the same operation with different arguments:
 | geometry | examples | mechanism | yields |
 |---|---|---|---|
 | **boundary** (singleton) | ATX heading line, thematic break, `[^n]:` def start, blank line, fixed byte window after a newline | candidate boundaries → ordinal partition of the window; first viable boundary is the only policy | a **partition** that tiles the window byte-for-byte (today's `--depth`, `--by breaks`, `--windows`) |
-| **toggle** (one token opens and closes) | ```` ``` ````/`~~~`, `$$`, `` ` ``, `<!--`/`-->` as a token pair | delimiter positions → **prefix parity** (XOR fold) → inside/outside; odd carry-out is residue | **regions** + `unclosed` residue |
-| **pair** (distinct open/close) | `<details>`…`</details>`, `[`…`]`, `\begin{}`…`\end{}` | strict-stack pairing under a named compatibility policy | **nested regions** + unclosed-open / dangling-close residue |
+| **toggle** (one *symmetric* token opens and closes, no stateful match condition) | `$$`…`$$` | delimiter positions → **prefix parity** (XOR fold) → inside/outside; odd carry-out is residue | **regions** + `unclosed` residue |
+| **pair** (distinct open/close tokens, or a same-shaped token whose closer is decided by a match condition) | fence (opener char+len … closer: same char, length ≥ opener's, empty info string), `<!--`…`-->`, `<details>`…`</details>`, `[`…`]`, `\begin{}`…`\end{}` | a **state machine proposes** a delimiter only when its pairing condition holds — never a bare regex scan of every candidate line, so a `~~~` line inside an open ```` ``` ```` fence is content, not a delimiter candidate; strict-stack pairing under a named compatibility policy for kinds that actually nest; prefix parity over the machine's own **emitted** delimiter claims is used only afterward, to report an odd carry-out as residue — never to decide which lines are delimiters | **(nested) regions** + unclosed-open / dangling-close residue |
 
 A delimiter spec is data: `{ pattern, geometry: boundary|toggle|pair(open,
 close), scope: line|whole, kind }`. Built-in kinds are just shipped specs;
@@ -33,18 +33,28 @@ a caller may pass one ad hoc. Partitions are **validated values** (shared
 endpoints, disjoint, exact window coverage) — the existing partition
 invariant, applied to every basis, not just headings.
 
-Two collector kinds, both writing to the same table:
+Two collector kinds, both writing to the same table — the `carve` primitive
+of the recursive discovery (design canon
+[mdnav_v2_structure-brief.md](../design/mdnav_v2_structure-brief.md) §2):
 
-- **State-machine collectors** for region kinds whose extent is a toggle or a
-  block condition (frontmatter, fence, html-comment, html-block, math-block).
-  One pass, replaces the two duplicated fence trackers. Toggle-defined regions
-  (fence, `$$`) are **prefix-parity** over their delimiter claims (doccer
-  `BooleanVector.PrefixParity`): delimiter positions XOR-fold to inside/outside,
-  and an odd carry-out is residue (`fence-unclosed`), reported never repaired.
-  Balanced-pair regions use strict-stack pairing with residue for unclosed
-  opens / dangling closes (doccer `Pairing.Pair`) — used only for kinds a
-  profile nominates as paired (e.g. `<details>` under a `github` profile), never
-  by default.
+- **State-machine collectors** for region kinds (frontmatter, fence,
+  html-comment, html-block, math-block). One pass, replaces the two
+  duplicated fence trackers, and is a state machine at every kind, never a
+  delimiter regex followed by an algebra:
+  - **Fence is a `pair`, not a toggle**, even though open and close use the
+    same character: an opener is proposed on any `` `{3,} ``/`~{3,}` line
+    when not already inside a fence; the *next* such line becomes its
+    closer only if it matches — same char, length ≥ opener's, empty info
+    string — otherwise it is fenced content. Prefix parity over the
+    machine's own emitted opener/closer claims is used only afterward, to
+    detect an odd carry-out (`fence-unclosed`), reported never repaired.
+  - **`<!--`…`-->` is a `pair`** (distinct open/close tokens, non-nesting):
+    first `-->` after an open `<!--` closes it, multi-line, no nesting.
+  - **`$$`…`$$` is the genuine `toggle`**: the same symmetric token with no
+    stateful match condition, so delimiter positions XOR-fold cleanly.
+  - Balanced pairs with real nesting (`<details>`…`</details>` under a
+    `github` profile) use strict-stack pairing (doccer `Pairing.Pair`) —
+    opt-in only, never by default.
 - **Rule collectors** — doccer's `PatternRule` in JS: `{ id, pattern, kind,
   source, level: char|line|multi, scope: line|whole, priority, capture?,
   info? }`, loaded from **JSONL inventories**. Execution: the rule's `scope`
@@ -115,9 +125,10 @@ M3: fenced noise, non-`---` breaks, multi-line comment, flag order.
 
 ## Sequencing (within this phase)
 
-3. State-machine collector: unify fence trackers, add html-comment,
-   html-block, math-block, frontmatter as region claims; prefix-parity fences
-   with residue → gates 6, 7.
+3. State-machine collector: unify fence trackers as a pairing state machine
+   (not prefix parity — the closer's match condition decides, parity only
+   reports residue), add html-comment, html-block, math-block, frontmatter
+   as region claims → gates 6, 7.
 4. Rule collector + `rules/core.jsonl` carrying today's inline regexes;
    region-scoped execution → gates 4, 5. Shared `break` rule → gate 9.
 
