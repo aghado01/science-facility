@@ -111,14 +111,19 @@ result:    @{ Plan; Groups[]; Shards[]; IdxMap }        # no Header — the plan
 plan:      @{ TotalEntries; TotalPlannedSizeBytes; ShardCount; OversizedCount;
               SingletonCount; InBandCount;
               TotalOvershootBytes; MaxOvershootBytes;   # overshoot-facing / tolerance-facing
+              TotalSlackBytes;                          # the remainder, wherever it landed
               MaxFillBytes; MinFillBytes; HeaderOverheadBytes;
               Grouping; GroupSort; OrderStrict; PackObjective;
               ShardQuotaBytes; ShardToleranceBytes; HeaderBytes; IdxWidth }
 group:     @{ GroupKey; EntryCount; SumRowBytes; ShardCount; LowerBound; Gap;
               OversizedCount; SingletonCount; InBandCount;
-              TotalOvershootBytes; MaxOvershootBytes; MaxFillBytes; MinFillBytes }
+              TotalOvershootBytes; MaxOvershootBytes; TotalSlackBytes;
+              MaxFillBytes; MinFillBytes }
 shard:     @{ Ordinal; Key; GroupKey; Class (Normal|Singleton|InBand|Oversized);
-              IsOversized; PlannedSizeBytes; OvershootBytes; EntryCount;
+              IsOversized; PlannedSizeBytes;
+              DeviationBytes;                # signed: PlannedSizeBytes − ShardQuotaBytes
+              OvershootBytes; SlackBytes;    # max(0, Deviation) / max(0, −Deviation) — derived
+              EntryCount;
               Entries[] (references into assemble.out.result.Entries, shard order) }
 placement: RelativePath → @{ GlobalIdx; ShardOrdinal; ShardKey; ShardIndex }  (IdxMap values)
 ```
@@ -212,11 +217,17 @@ both shapes.
   within each shard at sequence. Flexible membership is legitimate under any
   `Grouping` — directory-listing adjacency is a human convention the reading
   agent does not need. (Stages 1, 7.)
+- **One signed number per shard.** `DeviationBytes = PlannedSizeBytes −
+  ShardQuotaBytes`, anchored at quota (not the ceiling — anchoring there would
+  merge "under quota" and "in band" into one negative region). Three bands:
+  `< 0` underfilled (slack; the remainder lives here) · `0 … tolerance`
+  overshoot, in band · `> tolerance` beyond ceiling, Oversized only. Overshoot,
+  slack, and `Class` all derive from it.
 - **Single-record shard bands** (classification, exact bytes):
-  `headerBytes + rowBytes ≤ quota` → **Singleton** (a full shard that happens to
-  hold one record; not a runt, not a hazard); `quota < … ≤ ceiling` → **InBand**
+  `Deviation ≤ 0` → **Singleton** (a full shard that happens to hold one
+  record; not a runt, not a hazard); `0 < Deviation ≤ tolerance` → **InBand**
   (permitted overshoot; note the header can push a "row under quota" here);
-  `> ceiling` → **Oversized**. A **runt** is a *small* group tail — different
+  `Deviation > tolerance` → **Oversized**. A **runt** is a *small* group tail — different
   again. Empty group ≠ singleton group: an empty group yields no shard; a
   singleton group yields one shard, classified as above.
 
@@ -320,9 +331,13 @@ serialization; the doubled header row of the 0422 sample (an old LTS bug).
   shard has `EntryCount = 1`.
 - **Overshoot bounded** (the tolerance-facing check): per group and plan,
   `MaxOvershootBytes ≤ ShardToleranceBytes` — equivalently every non-oversized
-  shard's `OvershootBytes ≤ ShardToleranceBytes`; `Tolerance == 0` ⇒
+  shard's `DeviationBytes ≤ ShardToleranceBytes`; `Tolerance == 0` ⇒
   `MaxOvershootBytes == 0`. `TotalOvershootBytes` is the overshoot-facing
   aggregate (clause 3, harness), not a bound.
+- **Deviation is consistent**: per shard `OvershootBytes − SlackBytes ==
+  DeviationBytes`; `Class` agrees with the deviation bands; per group
+  `TotalSlackBytes − TotalOvershootBytes == k·quota − Σ PlannedSizeBytes` over
+  non-oversized shards (mass conservation, checked).
 - **Never worse than strict**: per group, `ShardCount ≤ k₀_g`; and
   `ShardCount ≥ LowerBound` with `Gap` reported.
 - **Tail rule**: within a group, the minimum-fill non-oversized bin is last.
