@@ -139,7 +139,7 @@ the residue. Layout (`HeaderBytes`, `IdxWidth`, `Columns`) is an input from
 | LTS | v3 | values · working default | disposition |
 |---|---|---|---|
 | `GroupingStrategy` | `Grouping` | `Flat \| ByFileType \| ByRootDirectory` · `Flat` | keep, rename |
-| `PackingStrategy` (`Greedy \| Balanced \| Loose`) | — | — | **drop** (ledger #40). Objective is tightest packing, not evenness; the ×1.1 / ×0.8 constants go with it. Replaced by the four knobs below — note these are *orthogonal axes*, not a flat enum: LTS's three names turned out to be one number, and a cross-product collapsed into a name list is how that happened. A named preset resolving to a knob tuple is fine, provided the plan records what it resolved to (ConfigEcho; payload-manifest-ledger #11) |
+| `PackingStrategy` (`Greedy \| Balanced \| Loose`) | — | — | **drop** (ledger #40). Objective is tightest packing, not evenness; the ×1.1 / ×0.8 constants go with it. Replaced by the four knobs below — orthogonal axes, **no preset/profile layer over them** (user, 2026-08-18): LTS's three names turned out to be one number, and a cross-product collapsed into a name list is how that happened. Quota + tolerance semantics are the whole surface; the plan records the resolved knobs (ConfigEcho; payload-manifest-ledger #11) |
 | `MaxShardSpanBytes` / `MaxShardSizeKB` | `ShardQuotaBytes` | long · 32 768 (working) | consolidate, rename — a **Size** (whole written file: header + rows). "Span" was meant as the file's whole span; the word is now content-measure vocabulary, so it leaves the knob name |
 | — | `ShardToleranceBytes` | long · 4 096 (working) | **new** (ledger #41). Exact bytes above quota that a *packed* shard may reach when doing so eliminates a shard. Ceiling = quota + tolerance |
 | — | `OrderStrict` | switch · `$false` (working) | **new** (ledger #43). `$true`: shards are contiguous runs of the group's sorted order. `$false`: membership is optimized within the group; sort restored within each shard for rendering |
@@ -395,8 +395,7 @@ serialization; the doubled header row of the 0422 sample (an old LTS bug).
 - Working defaults (`32 768 / 4 096 / OrderStrict $false / FrontLoad`) →
   final config surface.
 - `PackObjective` value names — `FrontLoad | Even` are descriptive, not yet
-  house vocabulary; and whether a named preset layer sits over the
-  `{Grouping, GroupSort, OrderStrict, PackObjective}` tuple.
+  house vocabulary. (No preset layer over the knob tuple — settled, not open.)
 - Which shape becomes the shipped default once the comparison harness has run
   on real payloads — the working default is a placeholder, not a finding.
 - `FrontLoad` under flexible order when a merge is forced: which bin absorbs
@@ -404,8 +403,6 @@ serialization; the doubled header row of the 0422 sample (an old LTS bug).
   Contiguous is settled (adjacent merge, latest-first).
 - Whether a fail-fast switch for oversized survives as a diagnostic gate.
 - Whether the plan holds entry *references* (assumed) or copies.
-- Layout module name: `rs.core.container` (assumed) vs. exporting `Measure-Row`
-  from `rs.core.serialize`.
 - **Propagation owed to shard-container-brief**: LF-only termination, no
   trailing `|`; UTF-8 no BOM; fixed-width rule for ordinal/address fields;
   header schema as the superset with rows as its shadow; which address columns
