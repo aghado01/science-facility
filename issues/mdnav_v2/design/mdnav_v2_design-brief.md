@@ -126,7 +126,14 @@ keep it, but the `<div>` around it is furniture."
 
 Five primitives, in dependency order, each usable without the ones after it
 (doccer's "capability library, not a pipeline"). Full spec for each lives in
-its phase brief; this is the map.
+its phase brief; this is the map. **How they compose — the recursive
+construction, the inside-out check, the flat-rows-with-path storage, the
+path address grammar, and the telescope surface — is canon in
+[mdnav_v2_structure-brief.md](mdnav_v2_structure-brief.md) (D41,
+2026-08-17), which supersedes items 2–5 below as a relationship, brief 01's
+column list, brief 03 §4–§5's addressing, and D11/D13. Where a phase brief
+still disagrees with it, the structure brief wins until the brief is
+amended.**
 
 1. **`SpanSet`** — geometry algebra over normalized sorted disjoint half-open
    byte intervals (union/intersect/subtract/complement/coverage/contains),
@@ -162,8 +169,11 @@ its phase brief; this is the map.
 - No six-module split, no `server.mjs`, no "virtual database engine"
   marketing. One file plus at most `span-set.mjs` / `claims.mjs` where a
   primitive is standalone and testable alone.
-- No CommonMark parser, no markdig. Extents by shape, toggles and block
-  conditions. The codex non-goals (classification, semantic chunking,
+- No CommonMark **inline** parser, no markdig. Block structure — opaque
+  regions, containers, the section overlay — *is* computed, by shape,
+  toggles and block conditions (the block-structure half of CommonMark's
+  own strategy; sharpened by D41). Inline structure beyond rule-collected
+  leaves is never computed. The codex non-goals (classification, semantic chunking,
   ranking, repair, rewriting, summarization) all stand — profiles express
   *disposition*, never *meaning*.
 - No open/close **tag-pair** HTML masking by default; pairing exists as a

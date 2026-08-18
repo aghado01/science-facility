@@ -28,6 +28,13 @@ and should be built and tested first, alone.
 
 ## 2. Claims — the occurrence table
 
+> **Superseded in part by D41 / [design/mdnav_v2_structure-brief.md](../design/mdnav_v2_structure-brief.md) §4:**
+> the column list below is amended — rows carry `ord` (reading order),
+> `path` (structural address; root spine `Hnnnn` flat, nested `…/q1/H1`)
+> and `digest` explicitly; `containers[]` is derived from `path`, not
+> authoritative. The kind table below stands. Amend this section to match
+> before phase 01 is chipped.
+
 One table per document, **an in-memory value first** (typed arrays,
 ≈12–16 B/claim; buffers + claims ≈ 1.2× corpus bytes), columnar:
 `starts[]`, `ends[]`, `kinds[]` (interned), `sources[]` (interned:

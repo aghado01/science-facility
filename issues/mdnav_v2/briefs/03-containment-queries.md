@@ -33,6 +33,15 @@ three keyed joins Markdown idiom actually defines, plus containment.
 
 ## 4. Containment and re-entry — the recursive walk
 
+> **Superseded by D41 / [design/mdnav_v2_structure-brief.md](../design/mdnav_v2_structure-brief.md) §2–§4:**
+> the recursion (carve → mask → partition → recurse → collect), the inside-
+> out agreement check and residue kinds, and the address grammar (nested
+> headings by path `…/q1/H1`, root spine `Hnnnn` flat and never renumbered;
+> projections `…/Sn`/`…/Wn` under a node). The `--enter` activation rule
+> below stands; the "ids stay ordinal over all heading claims" bullet does
+> not. Gates 8/10b reworded, 8b/8c added there. Amend this section to match
+> before phase 03 is chipped.
+
 Region claims are containers. After L0 (regions) and L1 (structural over
 `Total \ inert`), the walk **re-enters each region claim** and runs the
 structural collectors over the region's own window with region-specific
