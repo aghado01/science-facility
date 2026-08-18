@@ -134,8 +134,9 @@ its phase brief; this is the map.
 2. **Claims** — the occurrence table: one columnar record per document
    (starts/ends/kinds/sources/levels/priorities/ruleIds/containers/info), an
    open kind vocabulary, overlap and nesting preserved, backed by
-   `MemoryStore`/`SidecarStore` over a corpus-scoped `index/` +
-   run-scoped ledger layout. → [01-spanset-claims.md](../briefs/01-spanset-claims.md)
+   `MemoryStore`/`SidecarStore` over a content-addressed IR cache
+   (`$MDNAV_CACHE`) + an investigation work-dir (`$MDNAV_WORK_DIR`:
+   inventory, stamped runs, ledger) — D39. → [01-spanset-claims.md](../briefs/01-spanset-claims.md)
    (table/stores/hygiene) and **2b. Relations** — keyed joins over claims
    (`footnote`, `link-ref`, `anchor`, `contains`) →
    [03-containment-queries.md](../briefs/03-containment-queries.md)
@@ -232,17 +233,25 @@ milestone → gate map kept in sync with this list.
 2. `SpanSet`: union/intersect/subtract/complement agree with a brute-force
    bitmap over ≥ 200 random small interval sets; adjacent `[a,b)[b,c)` merge;
    outputs always normalized. — *01*
-3. Claims table: sorted `Geometry` order; nested claims carry the correct
-   `container`; `MemoryStore` and `SidecarStore` yield equal tables for the
-   same bytes; sidecar round-trips at schema 3; unchanged file → no rescan
-   under either store; a touched-but-identical file (mtime changed, digest
-   same) → no rescan; changed bytes → that document only is rebuilt;
-   schema-2 sidecar refreshed, not trusted; `Dnnn` ids identical after a
-   `Corpus` is closed and reopened **and across successive `discover` runs
-   on the same work-dir**; after 5 `discover` calls the work-dir holds
-   exactly one `index/documents/Dnnn.json` per document and 5 run dirs each
-   containing only `reads.jsonl` + `run.json`; `runs prune --keep 2` leaves
-   two. — *01*
+3. Claims table and layout (D39): sorted `Geometry` order; the `container`
+   column exists (−1 throughout in this phase — correctness is asserted in
+   *02* once regions exist); `MemoryStore` and `SidecarStore` yield equal
+   tables for the same bytes; IR round-trips at schema 3 through
+   `$MDNAV_CACHE/ir/v3/<sha>.json`; **the same bytes at two paths, or in two
+   work-dirs, produce exactly one IR file**; unchanged file → no rebuild; a
+   touched-but-identical file (mtime changed, digest same) → no rebuild (IR
+   cache hit by hash); changed bytes → a new IR file, the old one untouched;
+   `Dnnn` ids identical after a `Corpus` is closed and reopened **and across
+   successive `discover` runs on the same work-dir**; after 5 `discover`
+   calls the work-dir holds one `inventory.json` and 5 `runs/<stamp>/` each
+   containing only `run.json` + `reads.jsonl` (created empty at mint), and
+   `LATEST`; `runs prune --keep 2` leaves two; `cache prune --unreferenced
+   <work-dir>` removes IR no inventory row points at; a `Dnnn` call with
+   neither `--work-dir` nor `$MDNAV_WORK_DIR` dies naming both; a
+   path-carrying call with neither defaults to `<dir of first
+   target>/.doc-dive`; the refusal guard fires for a cache dir placed where
+   `discover` can see it; `index <Dnnn> --json` prints the document record
+   the suite reads its structural facts from (D40). — *01*
 4. Rule collector: a `scope: line` rule cannot match across a line break; a
    `scope: whole` rule cannot match across an excluded gap (test with a
    pattern that would span it); a bad rule fails at load with file:line and

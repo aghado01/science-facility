@@ -110,7 +110,10 @@ mdnav 2.0 is expected to become an internally vendored MCP subsystem of
 para-agent, as `nushell-mcp` will. Constraints that follow: the engine stays
 single-file zero-dep; the server is an embeddable `createMdnavTools({
 corpus, session, framing })` plus a thin standalone stdio runner, so
-para-agent can mount it in-process and supply its own session/result store;
+para-agent can mount it in-process and supply its own session/result store
+(D39 makes the seam concrete: the IR cache is the engine's in both
+deployments; the work dir — inventory, runs, ledger — is the session
+owner's, a directory for the CLI and para-agent's store for the server);
 result handles and addresses are plain data that can sit in a para-agent
 transcript row (`e17.tool.3 → D002:H0108@fa8a`), giving cross-reference
 between exchange addresses and document addresses for free.

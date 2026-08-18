@@ -63,43 +63,67 @@ Only shape decides membership (README §Triage principle stands): the
 
 **Stores.** The engine is a persistent-process design: a server holds one
 `Corpus` (buffers, claims, memoized views keyed by `(digest, policy)`) for
-its lifetime and answers queries from memory; invalidation is
-`statSync` size+mtime per query, digest on change, rebuild per document.
-Disk is for what must survive a process: the **inventory** (`Dnnn` → path
-— ids appear in agents' notes and must come back identical after restart)
-and the **reads ledger** (coverage and provenance across sessions;
-append-only JSONL as today). The sidecar (schema 3) is the serialization of
-the in-memory table behind a small store interface — `MemoryStore` (server)
-and `SidecarStore` (one-shot CLI, which has no warm process) — so the CLI
-and a running server pointed at the same work-dir see one index. Views are
+its lifetime and answers queries from memory. Disk holds two things with two
+different owners (D39): the **IR** — the claims table for a given byte
+content, engine-owned, content-addressed, disposable — and the
+**investigation** — inventory (`Dnnn` → path; ids appear in agents' notes
+and must come back identical after restart) plus the reads ledger
+(coverage and provenance; append-only JSONL as today), owned by whoever owns
+the session (a directory for the CLI, para-agent's store for the server).
+`MemoryStore` (server) and `SidecarStore` (one-shot CLI, which has no warm
+process) share the IR schema (3) behind one small store interface, so the
+CLI and a running server pointed at the same cache see one index. Views are
 never persisted; they are cheap to recompute and policy-dependent.
 
-**Hygiene — persistence with rehydration, not accretion.** Today every
-`discover` mints `.doc-dive/<stamp>/` with its own `inventory.json` and
-`documents/Dnnn.index.json` per doc, so N discoveries of one small document
-leave N copies of its index, and ids are per-run. Split what is
-*corpus-scoped* from what is *run-scoped*:
+**Layout (D39 — replaces the legacy per-run sidecar layout outright; there
+is no legacy mode).** Two roots, two env vars:
 
 ```
-<work-dir>/
-├── index/                         corpus-scoped, ONE copy, replaced in place
-│   ├── inventory.json             Dnnn ↔ path — ids stable across runs and restarts
-│   └── documents/Dnnn.json        digest, claims table (compact columnar JSON), no source body
-├── <stamp>/                       run-scoped, small: provenance for one investigation
-│   ├── reads.jsonl                append-only ledger (as today)
-│   └── run.json                   which index digests this run read against
-└── LATEST                         as today
+$MDNAV_CACHE                        engine-owned · content-addressed · disposable · shareable
+  default: %LOCALAPPDATA%\mdnav\cache (win32) · ~/.cache/mdnav (else)
+  └── ir/v3/<sha[0:2]>/<sha256>.json     IR for those bytes: claims table (compact columnar,
+                                         interned), line stats (bom, newline, maxLine),
+                                         windows keyed "<size>:<start>..<end>". No path, no Dnnn.
+
+$MDNAV_WORK_DIR                     investigation-owned · identity + provenance · stamped
+  default: <dir of first target>/.doc-dive/  (only for calls that carry a path — see below)
+  ├── inventory.json     {schema:3, docs:[{id, path, name, sha256, bytes, mtimeMs}]}
+  │                      Dnnn ↔ canonical path; the sha/size/mtime row is the fast-path
+  │                      invalidation table (stat matches → trust; else rehash → IR cache hit, or build)
+  ├── LATEST             → stamp (the default for --run within this work dir)
+  └── runs/<stamp>/
+        ├── run.json     {stamp, started, argv, cwd, cache, docs:[{id, sha256}]} — what this run read against
+        └── reads.jsonl  ledger, as today + explicit basis / enter / lens
 ```
 
-A server **rehydrates** `index/` at start, refreshes a document only when
-its digest changes, and rewrites that one file in place — never a second
-copy. Runs stay stamped because a run *is* provenance, but a run holds one
-ledger, not an index. `--work-dir` / `$MDNAV_WORK_DIR` / `<corpus>/.doc-dive/`
-resolution and the "refuse a work dir the crawler can see" guard are
-unchanged. Add `mdnav runs prune --keep <n>` (trivial) so an interactive
-session's exhaust is one command to trim. The one-shot CLI keeps working
-against the same layout — it has its own exaptations — it just pays the
-rehydrate on each call instead of once.
+- **IR is a pure function of bytes, so it is content-addressed**: never
+  stale, never per-run, never per-work-dir; a touched-but-identical or moved
+  file is a cache hit by hash; overlapping corpora share IR; `tmp + rename`
+  writes make concurrent CLI/server use safe. There is no invalidation
+  logic, only GC: `mdnav cache prune --older-than <d> | --unreferenced
+  <work-dir>`. Schema bumps change the key prefix (`v3/`); old IR is simply
+  never read.
+- **Resolution is explicit or bust.** `--work-dir` > `$MDNAV_WORK_DIR` >
+  `<dir of first target>/.doc-dive` — the last only when the call carries a
+  path (`discover`, `index <file>`, `outline <file>`, …). A `Dnnn` with no
+  work dir dies: `D001 needs a work dir — pass --work-dir <path> or set
+  $MDNAV_WORK_DIR`. **The legacy global `$TMP/mdnav/LAST` pointer is
+  dropped** (D39). Cache: `--cache` > `$MDNAV_CACHE` > the platform default
+  (the suite points both roots at temp dirs so it never touches the user's
+  cache and never gets a cross-run cache hit it did not ask for). The
+  "refuse a dir the crawler can see" guard applies to both roots.
+- Runs stay stamped because a run *is* provenance; `runs prune --keep <n>`
+  trims them. `run.json` records the digests read against, so a ledger row
+  can always be checked against the bytes it came from.
+- **`--json` on `discover`/`index`** prints the per-document record
+  (today's sidecar shape — `counts`, `noise`, `breaks`, `headings`,
+  `windows`, `maxLine`, `newline`, … — built from inventory row + IR). This
+  is the suite's seam (D40): the legacy suite reads sidecar files directly
+  in 17 places and inventory/ledger paths in ~15; with `--json` it asks the
+  binary instead and becomes black-box, and the same record is the typed
+  return the MCP wants (D16). See
+  [../reports/m0-legacy-capture-20260817.md](../reports/m0-legacy-capture-20260817.md)
+  §1 for the coupling inventory.
 
 ## Ported presentation and IO
 
@@ -114,10 +138,11 @@ refusal guard, inventory/ledger IO, all verb formatters, HELP.
 `--flag` eats a following non-`--` token, which silently corrupts flag-order
 edge cases. Whitelist value-taking flags: `by depth max-depth extent from
 glob heading headings kind max min preview run span strip-match to truncate
-windows within work-dir`; new here (consumed by later phases, whitelisted
-now so the parser doesn't need touching again): `only enter rules profile
-for in not-in out`. Boolean today: `comp composition help i recursive
-refresh`; new: `resolve`. **`--strip` is optional-value** (bare = `all`):
+windows within work-dir`; new here: `cache` (D39), and (consumed by later
+phases, whitelisted now so the parser doesn't need touching again) `only
+enter rules profile for in not-in out older-than keep unreferenced`.
+Boolean today: `comp composition help i recursive refresh`; new: `resolve
+json`. **`--strip` is optional-value** (bare = `all`):
 treat it as value-taking only when the next token is `all` or a comma-list
 whose every member is a known kind or `@profile`; otherwise bare. Anything
 not in either list is an error, not a guess.

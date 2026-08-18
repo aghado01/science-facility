@@ -103,16 +103,21 @@ oracle property tests (≥ 200 random sets). No engine wiring yet.
 
 New `mcp/mdnav_v2/mdnav.mjs` skeleton (the legacy file stays where it is):
 columnar claims table + `Doc`/`Corpus` shape; `MemoryStore` +
-`SidecarStore` sharing schema 3; corpus-scoped `index/` (inventory +
-`documents/Dnnn.json`) and run-scoped `<stamp>/reads.jsonl` + `run.json`;
-`runs prune`. **Populated by ported copies of the existing scanners** so
-outputs are unchanged while the plumbing lands. Ported presentation and IO
+`SidecarStore` sharing schema 3; the D39 layout — content-addressed IR
+under `$MDNAV_CACHE/ir/v3/<sha>.json`, investigation work-dir
+(`inventory.json`, `runs/<stamp>/{run.json,reads.jsonl}`, `LATEST`),
+explicit-or-bust work-dir resolution (no global `LAST` pointer), `runs
+prune`, `cache prune`; `--json` on `discover`/`index` (D40, the suite's
+seam). **Populated by ported copies of the existing scanners** so outputs
+are unchanged while the plumbing lands. Ported presentation and IO
 (survey dispositions "PORT"): `parseArgs` (whitelisted, F4), work-dir
 resolution + refusal guard, inventory/ledger IO, all verb formatters, HELP.
 
 - **Gates:** 3, 13, 14, 16 (goldens still byte-identical), suite §hygiene
   re-pointed at the new layout **without weakening** (dot-skip, refusal,
-  LATEST, `-2` suffix, precedence all still asserted).
+  work-dir `LATEST`, `-2` suffix, precedence all still asserted; the two
+  global-`LAST` assertions are replaced by "a `Dnnn` call with no work dir
+  dies naming the override", per D39).
 - **Depends on:** M0, M1. **Brief:**
   [01-spanset-claims.md](../briefs/01-spanset-claims.md) §2 (table, stores,
   hygiene), F4.

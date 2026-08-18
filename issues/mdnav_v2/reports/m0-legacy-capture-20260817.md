@@ -65,8 +65,16 @@ one inventory (D001…D0NN in call order).
    half of the sidecar. Then M2's strongest assertion is not stdout goldens
    but: *for every fixture, `legacyView(doc)` deep-equals the old sidecar
    minus `schema`/`mtimeMs`.* Recommend adding this as gate **16a** (M2).
-3. The global `LAST` pointer must survive in the CLI (brief 01 omits it). It
-   is irrelevant to the in-process server, which holds a `Corpus`.
+3. ~~The global `LAST` pointer must survive in the CLI.~~ **Superseded the
+   same day by D39:** the global `$TMP/mdnav/LAST` pointer is dropped;
+   work-dir resolution is explicit or bust (`--work-dir` > `$MDNAV_WORK_DIR`
+   > path-anchored default only when the call carries a path). The two
+   suite assertions at lines 461/483 are replaced by "a `Dnnn` call with no
+   work dir dies naming the override". Likewise the "sidecar layout" in item
+   2 is now the D39 layout (content-addressed IR under `$MDNAV_CACHE`;
+   inventory + `runs/<stamp>/` under the work dir), and the seam in item 1 is
+   `--json` on `discover`/`index` (D40) rather than a filesystem helper —
+   the suite asks the binary, not the disk.
 
 ## 2. Golden capture — procedure
 
