@@ -73,8 +73,8 @@ Measure-Row(entry, header) =
   Measure and render read one source — nothing to drift.
 - `content_span = codec(Content)` — the container codec (shard-format-notes
   §SPEC) over the processed content already in memory; `spanBytes` is computed
-  without allocating (`Measure-Content`, a counting fold over the same rule
-  table `Encode-Content` materializes with).
+  without allocating (`Measure-ContentSpan`, a counting fold over the same rule
+  table `ConvertTo-ContentSpan` materializes with).
 - **Termination is `NL` = LF alone; the LTS trailing `|` is dropped** (leaning,
   ledger #45 — the container is newline-delimited, one physical line per row,
   jsonl-like). Byte-exactness assumes **UTF-8 without BOM and `\n` only**; the
@@ -84,7 +84,7 @@ Measure-Row(entry, header) =
 
 **One grammar site, three callers.** `Format-Row → pieces` in
 `rs.core.container`; `Measure-Row` sums piece lengths (shards, plan time);
-`Render-Row` concatenates, writes, and returns the offset receipt (serialize,
+`Build-Row` concatenates to bytes and returns the offset receipt (serialize writes,
 write time). **Offsets remain the writer's receipt** — nobody derives an offset
 from `Measure-Row`; serialize never reports back into the plan.
 

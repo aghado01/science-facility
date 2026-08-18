@@ -1,7 +1,7 @@
 {
   "stage": "serialize",
   "module": "rs.core.serialize.psm1 — Invoke-Serialize(-Plan -Entries -Layout -OutDir [-Buffering]) → receipt. Emission loop over the plan; one path regardless of grouping; a per-shard writer (open → header row → rows → close) carrying the cursor and returning offsets as the receipt of the write. FILED, NOT STARTED (shard-container-brief).",
-  "$comment": "Export phase 2 — the ONLY stage that writes shard files. Consumes the plan (membership + order), the layout (header row text, columns, framing), and the entries (content), and renders via container's Render-HeaderRow / Render-Row so plan and file cannot disagree. Offsets are MEASURED here as a receipt — never derived from Measure-Row, never recovered from written bytes (LTS regex recovery is what must not come across). Serialize never reports back into the plan (no feedback loop). Writes UTF-8 without BOM, LF only, explicitly, regardless of platform. Buffers per shard, not per corpus. Emission column knobs are LAYOUT knobs (resolved before shards) — serialize has only I/O knobs; Compress is not inline (would break plan = file).",
+  "$comment": "Export phase 2 — the ONLY stage that writes shard files. Consumes the plan (membership + order), the layout (header row text, columns, framing), and the entries (content), and renders via container's Build-HeaderRow / Build-Row so plan and file cannot disagree. Offsets are MEASURED here as a receipt — never derived from Measure-Row, never recovered from written bytes (LTS regex recovery is what must not come across). Serialize never reports back into the plan (no feedback loop). Writes UTF-8 without BOM, LF only, explicitly, regardless of platform. Buffers per shard, not per corpus. Emission column knobs are LAYOUT knobs (resolved before shards) — serialize has only I/O knobs; Compress is not inline (would break plan = file).",
   "in": {
     "params": {
       "OutDir":    { "type": "path",   "note": "target directory; shard filename = <ShardStem>_<Key>.txt (.txt as reader accommodation, psr.header.json identity)" },
@@ -20,11 +20,11 @@
     "layout": {
       "HeaderRowText": { "from": "container.out.layout", "note": "written first in every shard, byte-identical" },
       "HeaderBytes":   { "from": "container.out.layout", "note": "cursor after the header row; first row's RowOffset" },
-      "Columns":       { "from": "container.out.layout", "note": "what Render-Row renders per entry — sources, types, widths, block sub-fields" },
+      "Columns":       { "from": "container.out.layout", "note": "what Build-Row renders per entry — sources, types, widths, block sub-fields" },
       "Framing":       { "from": "container.out.layout", "note": "delimiter, terminator, block, empty marker, encoding" }
     },
     "entry": {
-      "Content":      { "from": "assemble.out.entry.core", "note": "encoded by the container codec at render time (Encode-Content); content_bytes = its UTF-8 byte count" },
+      "Content":      { "from": "assemble.out.entry.core", "note": "encoded by the container codec at render time (ConvertTo-ContentSpan); content_bytes = its UTF-8 byte count" },
       "RelativePath": { "from": "assemble.out.entry.core", "note": "path column; row receipt key" }
     },
     "result_idx": {

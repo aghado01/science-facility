@@ -32,9 +32,9 @@
   "source_grammar": {
     "$comment": "`source` is READ BY CODE (rs.core.container Format-Row) and takes exactly one of four forms.",
     "entry.<PropertyPath>": "walk the property path on the IR entry (dots descend; absent → empty marker), e.g. entry.RelativePath, entry.ContentMeta.LineStats.Mean",
-    "plan.GlobalIdx":       "the value the shard plan assigned after packing (passed to Render-Row); fixed width from the layout",
-    "codec.bytes":          "Measure-Content(entry.Content) — UTF-8 byte width of the encoded content span, counted without materializing",
-    "codec.text":           "Encode-Content(entry.Content) — the encoded content span itself"
+    "plan.GlobalIdx":       "the value the shard plan assigned after packing (passed to Build-Row); fixed width from the layout",
+    "codec.bytes":          "Measure-ContentSpan(entry.Content) — UTF-8 byte width of the encoded content span, counted without materializing",
+    "codec.text":           "ConvertTo-ContentSpan(entry.Content) — the encoded content span itself"
   },
 
   "columns": {
@@ -97,6 +97,6 @@
   ],
 
   "row": {
-    "$comment": "There is no row declaration. A record row is this header declaration PROJECTED onto one entry: for each resolved column, in order, take `source`, render per `type` (and `width`), join with the field delimiter, terminate. The header names and types the value; the row carries the value. Measure-Row and Render-Row iterate the SAME resolved column list from the SAME object (rs.core.container's layout), so header and rows cannot disagree on count, order, or type — by construction, not by check. A separate row schema would be a second artifact that has to agree with the first: exactly the LTS drift class (row grammar written three times, nothing checks). Ledger #34 (header row IS the grammar), #46 (header is the superset, the row its shadow)."
+    "$comment": "There is no row declaration. A record row is this header declaration PROJECTED onto one entry: for each resolved column, in order, take `source`, render per `type` (and `width`), join with the field delimiter, terminate. The header names and types the value; the row carries the value. Measure-Row and Build-Row iterate the SAME resolved column list from the SAME object (rs.core.container's layout), so header and rows cannot disagree on count, order, or type — by construction, not by check. A separate row schema would be a second artifact that has to agree with the first: exactly the LTS drift class (row grammar written three times, nothing checks). Ledger #34 (header row IS the grammar), #46 (header is the superset, the row its shadow)."
   }
 }

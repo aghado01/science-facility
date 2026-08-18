@@ -72,10 +72,11 @@ Same construct can play different roles per relationship: `#Requires` is
 - **Planning never reads written bytes; it computes them forward** (narrowed
   2026-08-15 from "planning is not measurement"). Every byte of a shard file
   is ours and every input is in memory at plan time, so a row's serialized
-  size is a pure function — `Measure-Row(entry, header, idxWidth)` from the
-  one layout module (`rs.core.container`), the same function `Render-Row`
-  writes with. Shards packs on it exactly; there is no estimate. What stays
-  true: **offsets are the writer's receipt** (`Render-Row`'s running cursor),
+  size is a pure function — `Measure-Row(-Layout -Entry)` from the one
+  layout module (`rs.core.container`, landed 2026-08-17), over the same
+  `Format-Row` pieces `Build-Row` builds bytes from. Shards packs on it
+  exactly; there is no estimate. What stays true: **offsets are the writer's
+  receipt** (`Build-Row`'s cursor, written by serialize),
   never derived from a measure and never recovered from a written file; and
   never publish a layer 2 number (`ContentMeta.SpanBytes`) where a reader will
   spend it as an offset or an exact length. `SpanBytes` remains the

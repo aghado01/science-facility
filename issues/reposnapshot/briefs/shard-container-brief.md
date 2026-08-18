@@ -1,8 +1,8 @@
 # Shard container — header row, record rows, and the grammar that keeps them coherent — brief
 
 **Status:** **landed 2026-08-17** — `reposnapshot-v3/rs.core.container.psm1`
-(`Resolve-Layout` · `Measure-Content`/`Encode-Content` · `Format-Row` →
-`Measure-Row`/`Render-Row` · header-row pair), `tests/container.tests.ps1`
+(`Resolve-Layout` · `Measure-ContentSpan`/`ConvertTo-ContentSpan` · `Format-Row` →
+`Measure-Row`/`Build-Row` · header-row pair), `tests/container.tests.ps1`
 (70 asserts: plan = file by construction, codec SPEC rules 1–4 with
 measure == encode across a surrogate/terminator/control battery, offsets with
 inclusive ends and the seek round-trip, empty markers, width overflow, and the
@@ -78,7 +78,7 @@ in an ugly way and it is the reason a verbatim port is refused (ledger #5):
    positions together, because **positions are a receipt of the write, not a
    measurement of the artifact**:
    ```
-   Render-Row  entry, header, cursor
+   Build-Row  entry, header, cursor
                → @{ Bytes; RowOffset; RowMetaEnd; RowContentBegin; RowContentEnd; NextCursor }
    ```
    `cursor` is the byte position the row will occupy in its shard, so returned
@@ -88,8 +88,8 @@ in an ugly way and it is the reason a verbatim port is refused (ledger #5):
    · `row_content_end` (== begin when empty).
    The layout is a **dependency of two stages**, so it lives in its own small
    module — `rs.core.container` — as `Format-Row → pieces`, from which
-   `Measure-Row` (shards, sums lengths) and `Render-Row` (serialize, writes)
-   derive; likewise `Measure-Content` / `Encode-Content` over the one codec
+   `Measure-Row` (shards, sums lengths) and `Build-Row` (serialize, writes)
+   derive; likewise `Measure-ContentSpan` / `ConvertTo-ContentSpan` over the one codec
    rule table (count without allocating vs materialize), and the header-row
    pair. One grammar site, three callers; plan and file cannot disagree.
 3. **Grouping decides membership, not how bytes are written.** One emission
@@ -129,7 +129,7 @@ gidx<int:N> | path<str> | content_meta:{chars<int> words<int> ws_ratio<float> en
 every record row, so a record row has no schema of its own.** A row is the
 resolved header projected onto one entry: for each column in order, take the
 source, render per type and width, join, terminate. The header names and types
-the value; the row carries the value. `Measure-Row` and `Render-Row` iterate
+the value; the row carries the value. `Measure-Row` and `Build-Row` iterate
 the *same* resolved column list from the *same* layout object, so header and
 rows cannot disagree on count, order, or type — by construction, not by check.
 A separate row schema would be a second artifact that must agree with the

@@ -18,13 +18,13 @@ using namespace System.Collections.Generic
 
     Export phase 0. `Resolve-Layout` is computed ONCE per run (admiral holds
     it) and consumed three times: shards sums `Measure-Row`; serialize writes
-    `Render-Row`; manifest declares `HeaderRowText`. Plan and file cannot
+    `Build-Row`; manifest declares `HeaderRowText`. Plan and file cannot
     disagree because they were computed by the same function over the same
-    pieces (`Format-Row`). Offsets are the WRITER's receipt — `Render-Row`
+    pieces (`Format-Row`). Offsets are the WRITER's receipt — `Build-Row`
     returns them from its cursor; nothing derives an offset from a measure.
 
     Content codec (shard-format-notes §Content codec — SPEC): ONE rule table,
-    two functions — `Encode-Content` materializes, `Measure-Content` counts
+    two functions — `ConvertTo-ContentSpan` materializes, `Measure-ContentSpan` counts
     without materializing. Rules: every line terminator (LF, CRLF, CR, NEL,
     LS, PS, VT, FF) → the two characters `\n`; backslash is never doubled;
     remaining C0 controls and DEL are stripped; TAB stays literal. Under
@@ -36,8 +36,8 @@ using namespace System.Collections.Generic
     Header row = the schema; a record row is the header projected onto an
     entry — there is no row schema (ledger #34/#46).
 
-    Public: Resolve-Layout · Measure-Content · Encode-Content · Format-Row ·
-    Measure-Row · Render-Row · Measure-HeaderRow · Render-HeaderRow.
+    Public: Resolve-Layout · Measure-ContentSpan · ConvertTo-ContentSpan · Format-Row ·
+    Measure-Row · Build-Row · Measure-HeaderRow · Build-HeaderRow.
 #>
 
 $script:DeclarationPath = Join-Path $PSScriptRoot 'schema/psr.header.json'
@@ -56,7 +56,7 @@ $script:CodecRegex = [regex]::new(
 $script:CodecBreak = '\n'      # two characters: backslash, n
 $script:CodecBreakBytes = 2
 
-function Encode-Content
+function ConvertTo-ContentSpan
 {
     <#
     .SYNOPSIS
@@ -71,16 +71,16 @@ function Encode-Content
     })
 }
 
-function Measure-Content
+function Measure-ContentSpan
 {
     <#
     .SYNOPSIS
-        UTF-8 byte width of Encode-Content($Content) — counted, not materialized.
+        UTF-8 byte width of ConvertTo-ContentSpan($Content) — counted, not materialized.
     .DESCRIPTION
         Whole-string byte count, then per match: a terminator becomes 2 bytes
         (delta = 2 − its own width), a stripped control becomes 0 (delta = −1).
         Every match is a BMP non-surrogate, so the remainder's byte count is
-        untouched and the sum is exact against Encode-Content.
+        untouched and the sum is exact against ConvertTo-ContentSpan.
     #>
     [CmdletBinding()]
     param([AllowNull()][AllowEmptyString()][string]$Content)
@@ -311,7 +311,7 @@ function Resolve-Layout
 }
 
 # =============================================================================
-# PUBLIC — Format-Row (pieces) → Measure-Row (sum) / Render-Row (write)
+# PUBLIC — Format-Row (pieces) → Measure-Row (sum) / Build-Row (bytes + receipt)
 # =============================================================================
 function Format-Row
 {
@@ -332,12 +332,12 @@ function Format-Row
     )
     $content = Get-Prop $Entry 'Content'
     if ($null -eq $content) { $content = '' }
-    $contentBytes = Measure-Content -Content ([string]$content)
+    $contentBytes = Measure-ContentSpan -Content ([string]$content)
 
     $pieces = [List[string]]::new()
     foreach ($col in $Layout.Columns)
     {
-        if ($col.Source -eq 'codec.text') { continue }   # content — rendered by Render-Row only
+        if ($col.Source -eq 'codec.text') { continue }   # content — rendered by Build-Row only
 
         if ($col.Type -eq 'block')
         {
@@ -361,7 +361,7 @@ function Resolve-SourceValue ([string]$Source, [object]$Entry, [object]$GlobalId
     # psr.header.json source_grammar — exactly four forms.
     if ($Source -eq 'plan.GlobalIdx') { return $GlobalIdx }
     if ($Source -eq 'codec.bytes')    { return $ContentBytes }
-    if ($Source -eq 'codec.text')     { throw "rs.core.container: codec.text is materialized only by Render-Row." }
+    if ($Source -eq 'codec.text')     { throw "rs.core.container: codec.text is materialized only by Build-Row." }
     if ($Source -like 'entry.*')      { return Resolve-EntryPath $Entry ($Source.Substring(6) -split '\.') }
     throw "rs.core.container: unknown source '$Source' — psr.header.json source_grammar allows entry.<path>, plan.GlobalIdx, codec.bytes, codec.text."
 }
@@ -390,12 +390,12 @@ function Measure-Row
     return $bytes
 }
 
-function Render-Row
+function Build-Row
 {
     <#
     .SYNOPSIS
-        Render an entry's row to bytes at a cursor and return the writer's
-        receipt: the bytes and the offsets they occupy (LTS semantics: 0-based,
+        Build an entry's row — the bytes at a cursor plus the writer's
+        receipt (serialize writes the bytes; nothing here touches a stream): the bytes and the offsets they occupy (LTS semantics: 0-based,
         end offsets INCLUSIVE; RowContentEnd == RowContentBegin when empty).
     .OUTPUTS
         @{ Bytes; RowOffset; RowMetaEnd; RowContentBegin; RowContentEnd;
@@ -408,11 +408,11 @@ function Render-Row
         [Parameter(Mandatory)] [long]$Cursor,
         [AllowNull()] [object]$GlobalIdx = $null
     )
-    if ($Layout.IdxWidth -gt 0 -and $null -eq $GlobalIdx) { throw "Render-Row: layout has gidx enabled — GlobalIdx is required." }
+    if ($Layout.IdxWidth -gt 0 -and $null -eq $GlobalIdx) { throw "Build-Row: layout has gidx enabled — GlobalIdx is required." }
     $f = Format-Row -Layout $Layout -Entry $Entry -GlobalIdx $GlobalIdx
     $D = $Layout.Framing.FieldDelimiter
     $prefix = @($f.Pieces) -join $D
-    $encoded = Encode-Content -Content $f.Content
+    $encoded = ConvertTo-ContentSpan -Content $f.Content
     $text = $prefix + $D + $encoded + $Layout.Framing.RecordTerminator
     $bytes = $script:Utf8.GetBytes($text)
 
@@ -441,7 +441,7 @@ function Measure-HeaderRow
     return $Layout.HeaderBytes
 }
 
-function Render-HeaderRow
+function Build-HeaderRow
 {
     [CmdletBinding()]
     param([Parameter(Mandatory)] [PSCustomObject]$Layout)
@@ -449,6 +449,6 @@ function Render-HeaderRow
 }
 
 Export-ModuleMember -Function @(
-    'Resolve-Layout', 'Measure-Content', 'Encode-Content', 'Format-Row',
-    'Measure-Row', 'Render-Row', 'Measure-HeaderRow', 'Render-HeaderRow'
+    'Resolve-Layout', 'Measure-ContentSpan', 'ConvertTo-ContentSpan', 'Format-Row',
+    'Measure-Row', 'Build-Row', 'Measure-HeaderRow', 'Build-HeaderRow'
 )

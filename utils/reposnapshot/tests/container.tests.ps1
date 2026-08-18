@@ -12,12 +12,12 @@ Set-StrictMode -Version Latest
       1. Resolve-Layout — required-only default; optional columns; widths from
          EntryCount; admissibility; MetaFields order/default; presence warning;
          the two order invariants (content last, content_bytes before it).
-      2. Codec — Encode-Content SPEC rules 1–4; Measure-Content == UTF-8 width
-         of Encode-Content over a battery incl. multibyte, surrogate pairs, a
+      2. Codec — ConvertTo-ContentSpan SPEC rules 1–4; Measure-ContentSpan == UTF-8 width
+         of ConvertTo-ContentSpan over a battery incl. multibyte, surrogate pairs, a
          lone surrogate, every terminator kind, controls, backslashes.
-      3. Header row — Render-HeaderRow bytes == HeaderBytes; LF-terminated; no
+      3. Header row — Build-HeaderRow bytes == HeaderBytes; LF-terminated; no
          trailing delimiter; UTF-8 no BOM.
-      4. Rows — Measure-Row == Render-Row Bytes.Length (plan = file, by
+      4. Rows — Measure-Row == Build-Row Bytes.Length (plan = file, by
          construction); exact text; offsets (0-based, inclusive ends,
          content_bytes adjacency); gidx zero-pad and width overflow; float
          formatting; empty markers for absent sub-fields / absent block;
@@ -62,9 +62,7 @@ function Assert-True ([bool]$Condition, [string]$Label, [string]$Detail = '')
     }
 }
 
-# Render-/Encode- are the brief's vocabulary (shard-container-brief), not
-# approved verbs — suppress the discoverability warning, keep the names.
-Import-Module (Join-Path $v3 'rs.core.container.psm1') -Force -DisableNameChecking
+Import-Module (Join-Path $v3 'rs.core.container.psm1') -Force
 $utf8 = [System.Text.UTF8Encoding]::new($false)
 
 function New-Header ([int]$EntryCount, [hashtable]$Elements = @{})
@@ -132,16 +130,16 @@ try
     Assert-True ($names[-1] -eq 'content' -and $names[-2] -eq 'content_bytes') 'content last; content_bytes immediately before it'
 
     # -----------------------------------------------------------------------
-    Enter-Section '2. Codec — Encode-Content / Measure-Content'
+    Enter-Section '2. Codec — ConvertTo-ContentSpan / Measure-ContentSpan'
     # -----------------------------------------------------------------------
-    Assert-True ((Encode-Content "a`r`nb`rc`nd") -eq 'a\nb\nc\nd') 'CRLF, CR, LF → \n (two chars), kind not preserved' (Encode-Content "a`r`nb`rc`nd")
-    Assert-True ((Encode-Content "x`u{0085}y`u{2028}z`u{2029}w`u{000B}v`u{000C}u") -eq 'x\ny\nz\nw\nv\nu') 'NEL, LS, PS, VT, FF → \n'
-    Assert-True ((Encode-Content 'C:\Users\me\n') -eq 'C:\Users\me\n') 'backslash never doubled; literal \n in source passes verbatim'
-    Assert-True ((Encode-Content "a`tb") -eq "a`tb") 'TAB stays literal'
-    Assert-True ((Encode-Content "a`0b`u{0001}c`u{007F}d`u{001B}e") -eq 'abcde') 'NUL, SOH, DEL, ESC stripped'
-    Assert-True ((Encode-Content '') -eq '' -and (Encode-Content $null) -eq '') 'empty / null → empty'
-    Assert-True ((Measure-Content '') -eq 0 -and (Measure-Content $null) -eq 0) 'empty / null → 0 bytes'
-    $enc = Encode-Content "line1`r`nline2`n"
+    Assert-True ((ConvertTo-ContentSpan "a`r`nb`rc`nd") -eq 'a\nb\nc\nd') 'CRLF, CR, LF → \n (two chars), kind not preserved' (ConvertTo-ContentSpan "a`r`nb`rc`nd")
+    Assert-True ((ConvertTo-ContentSpan "x`u{0085}y`u{2028}z`u{2029}w`u{000B}v`u{000C}u") -eq 'x\ny\nz\nw\nv\nu') 'NEL, LS, PS, VT, FF → \n'
+    Assert-True ((ConvertTo-ContentSpan 'C:\Users\me\n') -eq 'C:\Users\me\n') 'backslash never doubled; literal \n in source passes verbatim'
+    Assert-True ((ConvertTo-ContentSpan "a`tb") -eq "a`tb") 'TAB stays literal'
+    Assert-True ((ConvertTo-ContentSpan "a`0b`u{0001}c`u{007F}d`u{001B}e") -eq 'abcde') 'NUL, SOH, DEL, ESC stripped'
+    Assert-True ((ConvertTo-ContentSpan '') -eq '' -and (ConvertTo-ContentSpan $null) -eq '') 'empty / null → empty'
+    Assert-True ((Measure-ContentSpan '') -eq 0 -and (Measure-ContentSpan $null) -eq 0) 'empty / null → 0 bytes'
+    $enc = ConvertTo-ContentSpan "line1`r`nline2`n"
     Assert-True ($enc -notmatch "[`r`n]") 'encoded content contains no raw line terminators (one physical line per row)'
 
     $battery = @(
@@ -162,29 +160,29 @@ try
     $allEqual = $true; $detail = ''
     foreach ($s in $battery)
     {
-        $m = Measure-Content $s
-        $e = $utf8.GetByteCount((Encode-Content $s))
+        $m = Measure-ContentSpan $s
+        $e = $utf8.GetByteCount((ConvertTo-ContentSpan $s))
         if ($m -ne $e) { $allEqual = $false; $detail += "[$($s.Substring(0, [Math]::Min(20, $s.Length)))… measure=$m encode=$e] " }
     }
-    Assert-True $allEqual 'Measure-Content == utf8(Encode-Content) across the battery (incl. surrogates, every terminator, controls)' $detail
-    Assert-True ((Measure-Content "ab`ncd") -eq 6) 'LF: 1 byte → 2 (ab\ncd = 6)'
-    Assert-True ((Measure-Content "ab`r`ncd") -eq 6) 'CRLF: 2 bytes → 2'
-    Assert-True ((Measure-Content "ab`u{2028}cd") -eq 6) 'LS: 3 bytes → 2'
-    Assert-True ((Measure-Content "ab`0cd") -eq 4) 'NUL: 1 byte → 0'
-    Assert-True ((Measure-Content 'é') -eq 2 -and (Measure-Content '😀') -eq 4) 'multibyte counted in UTF-8'
+    Assert-True $allEqual 'Measure-ContentSpan == utf8(ConvertTo-ContentSpan) across the battery (incl. surrogates, every terminator, controls)' $detail
+    Assert-True ((Measure-ContentSpan "ab`ncd") -eq 6) 'LF: 1 byte → 2 (ab\ncd = 6)'
+    Assert-True ((Measure-ContentSpan "ab`r`ncd") -eq 6) 'CRLF: 2 bytes → 2'
+    Assert-True ((Measure-ContentSpan "ab`u{2028}cd") -eq 6) 'LS: 3 bytes → 2'
+    Assert-True ((Measure-ContentSpan "ab`0cd") -eq 4) 'NUL: 1 byte → 0'
+    Assert-True ((Measure-ContentSpan 'é') -eq 2 -and (Measure-ContentSpan '😀') -eq 4) 'multibyte counted in UTF-8'
 
     # -----------------------------------------------------------------------
     Enter-Section '3. Header row'
     # -----------------------------------------------------------------------
-    $hb = Render-HeaderRow -Layout $L1
-    Assert-True ($hb.Length -eq $L1.HeaderBytes -and (Measure-HeaderRow -Layout $L1) -eq $L1.HeaderBytes) 'Render-HeaderRow bytes == HeaderBytes == Measure-HeaderRow'
+    $hb = Build-HeaderRow -Layout $L1
+    Assert-True ($hb.Length -eq $L1.HeaderBytes -and (Measure-HeaderRow -Layout $L1) -eq $L1.HeaderBytes) 'Build-HeaderRow bytes == HeaderBytes == Measure-HeaderRow'
     Assert-True ($hb[-1] -eq 10 -and $hb[-2] -ne 13) 'LF-terminated, no CR'
     Assert-True (-not ($hb[0] -eq 0xEF -and $hb[1] -eq 0xBB)) 'no BOM'
     $ht = $utf8.GetString($hb)
     Assert-True (-not $ht.TrimEnd("`n").EndsWith('|') -and -not $ht.TrimEnd("`n").EndsWith(' ')) 'no trailing delimiter'
 
     # -----------------------------------------------------------------------
-    Enter-Section '4. Rows — Format / Measure / Render'
+    Enter-Section '4. Rows — Format / Measure / Build'
     # -----------------------------------------------------------------------
     $entry = [pscustomobject]@{
         RelativePath = 'src/Foo.cs'
@@ -204,8 +202,8 @@ try
     Assert-True ($f.Pieces[3] -eq "$expectedBytes" -and $f.ContentBytes -eq $expectedBytes) 'content_bytes = measured encoded width'
 
     $mr = Measure-Row -Layout $L1 -Entry $entry
-    $rr = Render-Row -Layout $L1 -Entry $entry -Cursor 138 -GlobalIdx 42
-    Assert-True ($mr -eq $rr.Bytes.Length) 'PLAN = FILE: Measure-Row == Render-Row Bytes.Length' "measure=$mr render=$($rr.Bytes.Length)"
+    $rr = Build-Row -Layout $L1 -Entry $entry -Cursor 138 -GlobalIdx 42
+    Assert-True ($mr -eq $rr.Bytes.Length) 'PLAN = FILE: Measure-Row == Build-Row Bytes.Length' "measure=$mr render=$($rr.Bytes.Length)"
     $rowText = $utf8.GetString($rr.Bytes)
     $expectedRow = "0042 | src/Foo.cs | {30 5 0.4037 4.2516} | $expectedBytes | $expectedContent`n"
     Assert-True ($rowText -eq $expectedRow) 'row text exact' $rowText
@@ -233,24 +231,24 @@ try
     $bare = [pscustomobject]@{ RelativePath = 'b.txt'; Content = 'y' }
     $fb = Format-Row -Layout $L1 -Entry $bare -GlobalIdx 0
     Assert-True ($fb.Pieces[2] -eq '{   }') 'absent block renders all empty markers' "'$($fb.Pieces[2])'"
-    Assert-True ((Measure-Row -Layout $L1 -Entry $bare) -eq (Render-Row -Layout $L1 -Entry $bare -Cursor 0 -GlobalIdx 0).Bytes.Length) 'sparse row: measure == render'
+    Assert-True ((Measure-Row -Layout $L1 -Entry $bare) -eq (Build-Row -Layout $L1 -Entry $bare -Cursor 0 -GlobalIdx 0).Bytes.Length) 'sparse row: measure == render'
 
     # empty content → LTS convention RowContentEnd == RowContentBegin, ContentBytes 0
     $empty = [pscustomobject]@{ RelativePath = 'e.txt'; Content = '' }
-    $re = Render-Row -Layout $L0 -Entry $empty -Cursor 10
+    $re = Build-Row -Layout $L0 -Entry $empty -Cursor 10
     Assert-True ($re.ContentBytes -eq 0 -and $re.RowContentEnd -eq $re.RowContentBegin) 'empty content: ContentBytes 0, RowContentEnd == RowContentBegin (LTS convention)'
     Assert-True ((Measure-Row -Layout $L0 -Entry $empty) -eq $re.Bytes.Length) 'empty content: measure == render'
 
     # gidx: required when enabled; width overflow is a plan-time error
-    $threw = $null; try { Render-Row -Layout $L1 -Entry $entry -Cursor 0 | Out-Null } catch { $threw = $_.Exception.Message }
-    Assert-True ($null -ne $threw -and $threw -like '*GlobalIdx is required*') 'Render-Row without GlobalIdx under gidx throws' $threw
-    $threw = $null; try { Render-Row -Layout $L1 -Entry $entry -Cursor 0 -GlobalIdx 12345 | Out-Null } catch { $threw = $_.Exception.Message }
+    $threw = $null; try { Build-Row -Layout $L1 -Entry $entry -Cursor 0 | Out-Null } catch { $threw = $_.Exception.Message }
+    Assert-True ($null -ne $threw -and $threw -like '*GlobalIdx is required*') 'Build-Row without GlobalIdx under gidx throws' $threw
+    $threw = $null; try { Build-Row -Layout $L1 -Entry $entry -Cursor 0 -GlobalIdx 12345 | Out-Null } catch { $threw = $_.Exception.Message }
     Assert-True ($null -ne $threw -and $threw -like '*exceeds the fixed width*') 'gidx wider than IdxWidth throws (never widened silently)' $threw
-    $rr0 = Render-Row -Layout $L0 -Entry $entry -Cursor 0
+    $rr0 = Build-Row -Layout $L0 -Entry $entry -Cursor 0
     Assert-True (($utf8.GetString($rr0.Bytes)) -like "src/Foo.cs | $expectedBytes | *") 'required-only layout: no gidx, no block'
 
     # measure is content-agnostic about gidx value (fixed width)
-    Assert-True ((Measure-Row -Layout $L1 -Entry $entry) -eq (Render-Row -Layout $L1 -Entry $entry -Cursor 0 -GlobalIdx 9999).Bytes.Length) 'measure holds for any gidx value of the declared width'
+    Assert-True ((Measure-Row -Layout $L1 -Entry $entry) -eq (Build-Row -Layout $L1 -Entry $entry -Cursor 0 -GlobalIdx 9999).Bytes.Length) 'measure holds for any gidx value of the declared width'
 
     # -----------------------------------------------------------------------
     Enter-Section '5. Value walk — every layout source resolves on a real rs-content_meta entry'
@@ -277,7 +275,7 @@ try
     Assert-True ($unresolved.Count -eq 0) 'every entry.* source in the full layout resolves on the enriched entry' ($unresolved -join ', ')
     $fr = Format-Row -Layout $Lall -Entry $enriched -GlobalIdx 0
     Assert-True ($fr.Pieces[2] -notmatch '\{.*  .*\}' ) 'full block renders with no empty markers on a real entry' $fr.Pieces[2]
-    Assert-True ((Measure-Row -Layout $Lall -Entry $enriched) -eq (Render-Row -Layout $Lall -Entry $enriched -Cursor 0 -GlobalIdx 0).Bytes.Length) 'real entry: measure == render'
+    Assert-True ((Measure-Row -Layout $Lall -Entry $enriched) -eq (Build-Row -Layout $Lall -Entry $enriched -Cursor 0 -GlobalIdx 0).Bytes.Length) 'real entry: measure == render'
 }
 catch
 {

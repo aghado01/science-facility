@@ -8,12 +8,12 @@
 layout object three stages consume; validates admissibility, the two order
 invariants (content last, content_bytes before it), and warns — never decides —
 on ContentMeta presence from `Header.Elements`. Codec: ONE compiled regex rule
-table, two functions — `Encode-Content` materializes, `Measure-Content` counts
+table, two functions — `ConvertTo-ContentSpan` materializes, `Measure-ContentSpan` counts
 (whole-string UTF-8 width ± per-match deltas; exact against encode incl.
 surrogates); SPEC rules 1–4 (all terminators → `\n`, backslash never doubled,
 C0/DEL stripped, TAB literal). `Format-Row` is the one layout function
-(pieces, content never materialized); `Measure-Row` sums, `Render-Row` writes
-and returns the receipt (0-based, inclusive ends, `RowContentEnd ==
+(pieces, content never materialized); `Measure-Row` sums, `Build-Row` builds
+bytes and returns the receipt (0-based, inclusive ends, `RowContentEnd ==
 RowContentBegin` when empty — LTS convention kept); header-row pair. Fixed
 widths are plan-time bounds — overflow throws. UTF-8 no BOM, LF only.
 `psr.header.json`: `source` tightened to a four-form grammar READ BY CODE
@@ -22,8 +22,11 @@ moved before `entropy` (declaration order = wire order; LTS parity).
 `tests/container.tests.ps1` (70) added to run-all; includes the value walk of
 every source against a real rs-content_meta entry (contracts check #5, in
 its natural home). Functions at the boundary, PSCustomObject layout —
-per-char work is regex, per-row overhead negligible. `Render-`/`Encode-` are
-brief vocabulary, imported with -DisableNameChecking. Battery 16 · 1007 · 0.
+per-char work is regex, per-row overhead negligible. Verbs are approved and
+paired: `ConvertTo-ContentSpan` / `Measure-ContentSpan` (the span as written /
+its byte width), `Build-Row` / `Build-HeaderRow` (bytes + receipt; serialize
+writes) — the brief's Render-/Encode- wording renamed 2026-08-17 so no
+-DisableNameChecking is needed anywhere. Battery 16 · 1007 · 0.
 
 ## 2026-08-17 — processors: rs-attributes → rs-content_meta
 
