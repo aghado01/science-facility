@@ -190,7 +190,8 @@ order.
 | `c` | html-comment | | `m` | math-block |
 | `l` / `i` | list / list-item | | `t` | table |
 | `d` | footnote-def | | `fm` | frontmatter |
-| `S` / `W` | projections: break segments / byte windows cut *under* a node (`/H0007/S3`, `/H0007/W2`) | | `elided` | placeholder piece under a read (`/H0007/elided1`, brief 05) |
+| `S` / `W` | projections: break segments / byte windows cut *under* a node (`/H0007/S3`, `/H0007/W2`) — every piece synthetic | | `R` | a **gap** piece in a region-kind basis cut (`--by fence`, `--by footnote-def`): the region pieces of such a cut are not renumbered — they keep their own claim path (`/H0007/f1`, `/H0007/f2`) — only the space *between* them is synthetic and gets `/H0007/R1`, `/H0007/R2`, … |
+| `elided` | placeholder piece under a read (`/H0007/elided1`, brief 05) | | | |
 | *(name)* | inline kinds spelled out: `link1`, `footnote-ref2`, `data-uri1`, `html-tag3`, `custom:pixel1` | | | |
 
 Root spine ids nest in the path (`/H0001/H0002` for an H2 under an H1)
@@ -211,8 +212,8 @@ design and counting rows would double-count. **"Give me section 1"** is one
 selection with two equivalent forms — `path startsWith /H0001` (top-down)
 and `span ⊂ span(H0001)` (bottom-up) — and their equality *is* the
 agreement gate (8c); materialize the union and you get the section with
-everything nested in it; cut with `--depth`/`--enter`/`--only` and you get
-a coarser view of the same rows.
+everything nested in it; cut with `--depth`/`--enter`/`--select`/`--ignore`
+(D43) and you get a coarser view of the same rows.
 
 ## 5. The surface — telescope, not chunks
 
@@ -234,34 +235,36 @@ Because the kind vocabulary is universal, the census makes "know more"
 predictable: at any node the reader knows what drilling could reveal and how
 it is encoded, without opening it. Every response is a typed table or bytes
 (D16); the verbs are tree operations — **`tree`** (children of a node at a
-cut), **`read`** (materialize a node: unit / subtree / `--only` / `--strip`),
-**`find`** (pattern under a node → rows), **`status`** (coverage, residue,
-what is loaded) — and the legacy verbs are projections of them
-(`outline` = `tree` at the heading cut with legacy formatting, `marks` =
-`tree --kind`, `profile` = census + residue at the root, `locate` = `find`,
-`coverage` = `status`). Framing ([../briefs/05-framing-p0.md](../briefs/05-framing-p0.md))
-wraps *whatever comes back*; discovery never speaks in chunks.
+cut), **`read`** (materialize a node or a multi-node/predicate selection as
+one reading-order packet, §4 above; `--select`/`--ignore`/`--lens`, D43,
+D44), **`query`** (any field/predicate combination under a node → rows),
+**`search`** = `query --match <re>` (text pattern, disposition-aware),
+**`status`** (coverage, residue, what is loaded) — and the legacy verbs are
+projections of them (`outline` = `tree` at the heading cut with legacy
+formatting, `marks` = `tree --kind`, `profile` = census + residue at the
+root, `locate` = `search`, `coverage` = `status`). Framing
+([../briefs/05-framing-p0.md](../briefs/05-framing-p0.md)) wraps *whatever
+comes back*; discovery never speaks in chunks.
 
 **The telescope knobs, restated:** `--depth` = the level at which the spine
 recursion is cut for this view; `--enter <kinds>` = which container windows
 are transparent for that cut; `--within <addr>` = which node is `W`; `--by
 <spec>` = swap the boundary spec at that node (breaks, windows, a kind, a
-pattern) — a projection, addressed under the node; `--only`/`--strip <kinds>`
-= which leaf kinds are materialized. All are queries over the same rows.
+pattern) — a projection, addressed under the node (`S`/`R`/`W`, D43);
+`--select`/`--ignore <predicates|@lens>` = which rows are materialized, by
+any field (D43, D44). All are queries over the same rows.
 
-## 6. What this changes in the plan (edits to make)
+## 6. Status
 
-| document | change |
-|---|---|
-| canon `mdnav_v2_design-brief.md` §Shape | items 2–5 gain "composed as [structure brief] §2–§4"; item 2's column list defers to §4 here; Non-goal "no CommonMark parser" → "no *inline* parser; block structure by shape and block conditions" |
-| `briefs/01-spanset-claims.md` §2 | columns per §4 (`ord`, `path`, `digest` explicit; `containers[]` derived); the kind table stays; add the path-code table |
-| `briefs/02-collectors-parity.md` §3 | collectors are `carve` / `partition` / `collect`; fence = state machine emitting matched delimiters, parity for residue only; `<!--`/`-->` is a pair |
-| `briefs/03-containment-queries.md` §4 | replaced by §2–§3 here (recursion + inversion + residue kinds); §5 addressing per §4 here; `--enter` semantics unchanged; `S`/`R` → projections under a node |
-| `briefs/04-repl-contract.md` | export surface + REPL contract expressed over `tree`/`read`/`find`/`status`; census column is part of every `tree` row |
-| `briefs/05-framing-p0.md` | address bullet: `Dnnn:<path>@dig`; placeholder = `…/elidedN` in the same grammar |
-| `planning/decisions.md` | D41 (this brief; amends D11, D13) |
-| `reports/m0-legacy-capture-20260817.md` §1 | `legacyView(doc)` is a *projection of the tree* into the legacy sidecar shape; `--json` (D40) returns rows per §4 |
-| survey §429–471, §592–604 | "ids over all heading claims" → root spine flat, nested by path |
+All of canon, briefs 01–05, `planning/decisions.md` (D41–D44), and the M0
+report now carry this brief's facts directly — no section here restates
+them. The query language (row-field predicates, `select`/`ignore`, lenses,
+node-scoped `S`/`R`/`W`, multi-node `read` packets) landed in
+[03-containment-queries.md](../briefs/03-containment-queries.md) §5 and
+[04-repl-contract.md](../briefs/04-repl-contract.md) as D43/D44,
+2026-08-18. The survey's heading-numbering language (§429–471, §592–604)
+still reads "ordinal over all heading claims" — harmless as a record of the
+legacy file's own behavior, not a live spec — and does not need amending.
 
 ## 7. Non-goals (reaffirmed, one sharpened)
 

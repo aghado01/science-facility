@@ -1,4 +1,4 @@
-# Phase 03 — containment, relations, profiles, generalized queries
+# Phase 03 — containment, relations, lenses, generalized queries
 
 > **Role:** execution-ready spec for roadmap milestone **M4**. Canon is
 > [mdnav_v2_design-brief.md](../design/mdnav_v2_design-brief.md); depends on the claims table
@@ -26,8 +26,8 @@ cached in the sidecar) and returned as ordinal pairs plus residue:
 | `contains` | any → region claim | geometry (nearest container) | crossings |
 
 Relations are the query-form of "clickable": from a ref, its def span; from
-a unit, the foot-matter it cites (`read --only footnote-def --for H0007`);
-from a doc, its dangling refs (`profile` residue). They are **not** doccer's
+a unit, the foot-matter it cites (`read --select "kind:footnote-def via
+footnote H0007"`); from a doc, its dangling refs (`profile` residue). They are **not** doccer's
 `ClaimPairView` — no Allen labels, no general occurrence relation — just the
 three keyed joins Markdown idiom actually defines, plus containment.
 
@@ -42,7 +42,7 @@ state-machine collectors of phase 02) → **mask** `M = W \ regions` →
 every region whose kind is enterable under `C` — a new window, a switched
 context: inside `blockquote` the heading rule reads through `^ {0,3}>
 {0,3}#{1,6}\s`; inside `html-block` it is the ordinary ATX rule; inside
-`fence` nothing runs unless a profile says so; inside `list-item` the
+`fence` nothing runs unless a lens says so; inside `list-item` the
 continuation lines are the window — → **collect** inline leaves over `M`.
 Everything found by re-entry is an ordinary claim **in source coordinates**
 (no derived masters, no prefix stripping, no OffsetMap — doccer defers that
@@ -76,7 +76,7 @@ model has basis / depth / extent; this adds **enter**:
   keeps resolving to the same bytes.
 - A heading is *active* for units/outline/coverage when its **level ≤ depth
   AND its container chain is transparent**. The document root is transparent;
-  region kinds become transparent via `--enter <kinds>` (or a profile). Default
+  region kinds become transparent via `--enter <kinds>` (or a lens). Default
   `--enter` is **empty**: `# x` inside `<details>` or a blockquote is not a
   unit boundary at top level; `outline` shows the containing region as one
   unit with a `contains: heading×2` note; `outline --enter html-block` (or
@@ -92,75 +92,138 @@ silently omitted.
 ## 5. Queries — projections over claims
 
 Every verb becomes a query with named policies; existing flags are the
-first policies.
+first policies. Query design is canon (D43, D44): three separable
+concerns, previously conflated into one flag per verb — **scope** (which
+node's window is in play), **selection** (which rows under it, by any
+combination of fields), and **disposition** (`select` vs `ignore`, and
+whether a lens applies by default).
 
-- **Selection**: a set of claim ordinals from predicates (`kind in …`,
-  `container == …`, `within [S,E)`, `ruleId`, `priority ≥`) with
+- **Fields and operators.** Every row carries `path`, `kind`, `level`,
+  `span`, `ord`, `digest`, `title` (heading claims), plus derived tags from
+  residue and relations (`dangling`, `cited-by`, `unused`, …) and `census`
+  (what a container's subtree holds). A predicate names a field and an
+  operator: `path = <p>` / `path under <p>` (prefix — what `--within`
+  compiles to) / `path glob <pattern>`; `kind in <k,…>`; `level <= n`;
+  `span contains <byte>` / `span within a..b`; `ord a..b`; `title ~ <re>`;
+  `digest = <d>`; `has <tag>`; `census has <kind>`; and the relation join
+  `via <relation> <node>` — rows on the far side of a named relation from a
+  node's rows (`kind:footnote-def via footnote H0007` = the defs cited by
+  refs found in H0007, replacing today's `--for`). Predicates intersect
+  unless the caller asks for union.
+- **`path glob`** ports the glob→regex compiler from reposnapshot's
+  `rs.core.membrane.psm1` (`GlobCompiler.TranslateGlob`/`CompileGlobs`) —
+  `**/` → `(.+/)?`, `*` → `[^/]*`, `[!…]` classes, anchored when the
+  pattern contains `/` — unchanged, because mdnav paths are `/`-separated
+  and kind-coded the same shape: `**/q*` (every blockquote), `H0007/**`
+  (everything under section 7), `**/footnote-*` (every citation kind). One
+  named departure from that module's `Ignore` semantics (D43): membrane
+  prunes an excluded directory so nothing under it is ever re-included;
+  mdnav cannot, because a match implies its subtree **by span**, not by
+  directory pruning, and a citation island inside an ignored `<div>` must
+  stay rescuable. So every node is tested independently against the full
+  ordered pattern list; `!` on a descendant carves its span back out of an
+  ancestor's ignored coverage rather than being unreachable. The
+  dual-semantics idea — one compiled list, one truth table, interpreted as
+  `select` or `ignore` at the call site, never two code paths — is kept.
+- **Selection** = a set of claim ordinals from the predicates above, with
   union/intersect/subtract; `.coverage()` → `SpanSet` (identity dropped —
   doccer `ClaimSelection.Coverage`).
-- **Suppression** = `coverage(selection)`; the caller names the suppressors.
-- **Profiles** are named suppression/entry/emphasis policies as **data**,
-  `mcp/mdnav_v2/profiles/*.json`:
+- **Select / ignore** replace suppression-as-a-flag. Both take an **ordered
+  predicate list**, last-match-wins, `!` reverses the immediately preceding
+  match (rescue under `ignore`, un-keep under `select`) — reposnapshot's
+  dual truth table (D43). `ignore(list)` subtracts `coverage(list)` from
+  the scope; `select(list)` intersects it. Fail-fast: an empty or
+  self-annihilated `select` list is an error, never "select nothing."
+- **Lenses** (D44 — renames "profile" for this concept; the census verb
+  `profile` and D29's token profiles are unrelated and keep their names)
+  are named, saved predicate lists as **data**, `mcp/mdnav_v2/lenses/*.json`:
   ```json
   { "name": "chat-export", "rules": ["core"],
-    "strip": ["html-tag", "html-block", "data-uri", "signed-url"],
-    "keep":  ["footnote-ref", "footnote-def", "link-def"],
+    "ignore": ["kind:html-tag", "kind:html-block", "kind:data-uri", "kind:signed-url",
+               "!kind:footnote-ref", "!kind:footnote-def", "!kind:link-def"],
     "enter": [], "collect-inside": { "fence": [] },
     "triage": ["data-uri", "html-tag", "html-block"] }
   ```
-  A profile says nothing about *what* is in the document — every kind is
-  detected regardless — only which kinds this reader treats as furniture,
-  which it insists on keeping even when a broader strip would take them,
-  which containers it descends into, and what `discover` should warn about.
-  `default` reproduces today's behavior exactly (`strip` = today's
-  `STRIP_ALL`, `triage` = the same, `enter` = []). Selected by `--profile
-  <name>` or `$MDNAV_PROFILE`; individual flags override. A profile is a
-  disposition, loadable and composable, not code.
+  A lens says nothing about *what* is in the document — every kind is
+  detected regardless — only which rows this reader treats as furniture by
+  default, which containers it descends into, and what `discover` should
+  warn about. `default.ignore` membership is exactly `kind:data-uri`,
+  `kind:html-tag`, `kind:html-comment`, `kind:signed-url` — **`html-block`
+  is deliberately absent** (survey/M0 report: stripping the block would
+  also take interior prose a real parse keeps, an attributable golden
+  delta this brief must not introduce silently); `triage` = the same;
+  `enter` = []. Selected by `--lens <name>` or `$MDNAV_LENS`; ad-hoc
+  `--select`/`--ignore` flags layer on top, last-match-wins across
+  lens-then-flags. A lens is a disposition, loadable and composable, not
+  code.
 - **Basis, generalized**: `--by <kind | pattern:<re>>` on `outline`, `read`,
-  `coverage`, `locate`. Today's three bases become cases: `--by heading`
-  (default, with `--depth`), `--by break`, `--windows <n>`. New: `--by
-  footnote-def` (foot-matter as units), `--by fence` (regions as units;
-  gaps between regions are units too, so the tiling holds), `--by
-  pattern:'^\[\^[^\]\s]+\]:'` (ad-hoc boundary). A basis cuts one **node**
-  (the document root by default, or `--within <node>`), and the cut is
-  addressed **under that node's path** — `H0007/S3` (third break segment
-  inside section 7), `H0007/W2` (second window) — never a bare global
-  `Snnnn`/`Rnnnn`, so two different bases over two different nodes cannot
-  collide on one address (structure brief §4). One ledger throughout.
-  Segmenting is recursive: `--within <node> --by <other>` re-cuts that node
-  with a different delimiter — the XOR walk in CLI form.
-- **`read`**: `--strip <kinds|@profile>` = `[S,E) \ coverage(sel)`;
-  **new `--only <kinds>`** = `[S,E) ∩ coverage(sel)`; `--enter` as above.
-  Placeholder ≥ 1 KiB with `@s..e`, `keepOf` label rule, ledger of elided
-  spans, stderr warning before writing >64 KiB of stripped material — all
-  unchanged. Materialization is the existing slice loop expressed as
-  `subtract`; a `RewritePlan`-style ordered piece list is the internal shape
-  so `--only`/`--strip`/`--enter` compose without a second code path.
-- **`coverage`**: `union(reads) \ union(elided)` per doc; kept citation
-  labels no longer counted elided (gate 12 — this is where the `keepOf`
-  bookkeeping bug actually gets fixed: the ledger has existed since phase 01,
-  but the fix depends on suppression/`--only` existing so "kept" is a
-  well-defined query result rather than a special case).
-- **`outline`**: unchanged columns; `noise=` becomes `strip=` computed from
-  the active profile's `strip` set (label kept as `noise=` under `default`
+  `coverage`, `locate` — a basis produces the **candidate node set** a
+  scope is cut into; selection then filters within it. Today's three bases
+  become cases: `--by heading` (default, with `--depth`), `--by break`,
+  `--windows <n>`. New: `--by footnote-def` (foot-matter as units), `--by
+  fence` (regions as units; gaps between regions are units too, so the
+  tiling holds), `--by pattern:'^\[\^[^\]\s]+\]:'` (ad-hoc boundary). A
+  basis cuts one **node** (the document root by default, or `--within
+  <node>`), and the cut is addressed **under that node's path**, three
+  codes (D43, amending D41's two-code summary): `S` for boundary/pattern
+  cuts (`H0007/S3`, third break segment), `W` for windows (`H0007/W2`),
+  and `R` for the **gap pieces only** of a region-kind basis — a
+  `--by fence` cut's region pieces keep their own claim path
+  (`H0007/f1`, `H0007/f2`), only the space between them is synthetic
+  (`H0007/R1`). Never a bare global `Snnnn`/`Rnnnn` — two different bases
+  over two different nodes cannot collide on one address. One ledger
+  throughout. Segmenting is recursive: `--within <node> --by <other>`
+  re-cuts that node with a different delimiter — the XOR walk in CLI form.
+- **`read`**: any number of address/predicate arguments in one call —
+  `read H0003`, `read H0003 H0007/q1`, `read --select kind:fence --within
+  H0003` — materializes the **union** of their spans (`SpanSet`, so an
+  overlapping request never double-emits) as **one packet**, its pieces
+  assembled in **document reading order** (`ord`, source byte offset)
+  regardless of argument order, each contiguous piece carrying the
+  address(es) that produced it — disjoint requests stay disjoint spans with
+  their own provenance, never silently merged. This generalizes today's
+  `--headings a,b,c` (which sorts by start and decorates each span — the
+  legacy, single-field form of the same mechanism) and is how the framing
+  header (phase 05) labels a multi-source packet. `--ignore`/`--select
+  <predicates|@lens>` narrow what is materialized from that union;
+  `--enter` as above. Placeholder ≥ 1 KiB with `@s..e`, the `keepOf` label
+  rule (now a `!` rescue in the active lens), ledger of elided spans,
+  stderr warning before writing >64 KiB of ignored material — all
+  unchanged in mechanism. Materialization is the existing slice loop
+  expressed as `subtract`; a `RewritePlan`-style ordered piece list is the
+  internal shape so selection composes without a second code path.
+  `--strip`/`--only`/`--keep` retire as primary spellings; `--strip all`
+  (bare, or `=all`) is kept as a **golden-only alias** for `--ignore
+  @default` and is the only value `--strip` accepts going forward.
+- **`coverage`**: `union(reads) \ union(elided)` per doc; a rescued (`!`)
+  span is no longer counted elided (gate 12 — this is where the legacy
+  `keepOf` bookkeeping bug actually gets fixed: the ledger has existed
+  since phase 01, but the fix depends on select/ignore existing so "kept"
+  is a well-defined query result rather than a special case).
+- **`outline`**: unchanged columns; `noise=` becomes computed from the
+  active lens's `ignore` predicates (label kept as `noise=` under `default`
   for output stability); `--enter`; a `contains:` note on units holding
   non-transparent regions with headings.
-- **`profile`** (verb): census over **all** kinds present — counts, bytes,
-  ratio, cadence — not just construct runs; residue section (unclosed fences,
-  crossing regions, undefined footnote refs).
-- **`marks --kind <k>`**: any kind, incl. rule-defined; `--within`, `--in
-  <container-kind>`; `--resolve` joins through the kind's relation
-  (`marks --kind footnote-ref --resolve` → ref span, def span, label,
-  dangling flag). `read --only footnote-def --for <anchor>` materializes the
-  defs a unit cites.
-- **`locate`**: unchanged surface; may take `--in`/`--not-in <kinds>` later
-  (deferred, see roadmap).
+- **`profile`** (census verb — unrelated to a **lens**, D44): census over
+  **all** kinds present — counts, bytes, ratio, cadence — not just
+  construct runs; residue section (unclosed fences, crossing regions,
+  undefined footnote refs).
+- **`marks --kind <k>`**: any kind, incl. rule-defined; `--within`, and any
+  predicate from the field table above (`--in <container-kind>` is
+  `kind:<k> via contains <container>`); `--resolve` joins through the
+  kind's relation (`marks --kind footnote-ref --resolve` → ref span, def
+  span, label, dangling flag) — the same `via` join `read --select`
+  exposes.
+- **`locate`**: unchanged surface; the deferred `--in`/`--not-in <kinds>`
+  (roadmap) is now expressible as a post-match `path`/`kind` predicate with
+  no bespoke flag — still deferred as a first-class verb feature, but the
+  mechanism no longer needs separate design.
 - **`discover`/`index`**: build claims once, persist; Notes column driven by
-  the profile's `triage` set; `--rules`, `--profile`.
-- **`profiles`** / **`rules`** (new, trivial): list what is loaded and from
-  where.
-- README gains the kind table, the profile section, and *enter* as the
-  third knob (F3).
+  the lens's `triage` set; `--rules`, `--lens`.
+- **`lenses`** / **`rules`** (new, trivial — `lenses` replaces a would-be
+  `profiles` verb, D44): list what is loaded and from where.
+- README gains the kind table, the field/predicate reference, the lens
+  section, and *enter* as the third knob (F3).
 
 ## Implementation notes
 
@@ -194,19 +257,20 @@ Full text is the master list in [mdnav_v2_design-brief.md](../design/mdnav_v2_de
 - **10.** Footnote fixture (`[^1_1]`/`[^1_2]` refs, one dangling, one unused
   def): both kinds are claims; `marks --kind footnote-ref --resolve` pairs
   by label and flags dangling; `profile` residue lists the unused def;
-  `read --only footnote-def --for <unit>` returns just the cited defs;
-  `chat-export` strips furniture, keeps refs/defs. Same shape for
-  `[text][id]` / `[id]: url`.
+  `read --select "kind:footnote-def via footnote <unit>"` returns just the
+  cited defs; the `chat-export` lens ignores furniture, its `!` rules keep
+  refs/defs. Same shape for `[text][id]` / `[id]: url`.
 - **10b.** Generic basis: `--by fence` and `--by pattern:...` each produce
-  projections addressed under the node they cut and tile that node
-  byte-for-byte; `--within H0003 --by break` re-segments one node; an
-  unclosed toggle basis reports `unclosed` + `alternative` residue and
-  still tiles.
-- **11.** `read --only fence` yields exactly the fenced bytes in order;
-  `--only K` ⊕ `--strip K` reconstruct the unit byte-for-byte modulo
-  placeholders.
-- **12.** `coverage` after `read --strip all` reports `unit − elided`; a
-  kept citation label is not counted elided. (Reconciled per D36 to this
+  projections addressed under the node they cut (region pieces keep their
+  own path, only gaps mint `Rn`) and tile that node byte-for-byte;
+  `--within H0003 --by break` re-segments one node; an unclosed toggle
+  basis reports `unclosed` + `alternative` residue and still tiles.
+- **11.** `read --select kind:fence` yields exactly the fenced bytes in
+  order; `--select kind:K` ⊕ `--ignore kind:K` (same predicate, dual
+  interpretation) reconstruct the unit byte-for-byte modulo placeholders.
+- **12.** `coverage` after `read --ignore @default` (equivalently the
+  golden-alias `--strip all`) reports `unit − elided`; a rescued (`!`)
+  citation label is not counted elided. (Reconciled per D36 to this
   phase, not M3 — see the master gate list's note on gate 12.)
 
 Partition invariant re-asserted per `(basis, depth, enter)`, at every node,
@@ -216,14 +280,15 @@ throughout.
 
 5. Containment + re-entry (carve/mask/partition/recurse/collect) + the
    inside-out inversion + `--enter` → gates 8, 8b, 8c.
-6. Relations (§2b) + Selection / suppression / profiles (`default`,
-   `chat-export`) → gate 10; generic basis under node-scoped addressing →
-   gate 10b; `read --only`, coverage on the algebra → gates 11, 12.
+6. Relations (§2b) + Selection / select-ignore / lenses (`default`,
+   `chat-export`) → gate 10; generic basis under node-scoped `S`/`R`/`W`
+   addressing → gate 10b; `read --select`/`--ignore`, coverage on the
+   algebra → gates 11, 12.
 
 ## Report
 
 _(appended by the implementing agent on completion — what shipped, assert
-counts before/after, any relation/profile edge case the real corpus
+counts before/after, any relation/lens edge case the real corpus
 surfaced, which residue kinds the fixtures and the real-document set
 actually produced, whether the two tree constructions ever disagreed where
 the fixtures did not predict it, and whether the gate-12 reconciliation

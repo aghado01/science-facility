@@ -193,12 +193,19 @@ with a verb argument — the server brief (not this one) decides which, but
 bare verbs are out; noted here because the framing header carries the tool
 identity this namespacing produces.
 
-- Address = the anchor (`Dnnn:Hnnnn@digest`, or `Snnnn`/`Rnnnn`/`Wnnnn`,
-  or a raw `Dnnn:@s..e`), extended compositionally for nested claims and
-  placeholders (`…/fence.2`, `…/elided.1`) — every header is something the
-  Primary can hand back to `read`.
+- Address = the anchor (`Dnnn:Hnnnn@digest`, or the full node path —
+  `Dnnn:H0007/q1/H1@digest`, node-scoped `S`/`R`/`W` projections, or a raw
+  `Dnnn:@s..e`) — the structure brief's path grammar (D41), extended for
+  placeholders (`…/f2`, `…/elided1`) — every header is something the
+  Primary can hand back to `read`. **A `read` whose selection spans more
+  than one node or predicate emits one packet with one header per piece**
+  (phase 03 §5, D43): pieces are ordered by document reading order (`ord`),
+  not argument order, and each header's address names exactly the node(s)
+  that piece came from — the general form of today's `<!-- mdnav
+  Dnnn:Hnnnn -->` decoration on `--headings a,b,c`, now load-bearing for
+  every multi-node or multi-predicate `read`, not only that one flag.
 - **`content_bytes` is emitted UTF-8 bytes of the content cell (post-codec); `span` is source geometry. Never the same
-  field** — under `--strip`/`--only` they differ, and conflating them is the
+  field** — under `--select`/`--ignore` they differ, and conflating them is the
   historic byte-semantics trap. Both are *machine* fields (round-trip,
   audit, tooling); the model-facing magnitude is the coarse `~629B` /
   `~404KiB` and the `k/N` ordinal — and, when a **client token profile** is

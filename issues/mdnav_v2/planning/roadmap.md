@@ -145,30 +145,33 @@ is a separate decision (brief §Method 5).
   inverted and named; suite additions for fenced noise, non-`---` breaks,
   multi-line comment, flag order. (Gate 12 — `coverage`/kept-label — moved
   to M4 by D36: the brief's own Sequencing text and Chip-plan paragraph both
-  tie it to relations/`--only`/profiles landing, not to this milestone;
+  tie it to relations/select-ignore/lenses landing, not to this milestone;
   this list previously carried it in error.)
 - **Depends on:** M2. **Brief:**
   [02-collectors-parity.md](../briefs/02-collectors-parity.md), F1–F3,
   cosmetic fixes.
 - **Exit = Chip A done.** Report appended to the brief.
 
-## M4 — Containment, relations, profiles, generic basis, `--only` · `planned`
+## M4 — Containment, relations, query language, lenses, generic basis · `planned`
 
 Re-entry walk (region-specific rules, `container` column, nearest
-container); `--enter <kinds>` as the third activation knob (ids unchanged;
-`outline` prints `contains:` on undescended regions); relations
+container); `--enter <kinds>` as the third activation knob (root ordinals
+unchanged; `outline` prints `contains:` on undescended regions); relations
 (`footnote`, `link-ref`, `anchor` with GFM slug dedupe, `contains`) with
-residue; `Selection` + suppression; profiles as JSON (`default` reproduces
-today; `chat-export`); `read --only`; generic `--by <kind|pattern:>` with
-`S`/`R` addressing and per-basis partition invariant; `marks --resolve`,
-`read --only footnote-def --for`; `profile` verb as full census + residue.
+residue; a row-field query language (path/kind/level/span/ord/title/digest/
+tags, relation joins via `via`) with `select`/`ignore` as ordered predicate
+lists (D43) replacing `--only`/`--for`/`--in`/`--not-in`; lenses as JSON
+(D44; `default` reproduces today; `chat-export`); generic `--by
+<kind|pattern:>` with node-scoped `S`/`R`/`W` addressing and per-basis
+partition invariant; `marks --resolve`; `profile` verb as full census +
+residue.
 
 - **Gates:** 8, 10, 10b, 11, 12 (12 moved here from M3 by D36 — see that
   milestone's note); partition invariant re-asserted per (basis, depth,
   enter).
 - **Depends on:** M3. **Brief:**
   [03-containment-queries.md](../briefs/03-containment-queries.md) §2b, §4,
-  §5 (basis, read, marks, profile).
+  §5 (basis, read, marks, lenses).
 
 ## M5a — Exports, REPL/paging/budget contract · `planned`
 
@@ -308,7 +311,10 @@ Not a tokenizer; a lookup table with provenance and a refresh procedure.
 ## Deferred (named so they are not silently dropped)
 
 Cadence (`GapCadence` alignment) — note in M3 report whether free.
-`locate --in/--not-in`. Pairing for named tag sets under a profile
-(primitive exists after M3; no profile turns it on yet). Any second
-segmentation policy beyond first-viable-boundary. Anything Allen /
-path-selection / facts / origins from doccer.
+`locate` as a first-class predicate verb rather than a post-match filter
+(the field query language of D43 makes `--in`/`--not-in`-shaped filtering
+available today with no bespoke flag; a dedicated `locate` surface for it
+is still deferred). Pairing for named tag sets under a lens (primitive
+exists after M3; no lens turns it on yet). Any second segmentation policy
+beyond first-viable-boundary. Anything Allen / path-selection / facts /
+origins from doccer.

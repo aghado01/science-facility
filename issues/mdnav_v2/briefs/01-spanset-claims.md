@@ -165,13 +165,17 @@ refusal guard, inventory/ledger IO, all verb formatters, HELP.
 edge cases. Whitelist value-taking flags: `by depth max-depth extent from
 glob heading headings kind max min preview run span strip-match to truncate
 windows within work-dir`; new here: `cache` (D39), and (consumed by later
-phases, whitelisted now so the parser doesn't need touching again) `only
-enter rules profile for in not-in out older-than keep unreferenced`.
-Boolean today: `comp composition help i recursive refresh`; new: `resolve
-json`. **`--strip` is optional-value** (bare = `all`):
-treat it as value-taking only when the next token is `all` or a comma-list
-whose every member is a known kind or `@profile`; otherwise bare. Anything
-not in either list is an error, not a guess.
+phases, whitelisted now so the parser doesn't need touching again) `select
+ignore lens via enter rules out older-than keep unreferenced`. Retired
+before use, so never whitelisted: `only for in not-in profile` — the query
+language (D43) and the lens rename (D44) supersede those spellings before
+any implementation exists. Boolean today: `comp composition help i
+recursive refresh`; new: `resolve json`. **`--strip` is optional-value**
+(bare, or `--strip=all`) and, per D43, **accepts no other value** — the
+comma-list-of-kinds spelling this flag used to take is retired in favor of
+`--select`/`--ignore`, which removes F4's remaining parse-time-vocabulary
+problem (the 2026-08-17 review's §3.7): `--strip` never needs the kind
+table at parse time, because `all` is the only word it recognizes.
 
 ## Exit gate (this phase)
 

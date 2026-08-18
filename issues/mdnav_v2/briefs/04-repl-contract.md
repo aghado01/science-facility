@@ -19,15 +19,17 @@ alongside this phase once M4 is done).
 `mdnav.mjs` gains named exports — `Corpus` (open a work-dir with a store;
 `discover`, `doc(ref)`, `invalidate`), `Doc` (`buf`, `digest`, `claims`,
 `select(pred)`, `partition(basis, policy)`, `relations(name)`), `SpanSet`,
-`Selection`, `loadRules`, `loadProfile`, `materialize(doc, spans, policy)`,
-`Ledger` — object-shaped so a server holds one `Corpus` for the process and
-CLI verbs open-query-close — and the top-level CLI dispatch (last five lines
-today: `parseArgs` → `VERBS[verb](args)`) moves under an `if (isMain)` guard
-keyed on `import.meta.url` vs `process.argv[1]`. **There is no guard and no
-export today; `import()` runs the CLI.** After this, `server.mjs` (a later,
-separate brief per roadmap) imports in-process, and MCP tools are thin:
-`mdnav_query({doc, kind, within, profile})` is a Selection; `mdnav_read` is
-a projection.
+`Selection`, `loadRules`, `loadLens` (D44), `materialize(doc, spans,
+policy)`, `Ledger` — object-shaped so a server holds one `Corpus` for the
+process and CLI verbs open-query-close — and the top-level CLI dispatch
+(last five lines today: `parseArgs` → `VERBS[verb](args)`) moves under an
+`if (isMain)` guard keyed on `import.meta.url` vs `process.argv[1]`.
+**There is no guard and no export today; `import()` runs the CLI.** After
+this, `server.mjs` (a later, separate brief per roadmap) imports
+in-process, and MCP tools are thin: `mdnav_query({doc, within, select,
+ignore, lens})` is a Selection over the field/predicate language of
+[03-containment-queries.md](03-containment-queries.md) §5 (D43); `mdnav_read`
+is a projection.
 
 ## Front-end grammar (constraint on this brief; the server brief owns it)
 
@@ -47,6 +49,21 @@ never a summary, never a recommendation beyond stderr triage.** The exports
 above must make that shape natural for `server.mjs`; if a verb's result
 cannot be expressed as bytes-or-table, that is a design smell to report.
 
+**The named MCP surface this phase's exports must support** (structure
+brief §5; D43 supplies the query language underneath): `tree` (a node's
+children at a cut — `outline`'s successor, every row carrying a `census`
+of what is under it); `read` (materialize — same name, richer arguments
+per [03-containment-queries.md](03-containment-queries.md) §5: multiple
+addresses/predicates, `select`/`ignore`/`lens`); `query` (any field/
+predicate combination — subsumes `locate`'s ad-hoc surface and `marks
+--kind`); `search` = `query --match <re>` (text pattern, disposition-
+aware — respects the active `ignore`); `status` (coverage + residue —
+`profile` and `coverage` unified). Legacy verb names (`outline`, `locate`,
+`marks`, `discover`, `index`, `profile`, `coverage`, `--strip all`) stay as
+the CLI's byte-identical-to-goldens surface (D39, D40); the five named
+verbs above are thin wrappers this phase exports over the same Selection
+primitive, not a second implementation.
+
 ## Agent context hygiene — the REPL contract
 
 What is being built is a **Markdown-documents REPL for an agent**: a
@@ -61,8 +78,9 @@ handle.** Backend obligations (the server brief owns tool names and the
 session store; the engine must make these natural):
 
 - **Every query is paged and counted.** `select`, `partition`, `relations`,
-  `locate`, `marks` take `{limit, offset, columns}` and return `{total,
-  rows}`; `total` is always present, rows only up to `limit`. Values are
+  `locate`, `marks`, `query`, `search`, `tree` take `{limit, offset,
+  columns}` and return `{total, rows}`; `total` is always present, rows
+  only up to `limit`. Values are
   plain arrays of records so a session store can hold and re-slice them
   without recompute; queries are memoized by `(digest, policy, args)` so
   re-asking is free.
@@ -71,7 +89,7 @@ session store; the engine must make these natural):
   default small, e.g. 8 KiB). Over budget it returns **no bytes** — instead
   `{bytes, spans, elided, anchors, suggestion}`: the plan the caller would
   have paid for, with the anchors to narrow by (`--depth`, `--enter`,
-  `--only`, `--strip`, a smaller `--within`). Today's ">64 KiB stderr warn
+  `--select`/`--ignore`, a smaller `--within`). Today's ">64 KiB stderr warn
   before writing" is the seed; the MCP form refuses rather than warns,
   because once bytes are in context the cost is paid.
   **Budgets count emitted bytes, headers included.** `maxBytes` is compared
@@ -96,7 +114,7 @@ session store; the engine must make these natural):
   `locate` snippets ≤ 120 chars, `marks --preview` all cap at the engine, not
   the presenter; `truncate` on titles likewise. A table row is never allowed
   to smuggle a body.
-- **Session state makes calls short.** Current corpus, run, profile,
+- **Session state makes calls short.** Current corpus, run, lens,
   default budget, and "current document" (`cd`-like) live in the session so
   a call is `outline H0007 --depth 2`, not a repeat of the world. Result
   handles (`$r3`) can be passed back as inputs (`read $r3.anchors`,

@@ -98,7 +98,7 @@ and its suppression rule, which is the whole answer to "noise vs prose":
 
 For mdnav: the engine **discovers typed constructs** and records them as claims
 with source coordinates. `--strip`, "noise", "active heading", "unit boundary"
-are all *queries* a caller (CLI flag, profile, MCP tool, skill) names over
+are all *queries* a caller (CLI flag, lens, MCP tool, skill) names over
 those claims. mdnav's own design rule — presume about the reading process,
 never about the content — is the same rule from the other side.
 
@@ -156,9 +156,11 @@ amended.**
    region-specific rules, in source coordinates; `--enter <kinds>` is the
    third projection knob (basis / depth / extent / *enter*) governing heading
    activation. → [03-containment-queries.md](../briefs/03-containment-queries.md)
-5. **Queries** — projections over claims: Selection, suppression, profiles as
-   data, generalized `--by`, `read --only`/`--strip`, `coverage`, `marks
-   --resolve`. → [03-containment-queries.md](../briefs/03-containment-queries.md).
+5. **Queries** — projections over claims: a row-field predicate language
+   (path/kind/level/span/ord/title/digest/tags, relation joins), `select`/
+   `ignore` as ordered predicate lists, lenses as data, generalized `--by`,
+   multi-node `read` assembled in reading order, `coverage`, `marks
+   --resolve` (D43, D44). → [03-containment-queries.md](../briefs/03-containment-queries.md).
    Export surface, the REPL/paging/budget contract, and stream framing (P0)
    are downstream of the query layer and live in
    [04-repl-contract.md](../briefs/04-repl-contract.md) and
@@ -174,10 +176,10 @@ amended.**
   toggles and block conditions (the block-structure half of CommonMark's
   own strategy; sharpened by D41). Inline structure beyond rule-collected
   leaves is never computed. The codex non-goals (classification, semantic chunking,
-  ranking, repair, rewriting, summarization) all stand — profiles express
+  ranking, repair, rewriting, summarization) all stand — lenses express
   *disposition*, never *meaning*.
 - No open/close **tag-pair** HTML masking by default; pairing exists as a
-  primitive and only a profile turns it on for named tags.
+  primitive and only a lens turns it on for named tags.
 - No derived masters / OffsetMap / prefix stripping for re-entry.
 - No changes to `Dnnn:Hnnnn@digest` numbering, `--depth`/`--extent`
   semantics, the partition invariant, or any output format except the fixes
@@ -268,7 +270,7 @@ milestone → gate map kept in sync with this list.
    leaves the table empty; `--strip-match` still works as a `custom` rule. — *02*
 5. Fenced `data:` URI and fenced `<div>` survive `--strip all` under
    `default`; `discover` Notes for that doc show no `embedded=`/`html=`;
-   `profile` counts them as `fence` content. Under a profile with
+   `profile` counts them as `fence` content. Under a lens with
    `collect-inside: {fence: ["data-uri"]}` the same URI *is* found, with
    `container` = the fence. — *02*
 6. Multi-line `<!-- … -->` is a claim, elided by `--strip all` (placeholder
@@ -303,30 +305,32 @@ milestone → gate map kept in sync with this list.
 10. Fixture with `[^1_1]`/`[^1_2]` in prose and `[^1_1]: https://…` defs
     at the end (one ref dangling, one def unused): both kinds are claims;
     `marks --kind footnote-ref --resolve` pairs them by label and flags the
-    dangling ref; `profile` residue lists the unused def; `read --only
-    footnote-def --for <unit>` returns just the defs that unit cites;
-    `chat-export` profile strips the surrounding `<div>` furniture and keeps
-    refs and defs. Same shape for `[text][id]` / `[id]: url`. — *03*
+    dangling ref; `profile` residue lists the unused def; `read --select
+    "kind:footnote-def via footnote <unit>"` returns just the defs that
+    unit cites; the `chat-export` lens ignores the surrounding `<div>`
+    furniture and its `!` rules keep refs and defs. Same shape for
+    `[text][id]` / `[id]: url`. — *03*
 10b. Generic basis: `outline --by fence` and `--by pattern:'^\[\^[^\]\s]+\]:'`
     each produce **projections addressed under the node they cut**
     (`<node>/Sn`, `<node>/Wn`) that tile that node byte-for-byte (partition
     invariant asserted per basis); `outline --within H0003 --by break`
     re-segments one node; a toggle basis with an unclosed opener reports
     `unclosed` + `alternative` residue and still tiles. — *03*
-11. `read --only fence` yields exactly the fenced bytes of a unit in order;
-    `--only K` ⊕ `--strip K` reconstruct the unit byte-for-byte modulo
-    placeholders. — *03*
-12. `coverage` after `read --strip all` reports `unit − elided`; a kept
+11. `read --select kind:fence` yields exactly the fenced bytes of a unit in
+    order; `--select kind:K` ⊕ `--ignore kind:K` (the same predicate, dual
+    interpretation) reconstruct the unit byte-for-byte modulo placeholders. — *03*
+12. `coverage` after `read --ignore @default` (equivalently the golden-alias
+    spelling `--strip all`) reports `unit − elided`; a rescued (`!`)
     citation label is not counted elided. — *03* (reconciled by D36: the
     brief's own Sequencing text and Chip-plan paragraph both tied this to
-    relations/`--only`/profiles landing, i.e. M4; an earlier `roadmap.md`
+    relations/select-ignore/lenses landing, i.e. M4; an earlier `roadmap.md`
     draft had listed it under M3 — corrected there to match)
 13. `discover --recursive .` ≡ `discover . --recursive`. — *01*
-14. Byte fidelity: `read` without `--strip`/`--only` is byte-identical to the
-    source span (existing). — *01*
+14. Byte fidelity: `read` without `--select`/`--ignore`/`--strip` is
+    byte-identical to the source span (existing). — *01*
 15. `node -e "import('./mdnav.mjs').then(m => m.SpanSet && m.Selection)"`
     resolves without running the CLI. — *04*
-16. `default` profile output for every existing fixture **and the named
+16. `default` lens output for every existing fixture **and the named
     real-document set** (`issues/mdnav_v2/discussion/` — the legacy
     README's "3.5 MB real corpus" has no known location and is struck, per
     the M0 capture report) is byte-identical to pre-change output for

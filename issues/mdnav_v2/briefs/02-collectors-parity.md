@@ -53,7 +53,7 @@ of the recursive discovery (design canon
   - **`$$`…`$$` is the genuine `toggle`**: the same symmetric token with no
     stateful match condition, so delimiter positions XOR-fold cleanly.
   - Balanced pairs with real nesting (`<details>`…`</details>` under a
-    `github` profile) use strict-stack pairing (doccer `Pairing.Pair`) —
+    `github` lens) use strict-stack pairing (doccer `Pairing.Pair`) —
     opt-in only, never by default.
 - **Rule collectors** — doccer's `PatternRule` in JS: `{ id, pattern, kind,
   source, level: char|line|multi, scope: line|whole, priority, capture?,
@@ -64,7 +64,7 @@ of the recursive discovery (design canon
   a line break**. This is F1's structural fix: inline collectors run over
   `Total \ coverage(fence ∪ html-comment ∪ frontmatter)` by default, and
   *what is excluded is itself a named policy* the caller can change (a
-  `code-review` profile wants `data-uri` found *inside* fences).
+  `code-review` lens wants `data-uri` found *inside* fences).
   Built-in rules live in `mcp/mdnav_v2/rules/core.jsonl` (everything in the
   kind table in [01-spanset-claims.md](01-spanset-claims.md) that is
   regex-shaped); further inventories are for constructs Markdown does *not*
@@ -79,9 +79,10 @@ table untouched and names its line.
 **The `NOISE` table today** (`data-uri`, `html`, `signed-url`, `image-ref`;
 `STRIP_ALL = ['data-uri','html','signed-url']`) absorbs into
 `rules/core.jsonl` entries plus `keep` as claim `info`; `STRIP_ALL` becomes
-the `default` profile's `strip` set (profiles land in phase 03, but this
-phase must preserve the `STRIP_ALL` set's exact membership so that handoff
-is a data move, not a behavior change). Must-survive: signed-url **target
+the `default` lens's `ignore` set (lenses land in phase 03 as D43/D44
+predicate lists, but this phase must preserve the `STRIP_ALL` set's exact
+membership so that handoff is a data move, not a behavior change).
+Must-survive: signed-url **target
 test** and **label keep**; image-ref opt-in; the wrapper-vs-bare data-uri
 distinction; **outer-span-wins dedupe** (a data-uri inside an `<img>` tag).
 
