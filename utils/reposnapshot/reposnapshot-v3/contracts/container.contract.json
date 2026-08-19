@@ -31,6 +31,11 @@
       "Role":   { "type": "record|content" },
       "Source": { "type": "string", "note": "in-memory origin — an entry path (RelativePath, ContentMeta.CharCount, Content via codec) or 'plan' (gidx, assigned after packing). This is the wire-naming map (PascalCase → snake_case), taken from psr.header.json" },
       "Fields": { "type": "column[]", "optional": true, "note": "block sub-columns, one level deep, in declared order" }
+    },
+    "codec": {
+      "$comment": "The container's content codec — the source of truth psr.container-spec.jsonc content_bytes / content $ref into. Functions over one entry's Content, not shapes; declared here so a $ref has a JSON node to resolve to.",
+      "bytes": { "type": "int",    "note": "Measure-ContentSpan(entry.Content) — UTF-8 byte width of the encoded content span, counted without materializing; the content_bytes cell value" },
+      "text":  { "type": "string", "note": "ConvertTo-ContentSpan(entry.Content) — the encoded content span itself (line breaks substituted, one physical line); the content cell value, materialized only by Build-Row" }
     }
   }
 }

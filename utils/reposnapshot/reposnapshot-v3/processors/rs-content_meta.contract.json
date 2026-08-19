@@ -1,0 +1,28 @@
+{
+  "processor": "rs-content_meta",
+  "module": "processors/rs-content_meta.ps1 — colonel chain processor; attaches the ContentMeta element to the entry bag",
+  "$comment": "PRODUCER declaration for the ContentMeta element. assemble.contract.json leaves entry elements open by design (every non-core bag field rides into the IR in arrival order), so the shape of this element is declared here, by its producer, and nowhere else — this is the source of truth that psr.container-spec.jsonc content_meta sub-field $refs resolve into (#/out/ContentMeta/<Field>). In-memory names are PascalCase; wire names (snake_case) live in the container spec. BYTE SEMANTICS: metrics deal in the content as read; SpanBytes is the UTF-8 byte count of that content and is deliberately NOT a psr sub-field — content_bytes is the same quantity as the container measures it post-codec at write time (one fact, one column). Adding a metric = add it here + in the processor; admitting it on the wire = add a sub-field in the container spec; no writer change.",
+  "in": {
+    "bag": {
+      "Content": { "from": "ingest.out.bag", "note": "string; absent/null → element still attached with zero metrics" }
+    }
+  },
+  "out": {
+    "ContentMeta": {
+      "SpanBytes":        { "type": "int",    "note": "UTF-8 byte count of Content as read (0 when empty). Not a wire sub-field — see $comment" },
+      "CharCount":        { "type": "int" },
+      "WordCount":        { "type": "int" },
+      "PunctuationCount": { "type": "int",    "note": "count, not ratio — no PunctuationRatio is emitted; add it here first if the wire wants one" },
+      "UniqueChars":      { "type": "int",    "note": "distinct characters; emitted, currently not admitted on the wire (sub-field removed 2026-08-18, re-admissible)" },
+      "Entropy":          { "type": "double", "note": "Shannon entropy over characters, rounded to 4" },
+      "CompressionRatio": { "type": "double", "note": "gzip length / byte length, rounded to 4; computed only for content > 100 chars, else 1.0 (deliberate non-parity with the LTS defect that always reported 0). Not admitted on the wire until the metric is trusted" },
+      "WhitespaceRatio":  { "type": "double", "note": "whitespace chars / CharCount, rounded to 4; 0.0 when CharCount is 0" },
+      "LineStats": {
+        "Mean":   { "type": "double", "note": "mean line length in characters, rounded to 2" },
+        "Median": { "type": "double", "note": "median line length" },
+        "StdDev": { "type": "double", "note": "population standard deviation of line length, rounded to 2" },
+        "Max":    { "type": "int",    "note": "longest line in characters" }
+      }
+    }
+  }
+}

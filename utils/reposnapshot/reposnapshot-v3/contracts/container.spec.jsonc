@@ -1,0 +1,154 @@
+{
+  "format": "psr",
+  "name": "Piped Snapshot Rows (`psr`)",
+  "version": "0.3",
+  "description": "PSR — piped snapshot rows. The header (zero) row declares pipe-separated column descriptors — `name:type`, fixed-width ints as `name:type(width)`, blocks as `name:[sub:type,sub:type,…]` — and every record row is that header projected onto one entry: values only, same positions. Each psr file holds exactly one header row and at least one record row; every row is one physical line (line breaks inside content are encoded by the codec, never written raw). READ BY CODE: rs.core.container Resolve-Layout resolves the run's layout from this spec × run configuration (which optional columns / sub-fields are on) × the IR header (EntryCount → gidx width) — once per run; shards measures with the resulting layout, serialize renders with it, manifest declares with it. Nothing downstream reads this file; there is no row schema and must not be one (a record row IS the header projected).",
+  "properties": {
+    "file_ext": ".txt",
+    "encoding": "utf-8",
+    "bom": false,
+    "double_precision": 4 // wire precision for every double cell (fixed decimals, invariant culture); a cell-scoped record_precision / val_precision overrides
+  },
+  "conventions": {
+    "$comment": "Property tiers (the adapter reads these to know which layer a key describes): UNPREFIXED = the header cell's own representation, or a fact shared by header cell and record cell (col_position, required, column_separator, val_separator, enclosure); record_* = the record-row CELL for that column; val_* = one ELEMENT inside a record cell's array value (content_meta). `required` is one flag because presence is decided by the header row per file, never per row (a row cannot omit a declared column — it renders the empty marker). Interpolation: *_pattern and *_template strings are proto-strings resolved by rs.core.container: `${prop}` = sibling of the enclosing object, `${col.prop}` = another column's property, `${a.b}` descends; substituted values are regex-ESCAPED into *_pattern (escape every non-word char — [regex]::Escape does not escape ] } -) and inserted VERBATIM into *_template. `digits(EntryCount)` is the one function form: digit count of the IR header's EntryCount, resolved per run (ledger #46) — what keeps gidx rows byte-exact at any N. $ref values point at the source-of-truth contract for the in-memory value; the adapter derives the accessor from the ref (assemble → entry.<tail>, shards → plan.GlobalIdx, container → codec.*, processors/* → entry.<Element>.<tail>) and fails at load if the pointer does not resolve in the target file."
+  },
+  "shard_container_schema": {
+    "type": "array",
+    "required": true,
+    "record_delimiter": "\n",
+    "column_separator": "|",
+    "empty_marker": "", // nothing between separators. The wire has no null: absent and empty are the same bytes. psr never emits an empty value by design (LeanPayload routing keeps contentless entries out of the IR; enabled columns are sourced from every entry) — a reader that meets one should treat it as a defect signal, not data.
+    "header_cell_template": "${name}:${record_type}", // header descriptor for a scalar column
+    "header_cell_width_template": "${name}:${record_type}(${record_width})", // when record_width is set (gidx)
+    "header_block_template": "${name}:${record_val_enclosure.start}${cells}${record_val_enclosure.end}", // ${cells} = enabled sub-descriptors `${name}:${val_type}` joined by ${val_separator}, in val_rank order
+    "record_pattern": "^(?:[^${column_separator}${record_delimiter}]*${column_separator}){2,3}(?:0|[1-9][0-9]*)${column_separator}", // LEADER only (gidx|path|[content_meta]|content_bytes|) — content is consumed by content_bytes, then record_delimiter; a regex cannot span counted bytes. Structural pre-check; the interpreter may instead compose it from the cell patterns.
+    "description": "The header row's columns in wire order (col_position). Types for the corresponding record cells are the record_* keys; values bind via record_value.$ref.",
+    "properties": {
+      "gidx": {
+        "description": "Global record ordinal — final reading order across all shards, assigned by the shard plan after packing. Fixed width from a bound known before packing (EntryCount at enumerate) so row bytes stay exact while the value is assigned late (ledger #46). Optional: which address columns v3 carries is still open; if none, this column is off.",
+        "required": false,
+        "type": "string",
+        "col_position": 0,
+        "record_type": "int",
+        "record_width": "digits(EntryCount)", // DERIVED per run, never a literal — a literal breaks byte-exactness at 10^width entries
+        "record_value": {
+          "$ref": "shards.contract.json#/out/placement/GlobalIdx"
+        },
+        "record_pattern": "^[0-9]{${gidx.record_width}}$" // pattern always validates the RECORD value; header cell text is rendered from the template, never validated
+      },
+      "path": {
+        "description": "Relative POSIX path to the snapshot-scoped root; the record's identity and the tree manifest's join key.",
+        "required": true,
+        "type": "string",
+        "col_position": 1,
+        "record_type": "string",
+        "record_value": {
+          "$ref": "assemble.contract.json#/out/entry/core/RelativePath"
+        },
+        "record_pattern": "^[^/|\\r\\n]+(?:/[^/|\\r\\n]+)*$" // segments split on /, no empty segments; spaces and non-ASCII allowed (crawler-derived names); / | and line breaks are the only reserved chars because the piped format makes them unambiguous
+      },
+      "content_meta": {
+        "description": "Metadata ABOUT the content span (hence content_ — it pairs with content_bytes and content). Header cell lists the enabled sub-descriptors `name:type` in val_rank order inside the enclosure; the record cell carries the values, same order, no names. Attached to the entry by processors/rs-content_meta.ps1 as the ContentMeta element (one concept, three spellings: wire content_meta · in-memory ContentMeta · processor rs-content_meta). Which sub-fields are on is run configuration; `default: true` marks the default-on set. New enrichment metrics are added as sub-fields here and in the processor's contract — no writer change.",
+        "type": "string",
+        "required": false,
+        "col_position": 2,
+        "record_type": "array", // of values, without keys/names — the header names them
+        "record_val_enclosure": {
+          "start": "[",
+          "end": "]"
+        },
+        "val_separator": ",",
+        "record_value": {
+          "$ref": "processors/rs-content_meta.contract.json#/out/ContentMeta"
+        },
+        "record_pattern": "^${record_val_enclosure.start}[^${val_separator}${record_val_enclosure.start}${record_val_enclosure.end}]+(?:${val_separator}[^${val_separator}${record_val_enclosure.start}${record_val_enclosure.end}]+)*${record_val_enclosure.end}$", // structural pre-check only; the exact pattern (arity + per-element val_type) is DERIVED by the interpreter from the enabled sub-fields — do not hand-maintain element types here. Escaping: enclosure.end "]" must interpolate as \\] inside the class.
+        "properties": {
+          "line_mean": {
+            "description": "mean line length in characters (renamed from num_lines 2026-08-18 — that name mis-described a mean as a count)",
+            "val_rank": 0,
+            "val_type": "double",
+            "val_precision": 4,
+            "val": {
+              "$ref": "processors/rs-content_meta.contract.json#/out/ContentMeta/LineStats/Mean"
+            },
+            "default": true
+          },
+          "num_chars": {
+            "val_rank": 1,
+            "val_type": "int",
+            "val": {
+              "$ref": "processors/rs-content_meta.contract.json#/out/ContentMeta/CharCount"
+            },
+            "default": true
+          },
+          "num_words": {
+            "val_rank": 2,
+            "val_type": "int",
+            "val": {
+              "$ref": "processors/rs-content_meta.contract.json#/out/ContentMeta/WordCount"
+            },
+            "default": true
+          },
+          "num_punct": {
+            "description": "punctuation character count (was punct_ratio → PunctuationRatio, which the processor does not emit; bound to what exists — add a ratio to the processor first if a ratio is wanted)",
+            "val_rank": 3,
+            "val_type": "int",
+            "val": {
+              "$ref": "processors/rs-content_meta.contract.json#/out/ContentMeta/PunctuationCount"
+            },
+            "default": false
+          },
+          "ws_ratio": {
+            "val_rank": 4,
+            "val_type": "double",
+            "val_precision": 4,
+            "val": {
+              "$ref": "processors/rs-content_meta.contract.json#/out/ContentMeta/WhitespaceRatio"
+            },
+            "default": true
+          },
+          "entropy": {
+            "val_rank": 5,
+            "val_type": "double",
+            "val_precision": 4,
+            "val": {
+              "$ref": "processors/rs-content_meta.contract.json#/out/ContentMeta/Entropy"
+            },
+            "default": true
+          }
+          // num_unique_chars / num_unique_words removed 2026-08-18 (unused; UniqueWords was never emitted by the processor). UniqueChars is still produced and can be re-admitted as a sub-field here without a writer change.
+        }
+      },
+      "content_bytes": {
+        "description": "The length prefix: EXACT UTF-8 byte width of the content span as it sits in the file (post-codec) — the number a reader hands to a seek. NOT the source file's on-disk size (SizeBytes) and NOT a character count. Immediately precedes content; that adjacency is the seek contract.",
+        "required": true,
+        "type": "string",
+        "col_position": 3,
+        "record_type": "int",
+        "record_value": {
+          "$ref": "container.contract.json#/out/codec/bytes"
+        },
+        "record_pattern": "^(?:0|[1-9][0-9]*)$" // canonical: no leading zeros
+      },
+      "content": {
+        "description": "The encoded content span (codec: line breaks substituted, one physical line). Always the final column; never parsed for delimiters — framed by content_bytes.",
+        "required": true,
+        "type": "string",
+        "col_position": 4,
+        "record_type": "string",
+        "record_value": {
+          "$ref": "container.contract.json#/out/codec/text"
+        },
+        "record_pattern": null // validated by content_bytes (counted bytes), never by pattern
+      }
+    }
+  },
+  "invariants": [
+    "Column order is col_position order; `content` is last; `content_bytes` immediately precedes `content`.",
+    "One header per run: the resolved header row is byte-identical in every shard file.",
+    "Every record row carries exactly the header's column count; an absent optional value renders the empty marker (which psr never expects to emit).",
+    "Position-dependent columns (gidx) are fixed-width from a bound known before packing (digits(EntryCount)); row bytes are packing-invariant and Measure-Row is exact.",
+    "Required columns cannot be turned off; optional columns and sub-fields are run configuration, resolved once, before packing.",
+    "The header row is the ONLY place names and types appear; rows carry values only. Header cells are rendered from the *_template strings; record cells are validated by the *_pattern strings; both are interpolated from the same properties — one source of truth for formatter and validator."
+  ]
+}
