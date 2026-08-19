@@ -5,8 +5,10 @@ Exports a locally persisted Grok session into:
 1. A canonical exchange-envelope JSONL intermediate representation.
 2. Markdown with tunable structural, house, diarized, or dialogue formatting.
 
-This directory is independent of `claude-export` and `codex-export`. It reuses
-only the generic `jso-jackson.ps1` primitives and the shared Markdown writer.
+This directory holds the Grok session locator, `chat_history.jsonl` parser, and
+the agent-facing entry point. Snapshot, exchange-envelope I/O, Markdown
+rendering, and run/path resolution live in `../shared` so a later Claude or
+Codex pass can reuse them without another renderer clone.
 
 ## Agent-facing export
 
@@ -122,6 +124,14 @@ Invoke-GrokThreadExport `
     -SessionId $env:GROK_SESSION_ID `
     -MarkdownDir D:\aghado01\.discussion `
     -Format Structural `
+    -NormalizeWhitespace:$false `
+    -OutputEncoding Utf16LE
+
+# Render a frozen exchange JSONL with the shared Markdown renderer.
+ConvertTo-ChatMarkdown `
+    -ExchangesJsonlPath $exchangesPath `
+    -Provider grok `
+    -AssistantLabel Grok `
     -NormalizeWhitespace:$false `
     -OutputEncoding Utf16LE
 ```

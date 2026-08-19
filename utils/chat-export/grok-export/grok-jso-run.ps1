@@ -1,12 +1,12 @@
-# grok-jso-run.ps1 — Minimal single-session Grok export pipeline
+# grok-jso-run.ps1 — Grok session export pipeline
 #
-# Pipeline:
-#   Resolve session -> snapshot chat_history.jsonl -> exchange envelopes -> Markdown
+# Client-specific: resolve session, parse chat_history into exchange envelopes.
+# Shared: live JSONL snapshot, exchange IR write, Markdown render, path/runstamp.
 
 $ErrorActionPreference = 'Stop'
 
 . "$PSScriptRoot\grok-jso-jackson.ps1"
-. "$PSScriptRoot\grok-jso-markdown.ps1"
+. "$PSScriptRoot\..\shared\markdown.ps1"
 
 function Invoke-GrokThreadExport
 {
@@ -56,24 +56,11 @@ function Invoke-GrokThreadExport
         $WorkingDir = [System.IO.Path]::Combine(
             $resolved.GrokHome, 'tmp', 'grok-jso-run')
     }
-    $WorkingDir = [System.IO.Path]::GetFullPath($WorkingDir)
 
-    if ([string]::IsNullOrWhiteSpace($RunStamp))
-    {
-        $RunStamp = Get-JobTimestamp
-    }
-    if ($RunStamp -notmatch '^[0-9]{8}_[0-9]{6}$')
-    {
-        throw "Malformed run stamp '$RunStamp'. Expected UTC yyyyMMdd_HHmmss."
-    }
-
-    $runDir = [System.IO.Path]::Combine($WorkingDir, $RunStamp)
-    [void][System.IO.Directory]::CreateDirectory($runDir)
-
-    $rawDir = [System.IO.Path]::Combine($runDir, 'raw')
-    $snapshot = New-GrokJsonlSnapshot `
+    $run = Resolve-ChatRunDir -WorkingDir $WorkingDir -RunStamp $RunStamp
+    $snapshot = New-ChatJsonlSnapshot `
         -SourcePath $resolved.HistoryPath `
-        -WorkingDir $rawDir `
+        -WorkingDir ([System.IO.Path]::Combine($run.RunDir, 'raw')) `
         -FileName "chat_history-$SessionId.jsonl"
 
     $exchanges = @(Get-GrokExchanges `
@@ -82,10 +69,10 @@ function Invoke-GrokThreadExport
         -UserLabel $UserLabel `
         -DefaultModel $resolved.Model `
         -DefaultEffort $resolved.Effort)
-    $exchangeResult = Export-GrokExchanges `
+    $exchangeResult = Export-ChatExchanges `
         -Exchanges $exchanges `
-        -WorkingDir $runDir `
-        -SessionId $SessionId `
+        -WorkingDir $run.RunDir `
+        -Identity $SessionId `
         -OutputPrefix $OutputPrefix
 
     $stats = [pscustomobject]@{
@@ -100,9 +87,9 @@ function Invoke-GrokThreadExport
         return [pscustomobject]@{
             SessionId     = $SessionId
             ThreadId      = $SessionId
-            WorkingDir    = $WorkingDir
-            RunStamp      = $RunStamp
-            RunDir        = $runDir
+            WorkingDir    = $run.WorkingDir
+            RunStamp      = $run.RunStamp
+            RunDir        = $run.RunDir
             HistoryPath   = $resolved.HistoryPath
             SessionDir    = $resolved.SessionDir
             SnapshotPath  = $snapshot.SnapshotPath
@@ -115,29 +102,18 @@ function Invoke-GrokThreadExport
         }
     }
 
-    $resolvedMarkdownPath = if ($MarkdownPath)
-    {
-        $MarkdownPath
-    }
-    elseif ($MarkdownDir)
-    {
-        [System.IO.Path]::Combine(
-            $MarkdownDir, "$OutputPrefix-$SessionId.md")
-    }
-    elseif ($env:JSO_EXPORT_DIR)
-    {
-        [System.IO.Path]::Combine(
-            $env:JSO_EXPORT_DIR, "$OutputPrefix-$SessionId.md")
-    }
-    else
-    {
-        [System.IO.Path]::Combine(
-            $runDir, 'output', "$OutputPrefix-$SessionId.md")
-    }
+    $resolvedMarkdownPath = Resolve-ChatMarkdownPath `
+        -MarkdownPath $MarkdownPath `
+        -MarkdownDir $MarkdownDir `
+        -RunDir $run.RunDir `
+        -OutputPrefix $OutputPrefix `
+        -Identity $SessionId
 
-    ConvertTo-GrokMarkdown `
+    ConvertTo-ChatMarkdown `
         -ExchangesJsonlPath $exchangeResult.ExchangesPath `
         -OutputPath $resolvedMarkdownPath `
+        -Provider grok `
+        -AssistantLabel Grok `
         -Format $Format `
         -Exclude $Exclude `
         -MaxToolInputLength $MaxToolInputLength `
@@ -148,9 +124,9 @@ function Invoke-GrokThreadExport
     return [pscustomobject]@{
         SessionId     = $SessionId
         ThreadId      = $SessionId
-        WorkingDir    = $WorkingDir
-        RunStamp      = $RunStamp
-        RunDir        = $runDir
+        WorkingDir    = $run.WorkingDir
+        RunStamp      = $run.RunStamp
+        RunDir        = $run.RunDir
         HistoryPath   = $resolved.HistoryPath
         SessionDir    = $resolved.SessionDir
         SnapshotPath  = $snapshot.SnapshotPath

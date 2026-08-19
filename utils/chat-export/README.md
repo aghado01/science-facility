@@ -23,7 +23,11 @@ The Claude merge stage deduplicates copied continuation history by record UUID.
 It retains distinct thinking, text, and tool-use records even when Claude assigns
 them the same response `message.id`.
 
-Claude, Codex, and Grok Markdown renderers pass their completed document through the shared
+Grok post-ingest stages (live JSONL snapshot, exchange-envelope I/O, Markdown
+render, run/path resolution) live in `shared/`. Claude and Codex still have
+their own copies of those later stages.
+
+Claude, Codex, and Grok Markdown output passes through the shared
 `chat-export-format-ws.ps1` final-stage formatter. It normalizes line endings
 and Unicode, removes zero-width formatting characters, compacts prose
 whitespace, and retains significant whitespace in Markdown code and tool

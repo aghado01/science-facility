@@ -3,7 +3,7 @@ $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot\..\chat-export-output.ps1"
 . "$PSScriptRoot\..\claude-export\claude-jso-markdown-v2.ps1"
 . "$PSScriptRoot\..\codex-export\codex-jso-markdown.ps1"
-. "$PSScriptRoot\..\grok-export\grok-jso-markdown.ps1"
+. "$PSScriptRoot\..\shared\markdown.ps1"
 
 [int]$script:AssertionCount = 0
 
@@ -160,7 +160,7 @@ try
             @{
                 Path = "$PSScriptRoot\..\grok-export\grok-jso-run.ps1"
                 FunctionName = 'Invoke-GrokThreadExport'
-                ForwardedCommand = 'ConvertTo-GrokMarkdown'
+                ForwardedCommand = 'ConvertTo-ChatMarkdown'
             },
             @{
                 Path = "$PSScriptRoot\..\claude-export\claude-jso-markdown-v2.ps1"
@@ -171,8 +171,8 @@ try
                 FunctionName = 'ConvertTo-CodexMarkdown'
             },
             @{
-                Path = "$PSScriptRoot\..\grok-export\grok-jso-markdown.ps1"
-                FunctionName = 'ConvertTo-GrokMarkdown'
+                Path = "$PSScriptRoot\..\shared\markdown.ps1"
+                FunctionName = 'ConvertTo-ChatMarkdown'
             },
             @{
                 Path = "$PSScriptRoot\..\Export-ChatWhitespacePair.ps1"
@@ -197,7 +197,7 @@ try
             $wrapperText, '(?m)^\s*\[string\]\$masterMarkdown\s*=\s*ConvertTo-ClaudeMarkdownV2').Count) 1 `
         'forensic wrapper renders Claude master exactly once'
     Assert-Equal ([regex]::Matches(
-            $wrapperText, '(?m)^\s*\[string\]\$masterMarkdown\s*=\s*ConvertTo-GrokMarkdown').Count) 1 `
+            $wrapperText, '(?m)^\s*\[string\]\$masterMarkdown\s*=\s*ConvertTo-ChatMarkdown').Count) 1 `
         'forensic wrapper renders Grok master exactly once'
     Assert-Equal ([regex]::Matches(
             $wrapperText, '-RunThrough\s+Exchanges').Count) 3 `
@@ -359,9 +359,10 @@ try
         })
     $grokSourceHash = (Get-FileHash -LiteralPath $grokPath -Algorithm SHA256).Hash
     $grokUtf16Path = Join-Path $tempRoot 'grok-utf16.md'
-    ConvertTo-GrokMarkdown `
+    ConvertTo-ChatMarkdown `
         -ExchangesJsonlPath $grokPath `
         -OutputPath $grokUtf16Path `
+        -Provider grok `
         -Exclude @() `
         -NormalizeWhitespace:$false `
         -OutputEncoding Utf16LE

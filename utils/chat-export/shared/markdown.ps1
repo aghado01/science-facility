@@ -1,10 +1,13 @@
-# grok-jso-markdown.ps1 — Render Grok exchange envelopes as Markdown
+# chat-export/shared/markdown.ps1 — Render exchange-envelope JSONL as Markdown
+#
+# Operates on the client-agnostic envelope IR. Provider is a label for
+# frontmatter and speaker names, not a parser.
 
 $ErrorActionPreference = 'Stop'
 
 . (Join-Path (Split-Path -Parent $PSScriptRoot) 'chat-export-output.ps1')
 
-function script:ConvertTo-GrokDisplayJson
+function script:ConvertTo-ChatDisplayJson
 {
     param(
         [object]$Value,
@@ -28,7 +31,7 @@ function script:ConvertTo-GrokDisplayJson
     return $text
 }
 
-function script:Quote-GrokMarkdownBlock
+function script:Quote-ChatMarkdownBlock
 {
     param([string]$Text)
 
@@ -42,7 +45,7 @@ function script:Quote-GrokMarkdownBlock
     return $sb.ToString().TrimEnd()
 }
 
-function script:Get-GrokToolCallMarkdown
+function script:Get-ChatToolCallMarkdown
 {
     param(
         [object]$Record,
@@ -51,7 +54,7 @@ function script:Get-GrokToolCallMarkdown
         [string]$Format
     )
 
-    $inputText = script:ConvertTo-GrokDisplayJson `
+    $inputText = script:ConvertTo-ChatDisplayJson `
         -Value $Record.input -MaxLength $MaxToolInputLength
     $sb = [System.Text.StringBuilder]::new()
     [void]$sb.Append("**[tool: $($Record.tool_name)]**`n")
@@ -59,7 +62,7 @@ function script:Get-GrokToolCallMarkdown
 
     if (-not $ExcludeSet.Contains('tool-results') -and $null -ne $Record.response)
     {
-        $resultText = script:ConvertTo-GrokDisplayJson `
+        $resultText = script:ConvertTo-ChatDisplayJson `
             -Value $Record.response.content -MaxLength $null
         $shortId = [string]$Record.tool_use_id
         if ($shortId.Length -gt 16) { $shortId = $shortId.Substring(0, 16) + '...' }
@@ -70,17 +73,19 @@ function script:Get-GrokToolCallMarkdown
     $markdown = $sb.ToString()
     if ($Format -eq 'House')
     {
-        return script:Quote-GrokMarkdownBlock $markdown
+        return script:Quote-ChatMarkdownBlock $markdown
     }
     return $markdown
 }
 
-function script:Get-GrokMarkdownFrontmatter
+function script:Get-ChatMarkdownFrontmatter
 {
     param(
         [string]$Format,
         [string[]]$Exclude,
+        [string]$Provider,
         [string]$SessionId,
+        [string]$ThreadId,
         [System.Collections.Generic.HashSet[string]]$Models,
         [int]$ExchangeCount,
         [string]$UserLabel
@@ -88,10 +93,11 @@ function script:Get-GrokMarkdownFrontmatter
 
     $sb = [System.Text.StringBuilder]::new()
     [void]$sb.Append("---`n")
-    [void]$sb.Append("provider: grok`n")
+    if ($Provider) { [void]$sb.Append("provider: $Provider`n") }
     [void]$sb.Append("format: $Format`n")
     [void]$sb.Append("exported_at: $([datetime]::UtcNow.ToString('o'))`n")
     if ($SessionId) { [void]$sb.Append("session_id: $SessionId`n") }
+    elseif ($ThreadId) { [void]$sb.Append("thread_id: $ThreadId`n") }
     [void]$sb.Append("exchanges: $ExchangeCount`n")
     if ($UserLabel) { [void]$sb.Append("user_label: $UserLabel`n") }
 
@@ -115,11 +121,16 @@ function script:Get-GrokMarkdownFrontmatter
     return $sb.ToString()
 }
 
-function ConvertTo-GrokMarkdown
+function ConvertTo-ChatMarkdown
 {
     <#
     .SYNOPSIS
-        Render Grok exchange-envelope JSONL as Markdown.
+        Render exchange-envelope JSONL as Markdown.
+    .PARAMETER Provider
+        Frontmatter provider label and default assistant speaker.
+    .PARAMETER AssistantLabel
+        Speaker name in Diarized/Dialogue formats. Defaults to a title-cased
+        Provider value.
     .PARAMETER NormalizeWhitespace
         Apply the shared final-Markdown whitespace and Unicode normalizer.
         Default: $true. Set to $false for a pre-postprocessor forensic view;
@@ -135,6 +146,10 @@ function ConvertTo-GrokMarkdown
         [string]$ExchangesJsonlPath,
 
         [string]$OutputPath,
+
+        [string]$Provider = 'chat',
+
+        [string]$AssistantLabel,
 
         [ValidateSet('Diarized', 'Dialogue', 'Structural', 'House')]
         [string]$Format = 'Structural',
@@ -158,7 +173,13 @@ function ConvertTo-GrokMarkdown
 
     if (-not [System.IO.File]::Exists($ExchangesJsonlPath))
     {
-        throw "Grok exchanges JSONL not found: $ExchangesJsonlPath"
+        throw "Exchange JSONL not found: $ExchangesJsonlPath"
+    }
+
+    if ([string]::IsNullOrWhiteSpace($AssistantLabel))
+    {
+        $textInfo = [Globalization.CultureInfo]::InvariantCulture.TextInfo
+        $AssistantLabel = $textInfo.ToTitleCase($Provider.ToLowerInvariant())
     }
 
     $excludeSet = [System.Collections.Generic.HashSet[string]]::new(
@@ -167,6 +188,7 @@ function ConvertTo-GrokMarkdown
         [StringComparer]::Ordinal)
     $doc = [System.Text.StringBuilder]::new()
     $sessionId = $null
+    $threadId = $null
     $userLabel = $null
     $exchangeCount = 0
     $firstExchange = $true
@@ -176,7 +198,7 @@ function ConvertTo-GrokMarkdown
         if ([string]::IsNullOrWhiteSpace($line)) { continue }
         $exchange = $line | ConvertFrom-Json -Depth 100
         if (-not $sessionId) { $sessionId = [string]$exchange._session_uuid }
-        if (-not $sessionId) { $sessionId = [string]$exchange._thread_id }
+        if (-not $threadId) { $threadId = [string]$exchange._thread_id }
         if (-not $userLabel) { $userLabel = [string]$exchange._user_label }
         if ($exchange._model) { [void]$models.Add([string]$exchange._model) }
 
@@ -204,7 +226,7 @@ function ConvertTo-GrokMarkdown
                         if ($internal.Length -gt 0) { [void]$internal.Append("`n`n") }
                         $reason = if ($record.reason) { [string]$record.reason } else { 'synthetic' }
                         $block = "**[$reason]**`n$(([string]$record.text).TrimEnd())"
-                        [void]$internal.Append((script:Quote-GrokMarkdownBlock $block))
+                        [void]$internal.Append((script:Quote-ChatMarkdownBlock $block))
                     }
                 }
                 'thinking'
@@ -213,7 +235,7 @@ function ConvertTo-GrokMarkdown
                     {
                         if ($internal.Length -gt 0) { [void]$internal.Append("`n`n") }
                         $block = "**[thinking]**`n$(([string]$record.text).TrimEnd())"
-                        [void]$internal.Append((script:Quote-GrokMarkdownBlock $block))
+                        [void]$internal.Append((script:Quote-ChatMarkdownBlock $block))
                     }
                 }
                 'response'
@@ -228,7 +250,7 @@ function ConvertTo-GrokMarkdown
                             if ($Format -eq 'House')
                             {
                                 $block = "**[commentary]**`n$text"
-                                [void]$commentary.Append((script:Quote-GrokMarkdownBlock $block))
+                                [void]$commentary.Append((script:Quote-ChatMarkdownBlock $block))
                             }
                             else { [void]$commentary.Append($text) }
                         }
@@ -243,7 +265,7 @@ function ConvertTo-GrokMarkdown
                 {
                     if (-not $excludeSet.Contains('tool-calls'))
                     {
-                        $toolMd = script:Get-GrokToolCallMarkdown `
+                        $toolMd = script:Get-ChatToolCallMarkdown `
                             -Record $record `
                             -ExcludeSet $excludeSet `
                             -MaxToolInputLength $MaxToolInputLength `
@@ -306,7 +328,7 @@ function ConvertTo-GrokMarkdown
                 }
                 if ($assistantText)
                 {
-                    [void]$doc.Append("---`n`n**Grok**`n`n$assistantText`n`n")
+                    [void]$doc.Append("---`n`n**$AssistantLabel**`n`n$assistantText`n`n")
                 }
             }
             'Dialogue'
@@ -318,7 +340,7 @@ function ConvertTo-GrokMarkdown
                 }
                 if ($assistantText)
                 {
-                    [void]$doc.Append("---`n`nGrok:`n`n$assistantText`n`n")
+                    [void]$doc.Append("---`n`n${AssistantLabel}:`n`n$assistantText`n`n")
                 }
             }
             'Structural'
@@ -361,10 +383,12 @@ function ConvertTo-GrokMarkdown
         $firstExchange = $false
     }
 
-    $frontmatter = script:Get-GrokMarkdownFrontmatter `
+    $frontmatter = script:Get-ChatMarkdownFrontmatter `
         -Format $Format `
         -Exclude $Exclude `
+        -Provider $Provider `
         -SessionId $sessionId `
+        -ThreadId $threadId `
         -Models $models `
         -ExchangeCount $exchangeCount `
         -UserLabel $userLabel

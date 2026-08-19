@@ -260,7 +260,7 @@ try
     [System.IO.File]::WriteAllBytes(
         $tailPath,
         $encoding.GetBytes($good + "`n{incomplete"))
-    $tailSnap = New-GrokJsonlSnapshot `
+    $tailSnap = New-ChatJsonlSnapshot `
         -SourcePath $tailPath `
         -WorkingDir (Join-Path $tempRoot 'tail-raw')
     Assert-True $tailSnap.TailDropped 'incomplete JSON tail is dropped'

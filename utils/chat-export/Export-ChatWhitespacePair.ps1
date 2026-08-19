@@ -175,8 +175,10 @@ elseif ($Provider -eq 'Grok')
         -UserLabel $UserLabel `
         -OutputEncoding $OutputEncoding
 
-    [string]$masterMarkdown = ConvertTo-GrokMarkdown `
+    [string]$masterMarkdown = ConvertTo-ChatMarkdown `
         -ExchangesJsonlPath $freezeResult.ExchangesPath `
+        -Provider grok `
+        -AssistantLabel Grok `
         -Format $Format `
         -Exclude $Exclude `
         -MaxToolInputLength $MaxToolInputLength `
