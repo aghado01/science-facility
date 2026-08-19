@@ -3,6 +3,9 @@
 - **Evidence date:** 2026-08-14
 - **Executable:** `1.0.4 (d846eb93d9)`
 - **Decision:** W0-B no-go; W0-C model pilot not run
+- **Amended 2026-08-19:** the Outcome, the `mcp list` reading, and the first reopen condition
+  are corrected by the [Addendum](#addendum--2026-08-19-re-probe). Read it before acting on
+  anything above it.
 
 ## Outcome
 
@@ -160,3 +163,79 @@ Static command families exercised:
 
 No model call, client configuration mutation, plugin/MCP mutation, global-client
 edit, or commit was performed by the evidence lane.
+
+---
+
+## Addendum — 2026-08-19 re-probe
+
+Same executable (`1.0.4`), same repository cwd. Static configuration probes only: no model call,
+no authenticated turn, no session artifact, no repository mutation. Provenance discussion split
+out to [client-asset-provenance.md](../notes/client-asset-provenance.md).
+
+### Corrections to the Wave 0 record
+
+1. **The four "inherited" stdio definitions are Claude's user scope, not unexplained config.**
+   `inspect --json` labels each one `source.type: claudeJson`, `path: ~/.claude.json`,
+   `vendor: claude` — `git`, `fetch`, `filesystem`, `pwsh_exec`. `~/.grok/config.toml` declares
+   zero MCP servers (`configSources.layers` holds that one file). They follow Grok into *any*
+   cwd, sterile scratch included, which is the real isolation hazard: **a sterile cwd never
+   strips them.**
+
+2. **A documented no-load control exists.** `[compat.claude] mcps = false` and
+   `[compat.cursor] mcps = false`, or the env equivalents `GROK_CLAUDE_MCPS_ENABLED` /
+   `GROK_CURSOR_MCPS_ENABLED`. Witnessed: with both set false in a sterile cwd, all four claude
+   entries flip to `compatibilityStatus: "disabled"` in `inspect --json`. The Wave 0 statement
+   that "no documented per-invocation switch was found" is superseded.
+
+3. **Repo-local `.mcp.json` servers are gated by folder trust, default deny.** At untrusted repo
+   cwd, `grok mcp doctor para-agent --json` returned check `folder untrusted`, `passed: false`,
+   detail `repo-local (project-scoped) server not started for an untrusted folder`. The gate is
+   `~/.grok/trusted_folders.toml`; the grant covers MCP, LSP, and hooks together and cascades to
+   subdirectories.
+
+4. **`mcp list --json` returning `[]` was never a contradiction.** `list` reports Grok's own
+   registry only — `~/.grok/config.toml`, zero servers. Compat and `.mcp.json` sources never
+   appear there. The Wave 0 reading that it "directly disagrees with aggregate discovery" was
+   wrong, and the disagreement it recorded does not exist.
+
+5. **`grok mcp doctor` is not a session-load witness.** With both compat env vars false, doctor
+   still started `filesystem` and `git` and completed handshakes at protocol `2025-11-25`. It
+   probes configured sources regardless of the compat gate — it does respect folder trust.
+   Load state is read from `inspect`'s `compatibilityStatus`, never from doctor.
+
+6. **A `%TEMP%` scratch cwd reported `projectTrusted: true`.** Sterile must therefore mean *no
+   `.mcp.json`, `.grok/`, or `.claude/` in the directory* — trust is not the guard there. This
+   also plausibly explains the Wave 0 sandboxed zero-server view as a `~/.claude.json`
+   readability difference, though that remains uncorroborated.
+
+### Post-trust witness
+
+Folder trust granted for `D:\aghado01\science-facility` on 2026-08-19
+(`trusted_folders.toml`, `decided_at 1787249727`). `grok mcp doctor para-agent --json` then
+reported `healthy: true` — command found, `server started 0.0s`, `handshake OK protocol
+2025-11-25`, `17 tools discovered`. That count is exact parity with the para-agent tool surface
+exposed to Claude in the same repository.
+
+### Reopen conditions — current state
+
+| Condition | State |
+|---|---|
+| Documented clean scope prevents fallback to user, project, compatibility config | **Met at the configuration layer** (items 2 and 3). Plugin, marketplace, and remote sources report empty here and are untested under the control |
+| Exact unsandboxed environment reports zero MCP servers, hooks, plugins, marketplaces | **Not taken.** Under the control `inspect` reports the four as `disabled`, not absent |
+| `mcp list --json` empty as corroboration only | Superseded — item 4 makes it evidence of nothing either way |
+| Built-in empty-allowlist semantics documented for 1.0.4 | Unchanged: not established |
+| Separate stdout/stderr capture, bounded timeout/kill, prompt cleanup, censuses | Unchanged: not built |
+
+### Candidate isolation scope — still not an authorized pilot
+
+Sterile cwd containing no `.mcp.json`, `.grok/`, or `.claude/`, left untrusted, plus
+`GROK_CLAUDE_MCPS_ENABLED=false` and `GROK_CURSOR_MCPS_ENABLED=false`, with `config.toml`
+carrying zero native servers. `GROK_FOLDER_TRUST=0` and `[folder_trust] enabled = false`
+disable the trust gate globally and would **ungate** repo-local servers — the isolation scope
+must never set them.
+
+### Proof limit
+
+Every result in this addendum is configuration-layer resolution. No runtime witness — a live
+session enumerating its actual tool surface — has been taken, and that is now the only
+remaining gate on P10.

@@ -16,18 +16,26 @@ and proving it by onboarding a fifth client through configuration alone.
 The original impetus, and the only thing standing between the substrate and Grok. Settles P10.
 Involves no para-agent source changes and does not wait on any other track.
 
-1. **Establish whether grok 1.0.4 can be launched with no MCP servers loaded.** W0-B found four
-   inherited stdio MCP definitions present under exact unsandboxed inspection while
-   `mcp list --json` returned empty — so the empty listing is not evidence of non-loading.
-   Determine whether a clean-config invocation, an explicit empty allowlist, or a documented
-   no-start flag actually prevents load *and* start.
-2. **Decide the fallback if it cannot be proven.** Either Grok never receives managed mediation
-   (console surface only), or it is onboarded with tool isolation explicitly recorded as
-   `unknown` and gated behind a documented risk acceptance. Do not leave this implicit.
-3. **Record the result in [decisions.md](decisions.md) P10** as ruled either way, with the exact
-   probe and its proof limit. `grok inspect --json` remains configuration-only evidence.
+1. ~~**Establish whether grok 1.0.4 can be launched with no MCP servers loaded.**~~ Answered at
+   the configuration layer on 2026-08-19: `[compat.<vendor>] mcps = false` /
+   `GROK_CLAUDE_MCPS_ENABLED` / `GROK_CURSOR_MCPS_ENABLED` disable the vendor-personal sources,
+   and repo-local `.mcp.json` is default-deny behind folder trust. The four "inherited"
+   definitions were Claude's user scope all along. See the
+   [addendum](../reports/grok-1.0.4-wave0-evidence.md#addendum--2026-08-19-re-probe).
+2. **Take the runtime witness.** This is now the whole track. A live session under the candidate
+   isolation scope must enumerate its own tool surface and show zero MCP tools — configuration
+   resolution is not load state, and `grok mcp doctor` is disqualified as a witness because it
+   starts servers regardless of the compat gate. Needs the bounded-timeout, separate-stream,
+   census-around-it apparatus the report lists, and it does cost a model call.
+3. **Decide the fallback if the witness cannot be taken.** Either Grok never receives managed
+   mediation (console surface only), or it is onboarded with tool isolation explicitly recorded
+   as `unknown` behind a documented risk acceptance. Do not leave this implicit.
+4. **Record the result in [decisions.md](decisions.md) P10** as ruled either way, with the exact
+   probe and its proof limit.
 
-No authenticated turn, model call, or session artifact until this track closes.
+No authenticated turn, model call, or session artifact until this track closes — with the single
+exception of the step-2 witness itself, which is the model call that closes it, and which does not
+run until its apparatus is ready.
 
 ## Track: substrate-migration — *independent of grok-isolation*
 

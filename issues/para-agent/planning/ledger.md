@@ -3,6 +3,21 @@
 Newest first. Evidence pointers are to commits, contracts, reports, and runner output.
 Counts are recorded **with the commit they were observed at** (P16) — never as standing claims.
 
+- **2026-08-19 — grok MCP load question re-probed; P10 narrowed to the runtime witness**
+  (no code change, static probes only, no model call): the four "inherited" stdio definitions
+  identified as Claude *user scope* (`~/.claude.json`), not unexplained config; documented
+  no-load controls found and witnessed — `[compat.<vendor>] mcps = false` /
+  `GROK_CLAUDE_MCPS_ENABLED` / `GROK_CURSOR_MCPS_ENABLED` flip all four to
+  `compatibilityStatus: "disabled"`; repo-local `.mcp.json` confirmed default-deny behind folder
+  trust (`~/.grok/trusted_folders.toml`); the Wave 0 `mcp list --json` contradiction retracted as
+  a misreading of a registry-only command; `grok mcp doctor` disqualified as a load witness —
+  it starts servers regardless of the compat gate. Folder trust then granted for this repository,
+  after which para-agent starts under Grok: handshake `2025-11-25`, **17 tools discovered**,
+  parity with its Claude surface. Record:
+  [addendum](../reports/grok-1.0.4-wave0-evidence.md#addendum--2026-08-19-re-probe).
+  Provenance argument split to [client-asset-provenance](../notes/client-asset-provenance.md),
+  opened as P21.
+
 - **2026-08-15 — planning canon minted** (this tier): decisions/roadmap/ledger seeded from the
   remediation and client-integration arcs. Both historical plans moved to [../reports/](../reports/)
   with superseded headers. Wave 0–4 numbering retired in favour of named tracks (P15); Grok
