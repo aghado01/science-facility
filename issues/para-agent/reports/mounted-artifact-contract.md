@@ -30,7 +30,7 @@ These identities must never be substituted for one another. In particular:
 
 The backend owns mounting, validation, path resolution, index binding, caching, bounded reads, receipts, and cleanup. The model should normally ask an intention-level question such as “open this snapshot,” “find relevant files,” or “fetch these results.” It should not assemble a sequence of index, digest, shard, and cache operations.
 
-This generalizes donor ideas in the [reposnapshot MCP vision](../../utils/reposnapshot/issues/mcp-surface.md), [jso-jackson implementation](../../utils/jso-jackson/jso-jackson.ps1), [para-agent backend architecture](../para-agent/backend-engine-architecture.md), and [Hashish capability inventory](../para-agent/hashish-capability-inventory.md). It does not claim that any donor already implements this contract.
+This generalizes donor ideas in the [reposnapshot MCP vision](../../reposnapshot/design/mcp-surface.md), [jso-jackson implementation](../../../utils/jso-jackson/jso-jackson.ps1), [para-agent backend architecture](backend-engine-architecture.md), and [Hashish capability inventory](hashish-capability-inventory.md). It does not claim that any donor already implements this contract.
 
 ## Why the mount boundary exists
 
@@ -363,7 +363,7 @@ A clean primary payload does not justify erasing these distinctions. Counts and 
 
 An artifact may satisfy different levels for different content classes. A comment sidecar might retain removed documentation while a large binary is only declared and externally referenced. The manifest must not promote the strongest local claim into a package-wide claim.
 
-The reposnapshot comment-sidecar and content-class work are explicitly forward designs in [comment ontology](../../utils/reposnapshot/issues/v3/comment-ontology.md) and [assembly design](../../utils/reposnapshot/issues/v3/rs.core.assemble-design.md). They establish valuable semantics—extraction instead of silent deletion, addressable residues, and round-trip verification—but are not current universal guarantees.
+The reposnapshot comment-sidecar and content-class work are explicitly forward designs in [comment ontology](../../reposnapshot/design/comment-ontology.md) and [assembly design](../../reposnapshot/design/rs.core.assemble-design.md). They establish valuable semantics—extraction instead of silent deletion, addressable residues, and round-trip verification—but are not current universal guarantees.
 
 ## Coordinate spaces and source maps
 
@@ -378,7 +378,7 @@ Useful spaces include:
 - `container_bytes`: exact component bytes and physical spans;
 - provider-specific logical coordinates such as JSONL record index or repository item ID.
 
-Character offsets and UTF-8 byte offsets are not interchangeable. The [reposnapshot shard format notes](../../utils/reposnapshot/issues/shard-format-notes.md) already distinguish source size, processed-content span, and encoded row length; this contract makes that distinction mandatory at the mount boundary.
+Character offsets and UTF-8 byte offsets are not interchangeable. The [reposnapshot shard format notes](../../reposnapshot/design/shard-format-notes.md) already distinguish source size, processed-content span, and encoded row length; this contract makes that distinction mandatory at the mount boundary.
 
 When a transform changes coordinates and callers need source attribution or rehydration, it must publish a versioned source map or transformation map. A map binds both endpoint generations/spaces, states units and boundary conventions, accounts for inserted/deleted regions, and carries its own integrity guard. Anchors into post-transform content are not sufficient for a byte-for-byte claim unless residues and inverse ordering are complete.
 
@@ -493,12 +493,12 @@ Cheap regeneration should produce a new artifact generation and can auto-mount i
 
 Current maturity must remain explicit:
 
-- the existing LTS tree/shard format supplies useful catalog and byte-span conventions, but its [format notes](../../utils/reposnapshot/issues/shard-format-notes.md) identify unresolved or undeclared codec/encoding details;
-- the v3 [payload manifest ledger](../../utils/reposnapshot/issues/v3/payload-manifest-ledger.md) contains live, settled, open, and forward declarations; an owed declaration is not an emitted guarantee;
+- the existing LTS tree/shard format supplies useful catalog and byte-span conventions, but its [format notes](../../reposnapshot/design/shard-format-notes.md) identify unresolved or undeclared codec/encoding details;
+- the v3 [payload manifest ledger](../../reposnapshot/planning/payload-manifest-ledger.md) contains live, settled, open, and forward declarations; an owed declaration is not an emitted guarantee;
 - diagnostics, configuration crosswalks, comment residues, structural surveys, and byte-perfect rehydration are unevenly implemented or forward design;
 - a legacy compatibility mount may compute a local validation envelope and offer reduced capabilities, but it must report its validation class and must not relabel an old package as fully contract-native.
 
-Search and similarity providers can enrich a reposnapshot mount, but they are projections. SimHash comparisons or MinHash/LSH indexes can nominate related files; exact digests establish identical bytes; exact measures verify declared derived views. The capability distinctions in the [Hashish inventory](../para-agent/hashish-capability-inventory.md) remain intact.
+Search and similarity providers can enrich a reposnapshot mount, but they are projections. SimHash comparisons or MinHash/LSH indexes can nominate related files; exact digests establish identical bytes; exact measures verify declared derived views. The capability distinctions in the [Hashish inventory](hashish-capability-inventory.md) remain intact.
 
 ## Provider adaptation: JSON and JSONL
 
@@ -511,7 +511,7 @@ live JSONL
   -> schema probe, filtered traversal, and bounded record reads
 ```
 
-The current [`JsonlFile.MountSnapshot`](../../utils/jso-jackson/jso-jackson.ps1) is a lightweight object binding, not yet this guarded mount contract. It stores snapshot and optional index paths and constructs a traversal. `JsonlIndex` checks magic/version while loading, but its lightweight validity probe checks only magic, and the index format does not bind itself cryptographically to the body generation. `New-JsonlSnapshot` records source path/time metadata and builds offsets, but that metadata is not exact source identity.
+The current [`JsonlFile.MountSnapshot`](../../../utils/jso-jackson/jso-jackson.ps1) is a lightweight object binding, not yet this guarded mount contract. It stores snapshot and optional index paths and constructs a traversal. `JsonlIndex` checks magic/version while loading, but its lightweight validity probe checks only magic, and the index format does not bind itself cryptographically to the body generation. `New-JsonlSnapshot` records source path/time metadata and builds offsets, but that metadata is not exact source identity.
 
 A contract adaptation would treat:
 
@@ -544,7 +544,7 @@ fetch selected evidence
   -> validate addresses, batch materialize, retain overflow, return receipt
 ```
 
-The eventual model-visible surface should pass the tool-admission rule in the [para-agent backend architecture](../para-agent/backend-engine-architecture.md): a tool exists only for a decision with distinct effects, permissions, lifecycle, or failure semantics that the agent genuinely needs to make. Internal `validate`, `build_index`, `bind_sidecar`, `close_descriptor`, and `rebuild_projection` operations do not qualify merely because the backend implements them.
+The eventual model-visible surface should pass the tool-admission rule in the [para-agent backend architecture](backend-engine-architecture.md): a tool exists only for a decision with distinct effects, permissions, lifecycle, or failure semantics that the agent genuinely needs to make. Internal `validate`, `build_index`, `bind_sidecar`, `close_descriptor`, and `rebuild_projection` operations do not qualify merely because the backend implements them.
 
 Skills and guidance should teach when a mounted corpus is useful, how to orient before fetching, how to interpret candidate versus exact evidence, and how to request the desired semantic view. They should not teach scratch-path policy, offset validation, index maintenance, or projection-cache choreography.
 

@@ -2,7 +2,7 @@
 
 **Status:** conceptual inventory; no implementation authorized | **Date:** 2026-08-10
 
-**Scope:** the 22 C# files in [`ThermoMapper/src/hashish`](../../../ThermoMapper/src/hashish), treated as a toolbox of representations, measures, signatures, search models, and streaming summaries rather than as an API or MCP-tool proposal
+**Scope:** the 22 C# files in [`ThermoMapper/src/hashish`](../../../../ThermoMapper/src/hashish), treated as a toolbox of representations, measures, signatures, search models, and streaming summaries rather than as an API or MCP-tool proposal
 
 ## Executive orientation
 
@@ -14,7 +14,7 @@ Hashish is not one hashing library. It is a compact survey of several different 
 4. Can a corpus model retrieve relevant documents or reveal contextual associations?
 5. Can a bounded streaming structure answer membership, frequency, or cardinality questions approximately?
 
-The word “hash” hides an important distinction. The current module contains **no cryptographic content digest**: no SHA, BLAKE, or equivalent exact-identity primitive. [`seeded.cs`](../../../ThermoMapper/src/hashish/seeded.cs) provides non-cryptographic FNV-derived hashing and mixing for buckets and sketches. SimHash, MinHash, CTPH, and TLSH are resemblance fingerprints. Bloom, Count-Min, and HyperLogLog are probabilistic summaries. None can authoritatively identify an artifact.
+The word “hash” hides an important distinction. The current module contains **no cryptographic content digest**: no SHA, BLAKE, or equivalent exact-identity primitive. [`seeded.cs`](../../../../ThermoMapper/src/hashish/seeded.cs) provides non-cryptographic FNV-derived hashing and mixing for buckets and sketches. SimHash, MinHash, CTPH, and TLSH are resemblance fingerprints. Bloom, Count-Min, and HyperLogLog are probabilistic summaries. None can authoritatively identify an artifact.
 
 That absence is useful design information. A complete system needs a separate cryptographic digest for byte identity and integrity, then may use Hashish-derived capabilities for search, candidate generation, comparison, ranking, diversity, and telemetry.
 
@@ -51,7 +51,7 @@ A cryptographic digest answers an equality/integrity question over exact bytes. 
 
 ### 2. Deterministic addressing and hash-family substrate
 
-[`SeededHash`](../../../ThermoMapper/src/hashish/seeded.cs) supplies a 64-bit mixer and seeded FNV-1a paths over UTF-16 code units, bytes, and `uint` sequences. Its value is fast, repeatable distribution into buckets and the derivation of several pseudo-independent hash positions.
+[`SeededHash`](../../../../ThermoMapper/src/hashish/seeded.cs) supplies a 64-bit mixer and seeded FNV-1a paths over UTF-16 code units, bytes, and `uint` sequences. Its value is fast, repeatable distribution into buckets and the derivation of several pseudo-independent hash positions.
 
 Useful applications include:
 
@@ -77,7 +77,7 @@ These files are foundational because every downstream similarity claim is relati
 
 ### Normalization and word tokenization
 
-[`tokenizer.cs`](../../../ThermoMapper/src/hashish/tokenizer.cs) provides Unicode normalization, optional compatibility folding, invariant lowercasing, trimming, and `\w+` word extraction with a minimum token length.
+[`tokenizer.cs`](../../../../ThermoMapper/src/hashish/tokenizer.cs) provides Unicode normalization, optional compatibility folding, invariant lowercasing, trimming, and `\w+` word extraction with a minimum token length.
 
 Conceptual value:
 
@@ -89,7 +89,7 @@ Potential applications include prose, logs, identifiers, command output, and met
 
 ### Word shingles
 
-[`shingler.cs`](../../../ThermoMapper/src/hashish/shingler.cs) turns token streams into ordered word n-grams, either preserving duplicate shingles or returning a set.
+[`shingler.cs`](../../../../ThermoMapper/src/hashish/shingler.cs) turns token streams into ordered word n-grams, either preserving duplicate shingles or returning a set.
 
 Shingles reintroduce **local order** after tokenization. A unigram set knows that two documents use the same words; a two- or three-word shingle set also knows which short phrases survived.
 
@@ -105,7 +105,7 @@ Width is a semantic knob. Small widths tolerate edits and rearrangement but crea
 
 ### Histograms and smoothed probability distributions
 
-[`histogram.cs`](../../../ThermoMapper/src/hashish/histogram.cs) converts counts into a probability mass function and can build a unigram distribution against a shared vocabulary. Lidstone smoothing includes unsmoothed, Jeffreys-like, and Laplace-style choices.
+[`histogram.cs`](../../../../ThermoMapper/src/hashish/histogram.cs) converts counts into a probability mass function and can build a unigram distribution against a shared vocabulary. Lidstone smoothing includes unsmoothed, Jeffreys-like, and Laplace-style choices.
 
 The histogram is not itself a similarity measure. It is a representation for distributional comparisons such as KL/JS divergence, Hellinger distance, Fisher–Rao geometry, or simple drift statistics; those measures are outside this directory.
 
@@ -124,7 +124,7 @@ There is no universal similarity. These measures answer different questions even
 
 ### Levenshtein: sequence edit effort
 
-[`levenshtein.cs`](../../../ThermoMapper/src/hashish/levenshtein.cs) computes the exact minimum number of insertions, deletions, and substitutions between two character sequences, plus a length-normalized similarity.
+[`levenshtein.cs`](../../../../ThermoMapper/src/hashish/levenshtein.cs) computes the exact minimum number of insertions, deletions, and substitutions between two character sequences, plus a length-normalized similarity.
 
 Useful for:
 
@@ -138,7 +138,7 @@ It retains sequence order but treats each UTF-16 code unit uniformly and has qua
 
 ### Jaccard: shared unique-feature proportion
 
-[`jaccard.cs`](../../../ThermoMapper/src/hashish/jaccard.cs) implements exact Jaccard similarity and distance over sets:
+[`jaccard.cs`](../../../../ThermoMapper/src/hashish/jaccard.cs) implements exact Jaccard similarity and distance over sets:
 
 ```text
 |A ∩ B| / |A ∪ B|
@@ -184,7 +184,7 @@ For the same two sets, Dice is a monotonic transform of Jaccard, so it does not 
 
 ### Cosine: direction of a weighted profile
 
-[`cos.cs`](../../../ThermoMapper/src/hashish/cos.cs) provides cosine similarity, angular distance, in-place L2 normalization, and pairwise distance-matrix construction.
+[`cos.cs`](../../../../ThermoMapper/src/hashish/cos.cs) provides cosine similarity, angular distance, in-place L2 normalization, and pairwise distance-matrix construction.
 
 Cosine asks whether two vectors have similar **relative feature emphasis**, largely ignoring total magnitude. It becomes useful after a representation such as:
 
@@ -198,7 +198,7 @@ Cosine does not know what a dimension means, and scores across different vocabul
 
 ### Normalized Compression Distance: shared compressible structure
 
-[`ncd.cs`](../../../ThermoMapper/src/hashish/ncd.cs) compares the compressed sizes of `x`, `y`, and their concatenation using Brotli, Deflate, GZip, or ZLib.
+[`ncd.cs`](../../../../ThermoMapper/src/hashish/ncd.cs) compares the compressed sizes of `x`, `y`, and their concatenation using Brotli, Deflate, GZip, or ZLib.
 
 Its conceptual appeal is feature agnosticism: if a compressor can reuse patterns from one input while compressing the other, the pair probably shares structure. This can reveal resemblance in raw text, serialized data, or binaries without first designing tokens.
 
@@ -215,7 +215,7 @@ It is expensive for search because every pair requires compression, sensitive to
 
 ### Common measure interface
 
-[`measure.cs`](../../../ThermoMapper/src/hashish/measure.cs) wraps Levenshtein, cosine, Jaccard, and Dice behind `Distance` and `Similarity` methods.
+[`measure.cs`](../../../../ThermoMapper/src/hashish/measure.cs) wraps Levenshtein, cosine, Jaccard, and Dice behind `Distance` and `Similarity` methods.
 
 The conceptual value is generic pairwise orchestration: clustering, matrix construction, or evaluation code can accept a measure without naming the algorithm. The danger is false interchangeability. A Levenshtein distance, angular distance, and Jaccard distance have different domains and calibration; a common method name does not make thresholds portable across them. The current abstraction has no in-tree consumer.
 
@@ -225,7 +225,7 @@ These capabilities exchange information for speed. Their best use is to reduce a
 
 ### SimHash: compact angular resemblance
 
-[`simhash.cs`](../../../ThermoMapper/src/hashish/simhash.cs) builds a 64-bit signature by hashing features, adding or subtracting their weights in each bit dimension, and taking the sign of the accumulated vector. Hamming distance between signatures is the comparison.
+[`simhash.cs`](../../../../ThermoMapper/src/hashish/simhash.cs) builds a 64-bit signature by hashing features, adding or subtracting their weights in each bit dimension, and taking the sign of the accumulated vector. Hamming distance between signatures is the comparison.
 
 Conceptually, SimHash is a compact proxy for cosine/angular similarity over weighted features. Hashish uses case-folded word tokens with BM25-style term-frequency saturation and fitted IDF weights.
 
@@ -241,7 +241,7 @@ Its current representation is a bag of words, so token order is lost. Corpus/mod
 
 ### MinHash: compact set-overlap estimation
 
-[`minhash.cs`](../../../ThermoMapper/src/hashish/minhash.cs) builds a signature from a set of character n-grams. The fraction of equal signature slots estimates Jaccard similarity.
+[`minhash.cs`](../../../../ThermoMapper/src/hashish/minhash.cs) builds a signature from a set of character n-grams. The fraction of equal signature slots estimates Jaccard similarity.
 
 MinHash is appropriate when the desired notion of resemblance is shared set membership, especially:
 
@@ -254,7 +254,7 @@ Unlike SimHash, it estimates Jaccard rather than angular similarity. The current
 
 ### Banded LSH: turning signatures into candidate IDs
 
-The second half of [`minhash.cs`](../../../ThermoMapper/src/hashish/minhash.cs) divides signatures into bands and indexes exact band matches. A query returns document IDs sharing at least one band.
+The second half of [`minhash.cs`](../../../../ThermoMapper/src/hashish/minhash.cs) divides signatures into bands and indexes exact band matches. A query returns document IDs sharing at least one band.
 
 This is a search accelerator, not another similarity measure. Band count and rows per band determine the probability curve: more bands improve recall but produce more candidates; more rows per band improve precision but miss more marginal matches.
 
@@ -270,7 +270,7 @@ The LSH result means “worth comparing,” not “duplicate.”
 
 ### CTPH: local-edit-resilient piecewise fingerprinting
 
-[`ctph.cs`](../../../ThermoMapper/src/hashish/ctph.cs) gestures at ssdeep-style context-triggered piecewise hashing: choose content-dependent boundaries, hash chunks at two resolutions, and compare the resulting digest sequences.
+[`ctph.cs`](../../../../ThermoMapper/src/hashish/ctph.cs) gestures at ssdeep-style context-triggered piecewise hashing: choose content-dependent boundaries, hash chunks at two resolutions, and compare the resulting digest sequences.
 
 The underlying concept is valuable for files where insertions or deletions shift byte offsets but much local content survives. Potential applications include:
 
@@ -283,7 +283,7 @@ The current implementation is not a true rolling-window CDC or established ssdee
 
 ### TLSH: whole-content locality-sensitive fingerprinting
 
-[`tlsh.cs`](../../../ThermoMapper/src/hashish/tlsh.cs) builds a sliding-window bucket histogram, quartile-encodes the bucket distribution, and combines it with length and checksum information.
+[`tlsh.cs`](../../../../ThermoMapper/src/hashish/tlsh.cs) builds a sliding-window bucket histogram, quartile-encodes the bucket distribution, and combines it with length and checksum information.
 
 The TLSH concept is useful for sufficiently large, varied inputs where a whole-content fuzzy fingerprint can cluster related binaries or documents while tolerating moderate change. It is commonly more appropriate for family resemblance than for tiny strings or highly repetitive low-entropy material.
 
@@ -293,7 +293,7 @@ Hashish's implementation is TLSH-shaped rather than established TLSH: it hashes 
 
 ### IDF: corpus-specific feature salience
 
-[`idf.cs`](../../../ThermoMapper/src/hashish/idf.cs) calculates document frequencies, average document length, and inverse-document-frequency weights using smooth, Robertson–Sparck Jones, or plain formulas.
+[`idf.cs`](../../../../ThermoMapper/src/hashish/idf.cs) calculates document frequencies, average document length, and inverse-document-frequency weights using smooth, Robertson–Sparck Jones, or plain formulas.
 
 IDF expresses a simple valuable idea: a term appearing in every document carries less discriminating information than a rare term. It is useful for:
 
@@ -307,13 +307,13 @@ An IDF value is not an intrinsic property of a word. It belongs to a corpus gene
 
 ### BM25 statistics shim: fitted weights for SimHash, not BM25 search
 
-[`bm25.cs`](../../../ThermoMapper/src/hashish/bm25.cs) returns average document length and a smoothed IDF map in the tuple expected by SimHash. SimHash then uses BM25-style term-frequency saturation and document-length normalization in its feature weights.
+[`bm25.cs`](../../../../ThermoMapper/src/hashish/bm25.cs) returns average document length and a smoothed IDF map in the tuple expected by SimHash. SimHash then uses BM25-style term-frequency saturation and document-length normalization in its feature weights.
 
 The conceptual pieces—term saturation, length normalization, and corpus rarity—are valuable. The current file is explicitly a legacy compatibility shim; it does **not** implement a BM25 document-retrieval scorer or inverted index. Calling Hashish's retrieval “BM25” would overstate the capability.
 
 ### TF-IDF vectorization
 
-[`tfidf.cs`](../../../ThermoMapper/src/hashish/tfidf.cs) provides:
+[`tfidf.cs`](../../../../ThermoMapper/src/hashish/tfidf.cs) provides:
 
 - a reusable tokenized corpus;
 - corpus fitting and vocabulary pruning;
@@ -337,7 +337,7 @@ It is lexical rather than semantic: synonyms with no token overlap remain far ap
 
 ### TF-IDF search
 
-[`tfidf_search.cs`](../../../ThermoMapper/src/hashish/tfidf_search.cs) scores a sparse query against dense document rows and provides nearest-document lookup with a bounded `O(N log K)` top-K heap.
+[`tfidf_search.cs`](../../../../ThermoMapper/src/hashish/tfidf_search.cs) scores a sparse query against dense document rows and provides nearest-document lookup with a bounded `O(N log K)` top-K heap.
 
 This is an actual retrieval capability, although it is a full scan rather than an inverted or approximate-nearest-neighbor index. It is most attractive for small-to-medium local corpora where simplicity, explainability, and no external service are more valuable than internet-scale indexing.
 
@@ -345,7 +345,7 @@ The current scorer is cosine only when model rows are L2-normalized; with normal
 
 ### Co-occurrence model
 
-[`cooc.cs`](../../../ThermoMapper/src/hashish/cooc.cs) builds a vocabulary and dense symmetric matrix of token co-occurrences within a sliding context window.
+[`cooc.cs`](../../../../ThermoMapper/src/hashish/cooc.cs) builds a vocabulary and dense symmetric matrix of token co-occurrences within a sliding context window.
 
 Where TF-IDF represents documents by the terms they contain, co-occurrence represents terms by the neighbors they keep. This enables distributional questions such as:
 
@@ -359,7 +359,7 @@ Window size defines “context.” Small windows emphasize syntactic/local relat
 
 ### PMI, PPMI, conditional probability, and contextual entropy
 
-[`cooc_stats.cs`](../../../ThermoMapper/src/hashish/cooc_stats.cs) derives several different signals:
+[`cooc_stats.cs`](../../../../ThermoMapper/src/hashish/cooc_stats.cs) derives several different signals:
 
 | Statistic | Meaning | Useful application |
 |---|---|---|
@@ -376,7 +376,7 @@ PMI tends to overvalue rare coincidences without frequency thresholds or smoothi
 
 ### Bloom filter: bounded membership memory
 
-[`bloom.cs`](../../../ThermoMapper/src/hashish/bloom.cs) sizes a bit array from expected item count and desired false-positive probability, uses double hashing, tracks insertions, and reports fill ratio.
+[`bloom.cs`](../../../../ThermoMapper/src/hashish/bloom.cs) sizes a bit array from expected item count and desired false-positive probability, uses double hashing, tracks insertions, and reports fill ratio.
 
 Semantics:
 
@@ -388,7 +388,7 @@ Useful applications include avoiding expensive exact lookups for definitely-new 
 
 ### Count-Min Sketch: bounded approximate frequency
 
-[`countmin.cs`](../../../ThermoMapper/src/hashish/countmin.cs) maintains several hashed counter rows and estimates a key's count as the minimum observed counter.
+[`countmin.cs`](../../../../ThermoMapper/src/hashish/countmin.cs) maintains several hashed counter rows and estimates a key's count as the minimum observed counter.
 
 With positive updates and suitable hash assumptions, collisions make the estimate overcount rather than undercount. Width controls additive error; depth controls the probability of exceeding that error.
 
@@ -403,7 +403,7 @@ It does not enumerate keys on its own, so heavy-hitter discovery still needs a c
 
 ### HyperLogLog: bounded approximate distinct count
 
-[`hyperloglog.cs`](../../../ThermoMapper/src/hashish/hyperloglog.cs) distributes hashes into registers, records leading-zero ranks, estimates cardinality, applies a small-range correction, and can merge states with matching precision.
+[`hyperloglog.cs`](../../../../ThermoMapper/src/hashish/hyperloglog.cs) distributes hashes into registers, records leading-zero ranks, estimates cardinality, applies a small-range correction, and can merge states with matching precision.
 
 Its relative standard error is approximately `1.04 / sqrt(registerCount)` under the usual assumptions. It is useful when the question is “how many unique?” rather than “which ones?”
 
@@ -513,7 +513,7 @@ The inventory should not turn conceptual adjacency into an implementation claim.
 
 ## Donor implementation maturity
 
-The direct source is a broad prototype and conceptual quarry, not a certified suite. The existing [`ThermoMapper hashish review`](../../../ThermoMapper/issues/doccer-excavation-hpc-hashish-review-20260806.md) explicitly reports no benchmark or compatibility testing.
+The direct source is a broad prototype and conceptual quarry, not a certified suite. The existing [`ThermoMapper hashish review`](../../../../ThermoMapper/issues/doccer-excavation-hpc-hashish-review-20260806.md) explicitly reports no benchmark or compatibility testing.
 
 | Readiness band | Components | Interpretation |
 |---|---|---|
@@ -539,28 +539,28 @@ Particularly important current caveats are:
 
 | Source file | Embedded capability | Conceptual home |
 |---|---|---|
-| [`seeded.cs`](../../../ThermoMapper/src/hashish/seeded.cs) | 64-bit mixer and seeded FNV over chars, bytes, and `uint`s | Hash-family substrate |
-| [`bloom.cs`](../../../ThermoMapper/src/hashish/bloom.cs) | Sized Bloom filter, double hashing, membership, fill ratio | Probabilistic membership |
-| [`countmin.cs`](../../../ThermoMapper/src/hashish/countmin.cs) | Epsilon/delta-sized Count-Min Sketch | Approximate streaming frequency |
-| [`hyperloglog.cs`](../../../ThermoMapper/src/hashish/hyperloglog.cs) | Precision-sized HLL, estimate, merge | Approximate distinct cardinality |
-| [`minhash.cs`](../../../ThermoMapper/src/hashish/minhash.cs) | Character-shingle MinHash, Jaccard estimate, banded LSH index | Set-similarity signature and candidate search |
-| [`simhash.cs`](../../../ThermoMapper/src/hashish/simhash.cs) | BM25/IDF-weighted 64-bit SimHash and Hamming distance | Angular near-duplicate signature |
-| [`ctph.cs`](../../../ThermoMapper/src/hashish/ctph.cs) | Dual-resolution content-triggered piecewise digest and sequence comparison | Fuzzy file-family concept |
-| [`tlsh.cs`](../../../ThermoMapper/src/hashish/tlsh.cs) | Window buckets, quartiles, compact digest, simplified distance | Locality-sensitive whole-content concept |
-| [`levenshtein.cs`](../../../ThermoMapper/src/hashish/levenshtein.cs) | Character edit distance and normalized similarity | Exact sequence comparison |
-| [`jaccard.cs`](../../../ThermoMapper/src/hashish/jaccard.cs) | Jaccard, containment, overlap coefficient, Dice, word-shingle helpers | Exact set comparison |
-| [`cos.cs`](../../../ThermoMapper/src/hashish/cos.cs) | Cosine, angular distance, normalization, distance matrix | Exact vector comparison |
-| [`ncd.cs`](../../../ThermoMapper/src/hashish/ncd.cs) | Brotli/Deflate/GZip/ZLib normalized compression comparison | Heuristic representation-free comparison |
-| [`measure.cs`](../../../ThermoMapper/src/hashish/measure.cs) | Common distance/similarity interface and adapters | Pairwise orchestration abstraction |
-| [`tokenizer.cs`](../../../ThermoMapper/src/hashish/tokenizer.cs) | Unicode normalization, case folding, `\w+` tokenization | Text representation |
-| [`shingler.cs`](../../../ThermoMapper/src/hashish/shingler.cs) | Ordered and set-valued word n-grams | Local-order text features |
-| [`histogram.cs`](../../../ThermoMapper/src/hashish/histogram.cs) | Smoothed count normalization and unigram PMFs | Probability-distribution features |
-| [`idf.cs`](../../../ThermoMapper/src/hashish/idf.cs) | Document frequency, average length, three IDF formulas | Corpus-specific feature weighting |
-| [`bm25.cs`](../../../ThermoMapper/src/hashish/bm25.cs) | Average length and smoothed IDF tuple for SimHash | Legacy fitted-weight adapter |
-| [`tfidf.cs`](../../../ThermoMapper/src/hashish/tfidf.cs) | Tokenized corpus, fitted model, dense/sparse transforms | Lexical vectorization |
-| [`tfidf_search.cs`](../../../ThermoMapper/src/hashish/tfidf_search.cs) | Query scoring, nearest documents, bounded top-K | Local lexical retrieval |
-| [`cooc.cs`](../../../ThermoMapper/src/hashish/cooc.cs) | Windowed token co-occurrence model | Distributional corpus representation |
-| [`cooc_stats.cs`](../../../ThermoMapper/src/hashish/cooc_stats.cs) | PMI/PPMI, conditional probability, context vectors, entropy, neighbors | Association and distributional semantics |
+| [`seeded.cs`](../../../../ThermoMapper/src/hashish/seeded.cs) | 64-bit mixer and seeded FNV over chars, bytes, and `uint`s | Hash-family substrate |
+| [`bloom.cs`](../../../../ThermoMapper/src/hashish/bloom.cs) | Sized Bloom filter, double hashing, membership, fill ratio | Probabilistic membership |
+| [`countmin.cs`](../../../../ThermoMapper/src/hashish/countmin.cs) | Epsilon/delta-sized Count-Min Sketch | Approximate streaming frequency |
+| [`hyperloglog.cs`](../../../../ThermoMapper/src/hashish/hyperloglog.cs) | Precision-sized HLL, estimate, merge | Approximate distinct cardinality |
+| [`minhash.cs`](../../../../ThermoMapper/src/hashish/minhash.cs) | Character-shingle MinHash, Jaccard estimate, banded LSH index | Set-similarity signature and candidate search |
+| [`simhash.cs`](../../../../ThermoMapper/src/hashish/simhash.cs) | BM25/IDF-weighted 64-bit SimHash and Hamming distance | Angular near-duplicate signature |
+| [`ctph.cs`](../../../../ThermoMapper/src/hashish/ctph.cs) | Dual-resolution content-triggered piecewise digest and sequence comparison | Fuzzy file-family concept |
+| [`tlsh.cs`](../../../../ThermoMapper/src/hashish/tlsh.cs) | Window buckets, quartiles, compact digest, simplified distance | Locality-sensitive whole-content concept |
+| [`levenshtein.cs`](../../../../ThermoMapper/src/hashish/levenshtein.cs) | Character edit distance and normalized similarity | Exact sequence comparison |
+| [`jaccard.cs`](../../../../ThermoMapper/src/hashish/jaccard.cs) | Jaccard, containment, overlap coefficient, Dice, word-shingle helpers | Exact set comparison |
+| [`cos.cs`](../../../../ThermoMapper/src/hashish/cos.cs) | Cosine, angular distance, normalization, distance matrix | Exact vector comparison |
+| [`ncd.cs`](../../../../ThermoMapper/src/hashish/ncd.cs) | Brotli/Deflate/GZip/ZLib normalized compression comparison | Heuristic representation-free comparison |
+| [`measure.cs`](../../../../ThermoMapper/src/hashish/measure.cs) | Common distance/similarity interface and adapters | Pairwise orchestration abstraction |
+| [`tokenizer.cs`](../../../../ThermoMapper/src/hashish/tokenizer.cs) | Unicode normalization, case folding, `\w+` tokenization | Text representation |
+| [`shingler.cs`](../../../../ThermoMapper/src/hashish/shingler.cs) | Ordered and set-valued word n-grams | Local-order text features |
+| [`histogram.cs`](../../../../ThermoMapper/src/hashish/histogram.cs) | Smoothed count normalization and unigram PMFs | Probability-distribution features |
+| [`idf.cs`](../../../../ThermoMapper/src/hashish/idf.cs) | Document frequency, average length, three IDF formulas | Corpus-specific feature weighting |
+| [`bm25.cs`](../../../../ThermoMapper/src/hashish/bm25.cs) | Average length and smoothed IDF tuple for SimHash | Legacy fitted-weight adapter |
+| [`tfidf.cs`](../../../../ThermoMapper/src/hashish/tfidf.cs) | Tokenized corpus, fitted model, dense/sparse transforms | Lexical vectorization |
+| [`tfidf_search.cs`](../../../../ThermoMapper/src/hashish/tfidf_search.cs) | Query scoring, nearest documents, bounded top-K | Local lexical retrieval |
+| [`cooc.cs`](../../../../ThermoMapper/src/hashish/cooc.cs) | Windowed token co-occurrence model | Distributional corpus representation |
+| [`cooc_stats.cs`](../../../../ThermoMapper/src/hashish/cooc_stats.cs) | PMI/PPMI, conditional probability, context vectors, entropy, neighbors | Association and distributional semantics |
 
 All 22 canonical source files are represented above.
 

@@ -29,12 +29,12 @@ Codex-Scientiae currently has more than an engine/client split. It has four dist
 | Private PowerShell client | Runtime discovery, process lifetime, strict protocol validation, host-value conversion, deadlines, and cleanup | Mostly disappears in one Node process; the surviving concerns belong to a shared operation host |
 | Public PowerShell cmdlets | Ergonomic parameters, safe defaults, cardinality checks, and result shaping | Thin MCP handlers calling an application facade |
 
-The ownership statement is explicit in the [`jsonl_engine-client` README](../../../codex-scientiae/src/jsonl_engine-client/README.md): Python owns parsing, pointers, sidecars, signatures, and transactions; the client owns the cross-runtime impedance. The package's [`__init__.py`](../../../codex-scientiae/src/jsonl_engine/__init__.py) also declares a leaf-first dependency map rather than presenting one undifferentiated utility module.
+The ownership statement is explicit in the [`jsonl_engine-client` README](../../../../codex-scientiae/src/jsonl_engine-client/README.md): Python owns parsing, pointers, sidecars, signatures, and transactions; the client owns the cross-runtime impedance. The package's [`__init__.py`](../../../../codex-scientiae/src/jsonl_engine/__init__.py) also declares a leaf-first dependency map rather than presenting one undifferentiated utility module.
 
 Several details are especially worth preserving:
 
-- `JsonlEngine` is deliberately a byte/transaction layer and disclaims kinds, schemas, ingestion, and run layout in [`engine.py`](../../../codex-scientiae/src/jsonl_engine/engine.py).
-- artifact kinds bind declared text, validation, naming, and sidecar policy above that byte layer through [`kinds/base.py`](../../../codex-scientiae/src/jsonl_engine/kinds/base.py);
+- `JsonlEngine` is deliberately a byte/transaction layer and disclaims kinds, schemas, ingestion, and run layout in [`engine.py`](../../../../codex-scientiae/src/jsonl_engine/engine.py).
+- artifact kinds bind declared text, validation, naming, and sidecar policy above that byte layer through [`kinds/base.py`](../../../../codex-scientiae/src/jsonl_engine/kinds/base.py);
 - the private client centralizes interpreter selection, exact argument passing, environment isolation, deadlines, process-tree cleanup, UTF-8 framing, sequence validation, and all-or-nothing result release;
 - the public wrappers collapse physical read modes into a safe `Complete` default and preserve JSON values across PowerShell's different pipeline semantics;
 - the client explicitly says to cross the boundary once per artifact or query, never once per record.
@@ -214,7 +214,7 @@ Owns session/pane state, the two execution models, per-pane sequencing, dispatch
 
 ### Artifact engine
 
-Owns captured bytes, immutable references, source-generation guards, lifecycle/retention, atomic publication, manifests, and exact integrity. It is the common substrate for console bodies, delegated reports, query results, and imported source material. A durable `artifact_ref` remains distinct from an ephemeral validated `mount_ref`; the shared lifecycle and validation rules are specified in the [`Mounted Artifact contract`](../mcp/mounted-artifact-contract.md).
+Owns captured bytes, immutable references, source-generation guards, lifecycle/retention, atomic publication, manifests, and exact integrity. It is the common substrate for console bodies, delegated reports, query results, and imported source material. A durable `artifact_ref` remains distinct from an ephemeral validated `mount_ref`; the shared lifecycle and validation rules are specified in the [`Mounted Artifact contract`](mounted-artifact-contract.md).
 
 ### Event and journal engine
 
@@ -236,7 +236,7 @@ Provides cross-cutting request identity, cancellation, deadline, cleanup, concur
 
 Owns normalized context-epoch transitions, immutable checkpoints, target-specific restore plans, and per-delivery receipts. Console, Artifact, Job, query, task, capability, and Guidance components contribute typed state without controlling reinjection. The service persists richer reference-bearing state than it normally injects; a restore compiler selects a bounded target-client projection after revalidating identity, freshness, capabilities, permissions, and handles.
 
-Native `PreCompact`, `PreCompress`, `SessionStart`, resume, or equivalent hooks are adapter evidence for `context_epoch_closing` and `context_epoch_opened`, not the portable contract itself. Unsupported clients use continuously maintained projections plus a first-call or explicit-resume fallback. The full provider, policy, fork, authority, omission, and delivery rules live in the [`Session Continuity contract`](../mcp/session-continuity-contract.md).
+Native `PreCompact`, `PreCompress`, `SessionStart`, resume, or equivalent hooks are adapter evidence for `context_epoch_closing` and `context_epoch_opened`, not the portable contract itself. Unsupported clients use continuously maintained projections plus a first-call or explicit-resume fallback. The full provider, policy, fork, authority, omission, and delivery rules live in the [`Session Continuity contract`](session-continuity-contract.md).
 
 ## Where Hashish belongs
 
@@ -291,16 +291,16 @@ An internal capability registry can describe providers, cost, limits, determinis
 
 ## Current para-agent pressure points
 
-The current implementation already contains several good backend seams: [`Mux`](../../mcp/para-agent/src/mux.js) is close to an infrastructure adapter, captured command output bypasses the terminal, and the Console contract establishes producer-neutral records, external bodies, unconditional receipts, and reader-held cursors.
+The current implementation already contains several good backend seams: [`Mux`](../../../mcp/para-agent/src/mux.js) is close to an infrastructure adapter, captured command output bypasses the terminal, and the Console contract establishes producer-neutral records, external bodies, unconditional receipts, and reader-held cursors.
 
 The main entrypoint now carries too many layers at once:
 
-- [`index.js`](../../mcp/para-agent/src/index.js) imports the MCP SDK, constructs `Mux`, owns journal-root policy and caches, registers schemas, orchestrates use cases, and formats responses;
+- [`index.js`](../../../mcp/para-agent/src/index.js) imports the MCP SDK, constructs `Mux`, owns journal-root policy and caches, registers schemas, orchestrates use cases, and formats responses;
 - `status` manually constructs and parses the tmux format;
 - `exec` owns ephemeral-session naming, creation, capture, retention warnings, teardown, and cache cleanup;
 - `log`, `body`, and `find` each remember to ingest the inbox and finalize open turns before reading;
 - output deduplication exists both at the presentation edge and in journal code;
-- [`journal.js`](../../mcp/para-agent/src/journal.js) spans physical layout, sequencing, ingestion, queries, receipt construction, and user-facing continuation details.
+- [`journal.js`](../../../mcp/para-agent/src/journal.js) spans physical layout, sequencing, ingestion, queries, receipt construction, and user-facing continuation details.
 
 These are not arguments for changing behavior immediately. They show where the application facade would remove duplication and make future capabilities cheaper to integrate without expanding `index.js` or the agent's instructions.
 

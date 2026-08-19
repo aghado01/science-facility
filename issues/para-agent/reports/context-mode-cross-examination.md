@@ -28,20 +28,20 @@ This refines, rather than replaces, the current para-agent synthesis. Keep four 
 
 This report cross-examines four bodies of local evidence:
 
-1. The pinned context-mode 1.0.169 installation inside [`context-mode-core/node/node_modules/context-mode`](../../../pet-projects/context-mode-core/node/node_modules/context-mode).
-2. The local adaptations, deployment system, tests, architecture, and postmortems in [`context-mode-core`](../../../pet-projects/context-mode-core).
-3. The current [`packages/context-mode`](../../../packages/context-mode) checkout where it exposes later implementation details or client formatters.
+1. The pinned context-mode 1.0.169 installation inside [`context-mode-core/node/node_modules/context-mode`](../../../../pet-projects/context-mode-core/node/node_modules/context-mode).
+2. The local adaptations, deployment system, tests, architecture, and postmortems in [`context-mode-core`](../../../../pet-projects/context-mode-core).
+3. The current [`packages/context-mode`](../../../../packages/context-mode) checkout where it exposes later implementation details or client formatters.
 4. The earlier cybernetic-copilot, vscodepilot, and hierarchical-memory analysis in [`project-archaeology.md`](project-archaeology.md).
 
 The pinned installation is the primary source for claims about the runtime that `context-mode-core` actually wrapped. The current checkout retains the same package version even though its source has advanced, which is itself a provenance warning. The skill files and routing material examined here are byte-identical between the pinned installation and current checkout; that does not imply that the entire runtimes are identical.
 
-The old project's own final postmortem converges on the same center proposed here: a pure data plane, client-neutral policy and state, deterministic artifacts, a privileged transactional control plane, and real peer adapters at native boundaries. See [`context-mode-nexus-post-mortem-and-remediation-plan.md`](../../../pet-projects/context-mode-core/issues/post-mortems/context-mode-nexus-post-mortem-and-remediation-plan.md), especially lines 876–887.
+The old project's own final postmortem converges on the same center proposed here: a pure data plane, client-neutral policy and state, deterministic artifacts, a privileged transactional control plane, and real peer adapters at native boundaries. See [`context-mode-nexus-post-mortem-and-remediation-plan.md`](../../../../pet-projects/context-mode-core/issues/post-mortems/context-mode-nexus-post-mortem-and-remediation-plan.md), especially lines 876–887.
 
 ## What context-mode got right
 
 ### 1. Out-of-context derivation is a real capability
 
-`ctx_execute` established a useful pattern: do high-volume computation in a subprocess and emit only the requested finding. When stdout is large, the provider can retain it and return a searchable pointer instead of admitting all of it to the conversation. See the pinned [`server.js`](../../../pet-projects/context-mode-core/node/node_modules/context-mode/build/server.js), around lines 1455 and 1707.
+`ctx_execute` established a useful pattern: do high-volume computation in a subprocess and emit only the requested finding. When stdout is large, the provider can retain it and return a searchable pointer instead of admitting all of it to the conversation. See the pinned [`server.js`](../../../../pet-projects/context-mode-core/node/node_modules/context-mode/build/server.js), around lines 1455 and 1707.
 
 This is complementary to para-agent rather than synonymous with it:
 
@@ -51,7 +51,7 @@ This is complementary to para-agent rather than synonymous with it:
 
 ### 2. Capture and later narrowing can be economical
 
-The skill's anti-pattern reference distinguishes preserving full output from searching it later. That is valuable when the caller expects multiple questions, auditability, or replay. See [`anti-patterns.md`](../../../pet-projects/context-mode-core/node/node_modules/context-mode/skills/context-mode/references/anti-patterns.md), around lines 247–269.
+The skill's anti-pattern reference distinguishes preserving full output from searching it later. That is valuable when the caller expects multiple questions, auditability, or replay. See [`anti-patterns.md`](../../../../pet-projects/context-mode-core/node/node_modules/context-mode/skills/context-mode/references/anti-patterns.md), around lines 247–269.
 
 It is not a universal rule. “Never narrow before capture” can be wasteful or harmful for a one-shot derivation, sensitive material, expensive retention, or a source whose full body is already durably addressable elsewhere. Para-agent should make capture intent explicit instead of inferring it from output size.
 
@@ -72,19 +72,19 @@ known operations + known selectors + one aggregate budget
 
 Context-mode's FTS5 store uses chunking, lexical variants, rank fusion, source filters, timelines, and file hashes. Those are good implementation ideas for an optional artifact search provider.
 
-The index must not become canonical evidence. The pinned store replaces an earlier source when the same label is re-indexed, while automatic execution labels can be as broad as `execute:javascript`; later executions can therefore replace earlier searchable history. See [`store.js`](../../../pet-projects/context-mode-core/node/node_modules/context-mode/build/store.js), around line 876, and [`server.js`](../../../pet-projects/context-mode-core/node/node_modules/context-mode/build/server.js), around line 1717.
+The index must not become canonical evidence. The pinned store replaces an earlier source when the same label is re-indexed, while automatic execution labels can be as broad as `execute:javascript`; later executions can therefore replace earlier searchable history. See [`store.js`](../../../../pet-projects/context-mode-core/node/node_modules/context-mode/build/store.js), around line 876, and [`server.js`](../../../../pet-projects/context-mode-core/node/node_modules/context-mode/build/server.js), around line 1717.
 
 A para-agent search hit should resolve to an immutable or guarded artifact occurrence. Rebuilding or deleting the index must not delete the evidence.
 
 ### 5. Native asymmetry was eventually made explicit
 
-The current formatters record material differences among clients and even among fields of one hook event. For example, the local Claude formatter records that Bash `updatedInput.command` was ignored in Claude Code 2.1.x and converts that attempted rewrite into a denial, while other tool fields and other clients have different behavior. See [`claude-code.mjs`](../../../packages/context-mode/hooks/formatters/claude-code.mjs), lines 57–100, and the other files under [`hooks/formatters`](../../../packages/context-mode/hooks/formatters).
+The current formatters record material differences among clients and even among fields of one hook event. For example, the local Claude formatter records that Bash `updatedInput.command` was ignored in Claude Code 2.1.x and converts that attempted rewrite into a denial, while other tool fields and other clients have different behavior. See [`claude-code.mjs`](../../../../packages/context-mode/hooks/formatters/claude-code.mjs), lines 57–100, and the other files under [`hooks/formatters`](../../../../packages/context-mode/hooks/formatters).
 
 That evidence invalidates a client-wide boolean such as `supportsModify`. Capabilities must be keyed by client version, mode, event, native tool, field, and effect.
 
 ### 6. Some deployment mechanics were unusually disciplined
 
-The old core preserved upstream commit and artifact digests in [`BUILD.json`](../../../pet-projects/context-mode-core/node/BUILD.json), required exact patch anchors in [`context-mode-patches.mjs`](../../../pet-projects/context-mode-core/lib/context-mode-patches.mjs), defaulted the deployment command to planning unless `--apply` was supplied, bounded paths, backed up before mutation, and used temporary-file replacement for individual files.
+The old core preserved upstream commit and artifact digests in [`BUILD.json`](../../../../pet-projects/context-mode-core/node/BUILD.json), required exact patch anchors in [`context-mode-patches.mjs`](../../../../pet-projects/context-mode-core/lib/context-mode-patches.mjs), defaulted the deployment command to planning unless `--apply` was supplied, bounded paths, backed up before mutation, and used temporary-file replacement for individual files.
 
 These are worth preserving in a separate administrative system. They are not reasons to give an ordinary model-visible data-plane server cross-client mutation authority.
 
@@ -118,14 +118,14 @@ Each record needs its own identity and evidence class. A `PostToolUse` event is 
 
 The following behavior is grounded in the current `packages/context-mode` checkout, not assumed to be universal context-mode behavior or a portable client contract:
 
-1. Claude's [`precompact.mjs`](../../../packages/context-mode/hooks/precompact.mjs) reads the events bound to the incoming session, builds a resume snapshot, and upserts it before compaction. The database upsert explicitly resets `consumed` to `0`; see [`src/session/db.ts`](../../../packages/context-mode/src/session/db.ts), around lines 1044–1051.
-2. On Claude `SessionStart` with `source === "compact"`, [`sessionstart.mjs`](../../../packages/context-mode/hooks/sessionstart.mjs), around lines 191–250, retrieves that row and marks it consumed, but does **not** append `resume.snapshot` to `additionalContext`. It rereads durable session events, writes an event file, constructs a fresh session directive, and separately builds an automatic behavioral-state injection. If no events are found, the snapshot can still be marked consumed without either reconstructed payload being added.
-3. Claude directly appends a stored snapshot only on the `source === "resume"` fallback where the incoming session ID has no live events. That path atomically claims the latest unconsumed snapshot belonging to another session and appends it; see the same [`sessionstart.mjs`](../../../packages/context-mode/hooks/sessionstart.mjs), around lines 260–289, and the claim query in [`src/session/db.ts`](../../../packages/context-mode/src/session/db.ts), around lines 1059–1078. This is the fresh-ID `/resume` recovery case, not the ordinary post-compaction path.
-4. Codex differs. Its [`hooks/codex/sessionstart.mjs`](../../../packages/context-mode/hooks/codex/sessionstart.mjs), around lines 66–95, reconstructs a directive from current-session events and, on `source === "compact"`, also appends the stored same-session snapshot before marking it consumed. Its `resume` branch does not implement Claude's cross-session snapshot fallback.
+1. Claude's [`precompact.mjs`](../../../../packages/context-mode/hooks/precompact.mjs) reads the events bound to the incoming session, builds a resume snapshot, and upserts it before compaction. The database upsert explicitly resets `consumed` to `0`; see [`src/session/db.ts`](../../../../packages/context-mode/src/session/db.ts), around lines 1044–1051.
+2. On Claude `SessionStart` with `source === "compact"`, [`sessionstart.mjs`](../../../../packages/context-mode/hooks/sessionstart.mjs), around lines 191–250, retrieves that row and marks it consumed, but does **not** append `resume.snapshot` to `additionalContext`. It rereads durable session events, writes an event file, constructs a fresh session directive, and separately builds an automatic behavioral-state injection. If no events are found, the snapshot can still be marked consumed without either reconstructed payload being added.
+3. Claude directly appends a stored snapshot only on the `source === "resume"` fallback where the incoming session ID has no live events. That path atomically claims the latest unconsumed snapshot belonging to another session and appends it; see the same [`sessionstart.mjs`](../../../../packages/context-mode/hooks/sessionstart.mjs), around lines 260–289, and the claim query in [`src/session/db.ts`](../../../../packages/context-mode/src/session/db.ts), around lines 1059–1078. This is the fresh-ID `/resume` recovery case, not the ordinary post-compaction path.
+4. Codex differs. Its [`hooks/codex/sessionstart.mjs`](../../../../packages/context-mode/hooks/codex/sessionstart.mjs), around lines 66–95, reconstructs a directive from current-session events and, on `source === "compact"`, also appends the stored same-session snapshot before marking it consumed. Its `resume` branch does not implement Claude's cross-session snapshot fallback.
 
 There is consequently no single context-mode checkpoint/restore sequence. Even within one checkout, storage, selection, rendering, claiming, and delivery semantics vary by adapter. That is positive evidence for versioned client lifecycle capabilities and a neutral continuity contract above them.
 
-The Claude compact branch also contains a measurement defect. Its `snapshot-consumed` event says that `snapshotBytes` were injected and records that number as `bytes_returned`, although the stored snapshot is not the payload appended on that path. The actual added material is the always-present routing block plus the reconstructed session directive and, when available, the automatic injection. Only [`auto-injection.mjs`](../../../packages/context-mode/hooks/auto-injection.mjs), around lines 13–22 and 60–101, declares an aggregate target of roughly 500 tokens. [`session-directive.mjs`](../../../packages/context-mode/hooks/session-directive.mjs), around lines 274–499, applies several local truncations and reference windows but no common aggregate budget with the routing block. These payloads and their observed delivery therefore need separate measurements; stored snapshot length is neither their byte count nor proof of model admission.
+The Claude compact branch also contains a measurement defect. Its `snapshot-consumed` event says that `snapshotBytes` were injected and records that number as `bytes_returned`, although the stored snapshot is not the payload appended on that path. The actual added material is the always-present routing block plus the reconstructed session directive and, when available, the automatic injection. Only [`auto-injection.mjs`](../../../../packages/context-mode/hooks/auto-injection.mjs), around lines 13–22 and 60–101, declares an aggregate target of roughly 500 tokens. [`session-directive.mjs`](../../../../packages/context-mode/hooks/session-directive.mjs), around lines 274–499, applies several local truncations and reference windows but no common aggregate budget with the routing block. These payloads and their observed delivery therefore need separate measurements; stored snapshot length is neither their byte count nor proof of model admission.
 
 The single `consumed` bit is also narrower than the general problem. It cannot represent one checkpoint being restored into a resumed epoch, a fork, a handoff, and a second client independently. Marking it before successful delivery can discard the only recovery route after an adapter failure. A general system needs immutable checkpoints and per-target, idempotent delivery receipts rather than global one-shot consumption.
 
@@ -141,13 +141,13 @@ The key separation is between persisted state and injected state:
 
 Potential providers include active console panes and observation cursors, pending jobs and talk-back, artifact and mount references, current MCP capability/profile facts, the active objective and unresolved decisions, and canonical references to relevant procedural or metacognitive guidance. Configuration should decide which classes persist, which are re-injected inline versus restored by reference or requery, and which profiles apply to compact, resume, fork, handoff, clear, or crash recovery. Capability and permission facts must be revalidated in the target epoch, and historical guidance must retain provenance rather than acquiring authority merely because it survived compaction.
 
-The canonical types, policies, invariants, and fallback semantics belong in [`session-continuity-contract.md`](../mcp/session-continuity-contract.md). This report supplies the donor evidence and cautions: preserve the pattern of durable state plus bounded reorientation, while avoiding context-mode's adapter-specific payloads, global consumption flag, conflated accounting, and repeated guidance as the design ceiling.
+The canonical types, policies, invariants, and fallback semantics belong in [`session-continuity-contract.md`](session-continuity-contract.md). This report supplies the donor evidence and cautions: preserve the pattern of durable state plus bounded reorientation, while avoiding context-mode's adapter-specific payloads, global consumption flag, conflated accounting, and repeated guidance as the design ceiling.
 
 ## Where the design became pathological
 
 ### 1. The “neutral” vocabulary remained Claude-shaped
 
-The local wrapper maps PowerShell, Cmd, Bash, Shell, and `exec_command` into canonical `Bash`; it similarly normalizes other native tools into Claude-style `Read`, `Grep`, and `Glob`. See [`custom-routing.mjs`](../../../pet-projects/context-mode-core/runtime/lib/custom-routing.mjs), lines 6–39.
+The local wrapper maps PowerShell, Cmd, Bash, Shell, and `exec_command` into canonical `Bash`; it similarly normalizes other native tools into Claude-style `Read`, `Grep`, and `Glob`. See [`custom-routing.mjs`](../../../../pet-projects/context-mode-core/runtime/lib/custom-routing.mjs), lines 6–39.
 
 This improves local interoperability but is not a neutral semantic model. Neutral operations should name intent:
 
@@ -170,9 +170,9 @@ The local routing contract reduces decisions to `deny > ask > modify > context`.
 The wrapper made this concrete in two dangerous ways:
 
 - a local optimization match could return before the upstream hook's later security checks ran;
-- “security policy” was distinguished from token routing by regexing English response text in [`native-runner.mjs`](../../../pet-projects/context-mode-core/runtime/lib/native-runner.mjs), around lines 78 and 231.
+- “security policy” was distinguished from token routing by regexing English response text in [`native-runner.mjs`](../../../../pet-projects/context-mode-core/runtime/lib/native-runner.mjs), around lines 78 and 231.
 
-The first is a concrete control-flow defect, not merely an abstraction complaint. `runNativeHook()` returns a matching local decision at lines 231–240, while the upstream security evaluation it thereby skips occurs in the pinned [`routing.mjs`](../../../pet-projects/context-mode-core/node/node_modules/context-mode/hooks/core/routing.mjs), around lines 703–723. Under globally configured advisory routing, a large-output local match can become nonblocking context and allow the original tool without consulting the upstream deny policy. Antigravity takes a different path that evaluates both decisions before composition. The integration test's security probe does not match a local large-output rule, so it never tests the conflict.
+The first is a concrete control-flow defect, not merely an abstraction complaint. `runNativeHook()` returns a matching local decision at lines 231–240, while the upstream security evaluation it thereby skips occurs in the pinned [`routing.mjs`](../../../../pet-projects/context-mode-core/node/node_modules/context-mode/hooks/core/routing.mjs), around lines 703–723. Under globally configured advisory routing, a large-output local match can become nonblocking context and allow the original tool without consulting the upstream deny policy. Antigravity takes a different path that evaluates both decisions before composition. The integration test's security probe does not match a local large-output rule, so it never tests the conflict.
 
 Security must not depend on wording, and optimization must not acquire denial authority merely because the client cannot display advice. Every applicable enforcement policy must run before economy or teaching decisions are lowered.
 
@@ -204,7 +204,7 @@ Other potentially resident or repeatedly injected surfaces include:
 | Skill catalog descriptions | 2,546 characters | Exposure depends on client skill discovery |
 | Main context-mode skill | 16,683 bytes | Admission depends on skill loading behavior |
 
-Bytes are not provider tokens, and adapter-visible text is not proof of model admission. Even so, the design duplicates the same facts across config instructions, the main skill, tool descriptions, SessionStart, PreToolUse nudges, compact-resume injection, and subagent prompt rewriting. The current routing hook appends the full routing block to selected subagent prompts; see [`routing.mjs`](../../../packages/context-mode/hooks/core/routing.mjs), around line 892.
+Bytes are not provider tokens, and adapter-visible text is not proof of model admission. Even so, the design duplicates the same facts across config instructions, the main skill, tool descriptions, SessionStart, PreToolUse nudges, compact-resume injection, and subagent prompt rewriting. The current routing hook appends the full routing block to selected subagent prompts; see [`routing.mjs`](../../../../packages/context-mode/hooks/core/routing.mjs), around line 892.
 
 This is a credible contributor to Claude overhead and behavioral confusion, but it is not yet a causal explanation for the observed 52K-token baseline.
 
@@ -220,9 +220,9 @@ The predictive classifier was deliberately broad enough to nudge even bounded Po
 
 ### 6. “Unified memory” collapsed evidence and authority
 
-The searchable store combines documents, execution output, errors, prompts, inferred decisions, session summaries, and auto-memory categories. Retrieval relevance then risks being mistaken for instructional authority. See the pinned [`server.js`](../../../pet-projects/context-mode-core/node/node_modules/context-mode/build/server.js), around line 2288, and [`auto-memory.js`](../../../pet-projects/context-mode-core/node/node_modules/context-mode/build/search/auto-memory.js), around line 14.
+The searchable store combines documents, execution output, errors, prompts, inferred decisions, session summaries, and auto-memory categories. Retrieval relevance then risks being mistaken for instructional authority. See the pinned [`server.js`](../../../../pet-projects/context-mode-core/node/node_modules/context-mode/build/server.js), around line 2288, and [`auto-memory.js`](../../../../pet-projects/context-mode-core/node/node_modules/context-mode/build/search/auto-memory.js), around line 14.
 
-The resume snapshot has the right table-of-contents instinct but incompatible claims: it advertises zero truncation, truncates prompt excerpts, and assembles nonempty sections without a final byte budget. See [`snapshot.js`](../../../pet-projects/context-mode-core/node/node_modules/context-mode/build/session/snapshot.js), around lines 1, 361, and 398.
+The resume snapshot has the right table-of-contents instinct but incompatible claims: it advertises zero truncation, truncates prompt excerpts, and assembles nonempty sections without a final byte budget. See [`snapshot.js`](../../../../pet-projects/context-mode-core/node/node_modules/context-mode/build/session/snapshot.js), around lines 1, 361, and 398.
 
 For para-agent:
 
@@ -234,25 +234,25 @@ For para-agent:
 
 ### 7. Conversation identity was guessed
 
-The MCP server did not possess a portable native conversation ID and sometimes attributed activity to the latest project event; local hook state could fall back to the parent PID. See [`server.js`](../../../pet-projects/context-mode-core/node/node_modules/context-mode/build/server.js), around line 373, and [`custom-routing.mjs`](../../../pet-projects/context-mode-core/runtime/lib/custom-routing.mjs), lines 135–142.
+The MCP server did not possess a portable native conversation ID and sometimes attributed activity to the latest project event; local hook state could fall back to the parent PID. See [`server.js`](../../../../pet-projects/context-mode-core/node/node_modules/context-mode/build/server.js), around line 373, and [`custom-routing.mjs`](../../../../pet-projects/context-mode-core/runtime/lib/custom-routing.mjs), lines 135–142.
 
 MCP connection, hook process, operating-system process, conversation, task, and context epoch are different lifetimes. Missing correlation must remain explicitly `unbound`. False identity corrupts metrics, guidance throttling, memory, and exposure suppression more seriously than an honest unknown does.
 
 ### 8. Search performed hidden writes
 
-`ctx_search` was presented as read-only while stale-source refresh could rewrite the index during a query. See [`store.js`](../../../pet-projects/context-mode-core/node/node_modules/context-mode/build/store.js), around line 1118.
+`ctx_search` was presented as read-only while stale-source refresh could rewrite the index during a query. See [`store.js`](../../../../pet-projects/context-mode-core/node/node_modules/context-mode/build/store.js), around line 1118.
 
 Refresh is legitimate, but it must be explicit in the receipt or occur in a separately governed projection-maintenance path. Query semantics should not hide mutation, network access, or source refresh.
 
 ### 9. Partial execution could masquerade as success
 
-Timeout or background execution could return partial output through a nominally successful call. See [`server.js`](../../../pet-projects/context-mode-core/node/node_modules/context-mode/build/server.js), around line 1643.
+Timeout or background execution could return partial output through a nominally successful call. See [`server.js`](../../../../pet-projects/context-mode-core/node/node_modules/context-mode/build/server.js), around line 1643.
 
 A background continuation is a job. Partial material requires `complete:false`, lifecycle status, a cursor or body reference, omissions, and an exact continuation. This is the same truthfulness requirement already identified for para-agent's Console Journal and Job Exchange.
 
 ### 10. The executor was called a sandbox without enforcing one
 
-The pinned executor launches languages with the project as working directory, while routing prose claimed writes would not persist. See [`executor.js`](../../../pet-projects/context-mode-core/node/node_modules/context-mode/build/executor.js), around line 232, and [`routing-block.mjs`](../../../pet-projects/context-mode-core/node/node_modules/context-mode/hooks/routing-block.mjs), around line 42.
+The pinned executor launches languages with the project as working directory, while routing prose claimed writes would not persist. See [`executor.js`](../../../../pet-projects/context-mode-core/node/node_modules/context-mode/build/executor.js), around line 232, and [`routing-block.mjs`](../../../../pet-projects/context-mode-core/node/node_modules/context-mode/hooks/routing-block.mjs), around line 42.
 
 Para-agent should distinguish:
 
@@ -262,17 +262,17 @@ Para-agent should distinguish:
 
 Guidance cannot supply a security boundary.
 
-The old hydrator also queried every value under `HKCU\Environment` and merged it into child processes. This is a read, not a persistent registry mutation, but it creates an ambient capability, secret-exposure, and reproducibility boundary. Harness adapters and execution profiles should inherit only declared variables or an explicit allowlist; diagnostics may record variable names/counts but never secret values. See [`user-environment.mjs`](../../../pet-projects/context-mode-core/lib/user-environment.mjs), lines 41–108.
+The old hydrator also queried every value under `HKCU\Environment` and merged it into child processes. This is a read, not a persistent registry mutation, but it creates an ambient capability, secret-exposure, and reproducibility boundary. Harness adapters and execution profiles should inherit only declared variables or an explicit allowlist; diagnostics may record variable names/counts but never secret values. See [`user-environment.mjs`](../../../../pet-projects/context-mode-core/lib/user-environment.mjs), lines 41–108.
 
 ### 11. Runtime and administration shared one authority surface
 
-`infrastructure.json` names filesystem and administration policies separately, but helpers recombine them. The combined roots then flow into upstream Claude permissions, Codex writable roots, and SessionStart prose describing them as globally approved. See [`infrastructure.mjs`](../../../pet-projects/context-mode-core/lib/infrastructure.mjs), lines 157–203; [`upstream-policy.mjs`](../../../pet-projects/context-mode-core/lib/upstream-policy.mjs), lines 15–23; and [`codex.mjs`](../../../pet-projects/context-mode-core/adapters/codex.mjs), lines 122–147.
+`infrastructure.json` names filesystem and administration policies separately, but helpers recombine them. The combined roots then flow into upstream Claude permissions, Codex writable roots, and SessionStart prose describing them as globally approved. See [`infrastructure.mjs`](../../../../pet-projects/context-mode-core/lib/infrastructure.mjs), lines 157–203; [`upstream-policy.mjs`](../../../../pet-projects/context-mode-core/lib/upstream-policy.mjs), lines 15–23; and [`codex.mjs`](../../../../pet-projects/context-mode-core/adapters/codex.mjs), lines 122–147.
 
 This conflates content access, executor sandboxing, host governance, privileged administration, and teaching. A runtime artifact provider should not be able to edit Claude, Cursor, Codex, and Antigravity configuration merely because all of those paths are centrally known.
 
 ### 12. Peer adapters were nominal
 
-The adapter registry contains only Codex. Claude and Cursor behavior is embedded in generic runtime and deployment branches, while Antigravity receives special handling elsewhere. See [`adapters/index.mjs`](../../../pet-projects/context-mode-core/adapters/index.mjs) and [`native-runner.mjs`](../../../pet-projects/context-mode-core/runtime/lib/native-runner.mjs), lines 17–26.
+The adapter registry contains only Codex. Claude and Cursor behavior is embedded in generic runtime and deployment branches, while Antigravity receives special handling elsewhere. See [`adapters/index.mjs`](../../../../pet-projects/context-mode-core/adapters/index.mjs) and [`native-runner.mjs`](../../../../pet-projects/context-mode-core/runtime/lib/native-runner.mjs), lines 17–26.
 
 The result was centralized files without a mechanically enforced dependency boundary. Real peer adapters must be independently testable implementations of a small contract; the stable core must not import native paths, event names, tool aliases, or response envelopes.
 
@@ -552,7 +552,7 @@ Compilation can change syntax, but a client profile should select one resident c
 
 ## Claude overhead investigation
 
-The old wrapper is itself a plausible confound. A native hook invocation starts the central Node runner and may query `HKCU\Environment`. If local routing does not return first, the pass-through path synchronously starts a second Node process for the upstream hook with a 20-second timeout and a 4 MiB buffer. See [`hook-runner.mjs`](../../../pet-projects/context-mode-core/runtime/hook-runner.mjs), lines 5–30; [`native-runner.mjs`](../../../pet-projects/context-mode-core/runtime/lib/native-runner.mjs), lines 222–255; and [`user-environment.mjs`](../../../pet-projects/context-mode-core/lib/user-environment.mjs), lines 41–108.
+The old wrapper is itself a plausible confound. A native hook invocation starts the central Node runner and may query `HKCU\Environment`. If local routing does not return first, the pass-through path synchronously starts a second Node process for the upstream hook with a 20-second timeout and a 4 MiB buffer. See [`hook-runner.mjs`](../../../../pet-projects/context-mode-core/runtime/hook-runner.mjs), lines 5–30; [`native-runner.mjs`](../../../../pet-projects/context-mode-core/runtime/lib/native-runner.mjs), lines 222–255; and [`user-environment.mjs`](../../../../pet-projects/context-mode-core/lib/user-environment.mjs), lines 41–108.
 
 Because hook commands start fresh processes, a process-local “already hydrated” marker may not prevent the registry query on the next event. SessionStart also appends infrastructure prose unconditionally. These are testable hypotheses.
 
@@ -622,7 +622,7 @@ Default behavior is read-only planning. Apply stops on drift. Backups are recove
 5. Granular client capability evidence and explicit `unknown`.
 6. A small open-ended guidance layer with typed, retrievable recipes.
 7. Exact identity quality: native, correlated, or unbound—never PID/latest guessing.
-8. Separate console-native, MCP-operation, and harness truth domains plus the shared [`Session Continuity Contract`](../mcp/session-continuity-contract.md).
+8. Separate console-native, MCP-operation, and harness truth domains plus the shared [`Session Continuity Contract`](session-continuity-contract.md).
 
 ### Adapt after the correctness substrate
 
@@ -659,7 +659,7 @@ Recommended design artifact order:
 2. Backend application/engine boundary and neutral operation result.
 3. Guarded material reference/receipt contract, including the three material-handling modes and the mounted-artifact specialization.
 4. Job Exchange contract.
-5. Shared [`Session Continuity Contract`](../mcp/session-continuity-contract.md), with provider contributions and per-epoch delivery receipts.
+5. Shared [`Session Continuity Contract`](session-continuity-contract.md), with provider contributions and per-epoch delivery receipts.
 6. Harness observation, typed decision, capability evidence, and decision receipt contract.
 7. Minimal semantic guidance source plus two or three typed recipe resources.
 8. Only then, a workload-justified index provider and a separate administrative deployment design.

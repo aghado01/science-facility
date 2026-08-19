@@ -420,17 +420,17 @@ These fallbacks define semantics, not a mandatory new MCP tool surface. Each hos
 
 ## Context-mode donor analysis
 
-The current [`packages/context-mode`](../../../packages/context-mode) implementation is evidence for the value of the pattern and for why it must be generalized. These findings describe the inspected checkout on 2026-08-10; they are not claims that every context-mode release or adapter behaves identically.
+The current [`packages/context-mode`](../../../../packages/context-mode) implementation is evidence for the value of the pattern and for why it must be generalized. These findings describe the inspected checkout on 2026-08-10; they are not claims that every context-mode release or adapter behaves identically.
 
 ### Claude pre-compaction stores a snapshot
 
-The Claude-oriented [`precompact.mjs`](../../../packages/context-mode/hooks/precompact.mjs), lines 44–54, reads all events for the exact incoming session, builds a resume snapshot, writes it with `upsertResume`, and increments the compaction count. It emits no restoration payload from the pre-compaction hook.
+The Claude-oriented [`precompact.mjs`](../../../../packages/context-mode/hooks/precompact.mjs), lines 44–54, reads all events for the exact incoming session, builds a resume snapshot, writes it with `upsertResume`, and increments the compaction count. It emits no restoration payload from the pre-compaction hook.
 
 This is a useful donor pattern: capture durable state before expected context loss. It is still one opaque snapshot assembled from events, rather than typed provider contributions selected later for a target.
 
 ### Claude compact start reconstructs from events and does not append the stored snapshot
 
-In [`sessionstart.mjs`](../../../packages/context-mode/hooks/sessionstart.mjs), lines 191–212, the Claude `source === "compact"` path:
+In [`sessionstart.mjs`](../../../../packages/context-mode/hooks/sessionstart.mjs), lines 191–212, the Claude `source === "compact"` path:
 
 1. reads the stored resume row;
 2. marks it consumed if it was unconsumed;
@@ -449,7 +449,7 @@ This is materially different from compact handling. It also demonstrates why gen
 
 ### Codex compact behavior differs
 
-The Codex adapter [`hooks/codex/sessionstart.mjs`](../../../packages/context-mode/hooks/codex/sessionstart.mjs), lines 66–95, handles compact and resume together, reconstructs a session directive from events, and—on compact—also appends the stored `resume.snapshot` before marking it consumed.
+The Codex adapter [`hooks/codex/sessionstart.mjs`](../../../../packages/context-mode/hooks/codex/sessionstart.mjs), lines 66–95, handles compact and resume together, reconstructs a session directive from events, and—on compact—also appends the stored `resume.snapshot` before marking it consumed.
 
 Thus there is no single context-mode resume sequence. The adapters implement different payload composition and consumption behavior. Client lifecycle mapping and renderer behavior must be explicit, versioned capability facts.
 
@@ -461,9 +461,9 @@ This is precisely the distinction the proposed records enforce: stored bytes, se
 
 ### The declared auto-injection budget is not an aggregate restoration budget
 
-[`auto-injection.mjs`](../../../packages/context-mode/hooks/auto-injection.mjs), lines 1–13 and 60–101, declares a 500-token budget using an approximate four-characters-per-token estimator and prioritizes role, decisions, skills, and intent. That is a useful precedent for policy-driven selection.
+[`auto-injection.mjs`](../../../../packages/context-mode/hooks/auto-injection.mjs), lines 1–13 and 60–101, declares a 500-token budget using an approximate four-characters-per-token estimator and prioritizes role, decisions, skills, and intent. That is a useful precedent for policy-driven selection.
 
-The surrounding routing block and reconstructed session directive are composed outside this budget. The resume snapshot builder also explicitly assembles all nonempty sections without a final byte budget; see [`src/session/snapshot.ts`](../../../packages/context-mode/src/session/snapshot.ts), around lines 470–572. Even inside the auto-injection builder, some fallback additions are threshold-gated rather than checked against the final serialized total. The 500-token value is therefore a local declared budget, not a proven cap on all compact-start context.
+The surrounding routing block and reconstructed session directive are composed outside this budget. The resume snapshot builder also explicitly assembles all nonempty sections without a final byte budget; see [`src/session/snapshot.ts`](../../../../packages/context-mode/src/session/snapshot.ts), around lines 470–572. Even inside the auto-injection builder, some fallback additions are threshold-gated rather than checked against the final serialized total. The 500-token value is therefore a local declared budget, not a proven cap on all compact-start context.
 
 For overhead diagnosis, every component must be measured independently and in aggregate: routing block, session directive, auto-injection, stored snapshot when used, warnings, wrappers, resident guidance, and any host-added material.
 
@@ -614,15 +614,15 @@ This document does not:
 
 ## Related evidence and design
 
-- [`discussion/grok-science-facility-exploration.md`](discussion/grok-science-facility-exploration.md) — ideation that sharpened mounted corpus and compaction-survival applications.
-- [`../para-agent/context-mode-cross-examination.md`](../para-agent/context-mode-cross-examination.md) — broader context-mode archaeology, client asymmetry, identity, guidance, and authority findings.
-- [`../para-agent/backend-engine-architecture.md`](../para-agent/backend-engine-architecture.md) — shared backend capability substrate and the separation of runtime planes from client adapters.
-- [`../para-agent/design-synthesis.md`](../para-agent/design-synthesis.md) — current para-agent architectural synthesis.
-- [`../../../packages/context-mode/hooks/precompact.mjs`](../../../packages/context-mode/hooks/precompact.mjs) — inspected pre-compaction donor hook.
-- [`../../../packages/context-mode/hooks/sessionstart.mjs`](../../../packages/context-mode/hooks/sessionstart.mjs) — inspected Claude session-start donor adapter.
-- [`../../../packages/context-mode/hooks/codex/sessionstart.mjs`](../../../packages/context-mode/hooks/codex/sessionstart.mjs) — inspected Codex session-start donor adapter.
-- [`../../../packages/context-mode/hooks/auto-injection.mjs`](../../../packages/context-mode/hooks/auto-injection.mjs) — inspected prioritized auto-injection builder.
-- [`../../../packages/context-mode/src/session/snapshot.ts`](../../../packages/context-mode/src/session/snapshot.ts) — inspected resume snapshot builder.
+- [`discussion/grok-science-facility-exploration.md`](../../mcp/discussion/grok-science-facility-exploration.md) — ideation that sharpened mounted corpus and compaction-survival applications.
+- [`../para-agent/context-mode-cross-examination.md`](context-mode-cross-examination.md) — broader context-mode archaeology, client asymmetry, identity, guidance, and authority findings.
+- [`../para-agent/backend-engine-architecture.md`](backend-engine-architecture.md) — shared backend capability substrate and the separation of runtime planes from client adapters.
+- [`../para-agent/design-synthesis.md`](design-synthesis.md) — current para-agent architectural synthesis.
+- [`../../../packages/context-mode/hooks/precompact.mjs`](../../../../packages/context-mode/hooks/precompact.mjs) — inspected pre-compaction donor hook.
+- [`../../../packages/context-mode/hooks/sessionstart.mjs`](../../../../packages/context-mode/hooks/sessionstart.mjs) — inspected Claude session-start donor adapter.
+- [`../../../packages/context-mode/hooks/codex/sessionstart.mjs`](../../../../packages/context-mode/hooks/codex/sessionstart.mjs) — inspected Codex session-start donor adapter.
+- [`../../../packages/context-mode/hooks/auto-injection.mjs`](../../../../packages/context-mode/hooks/auto-injection.mjs) — inspected prioritized auto-injection builder.
+- [`../../../packages/context-mode/src/session/snapshot.ts`](../../../../packages/context-mode/src/session/snapshot.ts) — inspected resume snapshot builder.
 
 ## Design conclusion
 

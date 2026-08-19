@@ -17,17 +17,17 @@ The recommended shape is a pure ESM capability library internal to para-agent—
 
 ## Source and maturity boundary
 
-The canonical source is [`ThermoMapper/src/hashish`](../../../ThermoMapper/src/hashish). [`projects/Hashish/Hashish.csproj`](../../../ThermoMapper/projects/Hashish/Hashish.csproj) compiles that directory directly and adds only `System.Numerics.Tensors`.
+The canonical source is [`ThermoMapper/src/hashish`](../../../../ThermoMapper/src/hashish). [`projects/Hashish/Hashish.csproj`](../../../../ThermoMapper/projects/Hashish/Hashish.csproj) compiles that directory directly and adds only `System.Numerics.Tensors`.
 
 The companion [`Hashish capability and application inventory`](hashish-capability-inventory.md) catalogs what each algorithmic concept measures, the questions it can answer, its plausible applications, and the limits of the donor implementation. This note narrows that broader conceptual palette to a possible Node provider design.
 
-All 22 C# files are byte-identical by SHA-256 to the copy under [`pet-projects/rector-codicis/primitives/hashish`](../../../pet-projects/rector-codicis/primitives/hashish). The ThermoMapper location can therefore serve as the donor source while the Rector copy establishes the architectural lineage.
+All 22 C# files are byte-identical by SHA-256 to the copy under [`pet-projects/rector-codicis/primitives/hashish`](../../../../pet-projects/rector-codicis/primitives/hashish). The ThermoMapper location can therefore serve as the donor source while the Rector copy establishes the architectural lineage.
 
 Maturity is lower than “compiled and loading” may suggest:
 
 - ThermoMapper has no Hashish test project or in-tree algorithm consumer;
-- Rector's [`smoke.ps1`](../../../pet-projects/rector-codicis/primitives/hashish/smoke.ps1) only loads the DLL and lists types;
-- the recent [`hashish` review](../../../ThermoMapper/issues/doccer-excavation-hpc-hashish-review-20260806.md) explicitly says no benchmark or compatibility suite was run and identifies several correctness and identity questions.
+- Rector's [`smoke.ps1`](../../../../pet-projects/rector-codicis/primitives/hashish/smoke.ps1) only loads the DLL and lists types;
+- the recent [`hashish` review](../../../../ThermoMapper/issues/doccer-excavation-hpc-hashish-review-20260806.md) explicitly says no benchmark or compatibility suite was run and identifies several correctness and identity questions.
 
 The C# source is therefore both a valuable implementation donor and an oracle candidate—not an already certified specification.
 
@@ -269,7 +269,7 @@ This corrects cybernetic-copilot's overloaded observation `Hash`, which variousl
 
 ## SimHash: explicit model lifecycle
 
-The donor [`simhash.cs`](../../../ThermoMapper/src/hashish/simhash.cs) is a BM25-weighted 64-bit SimHash. Its default empty IDF map and `unknownIdf = 0` give every token zero weight, so the zero-setup instance returns zero for every input.
+The donor [`simhash.cs`](../../../../ThermoMapper/src/hashish/simhash.cs) is a BM25-weighted 64-bit SimHash. Its default empty IDF map and `unknownIdf = 0` give every token zero weight, so the zero-setup instance returns zero for every input.
 
 The para API should make one of two profiles explicit:
 

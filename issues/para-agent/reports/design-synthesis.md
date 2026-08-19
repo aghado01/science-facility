@@ -24,17 +24,17 @@ The common path should be short and economical, but the primitive console surfac
 
 This synthesis builds on:
 
-- the assignment and established findings in [`claude-agy-codesign-brief.md`](../../mcp/issues/para-agent/claude-agy-codesign-brief.md);
+- the assignment and established findings in [`claude-agy-codesign-brief.md`](claude-agy-codesign-brief.md);
 - the completed para-agent design review at `C:\Users\azrie\.para-agent\journals\streams\agent-agy\turns\000003.out`;
 - the subsequent source-verification critique in `C:\Users\azrie\.claude\projects\D--aghado01\d4607405-dfd4-47b3-a156-3451c7e07c2a.jsonl`;
-- a direct audit of [`src/`](../../mcp/para-agent/src), [`CONSOLE-CONTRACT.md`](../../mcp/para-agent/contract/CONSOLE-CONTRACT.md), [`ParaConsole.psm1`](../../mcp/para-agent/capture/ParaConsole.psm1), and the relevant rector-codicis design documents;
+- a direct audit of [`src/`](../../../mcp/para-agent/src), [`CONSOLE-CONTRACT.md`](../../../mcp/para-agent/contract/CONSOLE-CONTRACT.md), [`ParaConsole.psm1`](../../../mcp/para-agent/capture/ParaConsole.psm1), and the relevant rector-codicis design documents;
 - the selective old-project archaeology and disposition analysis in [`project-archaeology.md`](project-archaeology.md).
 - the upstream and locally customized context-mode cross-examination in [`context-mode-cross-examination.md`](context-mode-cross-examination.md).
 - the engine/client boundary analysis in [`backend-engine-architecture.md`](backend-engine-architecture.md).
 - the direct Node port analysis for ThermoMapper Hashish, jso-jackson, and cybernetic-copilot in [`node-hashish-port-design.md`](node-hashish-port-design.md).
 - the algorithm-by-algorithm conceptual and application map in [`hashish-capability-inventory.md`](hashish-capability-inventory.md).
-- the reposnapshot, context-mode, hook-layer, JSONL-mount, and shared-corpus ideation in [`grok-science-facility-exploration.md`](../mcp/discussion/grok-science-facility-exploration.md), checked against the local implementations rather than treated as implementation evidence by itself.
-- the resulting shared [`Mounted Artifact contract`](../mcp/mounted-artifact-contract.md) and [`Session Continuity contract`](../mcp/session-continuity-contract.md).
+- the reposnapshot, context-mode, hook-layer, JSONL-mount, and shared-corpus ideation in [`grok-science-facility-exploration.md`](../../mcp/discussion/grok-science-facility-exploration.md), checked against the local implementations rather than treated as implementation evidence by itself.
+- the resulting shared [`Mounted Artifact contract`](mounted-artifact-contract.md) and [`Session Continuity contract`](session-continuity-contract.md).
 
 The default `agy` journal contains failed login attempts rather than another completed report, so it was not treated as substantive design evidence.
 
@@ -169,7 +169,7 @@ Historical version graphs are not required for every provider. A guarded address
 
 This is a provider-neutral address envelope, not a second meaning for `artifact_ref`. Identity, generation, coordinate compatibility, selection, and provenance remain separate. For large mutable sources, CDC chunk identifiers may preserve unchanged regions across observations without retaining a version history.
 
-For mounted artifacts, `subject_ref` contains an immutable portable `artifact_ref`; the address or selector remains separate. An `artifact_ref` is also not an ephemeral runtime `mount_ref`. Mounts bind and validate one artifact generation for efficient queries; projections and cursors remain disposable. Creation may auto-mount to save a turn, but collaboration, restart, and continuity preserve the artifact reference and reacquire the mount. The full lifecycle, validation, residue, and source-map rules are in the [`Mounted Artifact contract`](../mcp/mounted-artifact-contract.md).
+For mounted artifacts, `subject_ref` contains an immutable portable `artifact_ref`; the address or selector remains separate. An `artifact_ref` is also not an ephemeral runtime `mount_ref`. Mounts bind and validate one artifact generation for efficient queries; projections and cursors remain disposable. Creation may auto-mount to save a turn, but collaboration, restart, and continuity preserve the artifact reference and reacquire the mount. The full lifecycle, validation, residue, and source-map rules are in the [`Mounted Artifact contract`](mounted-artifact-contract.md).
 
 Immutable artifact and component guards use complete cryptographic digests over exact bytes. Live topology guards instead use the strongest typed generation/cursor evidence their provider can establish. The current eight-hex `cmd_hash` and `out_hash` fields are convenient display/correlation prefixes, not equality or suppression authorities. Rolling hashes choose anchors or chunk boundaries; profile-compatible signatures nominate similar candidates, with model identity required where applicable; exact verification resolves the candidate.
 
@@ -219,7 +219,7 @@ Compaction survival should be a standard configurable session feature rather tha
 
 Console, Artifact, Job, query, task, capability, and Guidance components contribute state without acquiring injection authority. Persisted state may be richer than the restoration: the normal payload is a bounded navigator containing current objective/constraints, active handles, pending exchange state, exact continuations, selected canonical guidance references, and explicit omissions. Raw outputs, full skills, tool schemas already resident in the client, secrets, inferred permissions, and stale historical instructions remain out unless an explicit policy and authority allow them.
 
-Checkpoints are immutable and forkable; a single `consumed` bit cannot represent retry, fork, handoff, or several target clients. Clients without reliable before/after-compaction events use continuously maintained projections plus a first-call or explicit-resume fallback. The [`Session Continuity contract`](../mcp/session-continuity-contract.md) defines provider, configuration, trust, branch, idempotency, fallback, and conformance semantics.
+Checkpoints are immutable and forkable; a single `consumed` bit cannot represent retry, fork, handoff, or several target clients. Clients without reliable before/after-compaction events use continuously maintained projections plus a first-call or explicit-resume fallback. The [`Session Continuity contract`](session-continuity-contract.md) defines provider, configuration, trust, branch, idempotency, fallback, and conformance semantics.
 
 ### Job exchange
 
@@ -305,7 +305,7 @@ Tool exposure and discovery remain separate from guidance and routing. A hook ca
 
 ## Node-native Hashish as a derived projection library
 
-The intended integration is a deliberate Node port of the canonical [`ThermoMapper/src/hashish`](../../../ThermoMapper/src/hashish) source, not a PowerShell/.NET bridge and not an ad hoc generic SimHash. The algorithms should live in a pure internal ESM capability library beneath the Artifact query/projection engine. They do not define a public operation catalog; an agent-level query or comparison may use them internally and disclose the relevant profile/model provenance in its receipt.
+The intended integration is a deliberate Node port of the canonical [`ThermoMapper/src/hashish`](../../../../ThermoMapper/src/hashish) source, not a PowerShell/.NET bridge and not an ad hoc generic SimHash. The algorithms should live in a pure internal ESM capability library beneath the Artifact query/projection engine. They do not define a public operation catalog; an agent-level query or comparison may use them internally and disclose the relevant profile/model provenance in its receipt.
 
 Keep the result classes distinct:
 
@@ -401,10 +401,10 @@ Keep the pre-implementation contract set small and separable rather than writing
 
 1. **Console v1 conformance errata** — explicit corrections, compatibility decision, and executable invariant tests.
 2. **Backend application boundary** — neutral operation context/result, cancellation, budgets, retention, errors, and dependency rules for MCP handlers versus engines.
-3. **Guarded reference and receipt contract** — provider-neutral subject identity, generation guard, coordinate space, selector, completeness, and structured continuations; the shared [`Mounted Artifact contract`](../mcp/mounted-artifact-contract.md) supplies the immutable `artifact_ref` and create/open/mount/query/materialize specialization.
+3. **Guarded reference and receipt contract** — provider-neutral subject identity, generation guard, coordinate space, selector, completeness, and structured continuations; the shared [`Mounted Artifact contract`](mounted-artifact-contract.md) supplies the immutable `artifact_ref` and create/open/mount/query/materialize specialization.
 4. **Job exchange contract** — states, typed talk-back, causal links, budgets, and report artifacts.
 5. **Harness routing and capability contract** — native observations, typed decision domains, exact effect support, identity quality, and decision receipts.
-6. **Session Continuity contract** — the shared [`checkpoint, restore-plan, and delivery semantics`](../mcp/session-continuity-contract.md), with configurable providers, profiles, fork behavior, trust, and fallbacks.
+6. **Session Continuity contract** — the shared [`checkpoint, restore-plan, and delivery semantics`](session-continuity-contract.md), with configurable providers, profiles, fork behavior, trust, and fallbacks.
 7. **Guidance and observability profile** — one semantic guidance source, adapter-visible projections, measurement basis, and explicit unknowns.
 
 The skill should then be drafted against those contracts as the teaching interface over them. This ordering prevents guidance from fossilizing accidental details of the current 13-tool prototype while keeping the eventual workflow open-ended.

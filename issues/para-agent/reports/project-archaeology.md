@@ -23,9 +23,9 @@ The current four agent-facing layers should survive intact. “Garden” is an i
 
 The snapshot tree manifests were treated as indexes and their byte ranges were used to select relevant virtual files. Supplementary vscodepilot Markdown was inspected for the later architectural interpretation of that code.
 
-- [cybernetic-copilot tree](../../../project-snapshots/cybernetic-copilot/cybernetics_20260421_001818_tree.md)
-- [vscodepilot tree](../../../project-snapshots/vscodepilot/src_20260423_121624_tree.md), [architecture](../../../project-snapshots/vscodepilot/ARCHITECTURE.md), [salvage matrix](../../../project-snapshots/vscodepilot/SALVAGE-MATRIX.md), [garden design](../../../project-snapshots/vscodepilot/majestic-garden.md), and [digest](../../../project-snapshots/vscodepilot/DIGEST.md)
-- [hierarchical-memory tree](../../../project-snapshots/hierarchical-memory/hierarchical-memory_20260421_001801_tree.md)
+- [cybernetic-copilot tree](../../../../project-snapshots/cybernetic-copilot/cybernetics_20260421_001818_tree.md)
+- [vscodepilot tree](../../../../project-snapshots/vscodepilot/src_20260423_121624_tree.md), [architecture](../../../../project-snapshots/vscodepilot/ARCHITECTURE.md), [salvage matrix](../../../../project-snapshots/vscodepilot/SALVAGE-MATRIX.md), [garden design](../../../../project-snapshots/vscodepilot/majestic-garden.md), and [digest](../../../../project-snapshots/vscodepilot/DIGEST.md)
+- [hierarchical-memory tree](../../../../project-snapshots/hierarchical-memory/hierarchical-memory_20260421_001801_tree.md)
 
 The code predates para-agent and is incomplete in places. It is evidence of recurring design pressure, not evidence that an implementation is production-safe.
 
@@ -50,13 +50,13 @@ The code predates para-agent and is incomplete in places. It is evidence of recu
 
 ### What has already arrived in para-agent
 
-`CyberneticConsole.psm1` gives the current PowerShell process a session identity, `Start-Transcript` capture, and selective readers for presumed `session + seq + cmd/out` dump records. It neither provides detached persistence across client processes nor writes that dump format end to end. The lineage is session identity, transcript capture, correlation, and selective reading; para-agent realizes those ideas more completely through psmux panes, journal turns, sentinels, receipts, sidecar bodies, and a producer-neutral contract. See [shard s003](../../../project-snapshots/cybernetic-copilot/cybernetics_20260421_001818_s003.txt), bytes `[204,27999)`.
+`CyberneticConsole.psm1` gives the current PowerShell process a session identity, `Start-Transcript` capture, and selective readers for presumed `session + seq + cmd/out` dump records. It neither provides detached persistence across client processes nor writes that dump format end to end. The lineage is session identity, transcript capture, correlation, and selective reading; para-agent realizes those ideas more completely through psmux panes, journal turns, sentinels, receipts, sidecar bodies, and a producer-neutral contract. See [shard s003](../../../../project-snapshots/cybernetic-copilot/cybernetics_20260421_001818_s003.txt), bytes `[204,27999)`.
 
-`CopilotObservation.psm1` derives bounded typed observations containing a type, timestamp, hash, summary, metadata, and rough size estimate. This remains a useful view shape if the full source artifact stays authoritative and every view carries completeness, omissions, and its source reference. Hashing a whitespace-compressed or truncated summary cannot establish source identity. See [shard s001](../../../project-snapshots/cybernetic-copilot/cybernetics_20260421_001818_s001.txt), bytes `[6528,17168)`.
+`CopilotObservation.psm1` derives bounded typed observations containing a type, timestamp, hash, summary, metadata, and rough size estimate. This remains a useful view shape if the full source artifact stays authoritative and every view carries completeness, omissions, and its source reference. Hashing a whitespace-compressed or truncated summary cannot establish source identity. See [shard s001](../../../../project-snapshots/cybernetic-copilot/cybernetics_20260421_001818_s001.txt), bytes `[6528,17168)`.
 
 ### What is worth adapting
 
-- `CyberneticAutomata.psm1` supplies the ancestor of a file-backed job exchange: stable job IDs, status, result/signal/cancel paths, timeout, retention, and cleanup. Replace mutable job snapshots and transport heuristics with typed append-only events, causal links, cursor waits, leases, and artifact references. Terminal truth comes from the executor or an authoritative runtime coordinator. See [shard s002](../../../project-snapshots/cybernetic-copilot/cybernetics_20260421_001818_s002.txt), bytes `[205,19677)`.
+- `CyberneticAutomata.psm1` supplies the ancestor of a file-backed job exchange: stable job IDs, status, result/signal/cancel paths, timeout, retention, and cleanup. Replace mutable job snapshots and transport heuristics with typed append-only events, causal links, cursor waits, leases, and artifact references. Terminal truth comes from the executor or an authoritative runtime coordinator. See [shard s002](../../../../project-snapshots/cybernetic-copilot/cybernetics_20260421_001818_s002.txt), bytes `[205,19677)`.
 - Its `ExpectedArtifacts` idea should become typed requested outputs or postconditions. A receipt must distinguish “produced,” “verified,” and “accepted”; path existence alone proves none of them.
 - Session, sequence, project, and global are useful vocabulary for applicability and promotion. They should not become new Console Journal kinds or mutually exclusive storage buckets.
 - The supervision modules suggest an optional observer contract. A signal should name its rule, observation window, evidence references, confidence, and proposed action. When it is causally job-scoped, it can enter that job as a `finding`, `objection`, or `decision_request`; otherwise it remains a scoped diagnostic/artifact or uses a future advisory stream.
@@ -66,7 +66,7 @@ The strongest new design extrapolation motivated by this snapshot is **guidance 
 
 ### What should remain retired
 
-- Regex inspection of serialized tool arguments accompanied by large universal mandates. Preserve only the typed `{code, severity, evidence, alternative}` shape from `CopilotContextManagement.psm1`; discard the brittle policy and repeated prose. See [shard s001](../../../project-snapshots/cybernetic-copilot/cybernetics_20260421_001818_s001.txt), bytes `[346,6458)`.
+- Regex inspection of serialized tool arguments accompanied by large universal mandates. Preserve only the typed `{code, severity, evidence, alternative}` shape from `CopilotContextManagement.psm1`; discard the brittle policy and repeated prose. See [shard s001](../../../../project-snapshots/cybernetic-copilot/cybernetics_20260421_001818_s001.txt), bytes `[346,6458)`.
 - Hard-coded “similarity,” “circularity,” and “drift” thresholds whose proxies do not establish the semantic claim. Advisory heuristics must describe what was actually observed.
 - Artifact existence as proof of successful execution.
 - File quiescence, watcher timeout, or cancellation-file creation as proof of a terminal state.
@@ -78,7 +78,7 @@ The strongest new design extrapolation motivated by this snapshot is **guidance 
 
 ### What has already arrived in para-agent
 
-The old `safe-shell.ts` established the essential move: dispatch interactive terminal work without blocking the caller, then read durable JSONL records. para-agent supersedes its guessed “recent command” correlation and fixed sleep instructions with turns, sentinels, receipts, and cursor-aware retrieval. See [shard s012](../../../project-snapshots/vscodepilot/src_20260423_121624_s012.txt), bytes `[207,14797)`.
+The old `safe-shell.ts` established the essential move: dispatch interactive terminal work without blocking the caller, then read durable JSONL records. para-agent supersedes its guessed “recent command” correlation and fixed sleep instructions with turns, sentinels, receipts, and cursor-aware retrieval. See [shard s012](../../../../project-snapshots/vscodepilot/src_20260423_121624_s012.txt), bytes `[207,14797)`.
 
 The later architecture documents make two durable distinctions:
 
@@ -89,10 +89,10 @@ Those distinctions directly support a producer-neutral Console Journal and the c
 
 ### What is worth adapting
 
-- `job-store.ts` and `parallel-tools.ts` show the needed surface—job identity, rehydration, result and signal artifacts, waiting, and cancellation—but should be recast as typed durable events. See [shard s007](../../../project-snapshots/vscodepilot/src_20260423_121624_s007.txt), bytes `[9824,20657)`, and [shard s010](../../../project-snapshots/vscodepilot/src_20260423_121624_s010.txt), bytes `[211,30539)`.
+- `job-store.ts` and `parallel-tools.ts` show the needed surface—job identity, rehydration, result and signal artifacts, waiting, and cancellation—but should be recast as typed durable events. See [shard s007](../../../../project-snapshots/vscodepilot/src_20260423_121624_s007.txt), bytes `[9824,20657)`, and [shard s010](../../../../project-snapshots/vscodepilot/src_20260423_121624_s010.txt), bytes `[211,30539)`.
 - The JSON-RPC host/worker topology remains reasonable if a coordinator eventually owns several real responsibilities: psmux lifecycle, single-writer sequencing, job state, filesystem watches, and atomic hook projections. A daemon solely for wake-up is still unjustified.
 - The “garden” should become the federation seam: producers publish typed envelopes and references; consumers retrieve them deliberately; adapters do not inject source material straight into model state. Transport may be a named pipe, filesystem, or MCP call without changing the semantic contract.
-- `recipe-types.ts` is a useful ancestor for typed, searchable, composable recipes with examples and usage evidence. See [shard s011](../../../project-snapshots/vscodepilot/src_20260423_121624_s011.txt), bytes `[18295,22504)`. Recipes should describe typed operations and preconditions, not interpolate parameters into executable shell templates.
+- `recipe-types.ts` is a useful ancestor for typed, searchable, composable recipes with examples and usage evidence. See [shard s011](../../../../project-snapshots/vscodepilot/src_20260423_121624_s011.txt), bytes `[18295,22504)`. Recipes should describe typed operations and preconditions, not interpolate parameters into executable shell templates.
 - The thin-adapter rule is especially important for Claude hooks: the stable core and volatile client adapter both depend on the protocol; the adapter contains no domain policy.
 
 ### What should remain retired
@@ -109,7 +109,7 @@ Those distinctions directly support a producer-neutral Console Journal and the c
 
 ### What the snapshot actually is
 
-The project is not yet a hierarchical memory system. It is a scoped append-only event-log router: records receive one of four scope tags, a broad type, contextual metadata, and a destination filename. There is no parent relation, inheritance, retrieval widening, promotion graph, semantic/relevance ranking, decay, deduplication, or exposure accounting; retrieval does sort reverse-chronologically. See `MemorySystem.ps1` in [shard s001](../../../project-snapshots/hierarchical-memory/hierarchical-memory_20260421_001801_s001.txt), bytes `[336,11038)`.
+The project is not yet a hierarchical memory system. It is a scoped append-only event-log router: records receive one of four scope tags, a broad type, contextual metadata, and a destination filename. There is no parent relation, inheritance, retrieval widening, promotion graph, semantic/relevance ranking, decay, deduplication, or exposure accounting; retrieval does sort reverse-chronologically. See `MemorySystem.ps1` in [shard s001](../../../../project-snapshots/hierarchical-memory/hierarchical-memory_20260421_001801_s001.txt), bytes `[336,11038)`.
 
 This is still useful because it makes four concepts possible to separate:
 
@@ -128,7 +128,7 @@ The old exclusive `scope` field blurred context with physical storage. Its `Aggr
 - Preserve one canonical occurrence by default. Promotion creates an edge and records who promoted it, why, the stable destination collection, the guarded source, the retention effect, and stale/missing behavior. An explicit snapshot may create a new immutable derived occurrence with provenance.
 - Keep batching, health/status, explicit flush, and retention as lifecycle concerns, but replace the old writer and smoke test.
 
-The snapshot reader is not salvageable: it scans files, silently drops malformed records, has no cursor or completeness proof, and fails to apply its time cutoff consistently. The background writer lacks a reliable cross-runspace queue and cross-writer lease. The test deletes current-day files in a shared user directory and should not be revived. Its code appears in [shard s001](../../../project-snapshots/hierarchical-memory/hierarchical-memory_20260421_001801_s001.txt), bytes `[11104,14480)`.
+The snapshot reader is not salvageable: it scans files, silently drops malformed records, has no cursor or completeness proof, and fails to apply its time cutoff consistently. The background writer lacks a reliable cross-runspace queue and cross-writer lease. The test deletes current-day files in a shared user directory and should not be revived. Its code appears in [shard s001](../../../../project-snapshots/hierarchical-memory/hierarchical-memory_20260421_001801_s001.txt), bytes `[11104,14480)`.
 
 ## Refined architecture
 

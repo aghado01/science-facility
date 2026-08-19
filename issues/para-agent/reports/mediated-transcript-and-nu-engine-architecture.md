@@ -48,7 +48,7 @@ Primary Final Human Response
 
 ## 2. The 3-Tier Schema Hierarchy
 
-All transcript artifacts and adapters conform to strict JSON Schema contracts located in [`mcp/para-agent/src/schemas/`](../../mcp/para-agent/src/schemas/):
+All transcript artifacts and adapters conform to strict JSON Schema contracts located in [`mcp/para-agent/src/schemas/`](../../../mcp/para-agent/src/schemas/):
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -74,9 +74,9 @@ All transcript artifacts and adapters conform to strict JSON Schema contracts lo
 
 ## 3. Declarative Client Adapter Architecture
 
-Instead of maintaining separate schema formats for each vendor, `para-agent` defines a single meta-schema: [`client-adapter.schema.json`](../../mcp/para-agent/src/schemas/client-adapter.schema.json). 
+Instead of maintaining separate schema formats for each vendor, `para-agent` defines a single meta-schema: [`client-adapter.schema.json`](../../../mcp/para-agent/src/schemas/client-adapter.schema.json). 
 
-Concrete adapters ([`src/adapters/*.json`](../../mcp/para-agent/src/adapters/)) are declarative mapping definitions loaded at runtime by `AdapterEngine`:
+Concrete adapters ([`src/adapters/*.json`](../../../mcp/para-agent/src/adapters/)) are declarative mapping definitions loaded at runtime by `AdapterEngine`:
 
 ```
 ┌─────────────────────────┐
@@ -126,7 +126,7 @@ Concrete adapters ([`src/adapters/*.json`](../../mcp/para-agent/src/adapters/)) 
 
 ## 4. `ExchangeAssembler` Transaction Lifecycle
 
-The [`ExchangeAssembler`](../../mcp/para-agent/src/assembler.js) coordinates with [`TranscriptStore`](../../mcp/para-agent/src/transcript.js) to manage the physical lifecycle of an interaction:
+The [`ExchangeAssembler`](../../../mcp/para-agent/src/assembler.js) coordinates with [`TranscriptStore`](../../../mcp/para-agent/src/transcript.js) to manage the physical lifecycle of an interaction:
 
 ```mermaid
 sequenceDiagram
@@ -191,10 +191,10 @@ open --raw session.jsonl
 ## 6. Self-Contained Binary Dependencies & Multi-Profile Layout
 
 All executable dependencies are co-located in the repository:
-* **Nushell:** [`mcp/para-agent/bin/nu/nu.exe`](../../mcp/para-agent/bin/nu/nu.exe) (v0.114.1)
-* **Multiplexer:** [`mcp/para-agent/bin/mux/tmux.exe`](../../mcp/para-agent/bin/mux/tmux.exe) (`psmux` v3.3.7)
+* **Nushell:** [`mcp/para-agent/bin/nu/nu.exe`](../../../mcp/para-agent/bin/nu/nu.exe) (v0.114.1)
+* **Multiplexer:** [`mcp/para-agent/bin/mux/tmux.exe`](../../../mcp/para-agent/bin/mux/tmux.exe) (`psmux` v3.3.7)
 
-### Three Dedicated Nushell Profiles ([`mcp/para-agent/profiles/`](../../mcp/para-agent/profiles/))
+### Three Dedicated Nushell Profiles ([`mcp/para-agent/profiles/`](../../../mcp/para-agent/profiles/))
 
 1. **`backend/` (`env.nu`, `config.nu`):** Headless stdio daemon profile for background script evaluation via `NuEngine`. Zero ANSI, no interactive banner, no history.
 2. **`para-agent/` (`env.nu`, `config.nu`, `helpers.nu`):** Worker agent pane profile. Deterministic `nu> ` prompt, banner suppressed, worker helper commands (`para-emit`, `to-j`, `para-touch`).
