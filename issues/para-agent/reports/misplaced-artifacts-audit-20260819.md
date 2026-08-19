@@ -184,6 +184,61 @@ a byte-identical `SKILL.md` / `antigravity-agents.md` pair. `research/` is a cor
 — nothing in the repository or in any client config references it, and the canonical shared-skill
 location is `skills/`. Recorded only so the next reader does not re-flag it.
 
+## F9 — rooting gaps against the standalone design
+
+Stated intent (owner, 2026-08-19): everything para-agent owns is rooted under `mcp/para-agent` —
+its own skills, its own vendored `nu` and mux, eventually other MCPs vendored in — so the package is
+transplantable. `PARA_PKG_ROOT` (para-agent's own world) versus `PARA_WORKSPACE_ROOT` (the project it
+operates on) is the split that expresses this, and both are already in `profiles.js`.
+
+Most of it holds: `skills/` (`primary/`, `sub-agents/{para,self}`), `bin/{nu,mux}`, `profiles/`,
+`personas/`, `brewery/`, `capture/`, `contract/`, `resources/`, `src/` are all inside the root.
+Three things are not.
+
+**9a — the test suite lives outside the package root.** `package.json` runs
+`../tests/para-agent/run.ps1`; the suite and its fixtures are at `mcp/tests/para-agent/`. Worse for
+transplantability, two adapters carry **repo-relative** evidence references:
+
+```
+src/adapters/claude.json:18  "reference": "mcp/tests/para-agent/fixtures/adapters/claude/2.1.226/stdout.reduced.jsonl"
+src/adapters/codex.json:18   "reference": "mcp/tests/para-agent/fixtures/adapters/codex/0.147.0/stdout.jsonl"
+```
+
+Those paths resolve only from the repository root. Moved elsewhere, the package's own verification
+evidence becomes unreachable from the adapters that cite it.
+
+**9b — `mcp/para-agent/tests/` exists and is empty.** A stub inside the root while the real suite
+sits outside it. Either the intended destination or a leftover; it currently states an ownership the
+tree does not honor.
+
+**9c — the vendored runtime is untracked, and so is its configuration.** `.gitignore:37` (`bin/`,
+alongside `**/bin/**`) is aimed at build output and catches the vendored runtime as collateral:
+
+```
+$ git ls-files mcp/para-agent/bin        # (empty)
+$ git check-ignore -v mcp/para-agent/bin/nu/nu.exe
+.gitignore:37:bin/    mcp/para-agent/bin/nu/nu.exe
+```
+
+The binaries themselves should probably stay out — `bin/nu` is **176 MB**, `bin/mux` 6.7 MB. But the
+ignore also swallows 98 KB of non-binary files, including **`bin/mux/mux.conf`**, which `.mcp.json`
+names directly:
+
+```json
+"PARA_MUX_CONFIG_FILE": "./mcp/para-agent/bin/mux/mux.conf"
+```
+
+So a fresh clone gets a para-agent whose declared mux config path does not exist, and whose
+`PARA_NU_BIN` / `PARA_MUX_BIN` point at absent executables, with nothing in the repository recording
+what should be there. The thing that makes the package self-contained is the thing that does not
+travel with it.
+
+**Note for the planned vendoring.** `mcp/nushell-mcp` left para-agent because the concept is useful
+outside it, and is to come back as the front-end shell experience. Its layout authority is
+`config.nu`, and the reference corpus is deliberately not duplicated into the Claude-side adapter.
+Vendoring it in should keep that shape — one corpus, referenced by the vendored copy — or the
+duplication becomes another provenance problem of exactly the kind this audit catalogues.
+
 ## Proposed remediation
 
 Nothing below has been executed. Ordered by value.
@@ -197,6 +252,9 @@ Nothing below has been executed. Ordered by value.
 | R5 | Drop `pwsh_exec` from `~/.cursor/mcp.json`, or delete `~/.cursor/mcp.json` outright | No Cursor CLI installed. Personal-scope file — owner's call |
 | R6 | Decide whether `pwsh_exec` belongs in `~/.claude.json` at all now that `.mcp.json` declares it repo-relative | Removing the personal copy makes the repo the single declaration |
 | R7 | Fix the `mcp/mdnav` path in `~/.claude/CLAUDE.md` | Owner's file |
+| R8 | Un-ignore the vendored tree's **non-binary** files — `!mcp/para-agent/bin/**/*.conf` and friends, 98 KB total — so `mux.conf` travels with the package. Keep the 183 MB of executables out | F9c. Smallest fix with the most transplantability bought |
+| R9 | Give the vendored runtime a provisioning record: a manifest of what `bin/nu` and `bin/mux` should contain, with versions and checksums, and a fetch/verify script under the package root | F9c. The alternative to committing 183 MB. Makes "self-contained" reproducible rather than local-only |
+| R10 | Move the suite to `mcp/para-agent/tests/` (the empty stub) and make adapter evidence references package-relative | F9a, F9b. Larger change; touches `package.json`, the runner, and two adapter files. Do it when the migration track is already disturbing these files |
 
 **The general rule these argue for:** an artifact's directory should name *what produced it or what
 it is about*, never *which client happened to be running*. A vendor dot-directory holds that vendor's
