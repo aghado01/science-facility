@@ -13,17 +13,17 @@
       }
     },
     "pwsh_exec": {
-      "command": "D:/aghado01/science-facility/mcp/pwsh_exec/.venv/Scripts/uv.exe",
+      "command": "./mcp/pwsh_exec/.venv/Scripts/uv.exe",
       "args": [
         "run",
         "--project",
-        "D:/aghado01/science-facility/mcp/pwsh_exec",
+        "./mcp/pwsh_exec",
         "--no-cache",
         "--locked",
         "--no-sync",
         "python",
         "-B",
-        "D:/aghado01/science-facility/mcp/pwsh_exec/server.py"
+        "./mcp/pwsh_exec/server.py"
       ],
       "env": {}
     },

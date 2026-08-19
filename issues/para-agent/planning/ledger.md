@@ -3,6 +3,17 @@
 Newest first. Evidence pointers are to commits, contracts, reports, and runner output.
 Counts are recorded **with the commit they were observed at** (P16) — never as standing claims.
 
+- **2026-08-19 — fleet discovery census taken; grok compat discovery disabled** (config change by
+  owner, plus a static census — no model call): `~/.grok/config.toml` now sets all six compat cells
+  false for cursor, claude, and codex, after which Grok resolves repo-owned assets only. Census of
+  all four installed clients + Cursor's orphaned config recorded in
+  [client-discovery-inventory-20260819](../reports/client-discovery-inventory-20260819.md).
+  Findings feeding P21: `filesystem`/`fetch`/`git`/`pwsh_exec` are declared across up to four
+  scopes with drifting paths; this repository is trusted in three incompatible stores; Claude's
+  `enabledMcpjsonServers` sits at *user* scope naming repo-owned server names globally; the repo's
+  `AGENTS.md` reaches Grok and Codex but did **not** reach this Claude session; `.codex/` in-repo
+  holds para-agent capture artifacts, not Codex config.
+
 - **2026-08-19 — grok MCP load question re-probed; P10 narrowed to the runtime witness**
   (no code change, static probes only, no model call): the four "inherited" stdio definitions
   identified as Claude *user scope* (`~/.claude.json`), not unexplained config; documented

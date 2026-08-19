@@ -3,6 +3,10 @@
 - **Written:** 2026-08-19
 - **Status:** argument + evidence; no ruling. Feeds the client-setup substrate.
 - **Companion evidence:** [grok-1.0.4-wave0-evidence.md § Addendum](../reports/grok-1.0.4-wave0-evidence.md#addendum--2026-08-19-re-probe)
+- **Fleet census:** [client-discovery-inventory-20260819.md](../reports/client-discovery-inventory-20260819.md)
+  — all four installed clients plus Cursor's orphaned config, and what each reaches for
+- **Since written:** `~/.grok/config.toml` now sets every compat cell false for cursor/claude/codex
+  (2026-08-19), which removes the §1 shadowing on Grok. The other three clients are unchanged.
 
 ## The claim
 
