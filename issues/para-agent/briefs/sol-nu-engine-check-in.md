@@ -23,7 +23,7 @@ Remaining work
 - Resolve the AGY launch/configuration issue, capture a fresh native stream, conform a version-labelled fixture, and pass its real-client pilot before enabling the adapter.
 - Keep public `delegate` idempotency unsupported until retries can suppress duplicate native execution.
 
-The execution record is in [sol-remediation-swarm-plan.md](D:/aghado01/science-facility/issues/para-agent/reports/sol-remediation-swarm-plan.md), with the boundary in [MEDIATED-EXCHANGE-CONTRACT.md](D:/aghado01/science-facility/mcp/para-agent/contract/MEDIATED-EXCHANGE-CONTRACT.md).
+The execution record is in [sol-remediation-swarm-plan.md](../reports/sol-remediation-swarm-plan.md), with the boundary in [MEDIATED-EXCHANGE-CONTRACT.md](../../../mcp/para-agent/contract/MEDIATED-EXCHANGE-CONTRACT.md).
 
 Original mediated slice: `2672376`; frozen continuation contract: `62ec0dc`; terminal durability, quarantine, and runner hardening: `4230cc5`. The earlier foundation is `37383a6`. No push was performed by this campaign.
 
