@@ -3,6 +3,7 @@ $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot\..\chat-export-output.ps1"
 . "$PSScriptRoot\..\claude-export\claude-jso-markdown-v2.ps1"
 . "$PSScriptRoot\..\codex-export\codex-jso-markdown.ps1"
+. "$PSScriptRoot\..\grok-export\grok-jso-markdown.ps1"
 
 [int]$script:AssertionCount = 0
 
@@ -138,6 +139,10 @@ try
                 ForwardedCommand = 'Invoke-CodexThreadExport'
             },
             @{
+                Path = "$PSScriptRoot\..\grok-export\Export-GrokChat.ps1"
+                ForwardedCommand = 'Invoke-GrokThreadExport'
+            },
+            @{
                 Path = "$PSScriptRoot\..\claude-export\claude-jso-run.ps1"
                 FunctionName = 'Invoke-ClaudeThreadExport'
                 ForwardedCommand = 'ConvertTo-ClaudeMarkdownV2'
@@ -153,12 +158,21 @@ try
                 ForwardedCommand = 'ConvertTo-CodexMarkdown'
             },
             @{
+                Path = "$PSScriptRoot\..\grok-export\grok-jso-run.ps1"
+                FunctionName = 'Invoke-GrokThreadExport'
+                ForwardedCommand = 'ConvertTo-GrokMarkdown'
+            },
+            @{
                 Path = "$PSScriptRoot\..\claude-export\claude-jso-markdown-v2.ps1"
                 FunctionName = 'ConvertTo-ClaudeMarkdownV2'
             },
             @{
                 Path = "$PSScriptRoot\..\codex-export\codex-jso-markdown.ps1"
                 FunctionName = 'ConvertTo-CodexMarkdown'
+            },
+            @{
+                Path = "$PSScriptRoot\..\grok-export\grok-jso-markdown.ps1"
+                FunctionName = 'ConvertTo-GrokMarkdown'
             },
             @{
                 Path = "$PSScriptRoot\..\Export-ChatWhitespacePair.ps1"
@@ -183,11 +197,14 @@ try
             $wrapperText, '(?m)^\s*\[string\]\$masterMarkdown\s*=\s*ConvertTo-ClaudeMarkdownV2').Count) 1 `
         'forensic wrapper renders Claude master exactly once'
     Assert-Equal ([regex]::Matches(
-            $wrapperText, '-RunThrough\s+Exchanges').Count) 2 `
-        'forensic wrapper freezes both providers through exchanges'
+            $wrapperText, '(?m)^\s*\[string\]\$masterMarkdown\s*=\s*ConvertTo-GrokMarkdown').Count) 1 `
+        'forensic wrapper renders Grok master exactly once'
     Assert-Equal ([regex]::Matches(
-            $wrapperText, '-NormalizeWhitespace:\$false').Count) 2 `
-        'forensic wrapper renders both provider masters without normalization'
+            $wrapperText, '-RunThrough\s+Exchanges').Count) 3 `
+        'forensic wrapper freezes all providers through exchanges'
+    Assert-Equal ([regex]::Matches(
+            $wrapperText, '-NormalizeWhitespace:\$false').Count) 3 `
+        'forensic wrapper renders all provider masters without normalization'
     Assert-Equal ([regex]::Matches(
             $wrapperText, 'Export-ChatExportMarkdownPair').Count) 1 `
         'forensic wrapper derives one pair from the rendered master'
@@ -326,6 +343,37 @@ try
     Assert-Equal (Get-FileHash -LiteralPath $codexPath -Algorithm SHA256).Hash `
         $codexSourceHash `
         'Codex UTF-16LE output does not mutate exchange JSONL'
+
+    $grokPath = Join-Path $tempRoot 'grok-exchanges.jsonl'
+    Write-JsonlFixture -Path $grokPath -Value ([ordered]@{
+            _xid = 'grok-fixture-0000'
+            _session_uuid = 'cccccccc-cccc-cccc-cccc-cccccccccccc'
+            _thread_id = 'cccccccc-cccc-cccc-cccc-cccccccccccc'
+            _exchange_start = '2026-08-12T00:00:00Z'
+            _model = 'grok-fixture'
+            _user_label = 'Researcher'
+            records = @(
+                [ordered]@{ _type = 'prompt'; text = "left${zwsp}  right" },
+                [ordered]@{ _type = 'response'; phase = 'final_answer'; text = 'answer' }
+            )
+        })
+    $grokSourceHash = (Get-FileHash -LiteralPath $grokPath -Algorithm SHA256).Hash
+    $grokUtf16Path = Join-Path $tempRoot 'grok-utf16.md'
+    ConvertTo-GrokMarkdown `
+        -ExchangesJsonlPath $grokPath `
+        -OutputPath $grokUtf16Path `
+        -Exclude @() `
+        -NormalizeWhitespace:$false `
+        -OutputEncoding Utf16LE
+    $grokUtf16Bytes = [System.IO.File]::ReadAllBytes($grokUtf16Path)
+    Assert-True ($grokUtf16Bytes[0] -eq 0xFF -and $grokUtf16Bytes[1] -eq 0xFE) `
+        'Grok renderer writes UTF-16LE with BOM'
+    Assert-True ([System.Text.UnicodeEncoding]::new(
+            $false, $true).GetString($grokUtf16Bytes, 2, $grokUtf16Bytes.Length - 2).Contains($zwsp)) `
+        'Grok UTF-16LE output retains pre-normalization invisibles'
+    Assert-Equal (Get-FileHash -LiteralPath $grokPath -Algorithm SHA256).Hash `
+        $grokSourceHash `
+        'Grok UTF-16LE output does not mutate exchange JSONL'
 
     Write-Host "PASS: $script:AssertionCount forensic pair assertions" `
         -ForegroundColor Green

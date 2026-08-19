@@ -3,7 +3,7 @@
     Export a forensic pre-normalization/normalized Markdown pair from one freeze.
 
 .DESCRIPTION
-    Agent-facing research wrapper for Claude Code and Codex transcripts. It
+    Agent-facing research wrapper for Claude Code, Codex, and Grok transcripts. It
     freezes the live source once through the exchanges stage, renders Markdown
     exactly once with normalization disabled, and derives the normalized sibling
     directly from that frozen in-memory Markdown master.
@@ -27,8 +27,12 @@
         -Provider Claude `
         -OutputEncoding Utf16LE
 
+.EXAMPLE
+    & "D:\aghado01\science-facility\utils\chat-export\Export-ChatWhitespacePair.ps1" `
+        -Provider Grok
+
 .PARAMETER Provider
-    Transcript provider: Codex or Claude.
+    Transcript provider: Codex, Claude, or Grok.
 
 .PARAMETER OutputEncoding
     Encoding shared by both Markdown siblings. Utf8 (default) is BOM-less.
@@ -41,12 +45,14 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)]
-    [ValidateSet('Codex', 'Claude')]
+    [ValidateSet('Codex', 'Claude', 'Grok')]
     [string]$Provider,
 
     [string]$ThreadId = $env:CODEX_THREAD_ID,
 
     [string]$SessionId = $env:CLAUDE_CODE_SESSION_ID,
+
+    [string]$GrokSessionId = $env:GROK_SESSION_ID,
 
     [string]$OutputDir,
 
@@ -151,6 +157,34 @@ if ($Provider -eq 'Codex')
     $resolvedIdentity = $freezeResult.ThreadId
     $frozenSourcePath = $freezeResult.SnapshotPath
 }
+elseif ($Provider -eq 'Grok')
+{
+    if ([string]::IsNullOrWhiteSpace($GrokSessionId))
+    {
+        throw ('No Grok session id. $env:GROK_SESSION_ID is empty and ' +
+            '-GrokSessionId was not supplied.')
+    }
+
+    . "$PSScriptRoot\grok-export\grok-jso-run.ps1"
+    $freezeResult = Invoke-GrokThreadExport `
+        -SessionId $GrokSessionId `
+        -WorkingDir $providerWorkingDir `
+        -RunStamp $RunStamp `
+        -RunThrough Exchanges `
+        -OutputPrefix $OutputPrefix `
+        -UserLabel $UserLabel `
+        -OutputEncoding $OutputEncoding
+
+    [string]$masterMarkdown = ConvertTo-GrokMarkdown `
+        -ExchangesJsonlPath $freezeResult.ExchangesPath `
+        -Format $Format `
+        -Exclude $Exclude `
+        -MaxToolInputLength $MaxToolInputLength `
+        -NormalizeWhitespace:$false
+
+    $resolvedIdentity = $freezeResult.SessionId
+    $frozenSourcePath = $freezeResult.SnapshotPath
+}
 else
 {
     if ([string]::IsNullOrWhiteSpace($SessionId))
@@ -220,7 +254,9 @@ Write-Host "Normalized        → $($pair.NormalizedPath)" -ForegroundColor Gree
 return [PSCustomObject]@{
     Provider                  = $Provider
     ThreadId                  = $resolvedIdentity
-    SessionId                 = if ($Provider -eq 'Claude') { $SessionId } else { $null }
+    SessionId                 = if ($Provider -eq 'Claude') { $SessionId }
+                                elseif ($Provider -eq 'Grok') { $GrokSessionId }
+                                else { $null }
     WorkingDir                = $freezeResult.WorkingDir
     RunStamp                  = $RunStamp
     FrozenSourcePath          = $frozenSourcePath

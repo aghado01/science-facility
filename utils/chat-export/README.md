@@ -11,6 +11,9 @@ exporter.
 
 # Current Codex task
 & "D:\aghado01\science-facility\utils\chat-export\codex-export\Export-CodexChat.ps1"
+
+# Current Grok session
+& "D:\aghado01\science-facility\utils\chat-export\grok-export\Export-GrokChat.ps1"
 ```
 
 Pass only user-requested output or exclusion overrides. Report the returned
@@ -20,7 +23,7 @@ The Claude merge stage deduplicates copied continuation history by record UUID.
 It retains distinct thinking, text, and tool-use records even when Claude assigns
 them the same response `message.id`.
 
-Both Markdown renderers pass their completed document through the shared
+Claude, Codex, and Grok Markdown renderers pass their completed document through the shared
 `chat-export-format-ws.ps1` final-stage formatter. It normalizes line endings
 and Unicode, removes zero-width formatting characters, compacts prose
 whitespace, and retains significant whitespace in Markdown code and tool
@@ -29,7 +32,7 @@ invisible characters are removed without corrupting its structure; truncated
 or non-JSON payloads remain literal. Canonical merged and exchange JSONL
 artifacts are not modified.
 
-Normalization is enabled by default. Both ordinary agent-facing scripts expose
+Normalization is enabled by default. The ordinary agent-facing scripts expose
 the boolean `-NormalizeWhitespace` option; use `-NormalizeWhitespace:$false` to
 bypass only this final postprocessor and inspect the renderer's preceding
 Markdown. Upstream parsing, rendering, exclusions, and truncation still apply,
@@ -37,7 +40,7 @@ so the disabled form is not a raw backend transcript. The returned result also
 reports `NormalizeWhitespace`.
 
 Markdown output defaults to BOM-less UTF-8. `-OutputEncoding Utf16LE` is an
-opt-in alternative on both wrappers, runners, and standalone renderers. It
+opt-in alternative on the wrappers, runners, and standalone renderers. It
 writes an `FF FE` BOM followed by every rendered .NET UTF-16 code unit verbatim,
 including an isolated surrogate if one survived upstream parsing. Canonical
 snapshot, merged, and exchange JSONL remain UTF-8.
@@ -55,6 +58,9 @@ agent-facing wrapper instead:
 & "D:\aghado01\science-facility\utils\chat-export\Export-ChatWhitespacePair.ps1" `
     -Provider Claude `
     -OutputEncoding Utf16LE
+
+& "D:\aghado01\science-facility\utils\chat-export\Export-ChatWhitespacePair.ps1" `
+    -Provider Grok
 ```
 
 The wrapper freezes the provider source once through the exchange-envelope
@@ -80,6 +86,7 @@ Regression checks:
 
 ```powershell
 & "D:\aghado01\science-facility\utils\chat-export\tests\claude-export.tests.ps1"
+& "D:\aghado01\science-facility\utils\chat-export\tests\grok-export.tests.ps1"
 & "D:\aghado01\science-facility\utils\chat-export\tests\markdown-whitespace.tests.ps1"
 & "D:\aghado01\science-facility\utils\chat-export\tests\forensic-pair.tests.ps1"
 ```
