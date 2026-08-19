@@ -989,7 +989,7 @@ function Invoke-Membrane
 
         # Apply metadata pre-filters (size + extension) in one pass.
         # No I/O — all decisions read crawler-stamped fields (RelativePath,
-        # SizeBytes, Extension — schema/descriptor.json origin=crawler); fail
+        # SizeBytes, Extension — contracts/crawler.contract.json out.file); fail
         # fast on a pre-contract graph rather than silently matching $null.
         $preFiltered = [List[object]]::new()
         foreach ($f in $source.Files)
@@ -998,7 +998,7 @@ function Invoke-Membrane
             {
                 if ($null -eq $f.PSObject.Properties[$req])
                 {
-                    throw "Invoke-Membrane: file entry '$($f.AbsolutePath)' lacks $req — input must be a crawler graph carrying the descriptor contract (rs.core.crawler stamps it at walk time; schema/descriptor.json)."
+                    throw "Invoke-Membrane: file entry '$($f.AbsolutePath)' lacks $req — input must be a crawler graph carrying the crawler contract (rs.core.crawler stamps it at walk time; contracts/crawler.contract.json out.file)."
                 }
             }
             if ($MaxSizeBytes -gt 0 -and $f.SizeBytes -gt $MaxSizeBytes)

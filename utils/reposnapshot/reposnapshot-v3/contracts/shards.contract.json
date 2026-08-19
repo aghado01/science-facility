@@ -1,12 +1,13 @@
 {
   "stage": "shards",
-  "module": "rs.core.shards.psm1 — New-ShardPlan(-Entries -Layout [-Grouping] [-GroupSort] [-OrderStrict] [-ShardQuotaBytes] [-ShardToleranceBytes] [-MaxFilesPerShard] [-ShardStem]) → plan. Pure planning: zero I/O, zero offsets. Internally: enumerate → measure (Measure-Row from container) → classify → strict baseline → flexible rearrangement (FFD + tolerance-bounded bin elimination) → sequence → plan; the packer core is a pure function over a size vector (synthetic-vector tests). FILED, NOT STARTED (shards-brief, revised 2026-08-16).",
-  "$comment": "Export phase 1. Decides membership, arrangement, and global indexing; serialize consumes the plan; nothing flows back. Entries are held as REFERENCES into assemble.out.result.Entries (indices or the objects themselves) — the plan never copies content and never embeds the IR or the layout (no god object; admiral holds those). Header schema / widths / bytes come from container.out.layout, resolved before this stage. Grouping ByFileType derives the extension from RelativePath (Extension is excluded from entry bags by assemble). Row bytes are exact and packing-invariant (fixed-width gidx). Ledger #40–#47.",
+  "module": "rs.core.shards.psm1 — New-ShardPlan(-Entries -Layout [-Grouping] [-GroupSort] [-OrderStrict] [-PackObjective] [-ShardQuotaBytes] [-ShardToleranceBytes] [-MaxFilesPerShard] [-ShardStem]) → plan. Pure planning: zero I/O, zero offsets. Internally: enumerate → measure (Measure-Row from container) → classify → strict baseline (shape-exact: FrontLoad greedy+adjacent-merge, Even linear-partition) → flexible rearrangement (FFD + tolerance-bounded bin elimination + shape pass) → sequence → plan; the packer core is a pure function over a size vector (synthetic-vector tests). FILED, NOT STARTED (shards-brief, revised 2026-08-18).",
+  "$comment": "Export phase 1. Decides membership, arrangement, and global indexing; serialize consumes the plan; nothing flows back. Entries are held as REFERENCES into assemble.out.result.Entries (indices or the objects themselves) — the plan never copies content and never embeds the IR or the layout (no god object; admiral holds those). Header schema / widths / bytes come from container.out.layout, resolved before this stage. Grouping ByFileType derives the extension from RelativePath (Extension is excluded from entry bags by assemble). Row bytes are exact and packing-invariant (fixed-width gidx). Ledger #40–#48.",
   "in": {
     "params": {
       "Grouping":            { "type": "Flat|ByFileType|ByRootDirectory", "note": "containment unit; Flat = one group. A shard never mixes groups; packing runs per group. Default Flat" },
       "GroupSort":           { "type": "PathAsc|PathHash",                "note": "per-group nominal order; PathAsc = RelativePath ordinal ascending (default); PathHash = Get-PathHash (numerics, ledger #4) as a reading-order device" },
-      "OrderStrict":         { "type": "switch",                          "note": "$true: shards are contiguous runs of nominal order (greedy contiguous, optimal at quota; + tolerance → greedy-at-ceiling + DP). $false (default): membership optimized within group, nominal sort restored within each shard for rendering" },
+      "OrderStrict":         { "type": "switch",                          "note": "$true: shards are contiguous runs of nominal order (greedy contiguous, optimal at quota; + tolerance → shape-exact, ledger #48). $false (default): membership optimized within group, nominal sort restored within each shard for rendering" },
+      "PackObjective":       { "type": "FrontLoad|Even",                  "note": "clause 2 of §Objective — the shape of the sub-shard remainder at the settled ShardCount, never a shard-count lever (ledger #48). FrontLoad (default, working): fill to quota in nominal order, remainder as the group's tail. Even: spread the remainder, minimize the largest shard then the next. No preset/profile layer over the knobs — quota + tolerance semantics are the whole surface" },
       "ShardQuotaBytes":     { "type": "long",                            "note": "target — a Size (whole written file: header + rows). Packing capacity. Working default 32768" },
       "ShardToleranceBytes": { "type": "long",                            "note": "exact bytes above quota a PACKED shard may reach only when that eliminates a shard; ceiling = quota + tolerance. Working default 4096" },
       "MaxFilesPerShard":    { "type": "int",                             "note": "second capacity dimension honored alongside bytes. Default 100000" },
@@ -39,10 +40,16 @@
       "OversizedCount":        { "type": "int",   "note": "shards with Class = Oversized (single record > ceiling; policy, not failure)" },
       "SingletonCount":        { "type": "int",   "note": "single-record shards ≤ quota (full shards that happen to hold one record; not runts, not hazards)" },
       "InBandCount":           { "type": "int",   "note": "single-record shards in (quota, ceiling]" },
-      "SumOvershootBytes":     { "type": "long",  "note": "Σ over non-oversized shards of max(0, PlannedSizeBytes − ShardQuotaBytes) — tolerance consumed; secondary objective" },
+      "TotalOvershootBytes":   { "type": "long",  "note": "overshoot-facing: Σ over non-oversized shards of DeviationBytes clamped to max(0, ·) — clause 3 aggregate, harness column, NOT a bound" },
+      "MaxOvershootBytes":     { "type": "long",  "note": "tolerance-facing: max over non-oversized shards of DeviationBytes clamped to max(0, ·) — the exit-gate check, MaxOvershootBytes ≤ ShardToleranceBytes" },
+      "TotalSlackBytes":       { "type": "long",  "note": "Σ over non-oversized shards of max(0, −DeviationBytes) — the remainder, wherever the shape left it; mass-conservation check: TotalSlackBytes − TotalOvershootBytes == ShardCount×ShardQuotaBytes − Σ PlannedSizeBytes" },
+      "MaxFillBytes":          { "type": "long",  "note": "largest non-oversized shard's PlannedSizeBytes — what PackObjective=Even minimizes" },
+      "MinFillBytes":          { "type": "long",  "note": "smallest non-oversized shard's PlannedSizeBytes" },
+      "HeaderOverheadBytes":   { "type": "long",  "note": "ShardCount × HeaderBytes — the entire cost of shard count; what a worse k actually spends" },
       "Grouping":              { "type": "string" },
       "GroupSort":             { "type": "string" },
       "OrderStrict":           { "type": "bool" },
+      "PackObjective":         { "type": "string" },
       "ShardQuotaBytes":       { "type": "long" },
       "ShardToleranceBytes":   { "type": "long" },
       "HeaderBytes":           { "from": "container.out.layout", "note": "echoed so the plan is self-describing" },
@@ -58,7 +65,11 @@
       "OversizedCount":    { "type": "int" },
       "SingletonCount":    { "type": "int" },
       "InBandCount":       { "type": "int" },
-      "SumOvershootBytes": { "type": "long" }
+      "TotalOvershootBytes": { "type": "long", "note": "see plan.TotalOvershootBytes; per-group" },
+      "MaxOvershootBytes":   { "type": "long", "note": "see plan.MaxOvershootBytes; per-group" },
+      "TotalSlackBytes":     { "type": "long", "note": "see plan.TotalSlackBytes; per-group" },
+      "MaxFillBytes":        { "type": "long" },
+      "MinFillBytes":        { "type": "long" }
     },
     "shard": {
       "Ordinal":          { "type": "int",    "note": "1-based, global across groups; final reading order" },
@@ -67,7 +78,9 @@
       "Class":            { "type": "Normal|Singleton|InBand|Oversized" },
       "IsOversized":      { "type": "bool",   "note": "Class = Oversized; EntryCount = 1; PlannedSizeBytes > ceiling by policy; declared to the reader by manifest" },
       "PlannedSizeBytes": { "type": "long",   "note": "HeaderBytes + Σ Measure-Row over Entries — equals the written file's byte length exactly (exit gate; serialize asserts it)" },
-      "OvershootBytes":   { "type": "long",   "note": "max(0, PlannedSizeBytes − ShardQuotaBytes) for non-oversized shards; 0 for Oversized (their excess is atomicity, not tolerance)" },
+      "DeviationBytes":   { "type": "long",   "note": "SIGNED, anchored at quota: PlannedSizeBytes − ShardQuotaBytes. The stored fact; OvershootBytes/SlackBytes/Class all derive from it. < 0 underfilled (slack) · 0…tolerance overshoot, in band · > tolerance beyond ceiling, Oversized only" },
+      "OvershootBytes":   { "type": "long",   "note": "derived: max(0, DeviationBytes). 0 for Oversized (their excess is atomicity, not tolerance)" },
+      "SlackBytes":       { "type": "long",   "note": "derived: max(0, −DeviationBytes). Consistency: OvershootBytes − SlackBytes == DeviationBytes" },
       "EntryCount":       { "type": "int" },
       "Entries":          { "type": "ref[]",  "note": "references (indices) into assemble.out.result.Entries, in shard order (nominal sort restored within the shard)" }
     },
