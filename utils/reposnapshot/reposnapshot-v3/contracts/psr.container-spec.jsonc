@@ -5,187 +5,126 @@
   "properties": {
     "file_ext": ".txt",
     "encoding": "utf-8",
-    "bom": false,
+    "bom": false
   },
   "row_schemas": {
     "header_row_schema": {
       "type": "array",
       "required": true,
-      "pattern": "^[^|\r\n]*(?: \| [^|\r\n]*)*\n$", //need to revise this pattern to either be wildcard for different types of encoded new lines, or strict based on guarantees from upstream 
+      "pattern": "", //need to revise this pattern to either be wildcard for different types of encoded new lines, or strict based on guarantees from upstream 
       "description": "list of columns of the header row, types for corresponding record row items are inferred via binding ",
-      "items": [
-        {
-          "type": "string",
-          "name": "gidx",
-          "type_name": "int",
+      "properties": {
+        "gidx": {
+          "description": "Global, group agnostic sequential ordinal.",
           "required": true,
-          "description": "Global record ordinal, assigned by the shard plan after packing (final reading order across all shards); ONE address scheme among several (path; tree byte offsets). Fixed width from a bound known before packing (EntryCount, at enumerate) is what lets the value be assigned after packing while row bytes stay exact (ledger #46). Which address columns v3 carries is still open; if none, this column is off."
-        },
-        {
           "type": "string",
-          "name": "path",
-          "type_name": "string",
-          "required": true,
-          "description": "Relative to snapshot-scoped root"
+          "position": 0,
+          "row_type": "int",
+          "row_width": 4,
+          "row_value": {
+            "$ref": "path/to/connected/contract/schema/file/attribute"
+          },
+          "pattern": "^[0-9]{4}$"
         },
-        {
-          "type": "array",
-          "name": "content_meta",
-          "type_name": "array",
+        "path": {
+          "description": "Relative POSIX path to snapshot-scoped root",
+          "required": true,
+          "type": "string",
+          "position": 1,
+          "row_type": "string",
+          "row_value": {
+            "$ref": "path/to/connected/contract/schema/file/attribute"
+          },
+          "pattern": "^[a-zA-Z0-9_.-]+(?:/[a-zA-Z0-9_.-]+)*$"
+        },
+        "content_meta": {
+          "description": "A nested array of field names in the content_meta block; values for row entries are caculated during ingestion with content_metadata processor",
+          "type": "string",
           "required": false,
-          "description": "A nested array of values corresponding to the declared names and datatypes in the header row of the file. Calculated during ingestion with content_metadata processor",
-          "construction": "{item[1].field_name;item[1].type_name;...}",
-          "items": [
-            {
-              "type": "object",
-              "field_name": "num_lines",
-              "type_name": "int",
-              "source": "record.ContentMeta.LineStats.Mean"
+          "position": 2,
+          "enclosure": "[]",
+          "separator": ",",
+          "pattern": "^(?:\\{[^;{}]+\\s*(?:;\\s*[^;{}]+\\s*)*\\},)*$",
+          "row_type": "array", // of values, without keys/names 
+          "properties": {
+            "num_lines": {
+              "val_rank": 0,
+              "val_type": "int",
+              "default": true,
+              "val": {
+                "$ref": "record.ContentMeta.LineStats.Mean"
+              }
             },
-            {
-              "type": "object",
-              "field_name": "num_chars",
-              "type_name": "int",
-              "source": "record.ContentMeta.CharCount"
+            "num_chars": {
+              "val_rank": 1,
+              "val_type": "int",
+              "default": true,
+              "val": {
+                "$ref": "record.ContentMeta.CharCount"
+              }
             },
-            {
-              "type": "object",
-              "field_name": "num_words",
-              "type_name": "int",
-              "source": "record.ContentMeta.WordCount"
+            "num_words": {
+              "val_rank": 2,
+              "val_type": "int",
+              "default": true,
+              "val": {
+                "$ref": "record.ContentMeta.WordCount"
+              }
             },
-            {
-              "type": "object",
-              "field_name": "cardinality_chars",
-              "type_name": "int",
-              "source": "record.ContentMeta.UniqueChars"
+            "num_unique_chars": {
+              "val_rank": 3,
+              "val_type": "int",
+              "default": false,
+              "val": {
+                "$ref": "record.ContentMeta.UniqueChars"
+              }
             },
-            {
-              "type": "object",
-              "field_name": "cardinality_words",
-              "type_name": "int",
-              "source": "record.ContentMeta.UniqueWords"
+            "num_unique_words": {
+              "val_rank": 4,
+              "val_type": "int",
+              "default": false,
+              "val": {
+                "$ref": "record.ContentMeta.UniqueWords"
+              }
             },
-            {
-              "type": "object",
-              "field_name": "punct_ratio",
-              "type_name": "double",
-              "source": "record.ContentMeta.PunctuationRatio"
+            "punct_ratio": {
+              "val_rank": 5,
+              "val_type": "double",
+              "default": false,
+              "val": {
+                "$ref": "record.ContentMeta.PunctuationRatio"
+              }
             },
-            {
-              "type": "object",
-              "field_name": "ws_ratio",
-              "type_name": "double",
-              "source": "record.ContentMeta.WhitespaceRatio"
+            "ws_ratio": {
+              "val_rank": 6,
+              "val_type": "double",
+              "default": true,
+              "val": {
+                "$ref": "record.ContentMeta.WhitespaceRatio"
+              }
             },
-            {
-              "type": "object",
-              "field_name": "entropy",
-              "type_name": "double",
-              "source": "record.ContentMeta.Entropy"
+            "entropy": {
+              "val_rank": 7,
+              "val_type": "double",
+              "default": true,
+              "val": {
+                "$ref": "record.ContentMeta.Entropy"
+              }
             }
-          ],
-          "defaults": {
-            "type": "array",
-            "items": [
-              "num_lines",
-              "num_words",
-              "num_chars",
-              "ws_ratio",
-              "entropy"
-            ]
-          },
-          {
-            "name": "content_bytes",
-            "type": "string",
-            "type_name": "int",
-            "required": true,
-            "description": "the byte length prefix. encodes the span of encoded byte width of the subsequent content block"
-          },
-          {
-            "name": "content",
-            "type": "string",
-            "type_name": "string",
-            "required": true,
-            "description": "Processed content with line break substitutions encoded with idiomatic C-style escape sequence substitutions"
           }
-        ]
-      }
-    },
-    "record_row_schema": {
-      "required": true,
-      "description": "list of columns of the header row, types for corresponding record row items are inferred via binding. values are derived from planning object attribute values. they have no names because those are in the header row",
-      "type": "array", // typed as array because its a list that gets evaluated to a string 
-      "pattern": "header_row_schema.pattern", //need to revise this pattern to either be wildcard for different types of encoded new lines, or strict based on guarantees from upstream 
-      "items": [
-        {
-          "description": "the value the shard plan assigned after packing (passed to Build-Row); fixed width from the layout",
+        },
+        "content_bytes": {
+          "description": "the byte length prefix. encodes the span of encoded byte width of the subsequent content block",
+          "position": 3,
           "type": "string",
-          "required": "header_row_schema.path.required",
-          "pattern": "^[a-zA-Z0-9_.-]+(?:/[a-zA-Z0-9_.-]+)*$",
-          "source": "record.RelativePath" // needs to be double checked 
+          "row_type": "int"
         },
-        {
-          "description": "the value of the shard row item's relative path",
+        "content": {
+          "description": "Processed content with line break substitutions encoded with idiomatic C-style escape sequence substitutions",
+          "position": 4,
           "type": "string",
-          "pattern": "^[0-9]{4}$",
-          "required": "header_row_schema.gidx.required",
-          "source": "plan.GlobalIdx"
-        },
-        {
-          "description": "the respective values of content_meta array fields in the order they appear in the associated header row block",
-          "type": "array",
-          "pattern": "^\\{\\s*[^;{}]+\\s*(?:;\\s*[^;{}]+\\s*)*\\}$",
-          "required": "header_row_schema.content_meta.required",
-          "items": [
-            // maybe this should not be listed here and unpacked programmatically based on the header metadata?
-            {
-              "type": "header_row_schema.content_meta.items[0].type_name",
-              "source": "record.ContentMeta.LineStats.Mean"
-            },
-            {
-              "type": "header_row_schema.content_meta.items[1].type_name",
-              "source": "record.ContentMeta.CharCount"
-            },
-            {
-              "type": "header_row_schema.content_meta.items[2].type_name",
-              "source": "record.ContentMeta.WordCount"
-            },
-            {
-              "type": "header_row_schema.content_meta.items[3].type_name",
-              "source": "record.ContentMeta.UniqueChars"
-            },
-            {
-              "type": "header_row_schema.content_meta.items[4].type_name",
-              "source": "record.ContentMeta.UniqueWords"
-            },
-            {
-              "type": "header_row_schema.content_meta.items[5].type_name",
-              "source": "record.ContentMeta.PunctuationRatio"
-            },
-            {
-              "type": "header_row_schema.content_meta.items[6].type_name",
-              "source": "record.ContentMeta.WhitespaceRatio"
-            },
-            {
-              "type": "header_row_schema.content_meta.items[7].type_name",
-              "source": "record.ContentMeta.Entropy"
-            }
-          ]
-        },
-        {
-          "description": "The length prefix of the content block; UTF-8 byte width of the encoded content span, counted without materializing""source": "codec.bytes",
-          "type": "header_row_schema.content_bytes.type_name",
-          "pattern": "",
-          "required": true
-        },
-        {
-          "description": "the string containing the post-encoding content block for the row",
-          "type": "header_row_schema.content_bytes.type_name",
-          "source": "",
-          "pattern": "",
-          "required": true
+          "row_type": "string"
         }
-      ]
+      }
     }
   }
