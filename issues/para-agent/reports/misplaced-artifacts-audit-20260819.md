@@ -233,6 +233,31 @@ So a fresh clone gets a para-agent whose declared mux config path does not exist
 what should be there. The thing that makes the package self-contained is the thing that does not
 travel with it.
 
+**9d — the resolvers fall back to ambient binaries, silently.** `bin/` holding untracked compiled
+payload is deliberate; a clone rehydrates it. The gap is what happens when it has not been
+rehydrated. Both resolvers in `src/mux.js` end the same way:
+
+```js
+resolveNuBin()  → ... → return "nu";               // mux.js:74
+resolveBin()    → ... → return BIN_CANDIDATES[0];  // mux.js:57 — "tmux.exe" on win32
+```
+
+Bare names, resolved by the OS against `PATH`. So an unhydrated `bin/` does not fail — it silently
+substitutes **the host's** nushell and mux for the vendored ones. The dedicated runtime was vendored
+precisely to not depend on ambient tooling, and the last line of each resolver hands the ambient one
+back without a word. That is the inheritance problem this audit catalogues, occurring inside
+para-agent's own launch path.
+
+The declared-path case has the mirror hole: `resolvePath()` returns `cwdResolved` even when nothing
+exists there (`mux.js:31`), and neither resolver existence-checks an env-supplied path. `.mcp.json`
+sets `PARA_NU_BIN=./mcp/para-agent/bin/nu/nu.exe`, so on an unhydrated clone that resolves to a
+concrete path pointing at nothing, and the failure surfaces later as an opaque spawn error rather
+than as *"rehydrate `bin/`"*.
+
+Neither is an argument for refusing to launch — per the label-don't-gate posture, the fix is that the
+resolved runtime and **where it came from** (vendored / ambient / declared-missing) are recorded,
+and that the missing-vendored case names its remedy.
+
 **Note for the planned vendoring.** `mcp/nushell-mcp` left para-agent because the concept is useful
 outside it, and is to come back as the front-end shell experience. Its layout authority is
 `config.nu`, and the reference corpus is deliberately not duplicated into the Claude-side adapter.
@@ -252,8 +277,9 @@ Nothing below has been executed. Ordered by value.
 | R5 | Drop `pwsh_exec` from `~/.cursor/mcp.json`, or delete `~/.cursor/mcp.json` outright | No Cursor CLI installed. Personal-scope file — owner's call |
 | R6 | Decide whether `pwsh_exec` belongs in `~/.claude.json` at all now that `.mcp.json` declares it repo-relative | Removing the personal copy makes the repo the single declaration |
 | R7 | Fix the `mcp/mdnav` path in `~/.claude/CLAUDE.md` | Owner's file |
-| R8 | Un-ignore the vendored tree's **non-binary** files — `!mcp/para-agent/bin/**/*.conf` and friends, 98 KB total — so `mux.conf` travels with the package. Keep the 183 MB of executables out | F9c. Smallest fix with the most transplantability bought |
-| R9 | Give the vendored runtime a provisioning record: a manifest of what `bin/nu` and `bin/mux` should contain, with versions and checksums, and a fetch/verify script under the package root | F9c. The alternative to committing 183 MB. Makes "self-contained" reproducible rather than local-only |
+| R8 | Move `bin/mux/mux.conf` out of `bin/` to a tracked config location and repoint `PARA_MUX_CONFIG_FILE`. `bin/` then holds **only** rehydratable payload — one directory, one meaning | F9c. Preferred over un-ignoring files inside `bin/`, which leaves a mixed-ownership directory |
+| R9 | Add a tracked runtime manifest at the package root declaring what `bin/` should contain — component, version, filenames, checksums, rehydration source — plus the rehydrate/verify script | F9c. The payload stays untracked by design; the *record* of it becomes repo-carried, so "self-contained" is reproducible rather than local-only |
+| R11 | Record resolved-runtime provenance (vendored / ambient / declared-missing) and give the unhydrated case a named error stating the remedy. Do **not** refuse to launch on ambient fallback — label it | F9d. Same posture as the inheritance dimension; the two want the same receipt field |
 | R10 | Move the suite to `mcp/para-agent/tests/` (the empty stub) and make adapter evidence references package-relative | F9a, F9b. Larger change; touches `package.json`, the runner, and two adapter files. Do it when the migration track is already disturbing these files |
 
 **The general rule these argue for:** an artifact's directory should name *what produced it or what
