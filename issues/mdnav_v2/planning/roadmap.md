@@ -6,7 +6,7 @@ structural model — recursive discovery, flat rows with path addresses,
 inside-out agreement, telescope surface —
 [design/mdnav_v2_structure-brief.md](../design/mdnav_v2_structure-brief.md)
 (D41, 2026-08-17; supersedes brief 03 §4 and the addressing in D11/D13). **Homework:**
-[../archaelogy/figure-model-survey.md](../archaelogy/figure-model-survey.md).
+[../archaeology/figure-model-survey.md](../archaeology/figure-model-survey.md).
 **Locations:** v2 is built in `mcp/mdnav_v2/`; the legacy oracle is
 `skills/doc-dive/mdnav/` and is never edited. **Decisions:**
 [decisions.md](decisions.md). **Phase briefs** (execution-ready specs, one

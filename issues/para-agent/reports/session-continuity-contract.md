@@ -614,7 +614,7 @@ This document does not:
 
 ## Related evidence and design
 
-- [`discussion/grok-science-facility-exploration.md`](../../mcp/discussion/grok-science-facility-exploration.md) — ideation that sharpened mounted corpus and compaction-survival applications.
+- [`discussion/grok-science-facility-exploration.md`](../../mcp/discussions/grok-science-facility-exploration.md) — ideation that sharpened mounted corpus and compaction-survival applications.
 - [`../para-agent/context-mode-cross-examination.md`](context-mode-cross-examination.md) — broader context-mode archaeology, client asymmetry, identity, guidance, and authority findings.
 - [`../para-agent/backend-engine-architecture.md`](backend-engine-architecture.md) — shared backend capability substrate and the separation of runtime planes from client adapters.
 - [`../para-agent/design-synthesis.md`](design-synthesis.md) — current para-agent architectural synthesis.

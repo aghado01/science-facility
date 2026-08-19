@@ -4,7 +4,7 @@
 `skills/doc-dive/mdnav/mdnav.mjs` (1,165 lines) and `test/acceptance.mjs`
 (528 lines) on 2026-08-17, both at `38710e0` · **Companion:** the
 function-by-function dispositions are in
-[../archaelogy/figure-model-survey.md](../archaelogy/figure-model-survey.md);
+[../archaeology/figure-model-survey.md](../archaeology/figure-model-survey.md);
 this report does not repeat them. It records what a rewriter needs that the
 survey does not state: how the suite is actually coupled to the old
 implementation, the exact output contract the goldens will freeze, the

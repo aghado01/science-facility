@@ -10,7 +10,7 @@
 > [planning/roadmap.md](../planning/roadmap.md) (milestones M0–M6, chip
 > seams), the audit trail in [planning/decisions.md](../planning/decisions.md)
 > (D1–D38, ascending), and the figure-model homework in
-> [archaelogy/figure-model-survey.md](../archaelogy/figure-model-survey.md)
+> [archaeology/figure-model-survey.md](../archaeology/figure-model-survey.md)
 > (function-by-function dispositions, must-survive behaviors, test map).
 > Amend this brief and the phase briefs; do not fork them.
 
@@ -34,23 +34,23 @@ askable.
 
 **Lineage** (the conversation this brief closes out, in order):
 
-1. Codex converged spec v0.1 — [codex-design-discussion-full.md](../discussion/codex-design-discussion-full.md)
+1. Codex converged spec v0.1 — [codex-design-discussion-full.md](../discussions/codex-design-discussion-full.md)
    §1–13 (`mdnav outline D002 --depth 3` → H0107–H0141). Verb contract;
    governing principles (attention is the instrument; structure informs
    navigation without determining meaning; source authoritative; never
    silently omit bytes); non-goals incl. "MCP wrapping unless later
    justified" — now justified, the MCP is being built.
-2. Fable review 2026-07-29 — [fable-review-20260729.md](../discussion/fable-review-20260729.md)
+2. Fable review 2026-07-29 — [fable-review-20260729.md](../discussions/fable-review-20260729.md)
    §"mdnav tooling" (H0002): F1 noise detection fence-blind, F2 `profile` vs
    `--by breaks` disagree on breaks, F3 help/README/comment drift, F4 greedy
    boolean flags. **All four still open** (only commit since: the move to
    `mcp/`, 8d063b8). Absorbed here.
-3. Sol XOR note — [sol-XOR-discussion.md](../discussion/sol-XOR-discussion.md):
+3. Sol XOR note — [sol-XOR-discussion.md](../discussions/sol-XOR-discussion.md):
    mdnav as *consumer witness* of doccer primitives, not their definition; the
    recursive walk — classify delimiter candidates → mask/parity → bounded
    regions → **re-enter each region with context-specific rules** → repeat;
    every intermediate keeps its material basis and source coordinates.
-4. Gemini note 2026-08-16 — [gemini-mdnav-next-gen.md](../discussion/gemini-mdnav-next-gen.md):
+4. Gemini note 2026-08-16 — [gemini-mdnav-next-gen.md](../discussions/gemini-mdnav-next-gen.md):
    port doccer's `SpanSet`; hierarchical layers; slice-program
    materialization; cadence; module/MCP blueprint. This brief takes the
    algebra and the layering, generalizes "mask" to *claims + suppression

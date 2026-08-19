@@ -33,7 +33,7 @@ This synthesis builds on:
 - the engine/client boundary analysis in [`backend-engine-architecture.md`](backend-engine-architecture.md).
 - the direct Node port analysis for ThermoMapper Hashish, jso-jackson, and cybernetic-copilot in [`node-hashish-port-design.md`](node-hashish-port-design.md).
 - the algorithm-by-algorithm conceptual and application map in [`hashish-capability-inventory.md`](hashish-capability-inventory.md).
-- the reposnapshot, context-mode, hook-layer, JSONL-mount, and shared-corpus ideation in [`grok-science-facility-exploration.md`](../../mcp/discussion/grok-science-facility-exploration.md), checked against the local implementations rather than treated as implementation evidence by itself.
+- the reposnapshot, context-mode, hook-layer, JSONL-mount, and shared-corpus ideation in [`grok-science-facility-exploration.md`](../../mcp/discussions/grok-science-facility-exploration.md), checked against the local implementations rather than treated as implementation evidence by itself.
 - the resulting shared [`Mounted Artifact contract`](mounted-artifact-contract.md) and [`Session Continuity contract`](session-continuity-contract.md).
 
 The default `agy` journal contains failed login attempts rather than another completed report, so it was not treated as substantive design evidence.

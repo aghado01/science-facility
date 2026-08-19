@@ -86,7 +86,7 @@ and receives its own mount. A server restart may invalidate `mount_ref` without
 invalidating `artifact_ref`.
 
 The general lifecycle, validation, query, residue, and receipt rules live in the
-[`mounted artifact contract`](../../../issues/mcp/mounted-artifact-contract.md). The
+[`mounted artifact contract`](../../para-agent/reports/mounted-artifact-contract.md). The
 tree remains the tool-free catalog; mounting is the MCP backend's runtime binding of
 that catalog and its shards, not an operating-system filesystem mount.
 
@@ -142,7 +142,7 @@ avails to its human users** — for agent users:
 - Session continuity should persist the durable `artifact_ref`, semantic view summary,
   recent selectors, and optional `mount_ref`; restoration must be able to remount. The
   configurable checkpoint/restore protocol belongs to the shared
-  [`Session Continuity contract`](../../../issues/mcp/session-continuity-contract.md),
+  [`Session Continuity contract`](../../para-agent/reports/session-continuity-contract.md),
   while native injection remains a client-harness responsibility.
 
 ## Work log
