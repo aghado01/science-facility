@@ -3,6 +3,20 @@
 Newest first. Evidence pointers are to commits, contracts, reports, and runner output.
 Counts are recorded **with the commit they were observed at** (P16) — never as standing claims.
 
+- **2026-08-19 — workspace root named; AGY capture rescued and P12 corrected**: `index.js` derived
+  the workspace from `process.cwd()` inline at four points, never naming it — workspace-scoping was
+  always the intent (supervisor and para-agent land in the same project), but the workspace itself
+  was implicit, so transcripts had no override and no session could report its binding.
+  `WORKSPACE_ROOT` now resolves once with `PARA_WORKSPACE_ROOT` overriding and `process.cwd()` as the
+  documented default; `profiles.js` already carried the `PARA_PKG_ROOT` / `PARA_WORKSPACE_ROOT`
+  distinction. Conventional-launch behavior unchanged. Bounded gate after the change:
+  **21 suites / 218 discovered / 218 passed / 0 failed, skipped, or cancelled.**
+  Separately, the 2026-08-14 AGY capture was found in gitignored `.codex/`, uncited: `agy 1.1.13`
+  exited at Google OAuth timeout after 60s with **0 bytes of stdout**, so it never reached a stream.
+  Moved to [specimens/agy-native-stream-capture-20260814](../specimens/agy-native-stream-capture-20260814/README.md);
+  P12 amended to record an authentication-carrier gap rather than a stream finding. Both from
+  [misplaced-artifacts-audit-20260819](../reports/misplaced-artifacts-audit-20260819.md).
+
 - **2026-08-19 — fleet discovery census taken; grok compat discovery disabled** (config change by
   owner, plus a static census — no model call): `~/.grok/config.toml` now sets all six compat cells
   false for cursor, claude, and codex, after which Grok resolves repo-owned assets only. Census of

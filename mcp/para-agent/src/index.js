@@ -43,9 +43,25 @@ const transcriptStores = new Map();
 const lastSeen = new Map();
 
 /**
+ * Workspace root, resolved once at startup.
+ *
+ * para-agent's working files are workspace-scoped by design: a supervisor
+ * working in project X launches para-agent there, and both land in the same
+ * workspace, so `<workspace>/.para-agent/` holds that project's journals and
+ * transcripts and can be resumed from it. Launch cwd is that workspace by
+ * convention; PARA_WORKSPACE_ROOT states it explicitly when it is not.
+ *
+ * Distinct from PARA_PKG_ROOT (where para-agent itself lives) — see profiles.js,
+ * which passes both into the nu profile environment.
+ */
+const WORKSPACE_ROOT = process.env.PARA_WORKSPACE_ROOT
+  ? resolvePath(process.env.PARA_WORKSPACE_ROOT)
+  : process.cwd();
+
+/**
  * One journal per session. Workspace-contextual if PARA_JOURNAL_ROOT is unset.
  */
-const defaultJournalRoot = path.join(process.cwd(), ".para-agent", "journals");
+const defaultJournalRoot = path.join(WORKSPACE_ROOT, ".para-agent", "journals");
 const JOURNAL_ROOT = process.env.PARA_JOURNAL_ROOT ? resolvePath(process.env.PARA_JOURNAL_ROOT) : defaultJournalRoot;
 const journals = new Map();
 
@@ -55,14 +71,14 @@ const sessionOf = (handle) => String(handle).split(":")[0];
 async function writableTranscriptFor(handle) {
   const stream = sessionOf(handle);
   if (!transcriptStores.has(stream)) {
-    const store = await TranscriptStore.openWritable({ workspaceRoot: process.cwd(), sessionId: stream });
+    const store = await TranscriptStore.openWritable({ workspaceRoot: WORKSPACE_ROOT, sessionId: stream });
     transcriptStores.set(stream, store);
   }
   return transcriptStores.get(stream);
 }
 
 async function readOnlyTranscriptFor(handle) {
-  return TranscriptStore.openReadOnly({ workspaceRoot: process.cwd(), sessionId: sessionOf(handle) });
+  return TranscriptStore.openReadOnly({ workspaceRoot: WORKSPACE_ROOT, sessionId: sessionOf(handle) });
 }
 
 function createMediatedTurnService() {
@@ -262,7 +278,7 @@ server.registerTool(
 
       if (!spawnCommand && shell === "nu") {
         const nuBin = resolveNuBin();
-        const prof = getNuProfileConfig(profile, { workspaceRoot: cwd ?? process.cwd() });
+        const prof = getNuProfileConfig(profile, { workspaceRoot: cwd ?? WORKSPACE_ROOT });
         spawnCommand = [nuBin, ...prof.args];
         spawnEnv = { ...prof.env, ...spawnEnv };
       }

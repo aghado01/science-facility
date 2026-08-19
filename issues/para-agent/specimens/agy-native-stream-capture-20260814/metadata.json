@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "launched_at": "2026-08-14T21:21:19.796Z",
+  "completed_at": "2026-08-14T21:22:20.132Z",
+  "application": "agy",
+  "version": "1.1.13",
+  "command": [
+    "C:\\Users\\azrie\\AppData\\Local\\agy\\bin\\agy.exe",
+    "--print",
+    "--output-format",
+    "stream-json",
+    "--mode",
+    "plan",
+    "--sandbox",
+    "--disable-slash-commands",
+    "--print-timeout",
+    "2m"
+  ],
+  "cwd": "D:\\aghado01\\science-facility",
+  "prompt": {
+    "bytes": 92,
+    "sha256": "ede5d33eac84ed9decf82862159c7986b76507d400b5097100c87ac4a6e45f27"
+  },
+  "process": {
+    "code": 1,
+    "signal": null
+  },
+  "stdout": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "stderr": {
+    "bytes": 939,
+    "sha256": "d9abde58faad444bad37cd95ed0d634f48265a29da099a23b72bf7e4ebc71f2a"
+  }
+}

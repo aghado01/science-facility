@@ -12,38 +12,36 @@ Findings are ordered by consequence, not by how they were found.
 
 ---
 
-## F1 — para-agent's own state root is launcher-determined, not server-owned
+## F1 — the workspace root was intended but never named — *resolved 2026-08-19*
 
-**Live code.** [`src/index.js:48`](../../../mcp/para-agent/src/index.js:48):
+> **Corrected.** This finding was first written as "state root is launcher-determined, not
+> server-owned", reading `process.cwd()` as drift against the contract. That was wrong on intent.
+> Owner's account: cwd-derivation is deliberate — a supervisor working in project X launches
+> para-agent there so both land in the same workspace, and `<workspace>/.para-agent/` is a planned
+> convention for repo-scoped working files that can be written and resumed per project. The empty
+> `mcp/para-agent/.para-agent/` is a placeholder for that convention, not a fossil. Retained here
+> with the real gap, which is narrower.
 
-```js
-const defaultJournalRoot = path.join(process.cwd(), ".para-agent", "journals");
-```
+`src/index.js` derived the workspace root from `process.cwd()` **inline at four separate points** —
+the journal root plus three call sites — with the value never named, never overridable, and never
+reportable. Workspace-scoping was the design; the workspace itself was implicit.
 
-and three call sites passing `workspaceRoot: process.cwd()` — [index.js:58](../../../mcp/para-agent/src/index.js:58),
-[index.js:65](../../../mcp/para-agent/src/index.js:65), [index.js:265](../../../mcp/para-agent/src/index.js:265).
-The comment above it says the quiet part: *"Workspace-contextual if `PARA_JOURNAL_ROOT` is unset."*
+`profiles.js` already had the vocabulary: it passes both `PARA_PKG_ROOT` (where para-agent lives)
+and `PARA_WORKSPACE_ROOT` (the workspace) into the nu profile environment. The distinction was
+codified in one module and absent in the one that resolves it.
 
-The frozen contract says the opposite:
+Consequences of leaving it implicit: journals had an override (`PARA_JOURNAL_ROOT`) and transcripts
+had none; a launch whose cwd was not the workspace had no way to say so; and nothing could report
+which workspace a session actually bound to.
 
-> A **server-owned workspace root** and handle-derived ledger session select the transcript store.
-> Request `cwd` never changes that route.
+**Fixed** in [`index.js`](../../../mcp/para-agent/src/index.js:57): `WORKSPACE_ROOT` resolves once at
+startup, `PARA_WORKSPACE_ROOT` overrides, `process.cwd()` remains the documented default, and all
+four sites read the single value. Behavior under a conventional launch is unchanged. Bounded gate
+after the change: **21 suites / 218 discovered / 218 passed / 0 failed, skipped, or cancelled.**
 
-Request `cwd` indeed doesn't change it — **process** cwd does, and process cwd is whatever directory
-the launching client happened to start the server from. Two clients launching para-agent from two
-directories get two transcript stores, silently, with no error and no receipt of which one was used.
-
-This is the same defect as everything in F3, expressed in code: **location determined by the
-launcher rather than by the owner.** It is the generator of the problem, not an instance of it.
-
-The fossil is in the tree: `mcp/para-agent/.para-agent/` exists and is **empty** — a launch from that
-directory that created the tree and wrote nothing. Real state lives at the repo root
-(`.para-agent/journals/streams/agent-cli-test/`, `.para-agent/transcripts/`).
-
-Note the asymmetry: journals have an env override (`PARA_JOURNAL_ROOT`), transcripts have none —
-`workspaceRoot` is hard-wired to `process.cwd()` at every call site. That is the smaller half of the
-fix and it is directly on the path the [inheritance-control note](../notes/session-scoped-inheritance-control.md)
-proposes.
+Still open, and now a wording question rather than a code one: the frozen contract says *"a
+**server-owned** workspace root … selects the transcript store"*, which does not describe
+workspace-scoped resolution. The contract text, not the code, is what needs the ruling.
 
 ---
 
@@ -167,9 +165,9 @@ Nothing below has been executed. Ordered by value.
 
 | # | Action | Notes |
 |---|---|---|
-| R1 | Give para-agent a server-owned state root — resolve from the package/server location or an explicit `PARA_WORKSPACE_ROOT`, not `process.cwd()`; give transcripts the same override journals already have | Code change, closes F1 at the source. Belongs with the inheritance-control work |
-| R2 | Move `agy-native-stream-capture/` and `agy-native-stream-probe.mjs` into `issues/para-agent/` as tracked evidence, and correct P12 to say what actually happened | Closes F2. The ruling needs amending either way |
-| R3 | Delete the empty `mcp/para-agent/.para-agent/` and `.codex/chat-export/` | Empty fossils |
+| ~~R1~~ | ~~Name and resolve the workspace root explicitly~~ | **Done 2026-08-19.** `WORKSPACE_ROOT` + `PARA_WORKSPACE_ROOT`; 218/218 green |
+| ~~R2~~ | ~~Rescue the AGY capture; correct P12~~ | **Done 2026-08-19.** Moved to `specimens/agy-native-stream-capture-20260814/` with a README stating what it does and does not prove; P12 amended |
+| R3 | Delete `.codex/chat-export/` (empty). **Keep** `mcp/para-agent/.para-agent/` — it is a placeholder for the repo-scoped convention, not a fossil | Corrected from the first draft |
 | R4 | Move or discard `.claude/doc-dive/` and `.codex/doc-dive*/` | Ephemeral index output from August 6 and 10; likely just discard |
 | R5 | Drop `pwsh_exec` from `~/.cursor/mcp.json`, or delete `~/.cursor/mcp.json` outright | No Cursor CLI installed. Personal-scope file — owner's call |
 | R6 | Decide whether `pwsh_exec` belongs in `~/.claude.json` at all now that `.mcp.json` declares it repo-relative | Removing the personal copy makes the repo the single declaration |
