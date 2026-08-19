@@ -1,5 +1,12 @@
 # v3 consolidation plan — shore up before breaking ground
 
+> **SUPERSEDED (2026-08-19) — historical plan, not current status.**
+> Current canon is [../planning/](../planning/): [decisions.md](../planning/decisions.md),
+> [roadmap.md](../planning/roadmap.md), [ledger.md](../planning/ledger.md).
+> Executed through Phase 5 on 2026-07-29. Its §D/§E/§F forward items and its §F user
+> adjudications now live in the roadmap; its work log is condensed into the ledger.
+> Retained for the reasoning behind each phase, which the canon does not restate.
+
 **Status:** EXECUTED through Phase 5 (2026-07-29) — inventory items carry
 ✓ markers; remaining open: **6d** (tp-era contract harmonization —
 adjudicated 2026-07-29, implementation pending), **item 6** (crawler

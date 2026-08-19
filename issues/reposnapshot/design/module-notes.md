@@ -17,7 +17,7 @@ so `Extension`, `CreationUtc`, `FsAttributes` and per-node subtree rollups cost
 nothing beyond what the walk was doing. Facts that cost a read — encoding,
 binary sniff, hashes — belong to later stages, because the crawler walks
 everything ignore is about to discard (`.git`, `node_modules`, build output),
-often 10–100× the surviving count. This is decisions-ledger #30 restated as a
+often 10–100× the surviving count. This is decisions ledger #30 restated as a
 criterion so it applies to fields nobody has named yet.
 
 Fields exist for later consumers even when the next stage does not use them.
@@ -94,10 +94,10 @@ consumer (shards, tree manifest) wants them.
 
 **Greedy crawl.** Ignore config does not live in the crawler; crawl everything,
 filter afterwards. `New-FileSystemCrawler` takes only `-RootPath` by decision,
-not omission (decisions-ledger #29; admiral-orchestration §"Crawler ↔ ignore").
+not omission (decisions ledger #29; admiral-orchestration §"Crawler ↔ ignore").
 
 **Diagnostics.** `Skipped` is returned as a sibling of `Graph`, not folded into
-it — the feed is already separate in substance (decisions-ledger #32). Each
+it — the feed is already separate in substance (decisions ledger #32). Each
 directory is its own failure domain; each entry's attribute read and each
 file's stat are isolated so one bad entry does not lose the directory.
 

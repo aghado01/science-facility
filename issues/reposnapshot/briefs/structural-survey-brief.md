@@ -2,7 +2,7 @@
 
 **Status:** SHELVED, not urgent. Filed 2026-08-04 · Design home:
 `rs.core.assemble-design.md` §"Structural survey elements" (concept, feasibility
-boundary, span-anchor decision) · Registry: `v3-consolidation-plan.md` §E.
+boundary, span-anchor decision) · Registry: `planning/roadmap.md` §Deferred (was `v3-consolidation-plan.md` §E).
 
 **Sequencing:** downstream of the code trunk maturing — writers, then admiral —
 same shelf as the content-class dispositions. Nothing here blocks current work,

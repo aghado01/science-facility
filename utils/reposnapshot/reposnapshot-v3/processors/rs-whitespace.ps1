@@ -110,7 +110,7 @@
         sequence sees what the compiler sees. Where they do occur it is i18n
         resources and mixed-RTL literals, making them load-bearing content like
         ZWJ/ZWNJ above. Detection is a read-only-tail diagnostic step's job, not
-        a whitespace op's; decisions-ledger #11/#11b.
+        a whitespace op's; decisions ledger #11/#11b.
 
         Default set (what you get with no Operations key):
             lf · nfc · strip-zwsp · strip-wj · strip-zwnbsp · trim-trailing ·

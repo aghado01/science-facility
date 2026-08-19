@@ -8,7 +8,7 @@ least-overshoot demoted to an invariant; overflow restated as outranking
 the objectives; strict+tolerance open call closed; comparison harness added to
 the gate) · **Track:** V3 e2e sprint,
 export phase 1 (assemble → **shards** → serialize → manifest) ·
-**Archaeology:** `design/gemini-shard-recon.md` (LTS knob roster, pathology
+**Archaeology:** `archaeology/gemini-shard-recon.md` (LTS knob roster, pathology
 table) · **Discussion:** `discussion/opus-export-packing-discussion.md`,
 `discussion/packing-strategies-details.md`, and the 2026-08-16 session that
 resumed them (LTS shape re-anchored on `project-snapshots/reposnapshot/…0422…`

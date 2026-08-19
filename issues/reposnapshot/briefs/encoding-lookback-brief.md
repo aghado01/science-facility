@@ -16,7 +16,7 @@ behind it, and they want deciding together, not piecemeal."*
 It was waiting on serializer decisions that have now landed — the codec is
 settled (ledger #16, `shard-format-notes.md` §"Content codec — SPEC"). The rider
 about `Partition-Files` probing `ByteSpan` has separately been **retired** rather
-than actioned (decisions-ledger #27). What remains is the encoding half.
+than actioned (decisions ledger #27). What remains is the encoding half.
 
 ## The set
 

@@ -133,7 +133,7 @@ rewriting history.
   what a match means) — "ignore" is a semantics, not a stage. +
   `processors/` (ISS-loadable, body-only,
   `param($Item, $Config)`, copy-on-enrich, interior helpers allowed).
-  `schema/<stage>.contract.json` — per-stage I/O contracts (`{ stage, in, out }`,
+  `contracts/<stage>.contract.json` — per-stage I/O contracts (`{ stage, in, out }`,
   field registers under named shapes; `from: "<stage>.out.<shape>"` marks a
   field taken verbatim from upstream). `tests/contracts.tests.ps1` checks every
   `from` resolves (input ⊆ upstream output) and prints join residues — fields
@@ -142,13 +142,18 @@ rewriting history.
   field: stamp it, declare it in the origin's `out`, add `from` where it passes
   through, and add it to `assemble.out.entry.exclude` if it must not reach the
   payload. (Renamed from `*.schema.json` 2026-08-16: the files are contracts,
-  and "schema" was doing double duty — ledger #34.) `schema/psr.header.json`
-  is the one non-contract in that folder: the **psr** container's admissible
-  header-row declaration, read by `rs.core.container`; the contracts suite
-  globs `*.contract.json` and skips it.
+  and "schema" was doing double duty — decisions #34; the folder itself moved
+  `schema/` -> `contracts/`.) `contracts/container.spec.jsonc` is the one
+  non-contract in that folder: the **psr** container's admissible declaration,
+  read by `rs.core.container`; the contracts suite globs `*.contract.json` and
+  skips it.
 - `issues/reposnapshot/` — design docs (`design/`, `briefs/`, `planning/`,
-  `reports/`, `discussion/`). **`planning/v3-consolidation-plan.md` is the
-  sequenced work ledger**; `planning/decisions-ledger.md` the settled calls;
+  `reports/`, `discussions/`, `archaeology/`). **Planning canon is the
+  `planning/` triple**: `decisions.md` the settled calls, `roadmap.md` what is
+  ahead, `ledger.md` what landed — plus `payload-manifest-ledger.md`, a separate
+  registry of declarations the payload owes a reader. `reports/` holds
+  point-in-time reports and superseded plans, `discussions/` verbatim chat logs.
+  (The executed `v3-consolidation-plan.md` moved to `reports/` 2026-08-19.)
   `design/admiral-orchestration.md` the orchestrator design (admiral doesn't
   exist yet — stages carry contracts for what it will provide; test harnesses
   play admiral); `design/module-notes.md` per-module rationale displaced from

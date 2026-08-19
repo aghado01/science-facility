@@ -2,7 +2,7 @@
 
 **Status:** filed, not started · **Filed:** 2026-08-15 · **Priority:** side quest —
 does not block the V3 e2e sprint (`assemble → shards → serialize`). The decision
-behind it is already captured (decisions-ledger #11 / #11b), so deferring the
+behind it is already captured (decisions ledger #11 / #11b), so deferring the
 code loses nothing.
 
 ## Why it exists

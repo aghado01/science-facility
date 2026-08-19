@@ -26,7 +26,7 @@ update ignore-compiler's "antisemantics" to be like ThermoMapper's repo-audit's 
 
 finish v3 mvp e.g. fill in gaps between functionality of v3 and LTS
 
-- consolidation plan EXECUTED through the IR (2026-07-29 — `issues/reposnapshot/planning/v3-consolidation-plan.md`); remaining LTS-parity gap is the writer phase (rows/offsets/tree/shards) + item 6d
+- consolidation plan EXECUTED through the IR (2026-07-29 — `issues/reposnapshot/reports/v3-consolidation-plan.md`); remaining LTS-parity gap is the writer phase (rows/offsets/tree/shards) + item 6d
 
 need to design handling and conventions for configuration and documentation files
 

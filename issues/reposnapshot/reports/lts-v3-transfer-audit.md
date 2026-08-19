@@ -74,7 +74,7 @@ therefore already the LTS-driven engine, not a parallel reimplementation — the
   is a *new* capability, not a transfer — but the shard-row/tree conventions it extends
   are currently defined by LTS output. Format decision above gates it.
 
-> **Canonical sequenced plan as of 2026-07-28:** `issues/reposnapshot/planning/v3-consolidation-plan.md`
+> **Canonical sequenced plan as of 2026-07-28:** `issues/reposnapshot/reports/v3-consolidation-plan.md`
 > (consolidation-first doctrine; supersedes the inline plan sequencing in the
 > work-log entries below, which remain as session record).
 
