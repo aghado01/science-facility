@@ -10,8 +10,9 @@
   "shard_container_schema": {
     "type": "array",
     "required": true,
+    "record_delimiter": "\n",
     "column_separator": "|",
-    "column_pattern": "", //need to revise this pattern to either be wildcard for different types of encoded new lines, or strict based on guarantees from upstream 
+    "record_pattern": "^[^|\\r\\n]*(?:${column_separator}[^|\\r\\n]*)*${record_delimiter}$",
     "description": "list of columns of the header row, types for corresponding record row items are inferred via binding ",
     "properties": {
       "gidx": {
@@ -24,7 +25,7 @@
         "record_value": {
           "$ref": "psr.crosswalk.jsonc#/record/<attribute>"
         },
-        "record_pattern": "^[0-9]{gidx.record_width}$"
+        "record_pattern": "^[0-9]{${gidx.record_width}}$"
       },
       "path": {
         "description": "Relative POSIX path to snapshot-scoped root",
