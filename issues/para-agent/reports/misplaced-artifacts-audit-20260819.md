@@ -159,6 +159,31 @@ client with cursor compatibility enabled.
 
 ---
 
+## F8 — one short name, two referents, inside para-agent's own canon
+
+`agy` names two different things, and the canon uses both without qualification:
+
+| | The **role** | The **application** |
+|---|---|---|
+| What | standing adjutant pane, psmux session `agent-agy` | Google Antigravity CLI |
+| Driven by | headless `claude.exe -p` | `agy.exe` 1.1.13 |
+| Evidence | four engagements 2026-08-10→13, $2.42–$7.15 each, high hit rate — [agy-usage-report](../specimens/agy-usage-report-20260813_100903.md), [fable-agy-TexDig-triage](../specimens/fable-agy-TexDig-triage-20260812.md) | one capture attempt, 0 bytes of stdout, OAuth timeout — [agy-native-stream-capture-20260814](../specimens/agy-native-stream-capture-20260814/README.md) |
+| Status | worked | never reached a stream |
+
+Confirmation that the role is claude-backed, from the usage report's own §2 turn pattern:
+`claude.exe -p (Get-Content <promptfile> -Raw) --allowedTools Read Grep Glob --output-format json`.
+L1 adds that gemini is not installed and that `claude` 2.1.226 resolves on the pane PATH. Neither
+`agy.exe` nor Antigravity appears anywhere in that document.
+
+The two live side by side in `specimens/` under names that do not distinguish them, and P12 ruled on
+the application while the field evidence describes the role. Disambiguated in P12 and in the capture
+README on 2026-08-19; the underlying names are unchanged and remain the owner's call.
+
+Not a finding: `research/skills/claude-agy/` holds a vendor skill about Antigravity delegation, with
+a byte-identical `SKILL.md` / `antigravity-agents.md` pair. `research/` is a corpus, not a load path
+— nothing in the repository or in any client config references it, and the canonical shared-skill
+location is `skills/`. Recorded only so the next reader does not re-flag it.
+
 ## Proposed remediation
 
 Nothing below has been executed. Ordered by value.

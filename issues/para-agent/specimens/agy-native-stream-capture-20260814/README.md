@@ -3,6 +3,17 @@
 **This capture contains no stream.** It is retained because *why* it contains no stream is the
 evidence.
 
+> **Which "agy" this is.** The *application*: Google Antigravity CLI `agy.exe`, the binary at
+> `%LOCALAPPDATA%\agy\bin\agy.exe`, targeted by adapter `agy/unverified-v1`.
+>
+> It is **not** the adjutant *role* named `agy` from the prototype era. That was a standing psmux
+> pane in session `agent-agy`, driven by headless `claude.exe -p` — four productive engagements
+> 2026-08-10→13, recorded in
+> [agy-usage-report-20260813_100903.md](../agy-usage-report-20260813_100903.md) and
+> [fable-agy-TexDig-triage-20260812.md](../fable-agy-TexDig-triage-20260812.md). Those sessions
+> evidence the role's mechanics and Claude's stream. They say nothing about this application, and
+> the two are routinely conflated because they share a short name.
+
 | | |
 |---|---|
 | Application | `agy` (Antigravity) `1.1.13` |
