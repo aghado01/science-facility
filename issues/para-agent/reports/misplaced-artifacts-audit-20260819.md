@@ -258,6 +258,27 @@ Neither is an argument for refusing to launch — per the label-don't-gate postu
 resolved runtime and **where it came from** (vendored / ambient / declared-missing) are recorded,
 and that the missing-vendored case names its remedy.
 
+**The layout the findings point at.** Owner is honing this in `codex-scientiae`, cited as ideas
+rather than a template to copy. The load-bearing idea is a three-way split by *how a directory is
+obtained*, expressed in the ignore file:
+
+| Role | codex-scientiae | Ignore treatment | para-agent's equivalent |
+|---|---|---|---|
+| Recipes — how to obtain things | `brewery/` | absent from `.gitignore` ⇒ **tracked** | `brewery/` (exists, empty) |
+| Rehydrated payload | `packages/` | `packages/` ⇒ ignored | `bin/` — already correct |
+| Regenerable output | `artifacts/` | `artifacts/**` + **`!artifacts/README.md`** | `.para-agent/` at the workspace root |
+
+Two things follow for para-agent specifically. First, `bin/` is already playing the `packages/` role
+correctly — untracked payload is the right call and no change is wanted there. What is missing is
+the `brewery/` half: nothing yet records how `bin/` gets filled. Second, the `!README.md` negation is
+the answer to *"a directory whose contents are ignored should still declare what it is"* — which is
+exactly the gap in F9c, and it costs one file.
+
+Worth noting that para-agent's ignore policy is currently not para-agent's: `bin/` is ignored by
+`.gitignore:37` at the **repository** root, a repo-wide rule aimed at build output. Under the
+standalone design the package should carry its own `.gitignore`, both so the policy roots with the
+thing it governs and so it survives transplanting.
+
 **Note for the planned vendoring.** `mcp/nushell-mcp` left para-agent because the concept is useful
 outside it, and is to come back as the front-end shell experience. Its layout authority is
 `config.nu`, and the reference corpus is deliberately not duplicated into the Claude-side adapter.
@@ -278,7 +299,9 @@ Nothing below has been executed. Ordered by value.
 | R6 | Decide whether `pwsh_exec` belongs in `~/.claude.json` at all now that `.mcp.json` declares it repo-relative | Removing the personal copy makes the repo the single declaration |
 | R7 | Fix the `mcp/mdnav` path in `~/.claude/CLAUDE.md` | Owner's file |
 | R8 | Move `bin/mux/mux.conf` out of `bin/` to a tracked config location and repoint `PARA_MUX_CONFIG_FILE`. `bin/` then holds **only** rehydratable payload — one directory, one meaning | F9c. Preferred over un-ignoring files inside `bin/`, which leaves a mixed-ownership directory |
-| R9 | Add a tracked runtime manifest at the package root declaring what `bin/` should contain — component, version, filenames, checksums, rehydration source — plus the rehydrate/verify script | F9c. The payload stays untracked by design; the *record* of it becomes repo-carried, so "self-contained" is reproducible rather than local-only |
+| R9 | Put the rehydration knowledge in **`brewery/`** — pins, checksums, fetcher scripts, everything a cold setup needs for `bin/nu` and `bin/mux`. The directory already exists and is empty; nothing ignores it, so it is tracked by default | F9c. Supersedes the earlier "manifest at package root" phrasing. See the layout note below |
+| R12 | Give `bin/` a tracked `README.md` via ignore negation, stating what belongs there and pointing at its brewery recipe — the `!artifacts/README.md` pattern. A directory whose contents are ignored can still declare itself | F9c/F9d. This is the repo-level half of "para-agent knows the binary lives there"; R11 is the runtime half |
+| R13 | Give `mcp/para-agent/` its **own** `.gitignore`. Today `bin/` is governed by `.gitignore:37` at the repository root — para-agent's ignore policy lives outside the package it governs, which is the same rooting violation as F9a | F9. Also makes the package's ignore rules travel with it |
 | R11 | Record resolved-runtime provenance (vendored / ambient / declared-missing) and give the unhydrated case a named error stating the remedy. Do **not** refuse to launch on ambient fallback — label it | F9d. Same posture as the inheritance dimension; the two want the same receipt field |
 | R10 | Move the suite to `mcp/para-agent/tests/` (the empty stub) and make adapter evidence references package-relative | F9a, F9b. Larger change; touches `package.json`, the runner, and two adapter files. Do it when the migration track is already disturbing these files |
 
