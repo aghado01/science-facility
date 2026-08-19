@@ -3,7 +3,7 @@ Set-StrictMode -Version Latest
 
 <#
 .SYNOPSIS
-    Cross-stage contract checks over reposnapshot-v3/schema/*.contract.json.
+    Cross-stage contract checks over reposnapshot-v3/contracts/*.contract.json.
 
 .DESCRIPTION
     Every stage declares { stage, in, out } with field registers under named
@@ -30,7 +30,7 @@ Set-StrictMode -Version Latest
         & "$PSScriptRoot\contracts.tests.ps1"
 #>
 
-$schemaDir = Join-Path $PSScriptRoot '..\reposnapshot-v3\schema'
+$schemaDir = Join-Path $PSScriptRoot '..\reposnapshot-v3\contracts'
 
 # ---------------------------------------------------------------------------
 # Minimal assertion framework (house pattern — see colonel-dispatch.tests.ps1)
@@ -98,10 +98,10 @@ try
     # -----------------------------------------------------------------------
     Enter-Section '1. Every contract parses and names its stage'
     # -----------------------------------------------------------------------
-    # *.contract.json only — schema/ also holds payload declarations that are
-    # not stage contracts (psr.header.json) and must not be parsed as one.
+    # *.contract.json only — contracts/ also holds payload declarations that are
+    # not stage contracts (container.spec.jsonc) and must not be parsed as one.
     $files = @(Get-ChildItem -LiteralPath $schemaDir -Filter '*.contract.json' | Sort-Object Name)
-    Assert-True ($files.Count -ge 1) "contract files found under schema/" "got $($files.Count)"
+    Assert-True ($files.Count -ge 1) "contract files found under contracts/" "got $($files.Count)"
 
     $contracts = @{}
     foreach ($f in $files)

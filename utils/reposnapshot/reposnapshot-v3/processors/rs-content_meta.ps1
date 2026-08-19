@@ -3,7 +3,7 @@
 #
 # Per-document metadata processor: attaches a ContentMeta object of pure
 # string statistics over $Item.Content — the in-memory source of the psr
-# `content_meta` block (schema/psr.header.json maps ContentMeta.* → wire
+# `content_meta` block (contracts/container.spec.jsonc maps ContentMeta.* → wire
 # sub-fields; which are emitted is run configuration). One concept, three
 # spellings by convention: wire `content_meta` (snake), in-memory `ContentMeta`
 # (Pascal), processor `rs-content_meta` (after the wire block). Element renamed

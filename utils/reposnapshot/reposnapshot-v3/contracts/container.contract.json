@@ -1,13 +1,13 @@
 {
   "stage": "container",
   "module": "rs.core.container.psm1 — Resolve-Layout(-Header [-Declaration] [-Columns] [-MetaFields]) → layout; Format-Row(-Layout -Entry [-GlobalIdx]) → pieces; Measure-Row / Build-Row(-Layout -Entry -Cursor [-GlobalIdx]); Measure-HeaderRow / Build-HeaderRow(-Layout); Measure-ContentSpan / ConvertTo-ContentSpan over the one codec table. LANDED 2026-08-17 (tests/container.tests.ps1, 70 asserts incl. plan=file and the value walk).",
-  "$comment": "Export phase 0 — resolve the run's psr layout ONCE, before packing. Input is the admissible superset in schema/psr.header.json × run configuration (which optional columns / sub-fields are on) × the IR header (EntryCount → idx width). Output is the layout object that three stages consume: shards (Measure-Row sums), serialize (Build-Row writes), manifest (ColumnHeader declares). One declaration, one object, three `from` lines downstream — 'computed once, three sinks' is checkable here, not a discipline. In-memory only; nothing is written. Measure-* / Render-* are functions over (layout, entry), not shapes — their receipts are declared where they land (serialize.out.row).",
+  "$comment": "Export phase 0 — resolve the run's psr layout ONCE, before packing. Input is the admissible superset in contracts/container.spec.jsonc × run configuration (which optional columns / sub-fields are on) × the IR header (EntryCount → idx width). Output is the layout object that three stages consume: shards (Measure-Row sums), serialize (Build-Row writes), manifest (ColumnHeader declares). One declaration, one object, three `from` lines downstream — 'computed once, three sinks' is checkable here, not a discipline. In-memory only; nothing is written. Measure-* / Render-* are functions over (layout, entry), not shapes — their receipts are declared where they land (serialize.out.row).",
   "in": {
     "params": {
       "Header":      { "type": "object",   "note": "assemble.out.header — EntryCount and Elements are read (see in.header)" },
-      "Declaration": { "type": "path",     "optional": true, "note": "schema/psr.header.json (default: beside the module). Admissible column superset, framing constants, types, wire-name map. READ BY CODE." },
+      "Declaration": { "type": "path",     "optional": true, "note": "contracts/container.spec.jsonc (default: beside the module). Admissible column superset, framing constants, types, wire-name map. READ BY CODE." },
       "Columns":     { "type": "string[]", "optional": true, "note": "optional columns to enable: gidx, content_meta. Required columns (path, content_bytes, content) cannot be disabled; naming one is a no-op, naming an inadmissible one throws" },
-      "MetaFields":  { "type": "string[]", "optional": true, "note": "content_meta sub-fields on, in psr.header.json order; default = its $default_on set. Inadmissible name throws" }
+      "MetaFields":  { "type": "string[]", "optional": true, "note": "content_meta sub-fields on, in container.spec.jsonc order; default = its $default_on set. Inadmissible name throws" }
     },
     "header": {
       "EntryCount": { "from": "assemble.out.header", "note": "→ IdxWidth = digits(EntryCount) when gidx is on; the bound known before packing that keeps rows measurable (ledger #46)" },
@@ -17,11 +17,11 @@
   "out": {
     "layout": {
       "Format":         { "type": "string",   "note": "'psr'" },
-      "Columns":        { "type": "column[]", "note": "resolved columns in WIRE ORDER — required + enabled optional; content last, content_bytes immediately before it (psr.header.json invariants)" },
+      "Columns":        { "type": "column[]", "note": "resolved columns in WIRE ORDER — required + enabled optional; content last, content_bytes immediately before it (container.spec.jsonc invariants)" },
       "HeaderRowText":  { "type": "string",   "note": "the header row as written (without terminator): names + type annotations, blocks with sub-fields, joined by the field delimiter" },
       "HeaderBytes":    { "type": "int",      "note": "utf8(HeaderRowText) + terminator bytes; ONE constant per run, identical in every shard; seeds every shard's size in the plan" },
       "IdxWidth":       { "type": "int",      "note": "digits(EntryCount) when gidx enabled, else 0" },
-      "Framing":        { "type": "object",   "note": "field delimiter, record terminator, block open/close/delimiter, empty marker, encoding (UTF-8, no BOM) — verbatim from psr.header.json" },
+      "Framing":        { "type": "object",   "note": "field delimiter, record terminator, block open/close/delimiter, empty marker, encoding (UTF-8, no BOM) — verbatim from container.spec.jsonc" },
       "FloatPrecision": { "type": "int",      "note": "4 — one deterministic formatter (invariant culture) for every float column" }
     },
     "column": {
@@ -29,11 +29,11 @@
       "Type":   { "type": "int|float|str|block" },
       "Width":  { "type": "int",    "optional": true, "note": "fixed width (zero-padded) for position-dependent int columns; absent = variable" },
       "Role":   { "type": "record|content" },
-      "Source": { "type": "string", "note": "in-memory origin — an entry path (RelativePath, ContentMeta.CharCount, Content via codec) or 'plan' (gidx, assigned after packing). This is the wire-naming map (PascalCase → snake_case), taken from psr.header.json" },
+      "Source": { "type": "string", "note": "in-memory origin — an entry path (RelativePath, ContentMeta.CharCount, Content via codec) or 'plan' (gidx, assigned after packing). This is the wire-naming map (PascalCase → snake_case), taken from container.spec.jsonc" },
       "Fields": { "type": "column[]", "optional": true, "note": "block sub-columns, one level deep, in declared order" }
     },
     "codec": {
-      "$comment": "The container's content codec — the source of truth psr.container-spec.jsonc content_bytes / content $ref into. Functions over one entry's Content, not shapes; declared here so a $ref has a JSON node to resolve to.",
+      "$comment": "The container's content codec — the source of truth container.spec.jsonc content_bytes / content $ref into. Functions over one entry's Content, not shapes; declared here so a $ref has a JSON node to resolve to.",
       "bytes": { "type": "int",    "note": "Measure-ContentSpan(entry.Content) — UTF-8 byte width of the encoded content span, counted without materializing; the content_bytes cell value" },
       "text":  { "type": "string", "note": "ConvertTo-ContentSpan(entry.Content) — the encoded content span itself (line breaks substituted, one physical line); the content cell value, materialized only by Build-Row" }
     }

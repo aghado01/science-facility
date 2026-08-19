@@ -243,27 +243,46 @@ server-brief gate, not an assumption here.
 1. **Framer arithmetic is bytes, period.** The header glyphs `§` (U+00A7,
    `C2 A7`) and `¶` (U+00B6, `C2 B6`) are two UTF-8 bytes; every header
    line's cost is `Buffer.byteLength(line)`, every content cell's is its
-   `content_bytes`, and `maxBytes` compares against their sum. A framer
-   written with `.length` passes every gate except 21b and then lies in the
-   field by one byte per header — the historic byte-semantics trap wearing
-   a new hat. Write headers and payloads to the same `Buffer`/stream so the
-   count and the bytes cannot diverge.
+   `content_bytes`, and `maxBytes` compares against their sum. `…` U+2026,
+   `⁂` U+2042 and `†` U+2020 are **three** bytes, so the drift a `.length`
+   framer accrues is one byte per `§`/`¶`, two per `…`/`⁂`/`†`, and one or
+   two more for every non-ASCII codepoint in the content it framed — not a
+   uniform +1 (D45 corrects the earlier gate wording that said otherwise).
+   A framer written with `.length` passes every gate except 21b and then
+   lies in the field — the historic byte-semantics trap wearing a new hat.
+   Write headers and payloads to the same `Buffer`/stream so the count and
+   the bytes cannot diverge; count the row terminator with the row.
 
 ## Exit gate (this phase)
 
 Full text is the master list in [mdnav_v2_design-brief.md](../design/mdnav_v2_design-brief.md)
 §Exit gate. This phase closes:
 
-- **21.** Framing round-trip: `content_bytes` exactness under `--sigils
-  typographic` (codec/raw), multi-anchor concatenation equals `--sigils
-  none` byte-for-byte, addressable zero-`content_bytes` elisions, and
-  `--sigils legacy-comment` byte-identical to today's golden fixtures — the
-  last clause is the one this phase can close even without the spec freeze.
-- **21b.** Byte accounting: total bytes == Σ header bytes + Σ
-  `content_bytes`; header byte length == char length + 1 for every sigil
-  (incl. 3-byte `…`/`⁂`); header parser round-trips every field; plan's
-  `framed` total matches what a subsequent read actually writes; over-budget
-  `maxBytes` returns a plan, not bytes.
+- **21.** Framing round-trip, **P0 scope** (D45): every result framed
+  (single-anchor included); a multi-node/multi-predicate read emits one
+  packet, one row per contiguous piece, ordered by `ord`, each address
+  resolving back through `read` to the same span; under `--sigils
+  typographic --content raw`, `content_bytes` exactness (multi-byte UTF-8
+  and CRLF sources included) and concatenated content cells equal to the
+  `--sigils none` read byte-for-byte; `--sigils legacy-comment`
+  byte-identical to today's golden fixtures.
+- **21b.** Byte accounting: total bytes == Σ **row bytes excluding the
+  content cell** (prefix + delimiters + terminator — the terminator is
+  inside the sum, or the plan's `framed` total lies) + Σ `content_bytes`.
+  Per row prefix, `Buffer.byteLength(prefix) - prefix.length` == Σ (UTF-8
+  length − 1) over its non-ASCII codepoints: **+1** for 2-byte `§`/`¶`,
+  **+2** for 3-byte `…`/`⁂`/`†` — a per-glyph fixture table, not one
+  constant. The content cell sits outside that identity: content is
+  arbitrary UTF-8 (3-byte Control Pictures under `codec`), which is the
+  whole reason `.length` accounting fails. Header parser round-trips every
+  field; plan's `framed` total matches what a subsequent read actually
+  writes; a `maxBytes` admitting payload but not payload + framing returns a
+  plan, not bytes.
+- **21c** is **not** this phase's (D45): codec round-trip, elision rows, the
+  `⁂` close, `||` vs LF, key-once, cross-source interleaving — all the parts
+  D35 defers past P0 — move to the atomic payload format brief and settle
+  with the D20 eval. Gate 21 no longer asks this phase to certify what its
+  own scope section says it will not decide.
 
 ## Sequencing (within this phase)
 

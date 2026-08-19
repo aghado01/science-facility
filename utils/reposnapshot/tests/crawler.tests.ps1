@@ -115,10 +115,10 @@ try
     Assert-True ($null -eq $util.PSObject.Properties['ContentMeta']) 'no ContentMeta field (name reserved for the rs-content_meta element)'
 
     # -----------------------------------------------------------------------
-    Enter-Section '3d. Output conforms to schema/crawler.contract.json (out.file / out.node, exactly)'
+    Enter-Section '3d. Output conforms to contracts/crawler.contract.json (out.file / out.node, exactly)'
     # -----------------------------------------------------------------------
-    $schemaPath = Join-Path (Split-Path $crawlerPath -Parent) 'schema/crawler.contract.json'
-    Assert-True (Test-Path $schemaPath) 'schema/crawler.contract.json exists'
+    $schemaPath = Join-Path (Split-Path $crawlerPath -Parent) 'contracts/crawler.contract.json'
+    Assert-True (Test-Path $schemaPath) 'contracts/crawler.contract.json exists'
     $contract = Get-Content -LiteralPath $schemaPath -Raw | ConvertFrom-Json -AsHashtable
     Assert-True ($contract.stage -eq 'crawler') 'contract names its stage'
     $fileFields = @($contract.out.file.Keys)

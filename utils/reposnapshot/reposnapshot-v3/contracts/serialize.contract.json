@@ -4,7 +4,7 @@
   "$comment": "Export phase 2 — the ONLY stage that writes shard files. Consumes the plan (membership + order), the layout (header row text, columns, framing), and the entries (content), and renders via container's Build-HeaderRow / Build-Row so plan and file cannot disagree. Offsets are MEASURED here as a receipt — never derived from Measure-Row, never recovered from written bytes (LTS regex recovery is what must not come across). Serialize never reports back into the plan (no feedback loop). Writes UTF-8 without BOM, LF only, explicitly, regardless of platform. Buffers per shard, not per corpus. Emission column knobs are LAYOUT knobs (resolved before shards) — serialize has only I/O knobs; Compress is not inline (would break plan = file).",
   "in": {
     "params": {
-      "OutDir":    { "type": "path",   "note": "target directory; shard filename = <ShardStem>_<Key>.txt (.txt as reader accommodation, psr.header.json identity)" },
+      "OutDir":    { "type": "path",   "note": "target directory; shard filename = <ShardStem>_<Key>.txt (.txt as reader accommodation, container.spec.jsonc identity)" },
       "Buffering": { "type": "PerShard|Stream", "optional": true, "note": "PerShard (default): render one shard in memory, write, keep only its receipt. Stream: write rows as rendered. Same bytes either way" }
     },
     "result": {

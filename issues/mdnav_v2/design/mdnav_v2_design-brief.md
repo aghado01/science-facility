@@ -349,22 +349,43 @@ milestone → gate map kept in sync with this list.
 19. No table query can return a field longer than the preview cap. — *04*
 20. The CLI exposes `--max-bytes` and `--limit/--offset` so the one-shot path
     has the same discipline. — *04*
-21. Framing round-trip: under `--sigils typographic` every row's
-    `content_bytes` equals the content cell's bytes exactly (post-codec under
-    `codec`, raw under `raw`) (incl. multi-byte UTF-8 and CRLF sources), the
-    concatenated coding regions of a multi-anchor read equal the `--sigils
-    none` read byte-for-byte, an elision emits a zero-`content_bytes` row
-    whose address `read` accepts and resolves to the elided source span, and
-    `--sigils legacy-comment` output is byte-identical to today's for the
-    golden fixtures. — *05*
+21. Framing round-trip — **P0 scope, closes without the shared-spec freeze**
+    (D45): every result is framed, single-anchor reads included; a read
+    spanning more than one node or predicate emits one packet with one row
+    per contiguous piece, ordered by `ord`, each row carrying the address(es)
+    that produced it and resolving back through `read` to the same span;
+    under `--sigils typographic --content raw` every row's `content_bytes`
+    equals its content cell's bytes exactly (multi-byte UTF-8 and CRLF
+    sources included) and the concatenated content cells equal the `--sigils
+    none` read byte-for-byte; `--sigils legacy-comment` is byte-identical to
+    today's for the golden fixtures. — *05*
 21b. Byte accounting: total bytes written == Σ `Buffer.byteLength(row bytes
-    excluding content)` + Σ `content_bytes`; each header line's byte length ==
-    its char length + 1 (the glyph is the only non-ASCII bytes — asserted for
-    every sigil in the vocabulary, incl. the 3-byte `…`/`⁂`); a header parser
-    that reads the stream back recovers every address, `k/N`, `span`,
-    `content_bytes` exactly; the plan's `framed` total equals the bytes a
-    subsequent read within budget actually writes; a `maxBytes` that admits
-    the payload but not payload + headers returns a plan, not bytes. — *05*
+    excluding the content cell)` + Σ `content_bytes` — row prefix, field
+    delimiters **and row terminator** (` ||` + LF in the stream, LF alone in
+    files) all inside the first term, because that difference is precisely
+    what makes a plan's `framed` total lie. Per row prefix (through
+    `content_bytes`, content cell excluded), `Buffer.byteLength(prefix) -
+    prefix.length` == Σ over its non-ASCII codepoints of (UTF-8 length − 1):
+    **+1** for the 2-byte `§`/`¶`, **+2** for the 3-byte `…`/`⁂`/`†` — asserted
+    per glyph in the frozen vocabulary as a fixture table, never as one
+    constant (D45; `.length` is UTF-16 units, so a future non-BMP glyph would
+    need the fixture, not the formula). The content cell is excluded from
+    that identity because content is arbitrary UTF-8 — and under `codec`
+    carries 3-byte Control Pictures — which is exactly why `.length`-based
+    accounting is wrong. A header parser that reads the stream back recovers
+    every address, `k/N`, `span`, `content_bytes` exactly; the plan's `framed`
+    total equals the bytes a subsequent read within budget actually writes; a
+    `maxBytes` that admits the payload but not payload + framing returns a
+    plan, not bytes. — *05*
+21c. *(deferred with the atomic payload format brief — roadmap "After"; not
+    a P0 exit condition, recorded here so the split is on the record, D45)*
+    `content: codec` round-trip (decoding a content cell yields the source
+    span's bytes; concatenated decoded cells equal the `--sigils none` read),
+    addressable zero-`content_bytes` elision rows whose address `read`
+    resolves to the elided span, the optional `⁂` close row as an
+    address/position checksum, `||` vs LF, key-once vs self-identifying rows,
+    and interleaved `§`/`¶` pieces from different sources — settled with the
+    D20 behavioural eval, not before it. — *later*
 
 ## Report
 

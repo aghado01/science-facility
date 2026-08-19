@@ -12,7 +12,7 @@ using namespace System.Collections.Generic
 
 .DESCRIPTION
     Brief: issues/reposnapshot/briefs/shard-container-brief.md. Contract:
-    schema/container.contract.json. Declaration (READ HERE): schema/psr.header.json
+    contracts/container.contract.json. Declaration (READ HERE): contracts/container.spec.jsonc
     — the admissible column superset, framing constants, types, and the
     wire-name map (`source`, per its source_grammar).
 
@@ -40,7 +40,7 @@ using namespace System.Collections.Generic
     Measure-Row · Build-Row · Measure-HeaderRow · Build-HeaderRow.
 #>
 
-$script:DeclarationPath = Join-Path $PSScriptRoot 'schema/psr.header.json'
+$script:DeclarationPath = Join-Path $PSScriptRoot 'contracts/container.spec.jsonc'
 $script:Utf8 = [UTF8Encoding]::new($false)
 $script:Invariant = [Globalization.CultureInfo]::InvariantCulture
 
@@ -156,7 +156,7 @@ function Resolve-Layout
 {
     <#
     .SYNOPSIS
-        Resolve the run's psr layout: admissible superset (psr.header.json) ×
+        Resolve the run's psr layout: admissible superset (container.spec.jsonc) ×
         run configuration (which optional columns / sub-fields are on) × the IR
         header (EntryCount → gidx width). Computed once; consumed by shards,
         serialize, manifest.
@@ -164,7 +164,7 @@ function Resolve-Layout
     .PARAMETER Header
         assemble.out.header — EntryCount and Elements are read.
     .PARAMETER Declaration
-        Path to psr.header.json (default: beside this module).
+        Path to container.spec.jsonc (default: beside this module).
     .PARAMETER Columns
         Optional columns to enable (gidx, content_meta). Required columns
         cannot be disabled; naming one is a no-op; an inadmissible name throws.
@@ -208,7 +208,7 @@ function Resolve-Layout
     $declaredNames = @($decl.columns.Keys | Where-Object { $_ -notlike '$*' })
     foreach ($c in $Columns)
     {
-        if ($c -notin $declaredNames) { throw "Resolve-Layout: column '$c' is not admissible — psr.header.json declares: $($declaredNames -join ', ')" }
+        if ($c -notin $declaredNames) { throw "Resolve-Layout: column '$c' is not admissible — container.spec.jsonc declares: $($declaredNames -join ', ')" }
     }
 
     # ── Columns, in wire (declaration) order ─────────────────────────────
@@ -239,7 +239,7 @@ function Resolve-Layout
             $wanted = if ($null -eq $MetaFields) { @($c.'$default_on') } else { @($MetaFields) }
             foreach ($mf in $wanted)
             {
-                if ($mf -notin $admissible) { throw "Resolve-Layout: content_meta sub-field '$mf' is not admissible — psr.header.json declares: $($admissible -join ', ')" }
+                if ($mf -notin $admissible) { throw "Resolve-Layout: content_meta sub-field '$mf' is not admissible — container.spec.jsonc declares: $($admissible -join ', ')" }
             }
             $fl = [List[object]]::new()
             foreach ($fname in $admissible)   # declaration order, not request order
@@ -358,12 +358,12 @@ function Format-Row
 
 function Resolve-SourceValue ([string]$Source, [object]$Entry, [object]$GlobalIdx, [int]$ContentBytes)
 {
-    # psr.header.json source_grammar — exactly four forms.
+    # container.spec.jsonc source_grammar — exactly four forms.
     if ($Source -eq 'plan.GlobalIdx') { return $GlobalIdx }
     if ($Source -eq 'codec.bytes')    { return $ContentBytes }
     if ($Source -eq 'codec.text')     { throw "rs.core.container: codec.text is materialized only by Build-Row." }
     if ($Source -like 'entry.*')      { return Resolve-EntryPath $Entry ($Source.Substring(6) -split '\.') }
-    throw "rs.core.container: unknown source '$Source' — psr.header.json source_grammar allows entry.<path>, plan.GlobalIdx, codec.bytes, codec.text."
+    throw "rs.core.container: unknown source '$Source' — container.spec.jsonc source_grammar allows entry.<path>, plan.GlobalIdx, codec.bytes, codec.text."
 }
 
 function Measure-Row

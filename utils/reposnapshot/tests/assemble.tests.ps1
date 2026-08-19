@@ -115,9 +115,9 @@ foreach ($dropped in @('AbsolutePath', 'SizeBytes', 'Extension', 'CreationUtc', 
     Assert-True ($null -eq $ir.Entries[0].PSObject.Properties[$dropped]) "entry bag excludes $dropped"
 }
 # The exclusion and core sets are READ from the stage's own contract
-# (schema/assemble.contract.json out.entry.exclude / out.entry.core), not hardcoded —
+# (contracts/assemble.contract.json out.entry.exclude / out.entry.core), not hardcoded —
 # prove the module's lists equal the contract's (drift in either direction fails).
-$schemaPath = Join-Path $PSScriptRoot '..\reposnapshot-v3\schema\assemble.contract.json'
+$schemaPath = Join-Path $PSScriptRoot '..\reposnapshot-v3\contracts\assemble.contract.json'
 $contract = Get-Content -LiteralPath $schemaPath -Raw | ConvertFrom-Json -AsHashtable
 $contractExclude = @($contract.out.entry.exclude) | Sort-Object
 $moduleExclude = @(& (Get-Module rs.core.assemble) { $script:ExcludedFields }) | Sort-Object

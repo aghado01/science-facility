@@ -4,7 +4,7 @@ Set-StrictMode -Version Latest
 <#
 .SYNOPSIS
     rs.core.container — psr layout resolution, content codec, header/row
-    measure + render. Exercised against schema/psr.header.json (the real
+    measure + render. Exercised against contracts/container.spec.jsonc (the real
     declaration) and, for the value walk, a real rs-content_meta enrichment.
 
 .DESCRIPTION
@@ -33,7 +33,7 @@ Set-StrictMode -Version Latest
 
 $v3 = Join-Path $PSScriptRoot '..\reposnapshot-v3'
 $procDir = Join-Path $v3 'processors'
-$declPath = Join-Path $v3 'schema\psr.header.json'
+$declPath = Join-Path $v3 'contracts\container.spec.jsonc'
 
 # ---------------------------------------------------------------------------
 # Minimal assertion framework (house pattern)
