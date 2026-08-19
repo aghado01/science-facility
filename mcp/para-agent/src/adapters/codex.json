@@ -15,7 +15,7 @@
     "evidence": [
       {
         "kind": "live_stream_probe",
-        "reference": "mcp/tests/para-agent/fixtures/adapters/codex/0.147.0/stdout.jsonl",
+        "reference": "tests/fixtures/adapters/codex/0.147.0/stdout.jsonl",
         "observed_at": "2026-08-14T00:00:00Z",
         "note": "Ephemeral read-only JSONL probe; stderr warnings were kept outside the native event stream."
       },

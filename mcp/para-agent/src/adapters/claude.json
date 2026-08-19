@@ -15,7 +15,7 @@
     "evidence": [
       {
         "kind": "live_stream_probe",
-        "reference": "mcp/tests/para-agent/fixtures/adapters/claude/2.1.226/stdout.reduced.jsonl",
+        "reference": "tests/fixtures/adapters/claude/2.1.226/stdout.reduced.jsonl",
         "observed_at": "2026-08-14T00:00:00Z",
         "note": "Read-only no-tools stream-json probe with exact prompt supplied on native stdin; the checked-in fixture contains only the evidenced fields used by this adapter."
       }

@@ -1,0 +1,5 @@
+build/**
+!build/README.md
+deps/** 
+!deps/README.md
+node_modules/**
