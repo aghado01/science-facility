@@ -7,127 +7,125 @@
     "encoding": "utf-8",
     "bom": false
   },
-  "row_schemas": {
-    "header_row_schema": {
-      "type": "array",
-      "required": true,
-      "pattern": "", //need to revise this pattern to either be wildcard for different types of encoded new lines, or strict based on guarantees from upstream 
-      "description": "list of columns of the header row, types for corresponding record row items are inferred via binding ",
-      "properties": {
-        "gidx": {
-          "description": "Global, group agnostic sequential ordinal.",
-          "required": true,
-          "type": "string",
-          "position": 0,
-          "row_type": "int",
-          "row_width": 4,
-          "row_value": {
-            "$ref": "path/to/connected/contract/schema/file/attribute"
-          },
-          "pattern": "^[0-9]{4}$"
+  "shard_container_schema": {
+    "type": "array",
+    "required": true,
+    "pattern": "", //need to revise this pattern to either be wildcard for different types of encoded new lines, or strict based on guarantees from upstream 
+    "description": "list of columns of the header row, types for corresponding record row items are inferred via binding ",
+    "properties": {
+      "gidx": {
+        "description": "Global, group agnostic sequential ordinal.",
+        "required": true,
+        "type": "string",
+        "col_position": 0,
+        "record_type": "int",
+        "record_width": 4,
+        "record_value": {
+          "$ref": "psr.crosswalk.jsonc#/record/<attribute>"
         },
-        "path": {
-          "description": "Relative POSIX path to snapshot-scoped root",
-          "required": true,
-          "type": "string",
-          "position": 1,
-          "row_type": "string",
-          "row_value": {
-            "$ref": "path/to/connected/contract/schema/file/attribute"
-          },
-          "pattern": "^[a-zA-Z0-9_.-]+(?:/[a-zA-Z0-9_.-]+)*$"
+        "record_pattern": "^[0-9]{gidx.record_width}$"
+      },
+      "path": {
+        "description": "Relative POSIX path to snapshot-scoped root",
+        "required": true,
+        "type": "string",
+        "col_position": 1,
+        "record_type": "string",
+        "record_value": {
+          "$ref": "psr.crosswalk.jsonc#/record/<attribute>"
         },
-        "content_meta": {
-          "description": "A nested array of field names in the content_meta block; values for row entries are caculated during ingestion with content_metadata processor",
-          "type": "string",
-          "required": false,
-          "position": 2,
-          "enclosure": "[]",
-          "separator": ",",
-          "pattern": "^(?:\\{[^;{}]+\\s*(?:;\\s*[^;{}]+\\s*)*\\},)*$",
-          "row_type": "array", // of values, without keys/names 
-          "properties": {
-            "num_lines": {
-              "val_rank": 0,
-              "val_type": "int",
-              "val": {
-                "$ref": "record.ContentMeta.LineStats.Mean"
-              },
-              "default": true
+        "record_pattern": "^[a-zA-Z0-9_.-]+(?:/[a-zA-Z0-9_.-]+)*$"
+      },
+      "content_meta": {
+        "description": "A nested array of field names in the content_meta block; values for row entries are caculated during ingestion with content_metadata processor",
+        "type": "string",
+        "required": false,
+        "col_position": 2,
+        "record_type": "array", // of values, without keys/names 
+        "record_val_enclosure": {
+          "start": "[",
+          "end": "]"
+        },
+        "val_separator": ",",
+        "record_pattern": "^${record_val_enclosure.start}\\s*[^,${record_val_enclosure.start}${record_val_enclosure.end}]+\\s*(?:,\\s*[^,${record_val_enclosure.start}${record_val_enclosure.end}]+\\s*)*${record_val_enclosure.end}\\s*$",
+        "properties": {
+          "num_lines": {
+            "val_rank": 0,
+            "val_type": "int",
+            "val": {
+              "$ref": "psr.crosswalk.jsonc#/record/ContentMeta/LineStats/Mean"
             },
-            "num_chars": {
-              "val_rank": 1,
-              "val_type": "int",
-              "val": {
-                "$ref": "record.ContentMeta.CharCount"
-              },
-              "default": true
+            "default": true
+          },
+          "num_chars": {
+            "val_rank": 1,
+            "val_type": "int",
+            "val": {
+              "$ref": "psr.crosswalk.jsonc#/record/ContentMeta/CharCount"
             },
-            "num_words": {
-              "val_rank": 2,
-              "val_type": "int",
-              "val": {
-                "$ref": "record.ContentMeta.WordCount"
-              },
-              "default": true
+            "default": true
+          },
+          "num_words": {
+            "val_rank": 2,
+            "val_type": "int",
+            "val": {
+              "$ref": "psr.crosswalk.jsonc#/record/ContentMeta/WordCount"
             },
-            "num_unique_chars": {
-              "val_rank": 3,
-              "val_type": "int",
-              "val": {
-                "$ref": "record.ContentMeta.UniqueChars"
-              },
-              "default": false
-              "val": {
-                "$ref": "record.ContentMeta.UniqueChars"
-              }
+            "default": true
+          },
+          "num_unique_chars": {
+            "val_rank": 3,
+            "val_type": "int",
+            "val": {
+              "$ref": "psr.crosswalk.jsonc#/record/ContentMeta/UniqueChars"
             },
-            "num_unique_words": {
-              "val_rank": 4,
-              "val_type": "int",
-              "val": {
-                "$ref": "record.ContentMeta.UniqueWords"
-              },
-              "default": false
+            "default": false
+          },
+          "num_unique_words": {
+            "val_rank": 4,
+            "val_type": "int",
+            "val": {
+              "$ref": "psr.crosswalk.jsonc#/record/ContentMeta/UniqueWords"
             },
-            "punct_ratio": {
-              "val_rank": 5,
-              "val_type": "double",
-              "val": {
-                "$ref": "record.ContentMeta.PunctuationRatio"
-              },
-              "default": false
+            "default": false
+          },
+          "punct_ratio": {
+            "val_rank": 5,
+            "val_type": "double",
+            "val": {
+              "$ref": "psr.crosswalk.jsonc#/record/ContentMeta/PunctuationRatio"
             },
-            "ws_ratio": {
-              "val_rank": 6,
-              "val_type": "double",
-              "val": {
-                "$ref": "record.ContentMeta.WhitespaceRatio"
-              },
-              "default": true
+            "default": false
+          },
+          "ws_ratio": {
+            "val_rank": 6,
+            "val_type": "double",
+            "val": {
+              "$ref": "psr.crosswalk.jsonc#/record/ContentMeta/WhitespaceRatio"
             },
-            "entropy": {
-              "val_rank": 7,
-              "val_type": "double",
-              "val": {
-                "$ref": "record.ContentMeta.Entropy"
-              },
-              "default": true
-            }
+            "default": true
+          },
+          "entropy": {
+            "val_rank": 7,
+            "val_type": "double",
+            "val": {
+              "$ref": "psr.crosswalk.jsonc#/record/ContentMeta/Entropy"
+            },
+            "default": true
           }
-        },
-        "content_bytes": {
-          "description": "the byte length prefix. encodes the span of encoded byte width of the subsequent content block",
-          "position": 3,
-          "type": "string",
-          "row_type": "int"
-        },
-        "content": {
-          "description": "Processed content with line break substitutions encoded with idiomatic C-style escape sequence substitutions",
-          "position": 4,
-          "type": "string",
-          "row_type": "string"
         }
+      },
+      "content_bytes": {
+        "description": "the byte length prefix. encodes the span of encoded byte width of the subsequent content block",
+        "col_position": 3,
+        "type": "string",
+        "record_type": "int"
+      },
+      "content": {
+        "description": "Processed content with line break substitutions encoded with idiomatic C-style escape sequence substitutions",
+        "col_position": 4,
+        "type": "string",
+        "record_type": "string"
       }
     }
   }
