@@ -10,17 +10,16 @@
 .copilot
 .gemini
 .claude
+.grok
 .codex
 .antigravity
 .obsidian
 
 # temp dirs 
 **/.doc-dive/**
+!**/.doc-dive/README.md
 **/.snapshot/** 
 **/.para-agent/**
-
-
-**/bin/**
 
 **__/pycache__/**
 **/.pytest_cache/**
