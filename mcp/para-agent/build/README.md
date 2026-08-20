@@ -3,8 +3,11 @@
 Regenerable working output. Everything here is disposable by design: deleting the whole directory
 must cost nothing but the time to regenerate it.
 
-Plays the role `artifacts/` plays in `codex-scientiae`. Renamed because para-agent has no compile
-step of its own — what lands here is fetch caches, staging, and run output rather than object files.
+The same role `artifacts/` plays in `codex-scientiae` — the scoped, disposable middle of the trip
+from a pin and a recipe to a payload in `deps/`. Renamed only as a naming preference, not because
+the job differs. What lands here today is npm's download cache, archive extraction, and staging,
+because para-agent's dependencies are all third-party; a first-party executable built from
+para-agent's own `src/` would put its compile intermediates here too.
 
 **Everything here is ignored** (`build/**`, with this file ignore-negated). This file is the only
 tracked content under `build/`.
@@ -43,10 +46,12 @@ under `build/`.
 
 ## How it is enforced
 
-By the recipes that write here, and nothing else. para-agent has no `Directory.Build.props`
-equivalent deriving output paths automatically, because it has no .NET projects — so scoping is a
-convention each recipe follows explicitly, the way `restore-*.ps1` does rather than the way MSBuild
-does.
+By the recipes that write here, and nothing else. codex-scientiae gets the `.NET` half for free —
+`Directory.Build.props` derives the module from a project's own directory name, so any `.csproj`
+under `brewery/{module}/` lands correctly with no per-project configuration. para-agent has no
+`.csproj` files to derive from, so scoping is a convention each recipe follows explicitly, the way
+`restore-node.ps1` does rather than the way MSBuild does. That changes if first-party .NET ever
+appears here.
 
 ## Current state
 

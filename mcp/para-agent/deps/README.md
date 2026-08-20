@@ -1,7 +1,9 @@
 # deps/
 
-Materialized dependency payload — the compiled and fetched things para-agent actually runs
-against. First-party and third-party alike: the vendored nushell, the mux binary, `node_modules`.
+Where para-agent's executable dependencies live — the fetched and compiled things it actually runs
+against. Third-party and first-party alike, though today all three shelves are third-party: the
+vendored nushell, the mux binary, and `node_modules`. A first-party executable built from
+para-agent's own `src/` would land here the same way, by the same route.
 
 **Everything here is ignored** (`deps/**`, with this file ignore-negated). A clean clone starts
 without it. That is the point: every shelf must be reproducible from a recipe in

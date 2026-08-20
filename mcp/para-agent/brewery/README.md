@@ -10,9 +10,17 @@ package. The three roles are the same; two of the names differ.
 
 | Role | codex-scientiae | para-agent | Tracked? |
 |---|---|---|---|
-| Recipes — how to obtain a thing | `brewery/{module}/` | `brewery/{module}/` | **yes**, entirely |
-| Regenerable working output | `artifacts/{module}/` | `build/{module}/` | no — `README.md` only |
-| Payload consumers point at | `packages/{module}/` | `deps/{module}/` | no — `README.md` only |
+| Recipes for everything that ends up as a dependency | `brewery/{module}/` | `brewery/{module}/` | **yes**, entirely |
+| Disposable intermediates on the way from pins and recipes to payload | `artifacts/{module}/` | `build/{module}/` | no — `README.md` only |
+| Where executable dependencies live | `packages/{module}/` | `deps/{module}/` | no — `README.md` only |
+
+The pattern transfers directly; only two names change. codex-scientiae exercises it harder because
+it mixes languages and mixes **first-party executables built from its own `src/`** (`doccer`,
+`hdbscan` — C#) with **third-party toolchains** (`node`, `uv`). para-agent is the simpler case: no
+first-party executables today, and its three shelves are all third-party. Nothing about the shape
+changes if that stops being true — a first-party tool built from para-agent's `src/` would take the
+same path, recipe in `brewery/{module}/`, intermediates in `build/{module}/`, payload in
+`deps/{module}/`.
 
 ## The rules
 
@@ -69,26 +77,30 @@ review the lock diff, then run the restore recipe.
 
 ## Recipes not yet written
 
-These shelves were fetched as finished binaries and vendored, so none survives a clean clone. They
-are re-obtainable from upstream at the versions in use, recorded here so the pin is not lost with
-the binary.
+nu and mux were **hand-deposited** into the tree, not acquired by any recipe, so neither survives a
+clean clone. This is the same category codex-scientiae records for `tectonic` and `pdfpig`: shelves
+that predate the rule, kept honest by writing down the pin so it is not lost with the binary.
 
-| Shelf | Vendored version | Upstream |
+| Shelf | Deposited version | Upstream |
 |---|---|---|
 | nu | `0.114.1` | nushell GitHub releases, `nu-{version}-x86_64-pc-windows-msvc.zip` |
-| mux | `tmux 3.3.7` | vendored psmux/tmux build; see `deps/bin/mux/README.md` |
-| node (payload) | resolved from `package-lock.json` | npm registry |
+| mux | `tmux 3.3.7` | vendored psmux/tmux build |
 
 Until `restore-nu.ps1` and `restore-mux.ps1` exist, the working-tree copies are the only ones —
 do not delete them.
+
+node is not in this table: its pins are present and complete, and only the restore script is
+missing. Its payload is reproducible from `package-lock.json` today by hand.
 
 ## Current deviations
 
 This file states the target shape. Where the tree differs today:
 
-- Payload is at `deps/bin/{nu,mux}` and `deps/node_modules`, grouped by kind rather than by module.
-  Target is `deps/nu/`, `deps/mux/`, `deps/node/node_modules`. Moving it means repointing the
-  binary hints in `src/mux.js` and the `PARA_*_BIN` entries in the repository `.mcp.json`.
+- Payload is at `deps/bin/{nu,mux}` and `deps/node_modules`. codex-scientiae's shelves are named for
+  the module — `packages/doccer`, `packages/hdbscan`, `packages/node` — so the parallel here is
+  `deps/nu/`, `deps/mux/`, `deps/node/node_modules`, with no `bin` layer between. Worth aligning
+  when something else is already disturbing these paths: moving them means repointing the binary
+  hints in `src/mux.js` and the `PARA_*_BIN` entries in the repository `.mcp.json`.
 - `node_modules` at the package root is currently a hand-made junction. It belongs in the node
   restore recipe.
 - `build/` is empty and nothing routes to it yet.
