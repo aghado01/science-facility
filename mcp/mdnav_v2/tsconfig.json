@@ -1,0 +1,38 @@
+{
+  // Pinned once, checked in, and read by BOTH the editor's language service and the
+  // `typecheck` suite. Without this file each editor picks its own defaults and the two
+  // check different things -- which is how a tree comes to look typed without being typed.
+  "compilerOptions": {
+    "target": "es2024",
+    "lib": ["es2024"],
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "types": ["node"],
+
+    // --- strictness: the point of the exercise ---
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "useUnknownInCatchVariables": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+
+    // --- run-what-you-wrote: Node executes this source directly ---
+    // erasableSyntaxOnly rejects any construct Node's type stripper cannot erase
+    // (enum, namespace, parameter properties, import =). It is what keeps "no build
+    // step" true by construction rather than by discipline.
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "allowImportingTsExtensions": true,
+    "isolatedModules": true,
+    "noEmit": true,
+
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*.ts", "tests/**/*.ts"],
+  "exclude": ["deps", "build", "node_modules"]
+}

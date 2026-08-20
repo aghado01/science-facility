@@ -1,0 +1,17 @@
+{
+  "name": "mdnav",
+  "version": "0.1.0",
+  "description": "Markdown-documents REPL for an agent: typed claims over span algebra, addressed by path, delivered under a byte budget",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --test \"tests/**/*.test.ts\""
+  },
+  "engines": {
+    "node": ">=24",
+    "npm": ">=11"
+  },
+  "license": "MIT",
+  "comment": "Manifest only. Node reads `type` by walking up from each source file, so this must sit at the package root and cannot live in brewery. Dependency pins and the lockfile are the rehydration recipe and live in brewery/node/; deps/node_modules is where they deploy. `main`/`bin` are declared when M2 creates the entry point, not before. engines.node is >=24 because this package is written in TypeScript and run by Node directly -- unflagged type stripping is load-bearing, not a convenience. The test glob is quoted so the pattern reaches Node rather than being expanded by whichever shell npm picked."
+}
