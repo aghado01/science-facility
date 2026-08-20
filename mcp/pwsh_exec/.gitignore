@@ -1,6 +1,6 @@
 /.venv/
 /bin/
-/packages/
+/deps/
 __pycache__/
 *.py[cod]
 .pytest_cache/

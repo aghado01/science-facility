@@ -1,7 +1,3 @@
-
-# dot source alias helpers
-. "D:\aghado01\command-center\portable-env\helpers\SessionSetters.ps1"
-
 # Wrapper functions — Set-Alias only accepts a single command name, so anything
 # that needs dotnet sub-commands or argument passthrough lives here.
 # $script:DotNetExe is resolved from the portable env path set above — PATH
