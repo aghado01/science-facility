@@ -15,7 +15,8 @@
     "evidence": [
       {
         "kind": "fixture",
-        "reference": "tests/fixtures/client-integration/registry/valid/adapters/fake-client.json"
+        "reference": "tests/fixtures/client-integration/registry/valid/adapters/fake-client.json",
+        "note": "This profile is the fixture, so the citation is itself. It is a test double for registry resolution only — nothing parses its stream and no external evidence exists. The registry resolves verified adapters only, and the schema couples verified to a required evidence citation, so a self-reference is the honest form available."
       }
     ]
   },
