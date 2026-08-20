@@ -50,6 +50,16 @@ that skips it fails with `ERR_MODULE_NOT_FOUND` on the first import. It is also 
 `npm install` run anywhere in the package can remove it, leaving the payload intact and
 unreachable.
 
+**A plugin is not a dependency.** A vendored MCP — `nushell_mcp`, possibly `mdnav_v2` later — is a
+plugin: a thing with its own identity, lifecycle and registration, which happens in practice to be
+depended upon. It does not belong on this shelf, and the one-graph rule below does not decide its
+shape. Registration is the governing concern there, not pinning; see
+[visitor-mcp-registration](../../../issues/para-agent/notes/visitor-mcp-registration.md).
+
+The distinction is easy to lose because both end up as "something para-agent needs present at
+runtime". The difference is ownership: a dependency is a library this package reaches into, and a
+plugin is a separate thing this package admits.
+
 **There is one graph and everything reaches into it.** `deps/node_modules` is the whole package's
 Node dependency core, pinned once by `brewery/node/`. No consumer keeps its own copy under
 `{tool}/node_modules`, because what one use case needs today is usually what a later one needs too,
