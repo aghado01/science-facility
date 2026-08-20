@@ -195,21 +195,20 @@ Most of it holds: `skills/` (`primary/`, `sub-agents/{para,self}`), `bin/{nu,mux
 `personas/`, `brewery/`, `capture/`, `contract/`, `resources/`, `src/` are all inside the root.
 Three things are not.
 
-**9a — the test suite lives outside the package root.** `package.json` runs
-`../tests/para-agent/run.ps1`; the suite and its fixtures are at `mcp/tests/para-agent/`. Worse for
-transplantability, two adapters carry **repo-relative** evidence references:
+**9a — the test suite lived outside the package root.** *Resolved 2026-08-19.* `package.json` ran
+`../tests/para-agent/run.ps1` against a suite at `mcp/tests/para-agent/`, and two adapters cited
+their verification fixtures by **repo-relative** path into that location — resolvable only from the
+repository root.
 
-```
-src/adapters/claude.json:18  "reference": "mcp/tests/para-agent/fixtures/adapters/claude/2.1.226/stdout.reduced.jsonl"
-src/adapters/codex.json:18   "reference": "mcp/tests/para-agent/fixtures/adapters/codex/0.147.0/stdout.jsonl"
-```
+Owner moved all 71 files into `mcp/para-agent/tests/` (git records renames; `mcp/tests/` is gone and
+`mcp/` now holds only the four packages). The move left two things pointing at the vacated path:
+`package.json`, which broke `npm test` outright, and the adapter `reference` fields, which stayed
+silently dangling because nothing resolves that field at runtime — the suite was green over a path
+that did not exist. Both repointed; adapter references are now package-relative. Bounded gate from
+the new location: **21 suites / 218 discovered / 218 passed / 0 failed, skipped, or cancelled.**
 
-Those paths resolve only from the repository root. Moved elsewhere, the package's own verification
-evidence becomes unreachable from the adapters that cite it.
-
-**9b — `mcp/para-agent/tests/` exists and is empty.** A stub inside the root while the real suite
-sits outside it. Either the intended destination or a leftover; it currently states an ownership the
-tree does not honor.
+**9b — the empty `mcp/para-agent/tests/` stub.** *Resolved by the same move* — it was the intended
+destination, and is now the real one.
 
 **9c — the vendored runtime is untracked, and so is its configuration.** `.gitignore:37` (`bin/`,
 alongside `**/bin/**`) is aimed at build output and catches the vendored runtime as collateral:
@@ -303,7 +302,7 @@ Nothing below has been executed. Ordered by value.
 | R12 | Give `bin/` a tracked `README.md` via ignore negation, stating what belongs there and pointing at its brewery recipe — the `!artifacts/README.md` pattern. A directory whose contents are ignored can still declare itself | F9c/F9d. This is the repo-level half of "para-agent knows the binary lives there"; R11 is the runtime half |
 | R13 | Give `mcp/para-agent/` its **own** `.gitignore`. Today `bin/` is governed by `.gitignore:37` at the repository root — para-agent's ignore policy lives outside the package it governs, which is the same rooting violation as F9a | F9. Also makes the package's ignore rules travel with it |
 | R11 | Record resolved-runtime provenance (vendored / ambient / declared-missing) and give the unhydrated case a named error stating the remedy. Do **not** refuse to launch on ambient fallback — label it | F9d. Same posture as the inheritance dimension; the two want the same receipt field |
-| R10 | Move the suite to `mcp/para-agent/tests/` (the empty stub) and make adapter evidence references package-relative | F9a, F9b. Larger change; touches `package.json`, the runner, and two adapter files. Do it when the migration track is already disturbing these files |
+| ~~R10~~ | ~~Move the suite in; make adapter references package-relative~~ | **Done 2026-08-19** (owner moved the suite; `package.json` and both adapter references repointed). 218/218 green |
 
 **The general rule these argue for:** an artifact's directory should name *what produced it or what
 it is about*, never *which client happened to be running*. A vendor dot-directory holds that vendor's
