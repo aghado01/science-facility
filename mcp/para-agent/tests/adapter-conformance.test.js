@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -36,6 +37,60 @@ test("ADAPTER-STARTUP-VALIDATES: committed profiles load atomically with explici
   assert.equal(byApplication.agy.verification.status, "unverified");
   assert.throws(() => engine.getAdapter("agy"), (error) => assertAdapterError(error, "ADAPTER_UNVERIFIED"));
   assert.throws(() => engine.getAdapter("missing"), (error) => assertAdapterError(error, "ADAPTER_UNKNOWN"));
+});
+
+/**
+ * `evidence[].reference` is polymorphic and the field itself carries no type: for some kinds it
+ * names a checked-in artifact, for others it names the command that was run. `kind` is the only
+ * discriminator, so classification is declared here rather than inferred. An unrecognised kind is
+ * a failure, not a skip — a silently unchecked reference is the defect this test exists to catch.
+ *
+ * Keys must stay in step with the `kind` enum in client-adapter.schema.json. The schema rejects a
+ * kind it does not know at load time; this table catches the other direction — a kind added to the
+ * enum but never classified here, which would otherwise go unchecked.
+ */
+const EVIDENCE_REFERENCE_KIND = {
+  live_stream_probe: "path",
+  fixture: "path",
+  cli_help: "command",
+};
+
+test("ADAPTER-EVIDENCE-RESOLVES: path-kind evidence is package-relative and present on disk", async () => {
+  const engine = await new AdapterEngine().init();
+  const packageRoot = path.resolve(TEST_ROOT, "..");
+  const resolvedPaths = [];
+
+  for (const profile of engine.listProfiles()) {
+    const evidence = profile.verification?.evidence ?? [];
+    for (const [index, entry] of evidence.entries()) {
+      const where = `${profile.profile_id} evidence[${index}]`;
+      const referenceKind = EVIDENCE_REFERENCE_KIND[entry.kind];
+
+      assert.ok(
+        referenceKind,
+        `${where}: unrecognised evidence kind '${entry.kind}' — classify it in EVIDENCE_REFERENCE_KIND so its reference is checked`,
+      );
+      assert.equal(typeof entry.reference, "string", `${where}: reference must be a string`);
+      assert.notEqual(entry.reference.trim(), "", `${where}: reference must not be empty`);
+
+      if (referenceKind !== "path") continue;
+
+      assert.ok(!path.isAbsolute(entry.reference), `${where}: reference must not be absolute — ${entry.reference}`);
+
+      const resolved = path.resolve(packageRoot, entry.reference);
+      assert.ok(
+        !path.relative(packageRoot, resolved).startsWith(".."),
+        `${where}: reference escapes the package root — ${entry.reference}`,
+      );
+      assert.ok(existsSync(resolved), `${where}: reference does not resolve — ${entry.reference}`);
+
+      resolvedPaths.push(`${profile.profile_id}:${entry.reference}`);
+    }
+  }
+
+  // Non-vacuity: an empty loop would pass silently, which is the same class of defect —
+  // nothing resolves `reference` at runtime, so a dangling path stays green indefinitely.
+  assert.ok(resolvedPaths.length >= 2, `expected committed path evidence to check, saw ${resolvedPaths.length}`);
 });
 
 test("ADAPTER-VERSION-EXACT: version-labelled profiles reject drift", async () => {
