@@ -25,7 +25,7 @@ surface). M5 splits into **M5a** (exports/paging/budgets — settled,
 mechanical) and **M5b** (sigil/framing emission — the newer, less-settled
 part of the design, developed with para-agent's trajectory in mind; see M5b
 below) so the two don't have to move at the same pace. M6 is a
-fresh-context review. The `server.mjs` brief follows and is out of scope
+fresh-context review. The `server.ts` brief follows and is out of scope
 here.
 
 ## Bigger picture — where this is going
@@ -70,7 +70,7 @@ servers we do not control — and where it gets materially harder:
   has to degrade gracefully to "source identity + boundary" when nothing
   more is known.
 
-**Path:** (1) this brief — engine; (2) `server.mjs` — REPL/MCP over it;
+**Path:** (1) this brief — engine; (2) `server.ts` — REPL/MCP over it;
 (3) payload P0 on mdnav results + the D20 eval; (4) the token battery
 (shared); (5) the atomic payload format brief proper, informed by (3);
 (6) para-agent adopts the wrapper for its mediated tool returns, mdnav
@@ -82,21 +82,30 @@ requires the next to be designed first.
 
 Nothing in the engine changes. Capture the oracle.
 
-- Copy `test/acceptance.mjs` verbatim to run against a configurable binary
-  path (`MDNAV_BIN`, default the old file).
+- **Adapt** `test/acceptance.mjs` to `tests/acceptance.test.ts` — same
+  assertions, same fixtures, same coverage, typed, black-box through `--json`
+  (D40), driven by a configurable binary path (`MDNAV_BIN`, default the old
+  file). Not a verbatim copy: a `.js` suite would be the mixed tree D46
+  forbids on day one. The adaptation is **proved, not asserted** — the adapted
+  suite runs against the *legacy* binary and must reproduce 130/0 before any
+  engine code exists. That run is what makes "adaptation" different from "a
+  rewrite that quietly dropped assertions" (D47).
 - Golden-capture script: for every fixture the suite generates, record
   `discover`, `outline` (depths 1–3, `--by breaks`, `--windows`, `--comp`),
   `read` (each mode, with/without `--strip all`), `coverage`, `locate`,
   `profile`, `marks --kind fence|blockquote|table` — stdout **and** stderr
-  bytes — under a pinned work-dir/run. Store under `test/golden/` keyed by
+  bytes — under a pinned work-dir/run. Store under `tests/golden/` keyed by
   fixture + argv.
 - Record baseline: 130/0, 1,165 lines, sidecar layout as is.
-- **Gates:** 1 (harness), 16 (goldens exist and pass against the old binary).
-- **Depends on:** nothing. **Delivers:** the definition of "nothing discarded".
+- **Gates:** 0 (standing — already green; the typecheck suite predates the
+  engine by construction), 1 (harness), 16 (goldens exist and pass against the
+  old binary).
+- **Depends on:** nothing. **Delivers:** the definition of "nothing discarded",
+  as behavior a later build is checked against rather than code to carry over.
 
 ## M1 — `SpanSet` · `planned`
 
-Standalone `span-set.mjs` (permitted sibling): normalize, `union`,
+Standalone `span-set.ts` (permitted sibling): normalize, `union`,
 `intersect`, `subtract`, `complement(len)`, `coverage`, `contains`. Bitmap
 oracle property tests (≥ 200 random sets). No engine wiring yet.
 
@@ -105,7 +114,7 @@ oracle property tests (≥ 200 random sets). No engine wiring yet.
 
 ## M2 — Claims table, stores, hygiene layout · `planned`
 
-New `mcp/mdnav_v2/mdnav.mjs` skeleton (the legacy file stays where it is):
+New `mcp/mdnav_v2/mdnav.ts` skeleton (the legacy file stays where it is):
 columnar claims table + `Doc`/`Corpus` shape; `MemoryStore` +
 `SidecarStore` sharing schema 3; the D39 layout — content-addressed IR
 under `$MDNAV_CACHE/ir/v3/<sha>.json`, investigation work-dir
@@ -213,7 +222,7 @@ dogfoods v2 on the
 README/HELP against behavior (F3 closed for real). Findings appended as a
 dated review under `discussion/`.
 
-## After — `server.mjs` brief (separate)
+## After — `server.ts` brief (separate)
 
 Tool names over the export surface; session/result store (`$rN` handles);
 freezing the `§`/`¶` header spec with para-agent; default MCP budget chosen

@@ -24,7 +24,7 @@ holds only execution-ready phase specs) · **Home:**
 [skills/doc-dive/mdnav/mdnav.mjs](../../../skills/doc-dive/mdnav/mdnav.mjs),
 which stays in place, untouched, serving the doc-dive skill (single-file, zero-dep
 Node ≥ 18; sibling modules permitted where a primitive is genuinely
-standalone — `span-set.mjs`, `claims.mjs` — a six-module split is not; see
+standalone — `span-set.ts`, `claims.ts` — a six-module split is not; see
 Non-goals) · **Purpose:** generalize the substrate under every existing verb
 so mdnav becomes a queryable **markdown-docs-as-virtual-db** backend the
 incubating **mdnav MCP** imports in-process. **Nothing currently working is
@@ -54,7 +54,7 @@ askable.
    port doccer's `SpanSet`; hierarchical layers; slice-program
    materialization; cadence; module/MCP blueprint. This brief takes the
    algebra and the layering, generalizes "mask" to *claims + suppression
-   query*, and defers the module split and `server.mjs`.
+   query*, and defers the module split and `server.ts`.
 5. Thread of 2026-08-17: (a) masking is an index concept — kinds indexed
    independently so they can be filtered, read selectively, counted, composed;
    never "hide"; (b) `# x` inside an html-block is a **nested** heading reached
@@ -168,8 +168,8 @@ amended.**
 
 ## Non-goals (the whole brief — every phase inherits these)
 
-- No six-module split, no `server.mjs`, no "virtual database engine"
-  marketing. One file plus at most `span-set.mjs` / `claims.mjs` where a
+- No six-module split, no `server.ts`, no "virtual database engine"
+  marketing. One file plus at most `span-set.ts` / `claims.ts` where a
   primitive is standalone and testable alone.
 - No CommonMark **inline** parser, no markdig. Block structure — opaque
   regions, containers, the section overlay — *is* computed, by shape,
@@ -205,11 +205,16 @@ partition invariant on odd documents, CRLF/BOM, unclosed-fence warning,
 the work-dir refusal guard, `keepOf`, the blockquote regression the tests
 encode — and that behavior is read and ported, never edited in place.
 
-1. **Tests first, verbatim.** Copy the legacy `test/acceptance.mjs` into
-   `mcp/mdnav_v2/test/` unchanged (binary path made configurable) and write
-   the golden-capture script *before* any engine code. The new binary runs
-   the old suite from day one (gate 1) and matches goldens under `default`
-   (gate 16). The legacy file at `skills/doc-dive/mdnav/` is the oracle and
+1. **Tests first, adapted.** Port the legacy `test/acceptance.mjs` to
+   `mcp/mdnav_v2/tests/acceptance.test.ts` — same assertions, same fixtures,
+   typed, black-box through `--json` (D40), binary path configurable — and
+   write the golden-capture script *before* any engine code. Not a verbatim
+   copy: a `.js` suite would be the mixed tree D46 forbids, on day one. The
+   port is **proved, not asserted** — it runs against the *legacy* binary and
+   reproduces 130/0 before any engine code exists, which is what separates an
+   adaptation from a rewrite that quietly dropped assertions (D47). The new
+   binary then runs that suite from day one (gate 1) and matches goldens under
+   `default` (gate 16). The legacy file at `skills/doc-dive/mdnav/` is the oracle and
    is **never edited**; it keeps serving the doc-dive skill throughout.
 2. **New engine, clean:** `SpanSet`, claims, collectors, containment,
    `Selection`, `materialize` — doccer-shaped, no lineage from the old
@@ -233,15 +238,29 @@ misattributed between this brief and the roadmap). One execution queue.
 
 ## Exit gate — master list (single source of truth; phase briefs cite by number)
 
-All in `mcp/mdnav_v2/test/acceptance.mjs` — a verbatim copy of the legacy
-[skills/doc-dive/mdnav/test/acceptance.mjs](../../../skills/doc-dive/mdnav/test/acceptance.mjs)
-made at M0, then extended — via the existing runner; the suite must report
-assert counts, not just PASS. Every gate below is closed by exactly one
-phase brief; see [planning/roadmap.md](../planning/roadmap.md) for the
-milestone → gate map kept in sync with this list.
+All in `mcp/mdnav_v2/tests/`, bounded by `tests/test-manifest.json` and run
+through `node --test`; the suite must report assert counts, not just PASS.
+The acceptance suite is `tests/acceptance.test.ts` — a TypeScript
+**adaptation** of the legacy
+[skills/doc-dive/mdnav/test/acceptance.mjs](../../../skills/doc-dive/mdnav/test/acceptance.mjs),
+made at M0 and proved against the legacy binary (D47), then extended. Every
+gate below is closed by exactly one phase brief — **except gate 0, which is
+standing**, and which every phase re-closes; see
+[planning/roadmap.md](../planning/roadmap.md) for the milestone → gate map
+kept in sync with this list.
 
-1. Every pre-existing acceptance test passes unchanged, except those that
-   encode F1/F2 behavior, which are inverted and named as such. — *01*
+0. **Standing.** The tree typechecks: `tsc --noEmit` clean under the
+   checked-in `tsconfig.json` (`strict` plus `noUncheckedIndexedAccess`,
+   `exactOptionalPropertyTypes`, `noPropertyAccessFromIndexSignature`,
+   `noUnusedLocals`/`noUnusedParameters`, `erasableSyntaxOnly`), asserted by
+   `tests/typecheck.test.ts` as a bounded suite, and **no `.js`/`.mjs` file
+   exists anywhere under `mcp/mdnav_v2/`**. Closed before any engine code and
+   re-closed by every phase thereafter (D46). — *standing*
+1. Every assertion the legacy suite made still passes, except those that
+   encode F1/F2 behavior, which are inverted and named as such. The adapted
+   suite's fidelity to the original is established at M0 by running it against
+   the legacy binary (D47); from M1 on, this gate is about the v2 engine
+   rather than the port. — *01*
 2. `SpanSet`: union/intersect/subtract/complement agree with a brute-force
    bitmap over ≥ 200 random small interval sets; adjacent `[a,b)[b,c)` merge;
    outputs always normalized. — *01*
@@ -328,8 +347,11 @@ milestone → gate map kept in sync with this list.
 13. `discover --recursive .` ≡ `discover . --recursive`. — *01*
 14. Byte fidelity: `read` without `--select`/`--ignore`/`--strip` is
     byte-identical to the source span (existing). — *01*
-15. `node -e "import('./mdnav.mjs').then(m => m.SpanSet && m.Selection)"`
-    resolves without running the CLI. — *04*
+15. `mdnav.ts` is importable as a library without running the CLI:
+    `import('./mdnav.ts')` resolves and yields `SpanSet` and `Selection`, with
+    the `isMain` guard leaving the CLI unexecuted. Asserted as a spawned probe,
+    so the `.ts` entry is loaded the way Node actually loads it. Whether those
+    exports are *type*-sound is gate 0's business, not this gate's. — *04*
 16. `default` lens output for every existing fixture **and the named
     real-document set** (`issues/mdnav_v2/discussion/` — the legacy
     README's "3.5 MB real corpus" has no known location and is struck, per

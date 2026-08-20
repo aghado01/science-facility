@@ -20,7 +20,7 @@ Normalized sorted disjoint half-open byte intervals; linear two-pointer
 makes it usable as a mask. The Gemini sketch's `intersect`/`subtract` are
 correct as written; prove it against a brute-force bitmap, not by inspection.
 
-Standalone `span-set.mjs` (permitted sibling per the Non-goals module-split
+Standalone `span-set.ts` (permitted sibling per the Non-goals module-split
 rule): normalize, `union`, `intersect`, `subtract`, `complement(len)`,
 `coverage`, `contains`. Bitmap oracle property tests (≥ 200 random sets). No
 engine wiring yet — this module has no dependency on the claims table below
@@ -182,8 +182,13 @@ table at parse time, because `all` is the only word it recognizes.
 Full text is the master list in [mdnav_v2_design-brief.md](../design/mdnav_v2_design-brief.md)
 §Exit gate. This phase closes:
 
-- **1.** Every pre-existing acceptance test passes unchanged (F1/F2-encoding
-  tests excepted — those invert in phase 02).
+- **0 (standing).** `tsc --noEmit` clean under the checked-in `tsconfig.json`,
+  and no `.js`/`.mjs` anywhere under `mcp/mdnav_v2/`. Already green before this
+  phase begins — every module written here keeps it that way.
+- **1.** Every assertion the legacy suite made still passes (F1/F2-encoding
+  tests excepted — those invert in phase 02). The adapted suite's fidelity to
+  the original was established at M0 against the legacy binary (D47); here the
+  gate is about the v2 engine.
 - **2.** `SpanSet` bitmap-oracle property test, ≥ 200 random sets, adjacency
   merge, normalization.
 - **3.** Claims table ordering/containment/store-equivalence/sidecar

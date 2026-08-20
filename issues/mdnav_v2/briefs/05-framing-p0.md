@@ -288,7 +288,7 @@ Full text is the master list in [mdnav_v2_design-brief.md](../design/mdnav_v2_de
 
 7 (second half). Framing as a projection over the piece list.
 
-8. Report below; then the `server.mjs` brief (roadmap "After" section).
+8. Report below; then the `server.ts` brief (roadmap "After" section).
 
 ## Report
 

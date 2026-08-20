@@ -16,7 +16,7 @@ alongside this phase once M4 is done).
 
 ## Export surface (the MCP foundation)
 
-`mdnav.mjs` gains named exports — `Corpus` (open a work-dir with a store;
+`mdnav.ts` gains named exports — `Corpus` (open a work-dir with a store;
 `discover`, `doc(ref)`, `invalidate`), `Doc` (`buf`, `digest`, `claims`,
 `select(pred)`, `partition(basis, policy)`, `relations(name)`), `SpanSet`,
 `Selection`, `loadRules`, `loadLens` (D44), `materialize(doc, spans,
@@ -25,7 +25,7 @@ process and CLI verbs open-query-close — and the top-level CLI dispatch
 (last five lines today: `parseArgs` → `VERBS[verb](args)`) moves under an
 `if (isMain)` guard keyed on `import.meta.url` vs `process.argv[1]`.
 **There is no guard and no export today; `import()` runs the CLI.** After
-this, `server.mjs` (a later, separate brief per roadmap) imports
+this, `server.ts` (a later, separate brief per roadmap) imports
 in-process, and MCP tools are thin: `mdnav_query({doc, within, select,
 ignore, lens})` is a Selection over the field/predicate language of
 [03-containment-queries.md](03-containment-queries.md) §5 (D43); `mdnav_read`
@@ -46,7 +46,7 @@ almost verb-for-verb today (`discover`≈list, `outline`≈inspect,
 list), so the backend contract is: **every query returns either literal
 source bytes or a flat table/record of claims and anchors — never prose,
 never a summary, never a recommendation beyond stderr triage.** The exports
-above must make that shape natural for `server.mjs`; if a verb's result
+above must make that shape natural for `server.ts`; if a verb's result
 cannot be expressed as bytes-or-table, that is a design smell to report.
 
 **The named MCP surface this phase's exports must support** (structure
@@ -141,7 +141,7 @@ between exchange addresses and document addresses for free.
 1. **`isMain` guard on Windows.** `import.meta.url` is `file:///D:/…` with
    forward slashes; `process.argv[1]` is `D:\…` and the drive letter's case
    is whatever the caller typed (`mdnav.ps1` passes `Join-Path $PSScriptRoot
-   'mdnav.mjs'`). Compare `realpathSync.native(fileURLToPath(import.meta.url))`
+   'mdnav.ts'`). Compare `realpathSync.native(fileURLToPath(import.meta.url))`
    against `realpathSync.native(resolve(process.argv[1]))`, case-insensitively
    on `win32`. Test 15 must run through the `.ps1` wrapper as well as bare
    `node`.
@@ -151,8 +151,12 @@ between exchange addresses and document addresses for free.
 Full text is the master list in [mdnav_v2_design-brief.md](../design/mdnav_v2_design-brief.md)
 §Exit gate. This phase closes:
 
-- **15.** `node -e "import('./mdnav.mjs').then(m => m.SpanSet && m.Selection)"`
-  resolves without running the CLI.
+- **15.** `mdnav.ts` is importable as a library without running the CLI:
+  `import('./mdnav.ts')` resolves and yields `SpanSet` and `Selection`, and
+  the `isMain` guard leaves the CLI unexecuted. Asserted from the suite as a
+  spawned probe so the `.ts` entry is exercised the way Node actually loads
+  it. Gate 0 covers whether the exported types are sound; this gate covers
+  only that the module resolves.
 - **17.** `select`/`partition`/`marks` honour `limit/offset` and always
   return `total`.
 - **18.** `materialize` over `maxBytes` returns a plan with zero bytes and
@@ -171,4 +175,4 @@ Full text is the master list in [mdnav_v2_design-brief.md](../design/mdnav_v2_de
 _(appended by the implementing agent on completion — what shipped, assert
 counts before/after, the default MCP budget number proposed from measured
 reads (D26), and whether the export surface stayed thin enough for
-`server.mjs` to be a genuinely separate brief.)_
+`server.ts` to be a genuinely separate brief.)_
