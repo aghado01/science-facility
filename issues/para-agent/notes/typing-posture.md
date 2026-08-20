@@ -26,11 +26,23 @@ So the usual objection — TypeScript means a build pipeline — does not apply 
 keep launching `node src/index.ts`, and **the test harness survives untouched** because it is still
 `node --test` with para-agent's own reporter. P4's runner contract does not move.
 
+**Precedent in the ecosystem.** `codex-scientiae` already runs this model: 25 `.ts` files under
+`src/TeXdig`, **no `tsconfig.json`, no `typescript` package, no `tsc` on PATH**. TypeScript is
+written, Node strips it at runtime, and the checking comes from the editor's bundled service. So
+the approach is proven in practice here, not hypothetical.
+
+It also shows the gap concretely: those 25 files are type-checked only while an editor is open on
+them. Nothing in a test run or a clean checkout would catch a type error.
+
 **The catch:** Node *strips* types, it does not *check* them. `node file.ts` runs code with type
 errors. The benefit requires `tsc --noEmit` in the loop — a dev dependency and a check step, whose
 natural home is a suite in `tests/test-manifest.json` so it is bounded like everything else. Without
 that, annotations are documentation that can lie, which is worse than none. **Adopting TypeScript
 without the typecheck suite is not a smaller step; it is a worse one.**
+
+A `tsconfig.json` comes with it, for a reason beyond running `tsc`: without one, strictness is
+whatever each editor defaults to, so the editor and the suite check different things. Checked in, it
+pins `strict` once for both.
 
 ## The four surfaces
 
