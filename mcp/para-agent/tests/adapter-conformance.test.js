@@ -40,9 +40,10 @@ test("ADAPTER-STARTUP-VALIDATES: committed profiles load atomically with explici
 });
 
 /**
- * Evidence entries do not all point at the same thing. Some name a file kept in the repo — a
- * specimen captured from a real run, or a test fixture. Others name a command someone ran and
- * read, which is not kept. Only the first sort can be checked here.
+ * Evidence entries do not all point at the same thing. Some name a file kept in the repo: the
+ * claude and codex entries name reduced captures from real runs, held under tests/fixtures/ as
+ * fixed input for the battery. Others name a command someone ran and read, which is not kept.
+ * Only a named file can be checked here.
  *
  * `kind` is what tells them apart, so list every kind and what its reference names. Keep this in
  * step with the `kind` enum in client-adapter.schema.json: the schema rejects a kind it does not
