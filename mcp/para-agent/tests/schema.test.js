@@ -10,7 +10,7 @@ import {
   sha256Utf8,
   validateExchangeSchema,
   validateHeaderSchema,
-} from "../../para-agent/src/schema-validation.js";
+} from "../src/schema-validation.js";
 import { TEST_ADAPTER, validExchange, validHeader } from "./support/fixtures.js";
 
 test("JSON Schema 2020-12 validators compile in strict mode and accept canonical fixtures", () => {

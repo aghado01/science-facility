@@ -7,13 +7,13 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 
-import { AdapterEngine } from "../../para-agent/src/adapters.js";
-import { MediatedTurnService } from "../../para-agent/src/mediated-turn.js";
-import { Mux, MuxError, resolveNuBin } from "../../para-agent/src/mux.js";
-import { ProcessNativeClient } from "../../para-agent/src/native-client.js";
-import { RawTraceSink } from "../../para-agent/src/raw-trace.js";
-import { TranscriptStore } from "../../para-agent/src/transcript.js";
-import { waitPattern } from "../../para-agent/src/framing.js";
+import { AdapterEngine } from "../src/adapters.js";
+import { MediatedTurnService } from "../src/mediated-turn.js";
+import { Mux, MuxError, resolveNuBin } from "../src/mux.js";
+import { ProcessNativeClient } from "../src/native-client.js";
+import { RawTraceSink } from "../src/raw-trace.js";
+import { TranscriptStore } from "../src/transcript.js";
+import { waitPattern } from "../src/framing.js";
 
 const execFileAsync = promisify(execFile);
 

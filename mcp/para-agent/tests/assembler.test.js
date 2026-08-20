@@ -5,7 +5,7 @@ import { createHash } from "node:crypto";
 import {
   ExchangeAssembler,
   ExchangeAssemblyError,
-} from "../../para-agent/src/assembler.js";
+} from "../src/assembler.js";
 
 const sha256 = (text) => createHash("sha256").update(Buffer.from(text, "utf8")).digest("hex");
 

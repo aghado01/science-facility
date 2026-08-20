@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import {
   QuarantineReconciliationService,
   deriveConversationKey,
-} from "../../para-agent/src/quarantine-reconciliation.js";
+} from "../src/quarantine-reconciliation.js";
 
 const TARGET = {
   application: "claude",

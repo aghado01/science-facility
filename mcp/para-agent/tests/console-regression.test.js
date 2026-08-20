@@ -4,9 +4,9 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { runCaptured, requestCancel } from "../../para-agent/src/capture.js";
-import { deltaOf, waitPattern, waitStable } from "../../para-agent/src/framing.js";
-import { Journal } from "../../para-agent/src/journal.js";
+import { runCaptured, requestCancel } from "../src/capture.js";
+import { deltaOf, waitPattern, waitStable } from "../src/framing.js";
+import { Journal } from "../src/journal.js";
 
 async function withTempRoot(fn) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "para-console-test-"));

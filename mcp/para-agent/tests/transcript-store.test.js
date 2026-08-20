@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { TranscriptStore, TranscriptStoreError } from "../../para-agent/src/transcript.js";
+import { TranscriptStore, TranscriptStoreError } from "../src/transcript.js";
 import { TEST_ADAPTER, completedCommit } from "./support/fixtures.js";
 
 async function tempWorkspace(t) {

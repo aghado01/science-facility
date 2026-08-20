@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { Mux, MuxError } from "../../para-agent/src/mux.js";
+import { Mux, MuxError } from "../src/mux.js";
 
 test("MuxError preserves bounded timeout evidence", async () => {
   const timeoutMs = 100;

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { ProcessNativeClient } from "../../para-agent/src/native-client.js";
+import { ProcessNativeClient } from "../src/native-client.js";
 
 const fixture = path.join(
   path.dirname(fileURLToPath(import.meta.url)),

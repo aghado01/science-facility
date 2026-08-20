@@ -4,8 +4,8 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { NuEngine, NuExecutionError } from "../../para-agent/src/nu.js";
-import { TranscriptQuery } from "../../para-agent/src/transcript-query.js";
+import { NuEngine, NuExecutionError } from "../src/nu.js";
+import { TranscriptQuery } from "../src/transcript-query.js";
 
 function assertNuFailure(error, code) {
   assert.ok(error instanceof NuExecutionError);

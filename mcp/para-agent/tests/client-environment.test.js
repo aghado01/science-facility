@@ -12,23 +12,23 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { ClientIntegrationError } from "../../para-agent/src/client-integration/errors.js";
+import { ClientIntegrationError } from "../src/client-integration/errors.js";
 import {
   assertEnvironmentBackend,
   compileClientEnvironment,
   compileEnvironment,
-} from "../../para-agent/src/client-integration/environment.js";
+} from "../src/client-integration/environment.js";
 import {
   assertPolicyNarrowing,
   compileClientPolicy,
   compilePolicy,
   intersectPolicyCeilings,
-} from "../../para-agent/src/client-integration/policy.js";
+} from "../src/client-integration/policy.js";
 import {
   canonicalSemanticJson,
   semanticSha256,
-} from "../../para-agent/src/client-integration/semantic-json.js";
-import { resolveWorkspace } from "../../para-agent/src/client-integration/workspace.js";
+} from "../src/client-integration/semantic-json.js";
+import { resolveWorkspace } from "../src/client-integration/workspace.js";
 
 const TEST_ROOT = path.dirname(fileURLToPath(import.meta.url));
 const ENVIRONMENT_FIXTURE = path.join(

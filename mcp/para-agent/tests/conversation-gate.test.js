@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { ConversationGate } from "../../para-agent/src/conversation-gate.js";
+import { ConversationGate } from "../src/conversation-gate.js";
 
 test("conversation keys reject noncanonical aliases instead of trimming them", () => {
   const gate = new ConversationGate();

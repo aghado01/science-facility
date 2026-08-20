@@ -1,4 +1,4 @@
-import { sha256Utf8 } from "../../../para-agent/src/schema-validation.js";
+import { sha256Utf8 } from "../../src/schema-validation.js";
 
 export const TEST_ADAPTER = Object.freeze({
   id: "codex-stream",

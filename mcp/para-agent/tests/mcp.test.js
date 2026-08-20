@@ -9,9 +9,9 @@ import {
   registerNativeSkills,
   server,
   setMediatedTurnServiceForTesting,
-} from "../../para-agent/src/index.js";
-import { MediatedTurnError } from "../../para-agent/src/mediated-turn.js";
-import { TranscriptStore } from "../../para-agent/src/transcript.js";
+} from "../src/index.js";
+import { MediatedTurnError } from "../src/mediated-turn.js";
+import { TranscriptStore } from "../src/transcript.js";
 import { memoryTransportPair } from "./support/memory-transport.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));

@@ -15,7 +15,7 @@
     "evidence": [
       {
         "kind": "fixture",
-        "reference": "mcp/tests/para-agent/fixtures/client-integration/registry/valid/adapters/fake-client.json"
+        "reference": "tests/fixtures/client-integration/registry/valid/adapters/fake-client.json"
       }
     ]
   },

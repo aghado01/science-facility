@@ -5,11 +5,11 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { server } from "../../para-agent/src/index.js";
+import { server } from "../src/index.js";
 import { memoryTransportPair } from "./support/memory-transport.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const skillRoot = path.resolve(here, "../../para-agent/skills/primary");
+const skillRoot = path.resolve(here, "../skills/primary");
 const packageRequire = createRequire(path.join(skillRoot, "../../package.json"));
 const Ajv = packageRequire("ajv");
 const { Client } = await import(pathToFileURL(packageRequire.resolve("@modelcontextprotocol/sdk/client/index.js")).href);

@@ -4,11 +4,11 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { AdapterEngine, DEFAULT_ADAPTER_SCHEMA } from "../../para-agent/src/adapters.js";
-import { ExchangeAssembler } from "../../para-agent/src/assembler.js";
-import { ConversationGate } from "../../para-agent/src/conversation-gate.js";
-import { MediatedTurnError, MediatedTurnService } from "../../para-agent/src/mediated-turn.js";
-import { assertExchange } from "../../para-agent/src/schema-validation.js";
+import { AdapterEngine, DEFAULT_ADAPTER_SCHEMA } from "../src/adapters.js";
+import { ExchangeAssembler } from "../src/assembler.js";
+import { ConversationGate } from "../src/conversation-gate.js";
+import { MediatedTurnError, MediatedTurnService } from "../src/mediated-turn.js";
+import { assertExchange } from "../src/schema-validation.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fakeAdapterDir = path.join(here, "fixtures", "adapters", "fake", "1.0.0", "profile");

@@ -5,10 +5,10 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { main } from "../../para-agent/src/quarantine-admin.js";
-import { TranscriptStore } from "../../para-agent/src/transcript.js";
+import { main } from "../src/quarantine-admin.js";
+import { TranscriptStore } from "../src/transcript.js";
 
-const ADMIN_PATH = fileURLToPath(new URL("../../para-agent/src/quarantine-admin.js", import.meta.url));
+const ADMIN_PATH = fileURLToPath(new URL("../src/quarantine-admin.js", import.meta.url));
 const APPLICATION = "codex";
 const SESSION = "operator-seat";
 const HANDLE = "operator-seat:0.0";

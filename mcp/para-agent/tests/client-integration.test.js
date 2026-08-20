@@ -5,24 +5,24 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { ClientConfigProvider } from "../../para-agent/src/client-integration/config-provider.js";
+import { ClientConfigProvider } from "../src/client-integration/config-provider.js";
 import {
   compileClientEnvironment,
   assertEnvironmentBackend,
-} from "../../para-agent/src/client-integration/environment.js";
-import { compileClientPolicy } from "../../para-agent/src/client-integration/policy.js";
+} from "../src/client-integration/environment.js";
+import { compileClientPolicy } from "../src/client-integration/policy.js";
 import {
   compileInvocationRecipe,
   finalizeInvocationDescriptor,
   finalizeInvocationPlan,
-} from "../../para-agent/src/client-integration/invocation.js";
+} from "../src/client-integration/invocation.js";
 import {
   preparePromptCarrier,
   materializePromptCarrier,
-} from "../../para-agent/src/client-integration/carrier.js";
-import { ClientRegistry } from "../../para-agent/src/client-integration/registry.js";
-import { resolveWorkspace } from "../../para-agent/src/client-integration/workspace.js";
-import { runReadiness } from "../../para-agent/src/client-integration/readiness.js";
+} from "../src/client-integration/carrier.js";
+import { ClientRegistry } from "../src/client-integration/registry.js";
+import { resolveWorkspace } from "../src/client-integration/workspace.js";
+import { runReadiness } from "../src/client-integration/readiness.js";
 
 const TEST_DIR = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURE_ROOT = path.join(TEST_DIR, "fixtures", "client-integration", "registry");

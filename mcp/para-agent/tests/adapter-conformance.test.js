@@ -10,7 +10,7 @@ import {
   AdapterEngine,
   AdapterError,
   DEFAULT_ADAPTERS_DIR,
-} from "../../para-agent/src/adapters.js";
+} from "../src/adapters.js";
 
 const TEST_ROOT = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURES = path.join(TEST_ROOT, "fixtures", "adapters");

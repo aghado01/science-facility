@@ -5,7 +5,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { RawTraceError, RawTraceSink } from "../../para-agent/src/raw-trace.js";
+import { RawTraceError, RawTraceSink } from "../src/raw-trace.js";
 
 const EMPTY_SHA256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 

@@ -4,16 +4,16 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { AdapterEngine } from "../../para-agent/src/adapters.js";
+import { AdapterEngine } from "../src/adapters.js";
 import {
   ClientConfigProvider,
   canonicalClientConfigJson,
-} from "../../para-agent/src/client-integration/config-provider.js";
+} from "../src/client-integration/config-provider.js";
 import {
   CLIENT_ERROR_DEFINITIONS,
   ClientIntegrationError,
-} from "../../para-agent/src/client-integration/errors.js";
-import { ClientRegistry } from "../../para-agent/src/client-integration/registry.js";
+} from "../src/client-integration/errors.js";
+import { ClientRegistry } from "../src/client-integration/registry.js";
 
 const TEST_DIR = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURE_ROOT = path.join(TEST_DIR, "fixtures", "client-integration", "registry");

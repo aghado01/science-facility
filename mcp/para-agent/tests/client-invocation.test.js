@@ -6,25 +6,25 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { ClientIntegrationError } from "../../para-agent/src/client-integration/errors.js";
+import { ClientIntegrationError } from "../src/client-integration/errors.js";
 import {
   compileInvocationRecipe,
   finalizeInvocationDescriptor,
   finalizeInvocationPlan,
-} from "../../para-agent/src/client-integration/invocation.js";
+} from "../src/client-integration/invocation.js";
 import {
   parseStrictJsonObject,
   runReadiness,
-} from "../../para-agent/src/client-integration/readiness.js";
+} from "../src/client-integration/readiness.js";
 import {
   cleanupPromptCarrier,
   materializePromptCarrier,
   preparePromptCarrier,
-} from "../../para-agent/src/client-integration/carrier.js";
+} from "../src/client-integration/carrier.js";
 import {
   PROMPT_CARRIER_SCAVENGE_LOCK,
   scavengePromptCarriers,
-} from "../../para-agent/src/client-integration/scavenger.js";
+} from "../src/client-integration/scavenger.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fixtureRoot = path.join(here, "fixtures", "client-integration", "invocation");
