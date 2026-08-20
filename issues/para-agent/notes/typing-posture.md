@@ -92,13 +92,46 @@ precisely the class types eliminate.
 tool inputs. That is already one-declaration-serving-both-roles — runtime validation plus a static
 type by inference. Under TypeScript those 58 become typed for free, with nothing to write.
 
-### 4. Where neither applies, deliberately
+### 4. The door — the highest-value type in the system
 
-Native client streams. Adapters parse NDJSON emitted by Claude, Codex, Grok — external, untrusted,
-versioned by someone else, and **discovered rather than declared**. The contract calls this
-"privileged untrusted content" and requires it stay exact. There is no schema and there should not
-be one; the adapter's mappings and conditions are the runtime discipline, and `unknown` is the
-honest static type. Types stop at the parse boundary here by design, not by omission.
+> **Corrected.** This section first read "where neither applies, deliberately", on the grounds that
+> native streams are undeclarable so types stop at the parse boundary. That is backwards. The
+> stream is undeclarable; **the admission of that stream into the client-agnostic abstraction is
+> not**, and that admission is the single most valuable thing to type.
+
+Three layers, and only the first is out of reach:
+
+| Layer | Static type | Why |
+|---|---|---|
+| Inbound native stream | `unknown` | NDJSON from Claude, Codex, Grok — external, versioned by someone else, discovered rather than declared. The contract calls it privileged untrusted content and requires it stay exact |
+| **The door** — adapter mapping | **`(unknown) => NormalizedRecord`** | Entirely para-agent's own. This signature *is* the definition of client-agnostic |
+| Everything downstream | fully typed | The abstraction exists precisely to absorb the variance, so past the door there is no variance left to absorb |
+
+**The vocabulary is already declared**, as enums in `client-adapter.schema.json` constraining what an
+adapter may map onto:
+
+```
+record kinds       prompt_echo | thinking | tool_call | tool_result | response
+terminal outcomes  completed | failed | interrupted | timeout
+```
+
+What is missing is the in-memory shape those map *into* — the record flowing from adapter through
+`ExchangeAssembler` to the transcript store, carried today by 24 hand-written assertions in
+`assembler.js`. That is a discriminated union on five members, and the terminal outcome is a union
+of four. Both are small, closed, and entirely under this project's control.
+
+**Why this one matters more than the rest.** P11 rules that onboarding a fifth client through
+profiles and codecs alone — with zero changes to generic services — *is* the proof the substrate
+works. Type the door and that stops being a claim demonstrated by test and becomes one enforced by
+construction: a new adapter either produces the union or it does not compile. An adapter that
+cannot populate a normalized record is exactly the failure P11 cares about, and it would surface at
+authoring time rather than during a live pilot.
+
+The same holds for the reverse direction. Adding a sixth record kind currently means finding every
+consumer; with the union it means fixing every compile error, and the compiler's list is complete
+where a grep is not.
+
+Types do not stop at the parse boundary. They **start** there — that is what a boundary is for.
 
 ## Weighing it
 
@@ -110,6 +143,11 @@ trade.
 
 **Value is concentrated where the code already churns.** The modules with the most hand-written
 assertions are the ones the migration and client-onboarding tracks will keep touching.
+
+**And it is concentrated hardest at the door.** If only one thing gets typed, it should be the
+normalized record and terminal outcome — five members and four, closed, fully owned, sitting exactly
+where P11's extensibility proof is made. That is the smallest declaration with the largest reach,
+and unlike the rest it improves a *ruled* claim rather than only the code.
 
 **The proportionate move is not a conversion.** para-agent is 32 files of working, contract-driven
 code with 223 tests and runtime validation already carrying the load. Retrofitting types buys less
