@@ -1,7 +1,9 @@
 # Typing posture: where schemas are non-negotiable, and where types belong
 
 - **Written:** 2026-08-20
-- **Status:** hypothetical, traced. No code change proposed or made. May graduate later.
+- **Status:** direction set, not ruled. Owner's leaning as of 2026-08-20: **build the client
+  integration layer in TypeScript, then use it as the model for renovating the untyped modules.**
+  No code change made. Worth a decision entry once firm.
 - **Purpose:** a map of para-agent's shape-handling surfaces sorted into what must stay JSON
   Schema, what is a bare object that should be typed, and where a reader would expect types if
   TypeScript is adopted — so the justification and the cost are weighable per surface rather than
@@ -17,6 +19,8 @@ Run on Node `v26.2.0`, 2026-08-20:
 | `.ts` importing `./shape.ts` | works |
 | `node --test --test-concurrency=1 t.test.ts` | ✔ 1 pass |
 | `enum` (non-erasable syntax) | works — full transform, not just stripping |
+| `.js` importing `./typed.ts` | works — so existing modules can consume new TS ones |
+| `.ts` importing `./plain.js` | works — so a TS module can sit among JS ones |
 
 So the usual objection — TypeScript means a build pipeline — does not apply here. `.mcp.json` could
 keep launching `node src/index.ts`, and **the test harness survives untouched** because it is still
