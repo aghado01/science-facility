@@ -1,29 +1,122 @@
 {
   "schema_version": 1,
   "bounded": [
-    { "id": "runner-contract", "runner": "powershell", "path": "runner-contract.tests.ps1" },
-    { "id": "manifest-coverage", "runner": "node-test", "path": "manifest-coverage.test.js" },
-    { "id": "client-registry", "runner": "node-test", "path": "client-registry.test.js" },
-    { "id": "client-environment", "runner": "node-test", "path": "client-environment.test.js" },
-    { "id": "client-invocation", "runner": "node-test", "path": "client-invocation.test.js" },
-    { "id": "client-integration", "runner": "node-test", "path": "client-integration.test.js" },
-    { "id": "schema", "runner": "node-test", "path": "schema.test.js" },
-    { "id": "transcript-store", "runner": "node-test", "path": "transcript-store.test.js" },
-    { "id": "conversation-gate", "runner": "node-test", "path": "conversation-gate.test.js" },
-    { "id": "quarantine-reconciliation", "runner": "node-test", "path": "quarantine-reconciliation.test.js" },
-    { "id": "quarantine-admin", "runner": "node-test", "path": "quarantine-admin.test.js" },
-    { "id": "nu", "runner": "node-test", "path": "nu.test.js" },
-    { "id": "mux", "runner": "node-test", "path": "mux.test.js" },
-    { "id": "adapter-conformance", "runner": "node-test", "path": "adapter-conformance.test.js" },
-    { "id": "native-client", "runner": "node-test", "path": "native-client.test.js" },
-    { "id": "raw-trace", "runner": "node-test", "path": "raw-trace.test.js" },
-    { "id": "assembler", "runner": "node-test", "path": "assembler.test.js" },
-    { "id": "mediated-turn", "runner": "node-test", "path": "mediated-turn.test.js" },
-    { "id": "mcp", "runner": "node-test", "path": "mcp.test.js" },
-    { "id": "console-regression", "runner": "node-test", "path": "console-regression.test.js" },
-    { "id": "skill-examples", "runner": "node-test", "path": "skill-examples.test.js" }
+    {
+      "id": "runner-contract",
+      "runner": "powershell",
+      "path": "runner-contract.tests.ps1"
+    },
+    {
+      "id": "manifest-coverage",
+      "runner": "node-test",
+      "path": "manifest-coverage.test.js"
+    },
+    {
+      "id": "client-registry",
+      "runner": "node-test",
+      "path": "client-registry.test.js"
+    },
+    {
+      "id": "client-environment",
+      "runner": "node-test",
+      "path": "client-environment.test.js"
+    },
+    {
+      "id": "client-invocation",
+      "runner": "node-test",
+      "path": "client-invocation.test.js"
+    },
+    {
+      "id": "client-integration",
+      "runner": "node-test",
+      "path": "client-integration.test.js"
+    },
+    {
+      "id": "package-layout",
+      "runner": "node-test",
+      "path": "package-layout.test.js"
+    },
+    {
+      "id": "schema",
+      "runner": "node-test",
+      "path": "schema.test.js"
+    },
+    {
+      "id": "transcript-store",
+      "runner": "node-test",
+      "path": "transcript-store.test.js"
+    },
+    {
+      "id": "conversation-gate",
+      "runner": "node-test",
+      "path": "conversation-gate.test.js"
+    },
+    {
+      "id": "quarantine-reconciliation",
+      "runner": "node-test",
+      "path": "quarantine-reconciliation.test.js"
+    },
+    {
+      "id": "quarantine-admin",
+      "runner": "node-test",
+      "path": "quarantine-admin.test.js"
+    },
+    {
+      "id": "nu",
+      "runner": "node-test",
+      "path": "nu.test.js"
+    },
+    {
+      "id": "mux",
+      "runner": "node-test",
+      "path": "mux.test.js"
+    },
+    {
+      "id": "adapter-conformance",
+      "runner": "node-test",
+      "path": "adapter-conformance.test.js"
+    },
+    {
+      "id": "native-client",
+      "runner": "node-test",
+      "path": "native-client.test.js"
+    },
+    {
+      "id": "raw-trace",
+      "runner": "node-test",
+      "path": "raw-trace.test.js"
+    },
+    {
+      "id": "assembler",
+      "runner": "node-test",
+      "path": "assembler.test.js"
+    },
+    {
+      "id": "mediated-turn",
+      "runner": "node-test",
+      "path": "mediated-turn.test.js"
+    },
+    {
+      "id": "mcp",
+      "runner": "node-test",
+      "path": "mcp.test.js"
+    },
+    {
+      "id": "console-regression",
+      "runner": "node-test",
+      "path": "console-regression.test.js"
+    },
+    {
+      "id": "skill-examples",
+      "runner": "node-test",
+      "path": "skill-examples.test.js"
+    }
   ],
   "live": [
-    { "id": "live-windows", "runner": "node-test", "path": "live-windows.test.js" }
+    {
+      "id": "live-windows",
+      "runner": "node-test",
+      "path": "live-windows.test.js"
+    }
   ]
 }
