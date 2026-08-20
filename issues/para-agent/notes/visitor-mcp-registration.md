@@ -1,104 +1,120 @@
 # Registering visitor MCPs
 
 - **Written:** 2026-08-19
-- **Status:** proposal, no code. Answers the configuration-mechanics half of the visitor-MCP
-  question; the conformance half is sketched in
+- **Status:** proposal, no code. The configuration-mechanics half of the visitor-MCP question; the
+  conformance half is sketched in
   [grok-visitor-mcps-in-para-agent](../discussions/grok-visitor-mcps-in-para-agent.md).
-- **Related:** [session-scoped-inheritance-control](session-scoped-inheritance-control.md) —
-  the same field, approached from the participant side.
+- **Related:** [session-scoped-inheritance-control](session-scoped-inheritance-control.md) — the
+  same question from the participant's side.
 
-## The short version
+> **Superseded first draft.** This note originally proposed adding a `visitor_mcps` array to the
+> existing client config snapshot. Owner ruled two separate registries (2026-08-19). Importing a
+> capability and onboarding a kind of participant are different things, and collapsing them into
+> one snapshot would make the storage clear at the cost of making the concepts muddy. The
+> structural parallel is real and worth exploiting — but through shared primitives, not a shared
+> namespace. Rewritten accordingly.
 
-Do not build a second registry. The client config snapshot already does exactly what is wanted —
-declare a closed set, validate it, freeze it, hash it, resolve from it — and a visitor MCP is
-another thing to declare. Adding a fourth array to the snapshot buys the tractability for free,
-including one property that is easy to miss (see "What the hash buys" below).
+## The dimensions this sits between
 
-## What already exists
+Owner's enumeration, recorded because most of it is unworked and the list is the map:
 
-`config-provider.js` loads three kinds, each against its own schema
-(`DEFAULT_CLIENT_CONFIG_SCHEMA_PATHS`): integrations, host bindings, session profiles. It
-canonicalises the JSON, hashes it, and deep-freezes the result.
+- client application boundaries
+- their respective harnesses and interface semantics
+- client-specific configuration and provisioning
+- vendored MCPs
+- role-specific configuration concepts and governance
 
-`registry.js` takes that snapshot and resolves a registration from
-`{ application, surface, mode, sessionProfile }`, after cross-checking policy keys, environment
-entries, and session compatibility.
+Two of these are registries. The rest are not, and should not be pulled into one just because they
+are adjacent.
 
-The snapshot is strict in both directions:
+## Two registries
 
-```js
-// registry.js — assertSnapshotShape
-schema_version !== 1                                  → shape_invalid
-revision not /^[a-f0-9]{64}$/                         → shape_invalid
-any key outside {schema_version, revision,
-  integrations, host_bindings, session_profiles}      → shape_invalid
-computeClientConfigSnapshotRevision(snapshot)
-  !== snapshot.revision                               → revision_mismatch
-```
+| | Client registry | Visitor-MCP registry |
+|---|---|---|
+| Registers | a kind of participant para-agent can drive | a capability para-agent can make available to participants |
+| Answers | "what is Grok, and how do we speak to it" | "what is nushell-mcp, and may a participant reach it" |
+| Runtime | spawned per mediated turn, speaks a native stream an adapter parses | long-lived stdio JSON-RPC server, shared across turns and participants |
+| Owned by para-agent | no — an external CLI | no — a sibling MCP, instrumental but not owned |
+| Failure of a bad entry | a turn cannot be mediated | a tool surface is missing or wrong |
+| Governance question | may this client be driven, and under what policy | may this participant reach this capability |
 
-An unknown key is rejected outright, and the revision must equal the recomputed hash of the
-canonical form. Nothing can be smuggled in, and nothing can be edited without the hash changing.
+Separate snapshots, separate schemas, separate revisions. A visitor MCP never appears in the client
+snapshot and vice versa.
 
-## The proposal
+## The parallel, spent correctly
 
-A fourth config kind, `visitor_mcps`, with its own schema, in the same snapshot.
+The similarity is in the *mechanics*, not the subject matter. Both need: a declared closed set,
+each entry schema-validated, semantic checks past what a schema can say, canonical form, a hash
+over it, a freeze, and resolution from the frozen set. That is a generic capability, and it is
+currently welded to the client case in `config-provider.js`.
 
-**Declaration** — what a visitor MCP is, per entry: id; how to launch it (command, args, env);
-which of the disclosure verbs it provides (`list`, `read`, `search`, `inspect`, `status` from the
-discussion fragment); and its verification block, same shape as an adapter's, because a visitor MCP
-para-agent does not own has exactly the adapter version problem — pinned or not, evidenced or not.
+So the parallel argues for **extracting the config-snapshot primitive**, then having two registries
+use it — not for one registry with two kinds of thing in it:
 
-**Selection** — a session profile names which registered visitor MCPs that session may reach. Same
-two-level shape the clients already use: the registry says what exists and is permitted at all, the
-session profile picks from it. A visitor MCP absent from the snapshot cannot be selected, and a
-selection naming an unregistered id fails at resolve rather than at spawn.
-
-**Reusable as-is:**
-
-| Machinery | Why it applies unchanged |
+| Primitive, currently client-specific | Generic form |
 |---|---|
-| `assertConcreteHostPath(value, platform)` | a visitor MCP is a command at a concrete path |
-| `assertArguments(values, allowedPlaceholders)` | argv with a closed placeholder set — same need |
-| environment source/secret discipline | visitor MCPs take env; the "no literal secrets in package or session JSON" rule is the same rule |
-| `assertUnique` / `assertUniqueNames` | duplicate ids and duplicate env names, same failures |
-| canonicalise → hash → freeze | the whole point |
+| `canonicalClientConfigJson`, `computeClientConfigSnapshotRevision`, `deepFreezeClientConfig` | canonicalise / hash / freeze any declared set |
+| `assertSnapshotShape` with its hardcoded key allowlist | shape assertion parameterised by the kinds a snapshot declares |
+| `assertConcreteHostPath(value, platform)` | unchanged — a visitor MCP is also a command at a concrete path |
+| `assertArguments(values, allowedPlaceholders)` | unchanged — argv with a closed placeholder set |
+| environment source/secret discipline | unchanged — "no literal secrets in package or session JSON" is the same rule |
+| `assertUnique`, `assertUniqueNames` | unchanged |
 
-**Genuinely new, do not force into the client shape:** a client is spawned per mediated turn and
-speaks a native stream an adapter parses. A visitor MCP is a long-lived stdio JSON-RPC server,
-shared across turns and across participants. Different lifecycle, different failure modes,
-different cleanup. The *registration* is the same problem; the *runtime* is not.
+Behaviour-preserving extraction: the client registry keeps doing exactly what it does, and the
+generic layer gains a second caller. If the extraction changes any client behaviour it has gone
+wrong.
 
-## What the hash buys
+## What a visitor-MCP entry declares
 
-This is the part worth having.
+- **id** and how to launch it — command, args, env.
+- **Which disclosure verbs it provides** — `list`, `read`, `search`, `inspect`, `status` from the
+  discussion fragment. This is the conformance claim, and it belongs in the registration rather
+  than in prose, so an entry that claims a verb it does not serve is a checkable error.
+- **Verification** — same problem an adapter has, for the same reason: para-agent owns neither the
+  binary nor its release cadence. Whatever shape the adapter evidence question settles into should
+  apply here too, rather than inventing a second vocabulary for the same thing.
 
-The contract already binds each v2 conversation lane durably to the adapter, integration, session
-profile, workspace, and `policy.session_sha256`, and `TranscriptStore.acceptExchange()` compares
-that binding against every prior acceptance for the conversation key —
-`CONVERSATION_BINDING_CONFLICT` on any difference.
+**Selection stays two-level**, as it already is for clients: the registry says what exists and is
+permitted at all; a session profile names which of those a given session's participants may reach.
+A selection naming an unregistered id fails at resolve, not at spawn.
 
-Put visitor MCPs in the snapshot and they land inside that binding automatically. **A conversation
-cannot silently change which MCPs its participants could reach.** Add one mid-conversation and the
-next acceptance fails loudly instead of producing a transcript whose later turns had a wider tool
-surface than its earlier ones — with nothing in the record saying so. That is the same defect as an
-adapter citing evidence that moved: the state changes, the record does not, and nobody finds out.
+## Binding the record
 
-No new mechanism is needed for it. It falls out of using the snapshot instead of a side channel.
+The contract binds each v2 conversation lane durably to the adapter, integration, session profile,
+workspace, and `policy.session_sha256`, and `acceptExchange()` rejects any later difference with
+`CONVERSATION_BINDING_CONFLICT`.
+
+With two registries the lane wants **two revisions** — the client config snapshot's, and the
+visitor-MCP snapshot's — bound separately. That is better than the merged version, not worse: the
+record then says which client configuration *and* which capability set a conversation ran under,
+and a change to either is attributable to the one that changed. Merged, a revision bump would only
+say "something in config moved".
+
+The property worth keeping either way: a conversation cannot silently widen the tool surface its
+participants could reach. Add a visitor MCP mid-conversation and the next acceptance fails loudly,
+rather than producing a transcript whose later turns had more reach than its earlier ones with
+nothing in the record saying so.
 
 ## Sequencing
 
-The registry is bounded-green but is **not yet the production authority** — substrate-migration
-items 2 and 3 (inject registry + compiler into `MediatedTurnService`; strict `spawn` tagged union)
-are pending, and item 5 lands the three client profiles atomically with the cutover.
+The client registry is bounded-green but is **not yet the production authority** —
+substrate-migration items 2 and 3 (inject registry + compiler into `MediatedTurnService`; strict
+`spawn` tagged union) are pending, and item 5 lands the three client profiles atomically with the
+cutover.
 
-So: write the schema whenever, but land `visitor_mcps` **with or after** that cutover, not before.
-Landing it first means the new kind gets dragged through the migration as a fourth thing in flight,
-and the snapshot shape changes twice. Adding the array also changes the strict key allowlist and
-every recomputed revision, which is a one-line change but invalidates any stored snapshot — cheaper
-to absorb once.
+Extracting the shared primitive touches `config-provider.js`, which the migration is about to
+disturb. Doing the extraction *before* the cutover means doing it under code that is mid-move;
+doing it after means one disturbance instead of two. The visitor-MCP registry itself has no reason
+to precede either.
 
-One open question that is really a client question: `spawn`'s tagged union gets a shape for
-"managed `application + sessionProfile` pane". If a session's visitor MCPs are named on the session
-profile, that arm already carries them and no new arm is needed. Worth confirming when item 3 is
-designed, because the answer decides whether visitor MCPs are a spawn concept at all or purely a
-configuration one.
+## Open
+
+- Does a session's visitor-MCP selection live on the session profile, or on its own? The client
+  answer is "session profile", but that is the client's session profile — a role-specific concept
+  may not want to borrow it.
+- `spawn`'s tagged union has an arm for a managed `application + sessionProfile` pane. If visitor
+  MCPs are named on whatever the session-level selection turns out to be, that arm may already
+  carry them, and visitor MCPs are then purely a configuration concept that never touches `spawn`.
+  Worth confirming when item 3 is designed.
+- Governance is unworked: who may register a visitor MCP, and is registration itself something a
+  participant can request, or strictly an out-of-band act by the operator?
