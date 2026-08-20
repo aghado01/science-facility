@@ -40,57 +40,57 @@ test("ADAPTER-STARTUP-VALIDATES: committed profiles load atomically with explici
 });
 
 /**
- * `evidence[].reference` is polymorphic and the field itself carries no type: for some kinds it
- * names a checked-in artifact, for others it names the command that was run. `kind` is the only
- * discriminator, so classification is declared here rather than inferred. An unrecognised kind is
- * a failure, not a skip — a silently unchecked reference is the defect this test exists to catch.
+ * Evidence entries do not all point at the same thing. Some name a file kept in the repo — a
+ * specimen captured from a real run, or a test fixture. Others name a command someone ran and
+ * read, which is not kept. Only the first sort can be checked here.
  *
- * Keys must stay in step with the `kind` enum in client-adapter.schema.json. The schema rejects a
- * kind it does not know at load time; this table catches the other direction — a kind added to the
- * enum but never classified here, which would otherwise go unchecked.
+ * `kind` is what tells them apart, so list every kind and what its reference names. Keep this in
+ * step with the `kind` enum in client-adapter.schema.json: the schema rejects a kind it does not
+ * know, but it cannot notice a kind added to its own enum and never listed here. A kind missing
+ * from this list fails the test instead of being skipped.
  */
-const EVIDENCE_REFERENCE_KIND = {
-  live_stream_probe: "path",
-  fixture: "path",
+const WHAT_THE_REFERENCE_NAMES = {
+  live_stream_probe: "file",
+  fixture: "file",
   cli_help: "command",
 };
 
-test("ADAPTER-EVIDENCE-RESOLVES: path-kind evidence is package-relative and present on disk", async () => {
+test("ADAPTER-EVIDENCE-RESOLVES: evidence naming a file names one that is there", async () => {
   const engine = await new AdapterEngine().init();
   const packageRoot = path.resolve(TEST_ROOT, "..");
-  const resolvedPaths = [];
+  const filesChecked = [];
 
   for (const profile of engine.listProfiles()) {
     const evidence = profile.verification?.evidence ?? [];
     for (const [index, entry] of evidence.entries()) {
       const where = `${profile.profile_id} evidence[${index}]`;
-      const referenceKind = EVIDENCE_REFERENCE_KIND[entry.kind];
+      const names = WHAT_THE_REFERENCE_NAMES[entry.kind];
 
       assert.ok(
-        referenceKind,
-        `${where}: unrecognised evidence kind '${entry.kind}' — classify it in EVIDENCE_REFERENCE_KIND so its reference is checked`,
+        names,
+        `${where}: evidence kind '${entry.kind}' is not listed in WHAT_THE_REFERENCE_NAMES, so its reference goes unchecked — add it`,
       );
       assert.equal(typeof entry.reference, "string", `${where}: reference must be a string`);
       assert.notEqual(entry.reference.trim(), "", `${where}: reference must not be empty`);
 
-      if (referenceKind !== "path") continue;
+      if (names !== "file") continue;
 
       assert.ok(!path.isAbsolute(entry.reference), `${where}: reference must not be absolute — ${entry.reference}`);
 
       const resolved = path.resolve(packageRoot, entry.reference);
       assert.ok(
         !path.relative(packageRoot, resolved).startsWith(".."),
-        `${where}: reference escapes the package root — ${entry.reference}`,
+        `${where}: reference points outside the package — ${entry.reference}`,
       );
-      assert.ok(existsSync(resolved), `${where}: reference does not resolve — ${entry.reference}`);
+      assert.ok(existsSync(resolved), `${where}: no file at — ${entry.reference}`);
 
-      resolvedPaths.push(`${profile.profile_id}:${entry.reference}`);
+      filesChecked.push(`${profile.profile_id}:${entry.reference}`);
     }
   }
 
-  // Non-vacuity: an empty loop would pass silently, which is the same class of defect —
-  // nothing resolves `reference` at runtime, so a dangling path stays green indefinitely.
-  assert.ok(resolvedPaths.length >= 2, `expected committed path evidence to check, saw ${resolvedPaths.length}`);
+  // Without this, a loop that ran zero times would pass and report nothing. Two adapters
+  // commit a file reference today, so fail if fewer than two were actually checked.
+  assert.ok(filesChecked.length >= 2, `expected at least 2 file references to check, checked ${filesChecked.length}`);
 });
 
 test("ADAPTER-VERSION-EXACT: version-labelled profiles reject drift", async () => {
