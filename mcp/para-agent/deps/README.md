@@ -46,4 +46,12 @@ payload here is reached through a directory junction at the package root pointin
 
 That junction is the one part of a working tree that cannot be derived from tracked files. It
 belongs in the node restore recipe; until that exists it is created by hand, and a fresh clone
-that skips it fails with `ERR_MODULE_NOT_FOUND` on the first import.
+that skips it fails with `ERR_MODULE_NOT_FOUND` on the first import. It is also easy to lose — an
+`npm install` run anywhere in the package can remove it, leaving the payload intact and
+unreachable.
+
+**There is one graph and everything reaches into it.** `deps/node_modules` is the whole package's
+Node dependency core, pinned once by `brewery/node/`. No consumer keeps its own copy under
+`{tool}/node_modules`, because what one use case needs today is usually what a later one needs too,
+and a second copy is how the two start to drift. A consumer owns the driver or adapter it writes
+against a library; it does not own the library.

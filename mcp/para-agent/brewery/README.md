@@ -27,6 +27,19 @@ same path, recipe in `brewery/{tool}/`, intermediates in `build/{tool}/`, payloa
 **A recipe holds the recipe, never the payload.** Pins, lockfiles, restore scripts, build scripts,
 checksums. First-party source stays in `src/`; the recipe only says how to compile it.
 
+**A dependency graph is pinned once for the whole package, and consumers reach into it.** There is
+one canonical npm project — `brewery/node/` — and its graph is the union of everything para-agent
+needs from the Node side. Nobody gets their own `{tool}/node_modules`.
+
+The reason is not tidiness. What arrives as a dependency for one use case is usually a dependency
+of some later thing that has not been built yet, and a second declaration is how one graph quietly
+becomes two that drift. A consumer owns its own driver or adapter code — the thin layer that uses a
+library — and does not own the library. Adding a dependency means adding it to the one recipe, not
+starting a project beside your code.
+
+Enforced by `tests/package-layout.test.js`, which fails on a second dependency declaration anywhere
+in the package and on any nested `node_modules`.
+
 **Working output goes to `build/`, never beside the source**, and every stage of one tool's work is
 scoped under that tool — `build/{tool}/...`. One tool's entire working footprint is one deletable
 directory. See [build/README.md](../build/README.md).

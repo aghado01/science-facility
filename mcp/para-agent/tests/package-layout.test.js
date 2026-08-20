@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -59,6 +59,39 @@ test("PACKAGE-LAYOUT: the brewery recipe declares pinned dependencies and no pac
       `${name} must be pinned to one exact version, not a range`,
     );
   }
+});
+
+test("PACKAGE-LAYOUT: Node dependencies are declared in exactly one place", async () => {
+  // The dependency graph is pinned once for the whole package and consumers reach into it.
+  // Nobody gets their own {tool}/node_modules: what one use case needs today is usually what
+  // some later one needs too, and a second declaration is how the graph starts to fork.
+  const skipDirectories = new Set(["node_modules", "deps", "build", ".git"]);
+  const declarations = [];
+  const nested = [];
+
+  async function walk(directory) {
+    const entries = await readdir(directory, { withFileTypes: true });
+    for (const entry of entries) {
+      const full = path.join(directory, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name === "node_modules" && directory !== PACKAGE_ROOT) nested.push(path.relative(PACKAGE_ROOT, full));
+        if (skipDirectories.has(entry.name)) continue;
+        await walk(full);
+      } else if (entry.name === "package.json") {
+        const parsed = JSON.parse(await readFile(full, "utf8"));
+        if (parsed.dependencies || parsed.devDependencies) declarations.push(path.relative(PACKAGE_ROOT, full));
+      }
+    }
+  }
+
+  await walk(PACKAGE_ROOT);
+
+  assert.deepEqual(nested, [], "a nested node_modules means something installed its own copy");
+  assert.deepEqual(
+    declarations.sort(),
+    [path.join("brewery", "node", "package.json")],
+    "every Node dependency belongs to the one canonical recipe",
+  );
 });
 
 test("PACKAGE-LAYOUT: the lock is in step with the recipe beside it", async () => {
