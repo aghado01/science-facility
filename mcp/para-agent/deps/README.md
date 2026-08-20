@@ -48,7 +48,17 @@ That junction is the one part of a working tree that cannot be derived from trac
 belongs in the node restore recipe; until that exists it is created by hand, and a fresh clone
 that skips it fails with `ERR_MODULE_NOT_FOUND` on the first import. It is also easy to lose — an
 `npm install` run anywhere in the package can remove it, leaving the payload intact and
-unreachable.
+unreachable. That is not hypothetical; it happened on 2026-08-19 and took the whole suite red.
+
+To create or restore it, from the package root:
+
+```powershell
+New-Item -ItemType Junction -Path node_modules -Target (Resolve-Path deps\node_modules)
+```
+
+A junction rather than a symlink, because it needs no elevation on Windows. `git` ignores it via
+`node_modules/**`, and `ERR_MODULE_NOT_FOUND` on a package that is plainly present in
+`deps/node_modules` is the symptom that it is missing.
 
 **A plugin is not a dependency.** A vendored MCP — `nushell_mcp`, possibly `mdnav_v2` later — is a
 plugin: a thing with its own identity, lifecycle and registration, which happens in practice to be
