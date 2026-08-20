@@ -1,0 +1,22 @@
+{
+  "name": "para-agent",
+  "version": "0.1.0",
+  "description": "MCP server exposing tmux/psmux sessions as a supervisory interface for agents driving other agents",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "bin": {
+    "para-agent": "src/index.js",
+    "para-agent-quarantine": "src/quarantine-admin.js"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "pwsh -NoProfile -ExecutionPolicy Bypass -File ./tests/run.ps1",
+    "test:live": "pwsh -NoProfile -ExecutionPolicy Bypass -File ./tests/run.ps1 -Live"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "comment": "Manifest only. Node reads `type` and `main` by walking up from each source file, so this must sit at the package root and cannot live in brewery. Dependency pins and the lockfile are the rehydration recipe and live in brewery/node/; deps/node_modules is where they deploy."
+}

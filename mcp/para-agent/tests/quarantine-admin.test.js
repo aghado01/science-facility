@@ -311,8 +311,11 @@ test("a live writable owner remains authoritative over offline reconciliation", 
 
 test("package metadata and direct entry expose the separate administrative command", async () => {
   const packageRoot = path.dirname(path.dirname(ADMIN_PATH));
+  // The manifest sits at the package root because Node reads `type` and `bin` by walking up
+  // from each source file. The lockfile is a dependency pin and lives in brewery with the
+  // package.json npm installs from.
   const manifest = JSON.parse(await fs.readFile(path.join(packageRoot, "package.json"), "utf8"));
-  const lock = JSON.parse(await fs.readFile(path.join(packageRoot, "package-lock.json"), "utf8"));
+  const lock = JSON.parse(await fs.readFile(path.join(packageRoot, "brewery", "node", "package-lock.json"), "utf8"));
   assert.equal(manifest.bin["para-agent-quarantine"], "src/quarantine-admin.js");
   assert.equal(lock.packages[""].bin["para-agent-quarantine"], "src/quarantine-admin.js");
   assert.equal(manifest.engines.node, ">=20");

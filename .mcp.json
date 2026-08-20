@@ -7,9 +7,9 @@
       ],
       "env": {
         "PSMUX_NO_WARM": "1",
-        "PARA_MUX_BIN": "./mcp/para-agent/bin/mux/tmux.exe",
-        "PARA_MUX_CONFIG_FILE": "./mcp/para-agent/bin/mux/mux.conf",
-        "PARA_NU_BIN": "./mcp/para-agent/bin/nu/nu.exe"
+        "PARA_MUX_BIN": "./mcp/para-agent/deps/bin/mux/tmux.exe",
+        "PARA_MUX_CONFIG_FILE": "./mcp/para-agent/config/mux/mux.conf",
+        "PARA_NU_BIN": "./mcp/para-agent/deps/bin/nu/nu.exe"
       }
     },
     "pwsh_exec": {

@@ -39,9 +39,9 @@ const BIN_CANDIDATES = [
 
 /** Well-known install locations checked before falling back to PATH lookup. */
 const BIN_HINTS = [
-  path.join(process.cwd(), "mcp", "para-agent", "bin", "mux"),
-  path.join(process.cwd(), "bin", "mux"),
-  path.join(PACKAGE_ROOT, "bin", "mux"),
+  path.join(process.cwd(), "mcp", "para-agent", "deps", "bin", "mux"),
+  path.join(process.cwd(), "deps", "bin", "mux"),
+  path.join(PACKAGE_ROOT, "deps", "bin", "mux"),
   process.env.PSMUX_HOME,
   process.env.PORTABLE_ROOT ? path.join(process.env.PORTABLE_ROOT, "psmux") : null,
 ].filter(Boolean);
@@ -61,12 +61,12 @@ function resolveBin() {
 export function resolveNuBin() {
   if (process.env.PARA_NU_BIN) return resolvePath(process.env.PARA_NU_BIN);
   const nuCandidates = [
-    path.join(process.cwd(), "mcp", "para-agent", "bin", "nu", "nu.exe"),
-    path.join(process.cwd(), "bin", "nu", "nu.exe"),
-    path.join(PACKAGE_ROOT, "bin", "nu", "nu.exe"),
-    path.join(process.cwd(), "mcp", "para-agent", "bin", "nu", "nu"),
-    path.join(process.cwd(), "bin", "nu", "nu"),
-    path.join(PACKAGE_ROOT, "bin", "nu", "nu"),
+    path.join(process.cwd(), "mcp", "para-agent", "deps", "bin", "nu", "nu.exe"),
+    path.join(process.cwd(), "deps", "bin", "nu", "nu.exe"),
+    path.join(PACKAGE_ROOT, "deps", "bin", "nu", "nu.exe"),
+    path.join(process.cwd(), "mcp", "para-agent", "deps", "bin", "nu", "nu"),
+    path.join(process.cwd(), "deps", "bin", "nu", "nu"),
+    path.join(PACKAGE_ROOT, "deps", "bin", "nu", "nu"),
   ];
   for (const cand of nuCandidates) {
     if (existsSync(cand)) return cand;
