@@ -1,0 +1,21 @@
+The two halves compose rather than overlap: the schema rejects a kind it doesn't know at load time (I confirmed — mutating kind to garbage throws ADAPTER_PROFILE_SCHEMA_INVALID before the test can even see it), and the table catches the opposite direction, a kind added to the enum but never classified. I noted that dependency in the comment since the two now have to move together.
+
+One thing I left alone: the test files still import via
+
+
+The correction also sharpens the schema question, because "specimen" cuts where my taxonomy was groping. The three kinds land as:
+
+live_stream_probe → a specimen — captured in the wild, kept in the repo
+fixture → not a specimen — a test input someone authored
+cli_help → not a specimen — a citation of what a command printed, not kept
+
+So the array is evidence, correctly named, holding three things that aren't the same thing. The disentangling question becomes concrete: does an adapter's verification block want one list of mixed evidence, or a list of specimens plus whatever else separately? That's answerable in your own terms without any epistemics — a specimen is checkable because it's a file that's there; the other two aren't, for different reasons.
+
+Worth noting fixture is still the loose end. It's in the enum, unused by all three adapters, and undocumented, so whether it means "authored test input" or something else is a guess on my part — including in the comment I just wrote. If it means something else, that comment is wrong and I'd want to fix it.
+
+
+The thing worth keeping in view: the binary is good. unverified ⇒ inert is what makes an unevidenced AGY genuinely undriveable instead of half-usable — that's P12 with teeth, enforced by schema rather than convention. Whatever replaces it has to preserve that, which is an argument for splitting the axis rather than adding a status that quietly weakens the guarantee.
+
+And the reason I'd hold it: it's the same shape as the reference question you flagged — one field carrying two facts, where the fixture case is what pulls them apart. Deciding them in one pass keeps the answers consistent; deciding separately risks a status split that assumes one thing about evidence and an evidence split that assumes another.
+
+The self-citation stays as a documented wart in the meantime. It's ugly but it's honest and it explains itself, which is the most a fixture can do while the field it depends on is still ambiguous.
