@@ -54,7 +54,7 @@ function Invoke-GrokThreadExport
     if ([string]::IsNullOrWhiteSpace($WorkingDir))
     {
         $WorkingDir = [System.IO.Path]::Combine(
-            $resolved.GrokHome, 'tmp', 'grok-jso-run')
+            $resolved.GrokHome, 'chat-export')
     }
 
     $run = Resolve-ChatRunDir -WorkingDir $WorkingDir -RunStamp $RunStamp

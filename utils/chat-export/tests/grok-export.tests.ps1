@@ -218,6 +218,15 @@ try
     Assert-True (-not $cleanMd.Contains('skills listed')) 'default exclude drops synthetic'
     Assert-True (-not $cleanMd.Contains('**[tool: list_dir]**')) 'default exclude drops tools'
 
+    $defaulted = Invoke-GrokThreadExport `
+        -SessionId $sessionId `
+        -GrokHome $grokHome `
+        -RunStamp '20260819_000002' `
+        -RunThrough Exchanges
+    Assert-Equal $defaulted.WorkingDir `
+        ([System.IO.Path]::GetFullPath((Join-Path $grokHome 'chat-export'))) `
+        'default intermediates land under grok-home/chat-export'
+
     $badIdThrew = $false
     try
     {

@@ -216,8 +216,10 @@ runner calls the shared `Get-JobTimestamp`.
 The default root is:
 
 ```text
-%GROK_HOME%\tmp\grok-jso-run
+%GROK_HOME%\chat-export
 ```
+
+When `GROK_HOME` is unset, that is `%USERPROFILE%\.grok\chat-export`.
 
 An explicit `MarkdownPath`, `MarkdownDir`, or `$env:JSO_EXPORT_DIR` may place
 the final deliverable outside the run directory. Raw and exchange IR artifacts
