@@ -6,7 +6,11 @@ Para-agent exists as science-facility research project but by design is meant to
 
 [build](./build) is where *intermediate* build artifacts are written when something needs to be compiled or fetched and unpacked. `./build/**` is git-ignored with `./build/README.md` ignore-negated. 
 
-[deps](./deps) is not yet implemented but it or something like it will house all compiled dependencies for the para-agent MCP including all first-party and third-party packages such as the dedicated nushell binary, node_modules, and other things later. This is where pinned dependencies in brewery are intended to be deployed once consolidation happens `./deps/**` is git-ignored with `./deps/README.md` ignore-negated. 
+[deps](./deps) houses all compiled dependencies for the para-agent MCP including all first-party and third-party packages such as the dedicated nushell binary, node_modules, and other things later. This is where pinned dependencies in brewery are deployed. `./deps/**` is git-ignored with `./deps/README.md` ignore-negated.
+
+**brewery and build are keyed by tool; deps is keyed by how the thing is consumed.** One recipe per dependency at `brewery/{tool}`, its scratch at `build/{tool}`, but the payload lands wherever its consumer expects to find it — executables together under `deps/bin/{tool}`, and the node graph at `deps/node_modules` because that is the name Node's resolver looks for. A recipe therefore names its own destination rather than deriving it from its own directory name.
+
+Two consequences worth knowing. `node_modules` at the package root is a directory junction onto `deps/node_modules`, because Node resolves bare specifiers by walking up from the importing file and will not look inside `deps/` — it is the one part of a working tree that cannot be derived from tracked files, and a clone without it fails on the first import. And `package.json` at the package root is the *manifest* only — `type`, `main`, `bin`, scripts — because Node reads those by walking up too; the dependency pins and lockfile are a rehydration recipe and live in `brewery/node/`. Same filename, two different jobs, deliberately separated.
 
 [config](./config) is where config for various tools is stored and managed, with sub-directories per config's provenance. 
 

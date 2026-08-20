@@ -17,19 +17,20 @@ tracked content under `build/`.
 **Every write is scoped under a module or process-name subfolder.** Nothing writes a bare
 `build/cache`, `build/staging`, or `build/tmp`. This directory is shared by every process that
 emits regenerable output, so an unscoped top-level folder collides with all of them and makes it
-impossible to clear one module's output without disturbing the rest.
+impossible to clear one tool's output without disturbing the rest.
 
-The first segment names a **module** or a **process**, never an output kind:
+The first segment names a **tool** or a **process**, never an output kind:
 
-- **Every stage of one module's own work belongs to that module** — fetch cache, staging, and
-  verification output sit together under `build/{module}/`, so one module's entire working
-  footprint is one deletable directory. Output kinds are the *second* segment, never the first.
-- **A process bucket is for cross-cutting output** that is not a stage of any one module's work,
-  such as test runs.
+- **Every stage of one tool's own work belongs to that tool** — fetch cache, staging, and
+  verification output sit together under `build/{tool}/`, so one tool's entire working footprint is
+  one deletable directory. Output kinds are the *second* segment, never the first.
+- **A process bucket is for cross-cutting output** that is not a stage of any one tool's work, such
+  as test runs.
 
 ```text
-build/node/npm-cache/        npm's download cache, module-scoped
-build/{module}/staging/      payload staging, pre-release into deps/{module}/
+build/node/npm-cache/        npm's download cache, tool-scoped
+build/nu/unpack/             archive extraction before release
+build/{tool}/staging/        payload staging, pre-release into deps/
 build/test-runs/{stamp}/     cross-cutting run output
 ```
 
@@ -39,10 +40,10 @@ directory declares one below this root.
 ## Nothing is delivered from here
 
 `build/` is working output only, and every path in it is disposable. A payload other parts of
-para-agent consume is **released** to `deps/{module}/` — same module scoping, but a destination
-with a real lifetime. The recipe in `brewery/{module}/` owns the hand-off: stage here, verify the
-expected payload is present, then move it into `deps/{module}/`. Never point a consumer at a path
-under `build/`.
+para-agent consume is **released** into `deps/` — `deps/bin/{tool}/` for an executable,
+`deps/node_modules/` for the node graph — a destination with a real lifetime. The recipe in
+`brewery/{tool}/` owns the hand-off: stage here, verify the expected payload is present, then move
+it into its declared destination. Never point a consumer at a path under `build/`.
 
 ## How it is enforced
 
