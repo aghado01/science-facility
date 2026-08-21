@@ -48,19 +48,25 @@ context window as the scarcest resource in the loop:
    · landed 2026-08-21. Data plane + handle plane + budget on the
    persistent engine. Carries the envelope contract (shape 4) and the
    registry mechanics.
-2. **`rg` wrapper v1** — [briefs/rg-wrapper-v1.md](briefs/rg-wrapper-v1.md)
-   · filed, not started; depends on 1. First envelope consumer (at
-   parallelism 1): pass-through query side, `--json` rows,
-   spine-on-truncation, registry storage via `jobs stash` (landed
-   2026-08-21 with the review fix; the owed amendment is paid).
-3. **Query tools on the envelope** — mdnav_v2 chunk shards, `nu-skills
+2. **`hist` / `shape` / `page` v1** — [briefs/hist-v1.md](briefs/hist-v1.md)
+   · filed. Census over `$history` and any value; the cheapest fix to
+   the console's largest blind spot (the store has no receipt surface).
+   Pure, no deps — can land in parallel with 3.
+3. **`xq` v1** — [briefs/xq-v1.md](briefs/xq-v1.md) · filed; depends
+   on 1. Execute-and-quarantine for every external: `complete` + census
+   + inline-under-cap / stash-over-cap, job-aware via `job id`. The
+   primitive rg is a special case of — build before 4.
+4. **`rg` wrapper v1** — [briefs/rg-wrapper-v1.md](briefs/rg-wrapper-v1.md)
+   · filed, not started; depends on 1 and 3. `xq` + JSON-event parse +
+   spine; `--wrapped` query side, registry storage via `jobs stash`.
+5. **Query tools on the envelope** — mdnav_v2 chunk shards, `nu-skills
    search` fan-out. First real parallelism consumers; `par emit` shipped
    with par-jobs-v1. Align the chunk shape with mdnav_v2's brief rather
    than inventing twice.
-4. **Session layer / daemon** — later. Scoped per-agent history
+6. **Session layer / daemon** — later. Scoped per-agent history
    (standard issue), identity plumbing exercised for real, jobs that
    outlive the MCP child, queueing at cap, process isolation.
-5. **para-agent visitor grant** — later. Admit this MCP to a
+7. **para-agent visitor grant** — later. Admit this MCP to a
    participant; same verbs, no new surface.
 
 ## Briefs
@@ -68,4 +74,6 @@ context window as the scarcest resource in the loop:
 | Brief | Status |
 |---|---|
 | [par-jobs-v1](briefs/par-jobs-v1.md) | landed 2026-08-21 |
-| [rg-wrapper-v1](briefs/rg-wrapper-v1.md) | filed, not started; depends on par-jobs-v1 |
+| [hist-v1](briefs/hist-v1.md) | filed, not started; no deps |
+| [xq-v1](briefs/xq-v1.md) | filed, not started; depends on par-jobs-v1 |
+| [rg-wrapper-v1](briefs/rg-wrapper-v1.md) | filed, not started; depends on par-jobs-v1, xq-v1 |

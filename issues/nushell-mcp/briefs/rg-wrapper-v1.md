@@ -3,7 +3,9 @@
 **Status:** filed, not started · **Filed:** 2026-08-20 · **Home:**
 `mcp/nushell-mcp`, Nu-native module, used only through `evaluate`.
 **Depends on:** [par-jobs-v1](par-jobs-v1.md) — this is the **first
-consumer** of its query envelope (shape 4) and of the registry-as-store.
+consumer** of its query envelope (shape 4) and of the registry-as-store;
+and [xq-v1](xq-v1.md) — rg is `xq` + JSON-event parse + spine. Build
+`xq` first; this brief's text mode is `xq`'s envelope passed through.
 **Not this brief:** a search engine, rg flag curation, mdnav chunking.
 
 Treat this file as the v1 spec. Amend; do not fork.
