@@ -14,7 +14,7 @@ def get-skill-root []: nothing -> string {
 
 # Query Nushell skill documentation and reference topics
 export def main [
-    topic?: string # Optional topic to read directly (e.g. gotchas, posix-cheatsheet, pipelines, file-io, data-analysis, advanced, parity, mcp, sessions)
+    topic?: string # Optional topic to read directly (e.g. gotchas, posix-cheatsheet, pipelines, file-io, data-analysis, advanced, parity, mcp, sessions, jobs)
 ]: nothing -> string {
     if ($topic == null or $topic == "") {
         nu-skills read "index"

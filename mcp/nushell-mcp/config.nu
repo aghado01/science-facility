@@ -23,5 +23,9 @@ $env.NU_LIB_DIRS = ($env.NU_LIB_DIRS? | default [] | append $MODULES_DIR | uniq)
 $env.NU_SKILL_DIR = $SKILLS_DIR
 
 # Preload the augmentation modules into the persistent engine state.
+# `par` freezes `$env.NU_PAR` (cores, knobs, ceiling) once via export-env;
+# `jobs` initializes `$env.JOBS`. Both die with the MCP child.
 use nu-skills *
 use nu-modules *
+use par *
+use jobs *
