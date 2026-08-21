@@ -11,11 +11,12 @@ if (Get-Command Set-PSReadLineOption -ErrorAction SilentlyContinue) {
     Set-PSReadLineOption -HistorySavePath "$PSHOME\.history\$historyFileName.txt" -HistorySaveStyle SaveIncrementally
 }
 
-# pwsh_exec root 
-$parentParentDir = $(Split-Path -Parent $parentDirPath)
-
-# test-path $parentParentDir/scripts/cli-completions.ps1
-# test-path "$parentParentDir/scripts/console-prompt.ps1"
-. "$parentParentDir/scripts/console-prompt.ps1"
-. "$parentParentDir/scripts/cli-completions.ps1"
-. "$parentParentDir/scripts/dotnet-aliases.ps1"
+if (Test-Path -LiteralPath "$PSScriptRoot/console-prompt.ps1") {
+    . "$PSScriptRoot/console-prompt.ps1"
+}
+if (Test-Path -LiteralPath "$PSScriptRoot/cli-completions.ps1") {
+    . "$PSScriptRoot/cli-completions.ps1"
+}
+if (Test-Path -LiteralPath "$PSScriptRoot/dotnet-aliases.ps1") {
+    . "$PSScriptRoot/dotnet-aliases.ps1"
+}

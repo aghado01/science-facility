@@ -13,9 +13,8 @@ RESTORE_PATH = PROJECT_ROOT / "brewery" / "uv" / "restore-uv.ps1"
 PYTHON_PIN_PATH = PROJECT_ROOT / ".python-version"
 PYPROJECT_PATH = PROJECT_ROOT / "pyproject.toml"
 LOCK_PATH = PROJECT_ROOT / "uv.lock"
-BOOTSTRAP_UV = PROJECT_ROOT / "packages" / "uv" / "uv.exe"
-RUNTIME_UV = PROJECT_ROOT / ".venv" / "Scripts" / "uv.exe"
-REGISTRATION_PATH = PROJECT_ROOT / "packages" / "registrations" / "pwsh_exec.json"
+BOOTSTRAP_UV = PROJECT_ROOT / "deps" / "bin" / "uv" / "uv.exe"
+REGISTRATION_PATH = PROJECT_ROOT / "deps" / "registrations" / "pwsh_exec.json"
 
 
 def read_toml(path: Path):
@@ -62,7 +61,7 @@ class DependencyContractTests(unittest.TestCase):
         recipe = RESTORE_PATH.read_text(encoding="utf-8")
 
         self.assertIn("$PSScriptRoot", recipe)
-        self.assertIn("packages\\uv", recipe)
+        self.assertIn("deps\\bin\\uv", recipe)
         for forbidden in (
             "D:\\aghado01",
             "science-facility",
@@ -71,8 +70,8 @@ class DependencyContractTests(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, recipe)
 
-    @unittest.skipUnless(BOOTSTRAP_UV.is_file(), "bootstrap uv is not restored")
-    def test_restored_bootstrap_matches_pin(self):
+    @unittest.skipUnless(BOOTSTRAP_UV.is_file(), "uv is not restored")
+    def test_restored_uv_matches_pin(self):
         pin = json.loads(PIN_PATH.read_text(encoding="utf-8"))
         artifact = pin["artifacts"]["windows-x64"]
 
@@ -82,11 +81,6 @@ class DependencyContractTests(unittest.TestCase):
             artifact["executable_sha256"],
         )
 
-    @unittest.skipUnless(RUNTIME_UV.is_file(), "runtime uv is not restored")
-    def test_runtime_uv_matches_pin(self):
-        expected = json.loads(PIN_PATH.read_text(encoding="utf-8"))["version"]
-        self.assertEqual(executable_uv_version(RUNTIME_UV), expected)
-
     @unittest.skipUnless(
         REGISTRATION_PATH.is_file(), "machine-local registration is not generated"
     )
@@ -94,19 +88,16 @@ class DependencyContractTests(unittest.TestCase):
         registration = json.loads(REGISTRATION_PATH.read_text(encoding="utf-8"))
         server = registration["mcpServers"]["pwsh_exec"]
 
-        self.assertEqual(Path(server["command"]), RUNTIME_UV)
-        self.assertEqual(Path(server["args"][-1]), PROJECT_ROOT / "server.py")
+        self.assertEqual(Path(server["command"]), BOOTSTRAP_UV)
         self.assertEqual(
-            server["args"][:-1],
+            server["args"],
             [
                 "run",
                 "--project",
                 PROJECT_ROOT.as_posix(),
                 "--no-cache",
                 "--locked",
-                "--no-sync",
-                "python",
-                "-B",
+                (PROJECT_ROOT / "server.py").as_posix(),
             ],
         )
 

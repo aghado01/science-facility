@@ -43,10 +43,10 @@ $breweryRoot = (Resolve-Path -LiteralPath $PSScriptRoot).Path
 $projectRoot = (Resolve-Path -LiteralPath (Join-Path $breweryRoot '..\..')).Path
 $pinPath = Join-Path $breweryRoot 'pin.json'
 $pythonPinPath = Join-Path $projectRoot '.python-version'
-$packagesRoot = Join-Path $projectRoot 'packages'
-$bootstrapRoot = Join-Path $packagesRoot 'uv'
-$bootstrapExecutable = Join-Path $bootstrapRoot 'uv.exe'
-$receiptPath = Join-Path $bootstrapRoot 'restore-receipt.json'
+$depsRoot = Join-Path $projectRoot 'deps'
+$uvBinRoot = Join-Path $depsRoot 'bin\uv'
+$uvExecutable = Join-Path $uvBinRoot 'uv.exe'
+$receiptPath = Join-Path $uvBinRoot 'restore-receipt.json'
 
 if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
     throw 'This pwsh_exec distribution currently bundles Windows PowerShell and supports Windows restoration only.'
@@ -76,9 +76,9 @@ if ($pythonVersion -notmatch '^\d+\.\d+\.\d+$') {
     throw "Invalid Python version in ${pythonPinPath}: $pythonVersion"
 }
 
-$existingVersion = Get-UvVersion -Executable $bootstrapExecutable
-$existingExecutableHash = if (Test-Path -LiteralPath $bootstrapExecutable -PathType Leaf) {
-    (Get-FileHash -LiteralPath $bootstrapExecutable -Algorithm SHA256).Hash.ToLowerInvariant()
+$existingVersion = Get-UvVersion -Executable $uvExecutable
+$existingExecutableHash = if (Test-Path -LiteralPath $uvExecutable -PathType Leaf) {
+    (Get-FileHash -LiteralPath $uvExecutable -Algorithm SHA256).Hash.ToLowerInvariant()
 }
 $restoreBootstrap = (
     $Force -or
@@ -124,16 +124,16 @@ if ($restoreBootstrap) {
             throw "Restored uv executable SHA-256 mismatch: expected $expectedExecutableHash, got $stagedExecutableHash"
         }
 
-        $expectedBootstrapRoot = [IO.Path]::GetFullPath((Join-Path $projectRoot 'packages\uv'))
-        if ([IO.Path]::GetFullPath($bootstrapRoot) -ne $expectedBootstrapRoot) {
-            throw "Refusing to replace unexpected bootstrap path: $bootstrapRoot"
+        $expectedUvBinRoot = [IO.Path]::GetFullPath((Join-Path $projectRoot 'deps\bin\uv'))
+        if ([IO.Path]::GetFullPath($uvBinRoot) -ne $expectedUvBinRoot) {
+            throw "Refusing to replace unexpected uv bin path: $uvBinRoot"
         }
 
-        if (Test-Path -LiteralPath $bootstrapRoot) {
-            Remove-Item -LiteralPath $bootstrapRoot -Recurse -Force
+        if (Test-Path -LiteralPath $uvBinRoot) {
+            Remove-Item -LiteralPath $uvBinRoot -Recurse -Force
         }
-        New-Item -ItemType Directory -Path $bootstrapRoot -Force | Out-Null
-        Copy-Item -Path (Join-Path $stagedRoot '*') -Destination $bootstrapRoot -Recurse -Force
+        New-Item -ItemType Directory -Path $uvBinRoot -Force | Out-Null
+        Copy-Item -Path (Join-Path $stagedRoot '*') -Destination $uvBinRoot -Recurse -Force
 
         [ordered]@{
             schema_version = 1
@@ -152,42 +152,30 @@ if ($restoreBootstrap) {
     }
 }
 
-$bootstrapVersion = Get-UvVersion -Executable $bootstrapExecutable
-if ($bootstrapVersion -ne $expectedVersion) {
-    throw "Bootstrap uv version mismatch: expected $expectedVersion, got $bootstrapVersion"
+$activeUvVersion = Get-UvVersion -Executable $uvExecutable
+if ($activeUvVersion -ne $expectedVersion) {
+    throw "Restored uv version mismatch: expected $expectedVersion, got $activeUvVersion"
 }
 
 Push-Location -LiteralPath $projectRoot
 try {
-    Invoke-Checked -Executable $bootstrapExecutable -Arguments @(
+    Invoke-Checked -Executable $uvExecutable -Arguments @(
         'python', 'install', $pythonVersion, '--no-bin'
     )
-    Invoke-Checked -Executable $bootstrapExecutable -Arguments @(
-        'sync', '--locked', '--managed-python', '--python', $pythonVersion
-    )
 
-    $runtimeUv = Join-Path $projectRoot '.venv\Scripts\uv.exe'
-    $runtimeVersion = Get-UvVersion -Executable $runtimeUv
-    if ($runtimeVersion -ne $expectedVersion) {
-        throw "Runtime uv version mismatch: expected $expectedVersion, got $runtimeVersion"
-    }
-
-    $registrationRoot = Join-Path $packagesRoot 'registrations'
+    $registrationRoot = Join-Path $depsRoot 'registrations'
     $registrationPath = Join-Path $registrationRoot 'pwsh_exec.json'
     New-Item -ItemType Directory -Path $registrationRoot -Force | Out-Null
     [ordered]@{
         mcpServers = [ordered]@{
             pwsh_exec = [ordered]@{
-                command = $runtimeUv.Replace('\', '/')
+                command = $uvExecutable.Replace('\', '/')
                 args = @(
                     'run'
                     '--project'
                     $projectRoot.Replace('\', '/')
                     '--no-cache'
                     '--locked'
-                    '--no-sync'
-                    'python'
-                    '-B'
                     (Join-Path $projectRoot 'server.py').Replace('\', '/')
                 )
                 env = [ordered]@{}
@@ -196,8 +184,8 @@ try {
     } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $registrationPath -Encoding utf8
 
     if (-not $SkipTests) {
-        Invoke-Checked -Executable $runtimeUv -Arguments @(
-            'run', '--no-cache', '--locked', '--no-sync',
+        Invoke-Checked -Executable $uvExecutable -Arguments @(
+            'run', '--project', $projectRoot, '--no-cache', '--locked',
             'python', '-B', '-W', 'error',
             '-m', 'unittest', 'discover', '-s', 'tests', '-v'
         )
@@ -209,9 +197,8 @@ finally {
 
 [pscustomobject]@{
     ProjectRoot = $projectRoot
-    BootstrapUv = $bootstrapExecutable
-    RuntimeUv = (Join-Path $projectRoot '.venv\Scripts\uv.exe')
-    Registration = (Join-Path $projectRoot 'packages\registrations\pwsh_exec.json')
+    UvExecutable = $uvExecutable
+    Registration = (Join-Path $projectRoot 'deps\registrations\pwsh_exec.json')
     UvVersion = $expectedVersion
     PythonVersion = $pythonVersion
 }

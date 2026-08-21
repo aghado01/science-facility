@@ -25,5 +25,6 @@ function Get-DotnetAliases {
     return $dotnetAliases
 }
 
-$script:dotnetAliases = Get-DotnetAliases
-Set-SessionAliasesScoped -Aliases $script:dotnetAliases -Scope Global
+$(Get-DotnetAliases).GetEnumerator() | ForEach-Object {
+    New-Alias -Name $_.Key -Value $_.Value -Scope Global
+}

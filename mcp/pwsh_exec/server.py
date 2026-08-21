@@ -13,7 +13,10 @@ POWERSHELL_EXECUTABLE_ENV_VAR = "MCP_POWERSHELL_EXECUTABLE"
 POWERSHELL_PROFILE_ENV_VAR = "MCP_POWERSHELL_PROFILE"
 MCP_ROOT = Path(__file__).resolve().parent
 DEFAULT_POWERSHELL_EXECUTABLE = (
-    MCP_ROOT / "bin" / "PowerShell-7.6.4-win-x64" / "pwsh.exe"
+    MCP_ROOT / "deps" / "bin" / "pwsh" / "pwsh.exe"
+)
+DEFAULT_POWERSHELL_PROFILE = (
+    MCP_ROOT / "scripts" / "pwsh" / "profile-pwsh.ps1"
 )
 
 
@@ -45,16 +48,29 @@ def _resolve_powershell_executable() -> str:
     return shutil.which("pwsh") or shutil.which("powershell") or "pwsh"
 
 
+def _bundled_powershell_profile() -> str | None:
+    if DEFAULT_POWERSHELL_PROFILE.is_file():
+        return str(DEFAULT_POWERSHELL_PROFILE)
+
+    return None
+
+
+def _resolve_powershell_profile() -> str | None:
+    configured_profile = os.environ.get(POWERSHELL_PROFILE_ENV_VAR)
+    if configured_profile is not None:
+        if configured_profile.strip():
+            return configured_profile.strip()
+        return None
+
+    return _bundled_powershell_profile()
+
+
 def _build_powershell_code(code: str) -> str:
     commands = [
         "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); "
         "$OutputEncoding = [Console]::OutputEncoding; "
-        "$__mcpPowerShellProfile = if ($env:MCP_POWERSHELL_PROFILE -and $env:MCP_POWERSHELL_PROFILE.Trim()) { "
-        f"(Resolve-Path -LiteralPath $env:{POWERSHELL_PROFILE_ENV_VAR} -ErrorAction Stop).ProviderPath "
-        "} elseif (Test-Path -LiteralPath \"$PSHOME/profile.ps1\") { "
-        "\"$PSHOME/profile.ps1\" "
-        "}; "
-        "if ($__mcpPowerShellProfile) { "
+        f"if ($env:{POWERSHELL_PROFILE_ENV_VAR} -and $env:{POWERSHELL_PROFILE_ENV_VAR}.Trim()) {{ "
+        f"$__mcpPowerShellProfile = (Resolve-Path -LiteralPath $env:{POWERSHELL_PROFILE_ENV_VAR} -ErrorAction Stop).ProviderPath; "
         "$null = . $__mcpPowerShellProfile; "
         "Remove-Variable __mcpPowerShellProfile -ErrorAction SilentlyContinue; "
         "}; "
@@ -66,7 +82,14 @@ def _build_powershell_code(code: str) -> str:
 
 def _run_powershell(code: str) -> str:
     powershell_executable = _resolve_powershell_executable()
+    powershell_profile = _resolve_powershell_profile()
     powershell_code = _build_powershell_code(code)
+
+    child_env = os.environ.copy()
+    if powershell_profile:
+        child_env[POWERSHELL_PROFILE_ENV_VAR] = powershell_profile
+    else:
+        child_env.pop(POWERSHELL_PROFILE_ENV_VAR, None)
 
     # Run the PowerShell command
     process = subprocess.Popen(
@@ -75,6 +98,7 @@ def _run_powershell(code: str) -> str:
         stderr=subprocess.PIPE,
         text=True,
         encoding="utf-8",
+        env=child_env,
     )
 
     # Get the output and error messages

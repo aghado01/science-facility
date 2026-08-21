@@ -10,7 +10,7 @@ from mcp.client.stdio import stdio_client
 import server
 
 
-RUNTIME_UV_EXECUTABLE = server.MCP_ROOT / ".venv" / "Scripts" / "uv.exe"
+RUNTIME_UV_EXECUTABLE = server.MCP_ROOT / "deps" / "bin" / "uv" / "uv.exe"
 
 
 class PowerShellExecutableTests(unittest.TestCase):
@@ -29,7 +29,7 @@ class PowerShellExecutableTests(unittest.TestCase):
         which.assert_not_called()
 
     def test_bundled_executable_has_precedence_over_path(self):
-        bundled_path = "C:/mcp/bin/PowerShell-7.6.4-win-x64/pwsh.exe"
+        bundled_path = "C:/mcp/deps/bin/pwsh/pwsh.exe"
 
         with mock.patch.dict(os.environ, {}, clear=True):
             with mock.patch(
@@ -62,37 +62,32 @@ class PowerShellExecutableTests(unittest.TestCase):
 
 
 class PowerShellProfileTests(unittest.TestCase):
-    def test_default_profile_falls_back_to_pshome_profile_when_variable_is_absent(self):
+    def test_default_profile_resolves_to_bundled_profile_when_variable_is_absent(self):
         with mock.patch.dict(os.environ, {}, clear=True):
-            code = server._build_powershell_code("Get-Date")
+            with mock.patch(
+                "server._bundled_powershell_profile",
+                return_value="C:/mcp/scripts/pwsh/profile-pwsh.ps1",
+            ):
+                profile = server._resolve_powershell_profile()
 
-        self.assertIn("Test-Path -LiteralPath \"$PSHOME/profile.ps1\"", code)
-        self.assertIn("\"$PSHOME/profile.ps1\"", code)
-        self.assertIn("$null = . $__mcpPowerShellProfile", code)
-        self.assertTrue(code.endswith("Get-Date"))
+        self.assertEqual(profile, "C:/mcp/scripts/pwsh/profile-pwsh.ps1")
 
-    def test_blank_profile_falls_back_to_pshome_profile(self):
+    def test_blank_profile_resolves_to_none(self):
         with mock.patch.dict(
             os.environ, {"MCP_POWERSHELL_PROFILE": "   "}, clear=True
         ):
-            code = server._build_powershell_code("Get-Date")
+            profile = server._resolve_powershell_profile()
 
-        self.assertIn("Test-Path -LiteralPath \"$PSHOME/profile.ps1\"", code)
-        self.assertIn("\"$PSHOME/profile.ps1\"", code)
+        self.assertIsNone(profile)
 
-    def test_configured_profile_is_resolved_literally_and_dot_sourced(self):
+    def test_configured_profile_is_resolved(self):
         profile_path = "C:/profiles/client's profile.ps1"
         with mock.patch.dict(
             os.environ, {"MCP_POWERSHELL_PROFILE": profile_path}, clear=True
         ):
-            code = server._build_powershell_code("Get-ProfileValue")
+            profile = server._resolve_powershell_profile()
 
-        self.assertIn(
-            "Resolve-Path -LiteralPath $env:MCP_POWERSHELL_PROFILE", code
-        )
-        self.assertIn("$null = . $__mcpPowerShellProfile", code)
-        self.assertNotIn(profile_path, code)
-        self.assertTrue(code.endswith("Get-ProfileValue"))
+        self.assertEqual(profile, profile_path)
 
     def test_configured_profile_is_included_in_spawned_command(self):
         process = mock.Mock()
@@ -108,8 +103,10 @@ class PowerShellProfileTests(unittest.TestCase):
                 output = server._run_powershell("Get-ProfileValue")
 
         command = popen.call_args.args[0]
+        popen_env = popen.call_args.kwargs["env"]
         self.assertEqual(command[:3], ["C:/runtime/pwsh.exe", "-NoProfile", "-Command"])
         self.assertIn("$env:MCP_POWERSHELL_PROFILE", command[3])
+        self.assertEqual(popen_env["MCP_POWERSHELL_PROFILE"], "C:/profiles/client-a.ps1")
         self.assertEqual(output, "profile-loaded\n")
 
 
@@ -117,16 +114,15 @@ class PowerShellProfileTests(unittest.TestCase):
         server.DEFAULT_POWERSHELL_EXECUTABLE.is_file(),
         "the bundled PowerShell runtime is not installed",
     )
-    def test_default_pshome_profile_is_loaded_by_bundled_powershell(self):
+    def test_default_profile_is_loaded_by_bundled_powershell(self):
         environment = {
             "MCP_POWERSHELL_EXECUTABLE": "",
-            "MCP_POWERSHELL_PROFILE": "",
         }
 
-        with mock.patch.dict(os.environ, environment, clear=False):
-            output = server._run_powershell("$env:PSModulePath")
+        with mock.patch.dict(os.environ, environment, clear=True):
+            output = server._run_powershell("$env:MCP_POWERSHELL_PROFILE")
 
-        self.assertIn("Modules", output)
+        self.assertIn("profile-pwsh.ps1", output)
 
     @unittest.skipUnless(
         server.DEFAULT_POWERSHELL_EXECUTABLE.is_file(),
@@ -139,7 +135,7 @@ class PowerShellProfileTests(unittest.TestCase):
             "MCP_POWERSHELL_PROFILE": str(profile_path),
         }
 
-        with mock.patch.dict(os.environ, environment, clear=False):
+        with mock.patch.dict(os.environ, environment, clear=True):
             output = server._run_powershell("Get-McpPowerShellProfileTestValue")
 
         self.assertEqual(output.strip(), "profile-loaded")
@@ -150,7 +146,7 @@ class PowerShellProfileTests(unittest.TestCase):
     )
     def test_bundled_powershell_version(self):
         with mock.patch.dict(
-            os.environ, {"MCP_POWERSHELL_EXECUTABLE": ""}, clear=False
+            os.environ, {"MCP_POWERSHELL_EXECUTABLE": ""}, clear=True
         ):
             output = server._run_powershell(
                 "$PSVersionTable.PSVersion.ToString()"
@@ -189,9 +185,6 @@ class PowerShellMcpIntegrationTests(unittest.TestCase):
                 str(server.MCP_ROOT),
                 "--no-cache",
                 "--locked",
-                "--no-sync",
-                "python",
-                "-B",
                 str(server.MCP_ROOT / "server.py"),
             ],
             cwd=server.MCP_ROOT.parent,
