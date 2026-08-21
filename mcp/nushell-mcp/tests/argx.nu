@@ -43,7 +43,8 @@ let results = [
     (t "unknown flags stay in _args" {
         let p = ("rg foo -C 1 --type rust" | argx parse)
         assert-eq $p._args [rg foo -C "1" --type rust] "not stolen"
-        assert-eq ($p | columns | where {|c| $c not-in [_args _pos]} | is-empty) true "no invented keys"
+        assert-eq ($p | columns | where {|c| $c not-in [_args _pos _kwargs]} | is-empty) true "no invented keys"
+        assert-eq $p._kwargs {} "no bound kwargs"
     })
     (t "known named consumes value" {
         let p = ("probe 1 2 --ef sadf extra" | argx parse)
@@ -77,6 +78,47 @@ let results = [
     (t "missing command is rest-like" {
         let p = ("nosuch --json foo" | argx parse)
         assert-eq $p._args [nosuch --json foo] "flags not consumed"
+    })
+    (t "kwargsx overlays known flags" {
+        let p = ("probe 1 2" | argx parse {ef: sadf, cd: true})
+        assert-eq $p.ef sadf "ef"
+        assert-eq $p.cd true "cd"
+        assert-eq $p._args [probe "1" "2"] "args unchanged"
+        assert-eq $p._kwargs {ef: sadf, cd: true} "_kwargs"
+        assert-eq ($p | argx kwargs) {ef: sadf, cd: true} "argx kwargs"
+    })
+    (t "kwargsx wins over the line" {
+        let p = ("probe 1 2 --ef old" | argx parse {ef: new})
+        assert-eq $p.ef new "override"
+        assert-eq $p._kwargs.ef new "kwargs"
+    })
+    (t "kwargsx unsets a switch" {
+        let p = ("probe 1 2 -c" | argx parse {cd: false})
+        assert-eq ($p.cd? | default null) null "unset"
+        assert-eq $p._kwargs {} "empty kwargs"
+    })
+    (t "kwargsx unknown keys bind, not _args" {
+        let p = ("rg foo" | argx parse {json: true, type: rust})
+        assert-eq $p._args [rg foo] "positionals"
+        assert-eq $p.json true "json"
+        assert-eq $p.type rust "type"
+        assert-eq $p._kwargs {json: true, type: rust} "kwargs"
+    })
+    (t "parse without kwargsx still has _kwargs" {
+        let p = ("probe 1 2 -g" | argx parse)
+        assert-eq $p.g true "g"
+        assert-eq $p._kwargs {g: true} "from line"
+    })
+    (t "kwargsx on empty line" {
+        let p = ("" | argx parse {json: true})
+        assert-eq $p._args [] "no argv"
+        assert-eq $p.json true "json"
+        assert-eq $p._kwargs {json: true} "kwargs"
+    })
+    (t "kwargsx short key maps to long" {
+        let p = ("probe 1 2" | argx parse {c: true})
+        assert-eq $p.cd true "mapped"
+        assert-eq ($p.c? | default null) null "no short leftover"
     })
 ]
 
