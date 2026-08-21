@@ -47,12 +47,15 @@ rg [...args]    # --wrapped; argv forwarded to ^rg
   Envelope). No flag inspection, no curation. v2 may add structured
   adapters for list/count modes.
 - Empty `rg` is forwarded empty; rg's usage error is exit 2 → envelope.
-- **Prerequisite: `rg` on the MCP child's PATH.** Verified on this host:
-  the only binary is VS Code's bundled copy; the Bash-tool `rg` is a
-  harness function a plain `nu` child cannot see. The wrapper fails
-  closed — `{ok: false, error: "rg not found on PATH"}` — and never
-  silently falls back to a bundled copy. Installing ripgrep is a
-  host-setup step, not this module's job.
+- **Prerequisite: `rg` on the MCP child's PATH — satisfied by layout,
+  not by the wrapper.** `config.nu` prepends `deps/cli/` (vendored
+  ripgrep 14.1.1, gitignored, see `deps/README.md`) to `$env.PATH`, so
+  a config-loaded child resolves `^rg` deterministically ahead of the
+  host PATH (verified 2026-08-21). The wrapper itself still just calls
+  `^rg` and fails closed — `{ok: false, error: "rg not found on PATH"}`
+  — it never hunts for or bundles a binary. (Host note: the Bash-tool
+  `rg` is a harness function; without `deps/cli` a plain `nu` child
+  saw no rg at all.)
 - Ordering of findings is rg's emission order (per-file, line ascending;
   cross-file order is rg's traversal). Not re-sorted. Pass `--sort path`
   yourself when you need run-to-run determinism.
@@ -221,7 +224,7 @@ text mode the string is inline only under cap, otherwise stashed.
   v1 returns them as text mode)
 - Parsing rg's CLI with `argx` or anything else — `--wrapped` is the
   whole query-side contract
-- Locating or bundling an `rg` binary; PATH is host setup
+- The wrapper locating or bundling an `rg` binary; PATH is `config.nu` layout (`deps/cli`)
 - Sharding rg through `par`; any throughput claim
 - Context-dump / snippet-expansion features (use `open | lines | slice`)
 - A second storage surface (`$env.RG_LAST` rejected: registry is the
