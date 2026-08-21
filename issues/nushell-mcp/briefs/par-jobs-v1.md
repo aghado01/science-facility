@@ -30,6 +30,26 @@ Agent console **is** this REPL. Do not generate PowerShell/Nu **strings** to
 eval; the agent writes pipelines. para-agent JSON-RPC is a PTY console
 (receipts/bytes), a different surface.
 
+**Design center: interactive fan-out, not batch compute.** The likely v1
+consumer is parallel *search* inside a persistent session — sharded
+keyword/glob queries, e.g. non-overlapping chunks of a large markdown
+document exposed by mdnav_v2, swept in parallel the old-fashioned way
+instead of spawning sub-agents over it. Processing a dataset through
+`jobs` is supported but secondary; big-data ergonomics are a later
+concern. Where a design call is ambiguous, favor the interactive-session
+experience.
+
+**A single `jobs spawn` with no fan-out is a design-center use, not a
+degenerate case.** `jobs spawn { cargo build | complete } --tag build` at
+parallelism 1 delivers the actual prize: the console stays responsive
+while the slow thing runs, and the payload lands in the registry instead
+of context — receipt → `inspect` → surgical `read`. Non-blocking +
+payload quarantine is the product; parallelism is a feature on top.
+Implementers must not optimize or shape the verbs in ways that assume N
+jobs. (Textual search throughput is already `rg`'s job — internally
+parallel; don't shard it through `par` for speed. `par` earns its keep on
+structural per-item predicates; `rg` finds *where*, `par` judges *what*.)
+
 ## Two modules
 
 MATLAB/vscodepilot **names** (`parfor`, `parforeach`, `parwhile`, …) are a
@@ -37,11 +57,19 @@ corpus map only. Do not export them.
 
 ### `par` — data plane
 
-Pipeline in, table out, **no handles**. One command:
+Pipeline in, table out, **no handles**. One command — the module's `main`
+(`export def main` in module `par`; `par budget` coexists as a subcommand):
 
 ```
-$in | par try {|row| ... } [--threads N] [--no-keep-order]
+$in | par {|row| ... } [--threads N] [--no-keep-order]
 ```
+
+The verb names the dispatch, not an error stance. Outcome rows
+(`ok`/`error` as columns) are the `complete` contract applied to a batch —
+structured output, not shielding. That contract is **documented, not
+encoded**: it lives in the `main` docstring (`help par`), in
+`references/jobs.md`, and via `nu-modules` inspection — never in the
+handle. Docstrings on every exported verb are part of the deliverable.
 
 - Wraps `par-each`. `--threads` is a **request** (`MaxWorkers` for this
   dispatch), not a grant.
@@ -77,15 +105,45 @@ job spawn --description $tag {
 }
 ```
 
+- The wrapper **materializes** `(do $work)`: an iterator/stream result is
+  collected to a concrete value before `job send`, so census
+  (`bytes`/`type`/`length`) is computable and the mailbox never carries a
+  lazy stream. Shaping beyond that is the closure's business, task by task
+  (a query closure returns its findings table; a processing closure returns
+  whatever it returns) — the wrapper forces a value, it does not format one.
 - Registry: `$env.JOBS` table, append-only spawn `seq` (0,1,2,…). Lookup by
   `tag` or `job_id`. Duplicate `tag` → refuse. Dies with the MCP child. No
   `%TEMP%`, no JSONL store.
+- **`def --env` everywhere state moves.** `spawn`/`collect`/`cancel` mutate
+  `$env.JOBS`; `policy` mutates `$env.NU_PAR`. A plain `def` loses the
+  write across evaluates while *appearing* to work inside one — every
+  mutating verb is `export def --env`.
+- **Mailbox tag: one module-reserved constant.** All module jobs send on a
+  single reserved int tag; identity rides in the record's `tag` field
+  (already in the wrapper). `collect` drains only that tag; user-land
+  `job send` never collides with the module.
 - Fan-out v1: two `jobs spawn` in **one** `evaluate`, later evaluate
   `collect`. No list-of-closures API unless it falls out for free.
 - `collect` **never** `job recv` without timeout. Default: drain ready
   (`0sec`) or a short bound (`5sec`). Partial = receipts for what’s done.
 - At inflight ≥ ceiling: **refuse** `{ok: false, error: "budget", budget: {...}}`.
   Do not block `evaluate` for a slot.
+
+**Registry liveness (truth under failure):**
+
+- Inflight = registry rows with `status: running`. A job that dies
+  without sending (external `job kill`, panic) must not leave a
+  `running` row forever — that starves the ceiling and bricks `spawn`
+  with permanent budget refusals.
+- Reconcile on `list`/`collect`: **drain the mailbox first, then**
+  reconcile. Vanished = absent from native `job list` **and** no pending
+  message. Mark `status: failed`, `error: "vanished"`, stamp `finished`.
+  Order matters: a completed job may leave `job list` while its message
+  still waits; drain-first keeps it from being marked dead.
+- `jobs cancel` stamps its own row at kill time: `status: cancelled`,
+  `finished`, `elapsed`. A killed job never runs the wrapper's `catch`,
+  so no message ever arrives — `collect` cannot finalize it; `cancel`
+  must.
 
 ## Result returns (context hygiene)
 
@@ -106,22 +164,22 @@ shape: the product *is* the hits, plus census. It is not N bodies. See
   `$history` entry for that `evaluate` is the receipt table only.
 - `jobs inspect` = shape, never body.
 - `jobs read` = one value (the stored payload, already ordered if it was a
-  `par try` table). Native MCP truncation applies (`NU_MCP_OUTPUT_LIMIT`,
+  `par` table). Native MCP truncation applies (`NU_MCP_OUTPUT_LIMIT`,
   currently 20kb in `.mcp.json`); full value is in `$history.N` for that
   read. Page with ordinary Nu. No `collect --inline`. Direct values: `par
   try`, one `jobs read`, or a query envelope.
 - Never `read` in a loop inside one `evaluate` over all tags. That’s
   collect-with-payloads again.
 
-**Data plane (`par try`): values, because it is a pipeline.** Hygiene is
+**Data plane (`par`): values, because it is a pipeline.** Hygiene is
 routing, not a second receipt protocol:
 
-- Small maps in the foreground (`1..20 | par try {|i| ...}`) — table is
+- Small maps in the foreground (`1..20 | par {|i| ...}`) — table is
   the result; native truncation + `$history` paging is the backstop.
-- Large maps **must** be `jobs spawn { $data | par try {|row| ...} }`,
-  then inspect/read. Corpus states this; v1 does not auto-promote `par try`
+- Large maps **must** be `jobs spawn { $data | par {|row| ...} }`,
+  then inspect/read. Corpus states this; v1 does not auto-promote `par`
   into jobs (that’s magic / daemon-shaped).
-- Do not return per-row handles from `par try`.
+- Do not return per-row handles from `par`.
 
 ## Shapes and order
 
@@ -142,9 +200,9 @@ in v1; cancel is explicit (`jobs cancel` / `job kill`). Errors are data:
 `ok: false` on that object, everyone else still runs and still appears.
 
 Timing is **census**, not payload. Cheap scalars belong on receipts and
-`par try` rows. Stacks, streams, and bodies do not.
+`par` rows. Stacks, streams, and bodies do not.
 
-### `par try` — table, one row per input, **input order**
+### `par` — table, one row per input, **input order**
 
 ```
 {index: int, ok: bool, item: any, value: any, error: string?,
@@ -159,7 +217,7 @@ Timing is **census**, not payload. Cheap scalars belong on receipts and
   holes, no dropped items, no stop-the-map.
 - Empty input → empty table.
 - `item` is the input cell (agent needs it to know *which* file failed).
-  Large `$in` therefore does not belong in a foreground `par try`.
+  Large `$in` therefore does not belong in a foreground `par`.
 - `elapsed` is per-item wall time. No `started`/`finished` on map rows
   (N timestamps for a large `$in` is noise; the job receipt carries those).
 
@@ -176,6 +234,10 @@ Timing is **census**, not payload. Cheap scalars belong on receipts and
 - `error` short (~240 chars, first line). Stacks only via `inspect`/`read`.
 - `bytes` / `type` / `length` / `finished` / `elapsed` are census (`null`
   while running). `started` is set at spawn.
+- `bytes` = NUON-serialized byte length of the stored payload, computed
+  **once at drain**. Same definition everywhere the column appears
+  (receipts, `inspect`, query envelopes). It is not row length, not
+  on-disk size, not a re-serialization per read.
 - `ok: false` + `status: failed|cancelled` is still a **row**. Collect
   includes it in `seq` order next to successes.
 - `spawn` returns one receipt (`status: running`, census null except
@@ -197,8 +259,9 @@ Timing is **census**, not payload. Cheap scalars belong on receipts and
 
 ### `jobs read` — the stored value (any)
 
-Order inside a list/table payload is whatever was stored (for `par try`,
-that is input order). `read` does not re-sort. One id only.
+Order inside a list/table payload is whatever was stored (for `par`,
+that is input order). `read` does not re-sort. One id only. `read` is a
+**peek, not a pop**: repeatable, never removes or mutates the row.
 
 ### `jobs status` — one record (not a table)
 
@@ -218,20 +281,21 @@ Knobs, cores, ceiling, inflight, policy. No job rows.
 
 ### Query / search consumers
 
-Tools built **on** `par`/`jobs` (parallel search, shard queries, fan-out
-`nu-skills search` over topics, …) should return **findings + metadata**,
-not a receipt table of workers.
+Tools built **on** `par`/`jobs` (parallel search, shard queries over
+non-overlapping mdnav_v2 chunks, fan-out `nu-skills search` over topics,
+…) are the design-center consumers. They should return **findings +
+metadata**, not a receipt table of workers.
 
 Lawful:
 
-1. Foreground: `$data | par try {|row| query $row }` — the row table
+1. Foreground: `$data | par {|row| query $row }` — the row table
    **is** findings with metadata (`index`, `ok`, `item`, `value`, `error`,
    `elapsed`). Fail-soft: a dead shard is a row, hits from others still
    present. Input order.
 2. Flatten hits inside `value` (e.g. each file returns a list of matches)
    with **deterministic concat**: by `index`, then in-list order. Do not
    concat in completion order.
-3. One background job: `jobs spawn { $data | par try {|row| query $row} }`
+3. One background job: `jobs spawn { $data | par {|row| query $row} }`
    then `jobs read` **once**. The stored payload is that findings table.
 4. Envelope (preferred for a named query tool):
 
@@ -252,9 +316,10 @@ Lawful:
 Unlawful: `collect` of many tagged queries with bodies attached; looping
 `read` over tags in one `evaluate`; stuffing stacks into findings rows.
 
-v1 engine implements `par try` (shape 1) and `jobs read` (shape 3). The
+v1 engine implements `par` (shape 1) and `jobs read` (shape 3). The
 envelope (shape 4) is the **contract for wrappers**; a tiny `par emit`
-helper may wait until the first query tool needs it. Do not invent
+helper may wait until the first query tool needs it. First consumer:
+[rg-wrapper-v1](rg-wrapper-v1.md) — notably at parallelism 1. Do not invent
 `collect --inline` to paper over (4).
 
 ## Policy and discovery
@@ -300,26 +365,67 @@ to discovered cores.
 `{cores, os, knobs..., ceiling, policy}`. Do not re-probe `sys cpu` on every
 spawn.
 
+`jobs policy` mutations are **session-scoped**: they live in `$env.NU_PAR`
+and die with the child. `policy.json` is the durable default, read once at
+startup; the module never writes it back. (A write-back would also be an
+identity-blind write — see **Persistence and identity**.)
+
 | Dispatch | ItemCount | Grant |
 |---|---|---|
-| `par try` | `$in \| length` | full resolver → `par-each --threads $grant` |
+| `par` | `$in \| length` | full resolver → `par-each --threads $grant` |
 | `jobs spawn` | inflight jobs | ceiling; refuse at cap |
 
-Native `par-each --threads` bypasses policy — corpus: use `par try`. Do not
+Native `par-each --threads` bypasses policy — corpus: use `par`. Do not
 monkey-patch the builtin.
 
 **Nested oversubscribe:** enforce at REPL dispatch only. A spawned closure
-that itself calls `par try` can oversubscribe; document it. No `$env` mutex
+that itself calls `par` can oversubscribe; document it. No `$env` mutex
 from job threads in v1.
 
 `InitThreads` (colonel bootstrap cap) is **not** this object. Revisit only if
 discovery probes go parallel.
 
+## Persistence and identity
+
+v1 persists **nothing**: registry and `$history` are in-engine and die
+with the MCP child. That is scoping by construction — each agent's
+console is its own process; a joint session cannot cross-pollute.
+
+Layer-wide doctrine for whenever persistence arrives (optional registry
+dumps, ledgers, console histories, daemon stores) — scribed here until a
+better home exists:
+
+- **No generic filenames.** Any store the MCP writes carries identity in
+  the path: `<store>-<session-id>[-<agent-id>].<ext>`. A generic file in
+  a joint session means silent overwrites and lost identity. (Pattern:
+  PowerShell history routing — one history file per agent identifier.)
+- Session id and agent id are **two axes**: pid is free but dies with the
+  child; a launcher-passed id (e.g. `NU_MCP_SESSION_ID`) outlives
+  restarts; histories are per-agent even inside a shared session.
+- **Identity is routed by the caller.** The launching surface
+  (`.mcp.json`, para-agent, a hand-run `nu --mcp`) knows who it is
+  spawning for and injects identity at spawn. The MCP never self-derives
+  or guesses identity. This is the one deliberate extension to
+  config.nu's launcher contract: `--config` **plus identity**; layout
+  stays config.nu's alone.
+- **Session history is standard issue.** A persistent session ships with
+  scoped history persistence on by default — scoping is how the standard
+  feature works, not the price of an opt-in (PSReadLine precedent:
+  history is equipment, not an accessory). Default-on never means
+  identity-blind; a generic ambient history file stays banned.
+- Other historical stores (registry dumps, ledgers) remain **opt-in**.
+- Identity scoping is a **write** rule. Shared reads stay lawful
+  (`policy.json` is layer-wide, read-only).
+
+Scoped session history's home is the **session layer**, not this brief's
+deliverable — candidate for its own brief when daemon/session work
+starts. v1 of `par`/`jobs` still persists nothing.
+
 ## Tree
 
 ```
 mcp/nushell-mcp/modules/par/
-  mod.nu              # par try, par budget, host discovery
+  mod.nu              # par, par budget, host discovery
   policy.json         # knobs
 mcp/nushell-mcp/modules/jobs/
   mod.nu              # spawn list collect inspect read cancel status policy
@@ -343,13 +449,13 @@ Budget table (cores=16, reserved=2, min_items=4):
 
 - explicit 32 → clamp 16 + warning
 - explicit 1, items 200 → 1
-- `par try` with one failing item: both rows present, `ok` mixed, `index`
-  0..n-1 in order (`[3,1,2] | par try {|x| if $x == 1 { error make {msg: 'x'} } else { $x }}` →
+- `par` with one failing item: both rows present, `ok` mixed, `index`
+  0..n-1 in order (`[3,1,2] | par {|x| if $x == 1 { error make {msg: 'x'} } else { $x }}` →
   index 0,1,2 with middle `ok: false`); later items still have `value`
 - two jobs, first errors: `collect` has **both** receipts in `seq` order;
   `ok` mixed; the success is `read`able; the failure has `finished`/`elapsed`
   and short `error`; sibling was not cancelled
-- `par try` order matches input even when work times differ (sleep in the
+- `par` order matches input even when work times differ (sleep in the
   first item; still index 0 first)
 - two tagged `jobs spawn` (slow first, fast second), `collect` → two-row
   **receipt** table in **seq order** (slow tag still row 0), no `output`
@@ -362,11 +468,23 @@ Budget table (cores=16, reserved=2, min_items=4):
 - query envelope over cap: `truncated: true`, no `findings`, census present
 - `collect --timeout 0sec` does not hang
 - `jobs spawn` × (ceiling+1) in one eval: last row budget-fail; inflight ≤ ceiling
-- cancel then list
+- cancel then list: row `cancelled`, `finished`/`elapsed` stamped by
+  `cancel` itself; inflight decremented; a later `collect` includes the
+  row without touching it
+- out-of-band `job kill`, then `jobs list`: row reconciled to `failed` /
+  `error: "vanished"`, `finished` stamped; a subsequent `spawn` is not
+  budget-refused
+- completed-but-undrained job absent from native `job list`: `list`
+  reconciliation does **not** mark it vanished (message still pending);
+  `collect` finalizes it `completed`
+- `jobs read` twice on the same tag returns the same value (peek, not
+  pop); registry row unchanged
+- registry survives across two `evaluate`s (`spawn` in one, `list` in
+  the next) — the `def --env` check
 
 ## Exit gate
 
-Three `evaluate`s: `jobs spawn { 1..8 | par try {|i| $i * $i} } --tag sq` →
+Three `evaluate`s: `jobs spawn { 1..8 | par {|i| $i * $i} } --tag sq` →
 receipt; `jobs collect` → receipt with `ok`/`bytes`/`type`, **no values**;
 `jobs read sq` → the table (or `$history` page). No `job send`/`recv`, no
 signal files, no MATLAB names. `jobs status` shows cores + knobs. Inflight
@@ -387,7 +505,7 @@ never exceeds ceiling.
 - Returning collect/list in completion or mailbox order
 - Open receipt shapes (leaking raw `job list` columns)
 - Fail-fast / cancel-siblings-on-error
-- Per-item `started`/`finished` on `par try` rows
+- Per-item `started`/`finished` on `par` rows
 
 ---
 
