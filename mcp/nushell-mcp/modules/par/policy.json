@@ -1,0 +1,6 @@
+{
+  "max_workers": null,
+  "reserved_cores": 2,
+  "min_items_per_worker": 4,
+  "max_inline_bytes": null
+}
