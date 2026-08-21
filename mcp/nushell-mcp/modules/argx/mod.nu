@@ -1,8 +1,6 @@
 # argx — tokenize / parse a command line against a Nu command signature.
 # Starting point: nu_scripts modules/argx. Occupies `argx parse` (`use argx`),
 # not builtin `parse` unless glob-imported.
-# Optional kwargsx overlay: `"rg foo" | argx parse {json: true}`. `_kwargs` is
-# the closed keyword-arg record; `argx kwargs` projects it.
 
 # Signature facts for a loaded command. Unknown / missing commands → empty lists
 # (every flag then stays positional; see `parse`).
@@ -151,73 +149,24 @@ def resolve-key [raw: string, sign: record] {
     {key: $mapped, val: $parts.val, raw: $raw}
 }
 
-def bind-pos [pos: list, sign: record] {
-    let npos = ($sign.positional | length)
-    let p = (if $npos < 1 { [] } else { $pos | skip 1 | take $npos })
-    let rest = ($pos | skip (1 + $npos))
-    mut rec = (
-        $p | enumerate
-        | reduce -f {} {|it, acc|
-            $acc | upsert ($sign.positional | get $it.index) $it.item
-        }
-    )
-    if ($sign.rest | length) > 0 {
-        $rec = ($rec | upsert $sign.rest.0 $rest)
-    }
-    $rec
-}
-
-def kwargs-of [opt: record] {
-    let keys = ($opt | columns | where {|c| $c not-in [_args _pos _kwargs]})
-    $keys | reduce -f {} {|c, acc| $acc | upsert $c ($opt | get $c)}
-}
-
-def map-key [k: string, sign: record] {
-    if $k in $sign.name { $sign.name | get $k } else { $k }
-}
-
-# Overlay a kwargs record. Known keys bind (kwargs win). Unknown keys bind
-# too — they are unambiguously keyword args, not tokens. Keys starting with
-# `_` are ignored. `false` on a switch unsets it.
-def apply-kwargsx [opt: record, kwargsx: record, sign: record] {
-    mut opt = $opt
-    let keys = ($kwargsx | columns | where {|k| not ($k | str starts-with '_')})
-    for k in $keys {
-        let v = ($kwargsx | get $k)
-        let mapped = (map-key $k $sign)
-        if $mapped in $sign.switch or ($v | describe) == 'bool' {
-            if $v == true {
-                $opt = ($opt | upsert $mapped true)
-            } else if $v == false {
-                if $mapped in ($opt | columns) {
-                    $opt = ($opt | reject $mapped)
-                }
-            } else {
-                $opt = ($opt | upsert $mapped $v)
-            }
-        } else {
-            $opt = ($opt | upsert $mapped $v)
-        }
-    }
-    $opt
-}
-
-def parse-line [line: string] {
-    let token = ($line | token)
+# Parse tokens against `get-sign` of argv[0].
+# Known switches/named flags bind; unknown flags stay in `_args` (they do not
+# consume the next token). `--` ends flag parsing. `--flag=value` splits.
+export def parse [] {
+    let token = ($in | token)
     if ($token | is-empty) {
-        return {
-            opt: {_args: [], _pos: {}}
-            sign: {switch: [], name: {}, named: [], positional: [], rest: []}
-        }
+        return {_args: [], _pos: {}}
     }
     let sign = (get-sign $token.0)
     mut sw = ''
-    mut pos = []
+    mut pos = []          # `_args`: argv[0], positionals, and unknown flags (unconsumed)
+    mut bindable = []     # positional candidates only — unknown flags never bind to `_pos`
     mut opt = {}
     mut rest_only = false
     for c in $token {
         if $rest_only {
             $pos ++= [$c]
+            $bindable ++= [$c]
             continue
         }
         if $c == '--' {
@@ -244,32 +193,21 @@ def parse-line [line: string] {
             }
         } else {
             $pos ++= [$c]
+            $bindable ++= [$c]
         }
     }
-    $opt = ($opt | upsert _args $pos | upsert _pos (bind-pos $pos $sign))
-    {opt: $opt, sign: $sign}
-}
-
-# Parse tokens against `get-sign` of argv[0].
-# Known switches/named flags bind; unknown flags stay in `_args` (they do not
-# consume the next token). `--` ends flag parsing. `--flag=value` splits.
-# Optional `kwargsx` overlays keyword args (wins). Unambiguously kwargs even
-# when the command has no signature. Result includes `_kwargs` (flags only).
-export def parse [
-    kwargsx: record = {}                    # Optional kwargs overlay; wins over the line
-] {
-    let line = ($in | default "" | into string)
-    let parsed = (parse-line $line)
-    mut opt = (apply-kwargsx $parsed.opt $kwargsx $parsed.sign)
-    $opt | upsert _kwargs (kwargs-of $opt)
-}
-
-# Project the keyword-arg record (no `_args` / `_pos`).
-export def kwargs [] {
-    let rec = $in
-    if '_kwargs' in ($rec | columns) {
-        $rec._kwargs
-    } else {
-        kwargs-of $rec
+    $opt._args = $pos
+    let npos = ($sign.positional | length)
+    let p = (if $npos < 1 { [] } else { $bindable | skip 1 | take $npos })
+    let rest = ($bindable | skip (1 + $npos))
+    $opt._pos = (
+        $p | enumerate
+        | reduce -f {} {|it, acc|
+            $acc | upsert ($sign.positional | get $it.index) $it.item
+        }
+    )
+    if ($sign.rest | length) > 0 {
+        $opt._pos = ($opt._pos | upsert $sign.rest.0 $rest)
     }
+    $opt
 }
