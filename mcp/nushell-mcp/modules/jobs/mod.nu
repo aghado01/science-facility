@@ -115,9 +115,9 @@ def --env jobs-drain [] {
     }
 }
 
-def --env jobs-reconcile [] {
+# `ids` is a snapshot of native `job list` taken BEFORE the last drain (see jobs-harvest).
+def --env jobs-reconcile [ids: list<int>] {
     if ($env.JOBS? == null) or ($env.JOBS | is-empty) { return }
-    let ids = (jobs-live-ids)
     let now = (date now)
     $env.JOBS = (
         $env.JOBS | each {|row|
@@ -134,7 +134,11 @@ def --env jobs-reconcile [] {
     )
 }
 
-# Drain mailbox first, then mark vanished. Order keeps completed-but-undrained jobs alive.
+# Liveness order: snapshot `job list` BEFORE the final drain, then drain, then reconcile
+# against the snapshot. A job absent from the snapshot has either already sent (its
+# message precedes its exit, so the drain applies it and it is no longer `running`) or
+# is truly gone. Snapshotting AFTER the drain leaves a window where a job that sent and
+# exited between the two is falsely marked vanished and its message is later dropped.
 def --env jobs-harvest [timeout: duration = 0sec] {
     jobs-drain
     if $timeout > 0sec {
@@ -149,8 +153,9 @@ def --env jobs-harvest [timeout: duration = 0sec] {
             jobs-drain
         }
     }
+    let ids = (jobs-live-ids)
     jobs-drain
-    jobs-reconcile
+    jobs-reconcile $ids
 }
 
 def --env jobs-require-row [key] {
@@ -278,6 +283,60 @@ export def --env "jobs read" [
         error make {msg: $"jobs: '($key)' still running"}
     }
     $row.output
+}
+
+# Store a value in the registry as a completed-on-arrival row (no native job; `job_id: null`).
+# Returns the receipt. The value is then `inspect`/`read`-able like any job payload.
+# This is the quarantine primitive for query wrappers; `jobs emit` is built on it.
+export def --env "jobs stash" [
+    --tag: string                           # Unique session tag; default `stash:<seq>`
+]: any -> record {
+    let payload = $in
+    jobs-harvest 0sec
+    let seq = (jobs-next-seq)
+    let tag = (if $tag != null { $tag } else { $"stash:($seq)" })
+    if ($env.JOBS? != null) and (not ($env.JOBS | is-empty)) {
+        if not ($env.JOBS | where tag == $tag | is-empty) {
+            return {ok: false, error: "duplicate tag", tag: $tag}
+        }
+    }
+    let now = (date now)
+    let census = (jobs-census $payload)
+    let row = {
+        seq: $seq
+        tag: $tag
+        job_id: null
+        ok: true
+        status: "completed"
+        bytes: $census.bytes
+        type: $census.type
+        length: $census.length
+        error: null
+        started: $now
+        finished: $now
+        elapsed: 0sec
+        output: $payload
+    }
+    $env.JOBS = ($env.JOBS | default [] | append $row)
+    jobs-project $row
+}
+
+# Query envelope with quarantine: `par emit`, plus — when truncated — the full findings
+# table is stashed under `tag` so `jobs read <tag>` retrieves it. Envelope gains `tag`
+# only when something was stored. Foreground `par emit` alone is lossy over cap.
+export def --env "jobs emit" [
+    --tag: string                           # Registry tag for the stored findings; default `emit:<seq>`
+]: any -> record {
+    jobs-require-par
+    let findings = $in
+    let envelope = ($findings | par emit)
+    if not $envelope.truncated { return $envelope }
+    let tag = (if $tag != null { $tag } else { $"emit:(jobs-next-seq)" })
+    let receipt = ($findings | jobs stash --tag $tag)
+    if ($receipt.ok? == false) and ($receipt.error? == "duplicate tag") {
+        return ($envelope | insert error "duplicate tag" | insert tag $tag)
+    }
+    $envelope | insert tag $tag
 }
 
 # Kill a running job and stamp the row. A killed job never sends; collect must not wait on it.

@@ -51,8 +51,8 @@ context window as the scarcest resource in the loop:
 2. **`rg` wrapper v1** — [briefs/rg-wrapper-v1.md](briefs/rg-wrapper-v1.md)
    · filed, not started; depends on 1. First envelope consumer (at
    parallelism 1): pass-through query side, `--json` rows,
-   spine-on-truncation, registry storage. Owes par-jobs-v1 its
-   completed-on-arrival registry amendment.
+   spine-on-truncation, registry storage via `jobs stash` (landed
+   2026-08-21 with the review fix; the owed amendment is paid).
 3. **Query tools on the envelope** — mdnav_v2 chunk shards, `nu-skills
    search` fan-out. First real parallelism consumers; `par emit` shipped
    with par-jobs-v1. Align the chunk shape with mdnav_v2's brief rather

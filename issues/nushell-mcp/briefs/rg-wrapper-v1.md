@@ -79,15 +79,16 @@ rg <pattern> [paths...] [...rest]    # ...rest forwarded verbatim to ^rg
 
 ## Storage and drill-in
 
-Over-cap findings are **stored, not dropped**: the wrapper writes the
-full table into the jobs registry as a completed-on-arrival row, tag
-`rg:<seq>` (`status: completed`, census set, `job_id: null`). One
+Over-cap findings are **stored, not dropped**: the wrapper pipes the
+full table through `jobs stash --tag rg:<seq>` — a completed-on-arrival
+registry row (`status: completed`, census set, `job_id: null`). One
 retrieval surface for the whole console — `jobs list` shows it,
 `jobs inspect rg:0` gives shape, `jobs read rg:0` returns the table.
 
-> Amendment owed to par-jobs-v1: registry admits completed-on-arrival
-> rows from query tools; receipt `job_id` becomes `int?`. Scribe there
-> when implementing.
+`jobs stash` / `jobs emit` landed in par-jobs-v1 on 2026-08-21 (the
+registry amendment this brief owed is paid). The wrapper uses `stash`
+directly rather than `emit`, because its envelope carries `n_files`,
+`spine`, and `args` beyond the generic `par emit` shape.
 
 v1 storage is in-engine only. If registry contents are ever spilled to
 disk, the filename carries session/agent identity — see par-jobs-v1

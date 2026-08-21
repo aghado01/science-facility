@@ -38,7 +38,7 @@ Row shape, input order:
 
 `par budget <items> [--threads] [--cores] …` is pure (testable). Returns `{grant, ceiling, cores, graded, clamped, warning}`.
 
-`par emit` wraps a findings table in the query envelope (below). Built for wrappers.
+`par emit` wraps a findings table in the query envelope (below). Built for wrappers. Over cap it omits `findings` and stores nothing — in the foreground prefer `jobs emit`, which stashes the full table under a tag you can `jobs read`.
 
 ## `jobs` — handle plane (receipts until one `read`)
 
@@ -52,6 +52,8 @@ Row shape, input order:
 | `jobs cancel <id>` | `{job_id, cancelled}` |
 | `jobs status` | knobs, cores, ceiling, inflight, policy |
 | `jobs policy --max-workers N …` | mutate session knobs; still clamped |
+| `$v \| jobs stash [--tag t]` | store any value as a completed-on-arrival row (`job_id: null`); receipt back, `read` later |
+| `$findings \| jobs emit [--tag t]` | `par emit` + stash when truncated; envelope gains `tag` only if stored |
 
 Receipt (no `output` column):
 

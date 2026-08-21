@@ -284,6 +284,60 @@ let results = [
         assert-true ($s.inflight != null) "inflight"
         assert-true ($s.policy != null) "policy"
     })
+    (t "finished jobs never marked vanished (stress)" {
+        # Jobs that send then exit while harvest is running must never be `vanished`.
+        # Snapshot-before-drain ordering is what keeps this true; hammer `list` while they land.
+        let n = 10
+        for i in 0..<$n {
+            let ms = (($i * 7) mod 50)
+            let _ = (jobs spawn { sleep ($ms * 1ms); $i } --tag $"st($i)")
+        }
+        let t0 = (date now)
+        loop {
+            let l = (jobs list)
+            if ($l | where status == "running" | is-empty) { break }
+            if ((date now) - $t0) > 5sec { error make {msg: "stress jobs did not finish"} }
+        }
+        let l = (jobs list)
+        assert-eq ($l | length) $n "all rows"
+        assert-true ($l | where error == "vanished" | is-empty) "none vanished"
+        assert-true ($l | where status != "completed" | is-empty) "all completed"
+        for i in 0..<$n {
+            assert-eq (jobs read $"st($i)") $i $"payload st($i)"
+        }
+    })
+    (t "jobs stash completed-on-arrival" {
+        let r = ([1 2 3] | jobs stash --tag s)
+        assert-eq $r.status "completed" "status"
+        assert-eq $r.job_id null "no native job"
+        assert-true ($r.bytes > 0) "bytes"
+        assert-eq $r.length 3 "length"
+        assert-true ("output" not-in ($r | columns)) "receipt has no body"
+        assert-eq (jobs read s) [1 2 3] "readable"
+        assert-true ("output" not-in (jobs inspect s | columns)) "inspect no body"
+        assert-eq (jobs collect --timeout 0sec | length) 1 "collect includes it"
+        assert-eq (jobs status | get inflight) 0 "not inflight"
+        let dup = ([9] | jobs stash --tag s)
+        assert-eq $dup.error "duplicate tag" "duplicate refused"
+        let auto = ("x" | jobs stash)
+        assert-eq $auto.tag "stash:1" "auto tag uses seq"
+    })
+    (t "jobs emit quarantines over cap" {
+        let rows = (1..40 | par {|i| $i })
+        $env.NU_PAR = ($env.NU_PAR | upsert max_inline_bytes 50)
+        let e = ($rows | jobs emit --tag q)
+        $env.NU_PAR = ($env.NU_PAR | upsert max_inline_bytes null)
+        assert-eq $e.truncated true "truncated"
+        assert-true ("findings" not-in ($e | columns)) "no findings inline"
+        assert-eq $e.tag "q" "tag on envelope"
+        assert-eq (jobs read q) $rows "full findings retrievable"
+        assert-eq (jobs list | get 0.status) "completed" "registry row"
+        let small = ([{a: 1}] | jobs emit --tag small)
+        assert-eq $small.truncated false "under cap"
+        assert-true ("findings" in ($small | columns)) "findings inline"
+        assert-true ("tag" not-in ($small | columns)) "no tag when nothing stored"
+        assert-eq (jobs list | length) 1 "nothing stashed under cap"
+    })
     (t "exit-gate spawn collect read" {
         let r = (jobs spawn { 1..8 | par {|i| $i * $i } } --tag sq)
         assert-eq $r.status "running" "receipt running"

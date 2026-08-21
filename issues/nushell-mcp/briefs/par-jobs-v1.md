@@ -95,6 +95,8 @@ vscodepilot TS API as Nu verbs. Hide mailbox protocol.
 | `jobs cancel <id>` | `{job_id, cancelled: bool}` |
 | `jobs status` | record: knobs, cores, ceiling, inflight, policy |
 | `jobs policy ...` | mutate sticky knobs; still clamped |
+| `$v \| jobs stash [--tag t]` | store a value as a **completed-on-arrival** row (`job_id: null`, default tag `stash:<seq>`); returns receipt. The quarantine primitive for query wrappers |
+| `$findings \| jobs emit [--tag t]` | `par emit`; when `truncated`, stashes the full table under `tag` (default `emit:<seq>`) and adds `tag` to the envelope. Foreground `par emit` alone is lossy over cap |
 
 Spawn **wraps** the closure (this replaces signal files):
 
@@ -135,11 +137,15 @@ job spawn --description $tag {
   without sending (external `job kill`, panic) must not leave a
   `running` row forever — that starves the ceiling and bricks `spawn`
   with permanent budget refusals.
-- Reconcile on `list`/`collect`: **drain the mailbox first, then**
-  reconcile. Vanished = absent from native `job list` **and** no pending
-  message. Mark `status: failed`, `error: "vanished"`, stamp `finished`.
-  Order matters: a completed job may leave `job list` while its message
-  still waits; drain-first keeps it from being marked dead.
+- Reconcile on `list`/`collect` in this order: **snapshot native
+  `job list`, then drain the mailbox, then** mark `running` rows absent
+  from the *snapshot* as vanished (`status: failed`, `error: "vanished"`,
+  stamp `finished`). A job absent from the snapshot has either already
+  sent (its message precedes its exit, so the drain applies it and it is
+  no longer `running`) or is truly gone. Snapshotting *after* the drain
+  leaves a window — a job that sends and exits between the two is falsely
+  marked vanished and its message is later dropped. (Corrected
+  2026-08-21; the first scribe said only "drain first".)
 - `jobs cancel` stamps its own row at kill time: `status: cancelled`,
   `finished`, `elapsed`. A killed job never runs the wrapper's `catch`,
   so no message ever arrives — `collect` cannot finalize it; `cancel`
@@ -224,12 +230,16 @@ Timing is **census**, not payload. Cheap scalars belong on receipts and
 ### Job receipt — `spawn` (record) / `list` / `collect` (table)
 
 ```
-{seq: int, tag: string, job_id: int, ok: bool, status: string,
+{seq: int, tag: string, job_id: int?, ok: bool, status: string,
  bytes: int?, type: string?, length: int?, error: string?,
  started: datetime, finished: datetime?, elapsed: duration?}
 ```
 
 - No `output` column.
+- `job_id` is `null` for completed-on-arrival rows (`jobs stash` /
+  `jobs emit`): the registry admits stored values from query tools, not
+  only native jobs. They are never `running`, never inflight, and appear
+  in `list`/`collect` like any finished row.
 - `seq` is spawn order (0,1,2,…), assigned on `spawn`, never reused.
 - `error` short (~240 chars, first line). Stacks only via `inspect`/`read`.
 - `bytes` / `type` / `length` / `finished` / `elapsed` are census (`null`
@@ -481,6 +491,15 @@ Budget table (cores=16, reserved=2, min_items=4):
   pop); registry row unchanged
 - registry survives across two `evaluate`s (`spawn` in one, `list` in
   the next) — the `def --env` check
+- stress: N short jobs landing while `list` is hammered — none ever
+  `vanished`, all `completed`, every payload readable (snapshot-before-
+  drain ordering)
+- `jobs stash`: completed-on-arrival receipt (`job_id: null`, census
+  set, no body), readable, in `collect`, not inflight; duplicate tag
+  refused; auto tag `stash:<seq>`
+- `jobs emit` over cap: `truncated: true`, no `findings`, `tag` present,
+  `jobs read <tag>` returns the full table; under cap: findings inline,
+  no `tag`, nothing stashed
 
 ## Exit gate
 
@@ -522,3 +541,4 @@ never exceeds ceiling.
   - `jobs policy` flags: `--max-workers`, `--reserved-cores`, `--min-items-per-worker`, `--max-inline-bytes`.
   - MCP NUON shows a 1-row table as a record; internally `list`/`collect` are tables.
 - Not this brief (unchanged): session daemon, extra MCP tools, para-agent mux, `PARA_NU_BIN`.
+- 2026-08-21 review fix: (1) reconcile race — live-id snapshot now taken **before** the final drain (spec corrected in Registry liveness); (2) foreground `par emit` was lossy over cap — added `jobs stash` (completed-on-arrival rows, `job_id: null`) and `jobs emit` (envelope + stash when truncated, `tag` on envelope). Tests 25/25 (`stress never-vanished`, `stash`, `emit over cap`). This pays rg-wrapper-v1's owed registry amendment.
