@@ -45,7 +45,7 @@ context window as the scarcest resource in the loop:
 ## Sequence
 
 1. **`par` / `jobs` v1** — [briefs/par-jobs-v1.md](briefs/par-jobs-v1.md)
-   · filed, not started. Data plane + handle plane + budget on the
+   · landed 2026-08-21. Data plane + handle plane + budget on the
    persistent engine. Carries the envelope contract (shape 4) and the
    registry mechanics.
 2. **`rg` wrapper v1** — [briefs/rg-wrapper-v1.md](briefs/rg-wrapper-v1.md)
@@ -54,9 +54,9 @@ context window as the scarcest resource in the loop:
    spine-on-truncation, registry storage. Owes par-jobs-v1 its
    completed-on-arrival registry amendment.
 3. **Query tools on the envelope** — mdnav_v2 chunk shards, `nu-skills
-   search` fan-out. First real parallelism consumers; `par emit` gets
-   built when the first of these needs it. Align the chunk shape with
-   mdnav_v2's brief rather than inventing twice.
+   search` fan-out. First real parallelism consumers; `par emit` shipped
+   with par-jobs-v1. Align the chunk shape with mdnav_v2's brief rather
+   than inventing twice.
 4. **Session layer / daemon** — later. Scoped per-agent history
    (standard issue), identity plumbing exercised for real, jobs that
    outlive the MCP child, queueing at cap, process isolation.
@@ -67,5 +67,5 @@ context window as the scarcest resource in the loop:
 
 | Brief | Status |
 |---|---|
-| [par-jobs-v1](briefs/par-jobs-v1.md) | filed, not started |
+| [par-jobs-v1](briefs/par-jobs-v1.md) | landed 2026-08-21 |
 | [rg-wrapper-v1](briefs/rg-wrapper-v1.md) | filed, not started; depends on par-jobs-v1 |

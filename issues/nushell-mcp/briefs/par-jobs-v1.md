@@ -1,6 +1,6 @@
 # `par` / `jobs` v1 — agent parallelism in nushell-mcp
 
-**Status:** filed, not started · **Filed:** 2026-08-21 · **Home:**
+**Status:** landed · **Filed:** 2026-08-21 · **Landed:** 2026-08-21 · **Home:**
 `mcp/nushell-mcp`, Nu-native modules, used only through `evaluate`.
 **Prior art (shape, not code):** vscodepilot `parallel-tools.ts` job
 lifecycle; colonel `Resolve-WorkerBudget` + sticky knobs.
@@ -511,4 +511,14 @@ never exceeds ceiling.
 
 ## Follow-up report
 
-_Chip or implementer: append outcome, tests run, deviations from this spec._
+- Landed 2026-08-21. Tree as spec: `modules/par/{mod.nu,policy.json}`, `modules/jobs/mod.nu`, `references/jobs.md`, `config.nu` preloads both.
+- Child tests: `nu -n mcp/nushell-mcp/tests/par-jobs-v1.nu` — 22/22 (budget table + clamp, fail-soft, keep-order, mixed-error collect, seq-not-completion, read quarantine, inspect, flatten-by-index, envelope over cap, collect 0sec, ceiling+1, cancel stamp, vanished, undrained-not-vanished, peek, `--env` spawn/list, duplicate tag, status, exit-gate).
+- MCP exit gate (persistent `evaluate`): `jobs spawn { 1..8 | par {|i| $i * $i} } --tag sq` → running receipt; `jobs collect` → completed receipt `ok`/`bytes`/`type`, no values; `jobs read sq` → 8-row squares table; `jobs status` → cores=18, reserved=2, ceiling=16, inflight=0. Registry survived spawn→collect across evaluates (`def --env`).
+- Deviations / spec fills:
+  - `par emit` shipped (test list required the envelope; brief said it may wait).
+  - Mailbox tag `0x4A4F4253`. `collect` default timeout `5sec`.
+  - Duplicate tag → `{ok: false, error: "duplicate tag", tag}` (not a job row).
+  - Receipts use the closed column set (native `job list` fields do not leak).
+  - `jobs policy` flags: `--max-workers`, `--reserved-cores`, `--min-items-per-worker`, `--max-inline-bytes`.
+  - MCP NUON shows a 1-row table as a record; internally `list`/`collect` are tables.
+- Not this brief (unchanged): session daemon, extra MCP tools, para-agent mux, `PARA_NU_BIN`.
