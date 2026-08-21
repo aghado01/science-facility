@@ -20,18 +20,27 @@ Treat this file as the v1 spec. Amend; do not fork.
 
 ## Command
 
-Module `rg`, `export def main` — shadows the external; `^rg` is the
-untouched escape hatch and stays documented.
+Module `rg`, `export def --wrapped main [...args]`. Occupies the name;
+`^rg` is the untouched escape hatch and stays documented.
+
+The wrapper does **not** parse rg's CLI. A required-positional
+`pattern` was the starting sketch — Nushell would steal `-C`, `--type`,
+`-e`, `-f`, and anything before the pattern. Rejected.
 
 ```
-rg <pattern> [paths...] [...rest]    # ...rest forwarded verbatim to ^rg
+rg [...args]    # --wrapped; argv forwarded to ^rg
 ```
 
-- **Zero flag curation.** Everything after the wrapper's own contract is
-  passed through. The wrapper injects exactly one flag: `--json`.
+- **Zero flag curation.** `args` is opaque. Forwarded verbatim.
+  The wrapper injects exactly one flag: `--json`, prepended if absent,
+  never doubled. No other rewrite, no reordering.
+- `-h` / `--help` belong to Nushell (every `def`). That is wrapper
+  help (`help rg` / `rg --help`). Native help is `^rg --help`. Engine-
+  owned, not a curated rg flag — the one exception.
 - Flags incompatible with `--json` (`-l`, `--count`, `--files`, …) fail
   with rg's own error surfaced on the envelope (`ok: false`); use `^rg`.
   v2 may add adapters for those modes. Known nerf-edge; accepted.
+- Empty `rg` is forwarded empty; rg's usage error is exit 2 → envelope.
 - Ordering of findings is rg's emission order (per-file, line ascending;
   cross-file order is rg's traversal). Not re-sorted. Pass `--sort path`
   yourself when you need run-to-run determinism.
@@ -50,7 +59,8 @@ rg <pattern> [paths...] [...rest]    # ...rest forwarded verbatim to ^rg
   error. Exit 2 → `ok: false`, `error` short (~240 chars, first line).
 - `n` = match rows; `n_files` = distinct files; `bytes` = NUON size of
   the full findings table (the value tested against the cap); `args` =
-  argv echo for provenance in `$history`.
+  executed child argv (what `^rg` received, `--json` once) for
+  provenance in `$history`.
 - `findings` present **iff** `truncated == false`. `spine` present
   **iff** `truncated == true`. Never both, never neither (on `ok: true`).
 - Truncate on **bytes** only, cap = `max_inline_bytes` from
@@ -133,15 +143,18 @@ Docstrings on `main` are part of the deliverable.
 - bad flag (exit 2): `ok: false`, short `error`, no findings/spine
 - small query: `findings` inline, `kind: match`, `n`/`n_files`/`bytes`
   consistent; no `spine` column
-- `-C 1` passed through: context rows present, `kind: context`,
-  `col: null`, interleaved in rg order
+- `-C 1` before or after the pattern: context rows present,
+  `kind: context`, `col: null`, interleaved in rg order
+- `-e PATTERN` forwards (wrapper has no positional pattern)
 - over-cap (fixture with many hits, cap forced low): `truncated: true`,
   `spine` sorted hits-desc/file-asc, no `findings`; registry has
   `rg:0` completed row; `jobs read rg:0` returns the full table;
   `jobs inspect rg:0` has no body
 - two over-cap queries: tags `rg:0`, `rg:1`; seq monotonic
-- `args` echoes the argv; `--json` not doubled if caller passed it
-- `^rg` still reaches the raw external
+- `args` is the executed argv; `--json` present once — not doubled if
+  the caller already passed it
+- `help rg` is the wrapper contract; `^rg --help` still reaches the
+  raw external
 
 ## Exit gate
 
