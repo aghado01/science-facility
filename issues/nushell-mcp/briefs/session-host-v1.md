@@ -324,7 +324,7 @@ stay valid; `log`/`body`/`find`/`annotate`/`console` get their own.
 
 - `evaluate` relays verbatim: same `history_index`, `timestamp`,
   `output` as a direct `nu --mcp` call
-- turn/out/exit records per evaluate: `cmd` verbatim, `turn` = `history_index`, `ts` match the
+- turn/out/exit records per evaluate: `cmd` verbatim, `turn` session-monotonic (a failed evaluate still gets a turn, with no `history_index`), `ts` match the
   engine, `ms` > 0, `bytes` = output length
 - stamped record → row has `kind`/`tag`/`ref`; bare table → row has
   none, no error
