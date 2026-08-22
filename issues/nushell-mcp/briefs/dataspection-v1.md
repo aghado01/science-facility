@@ -10,8 +10,8 @@ amendments (`jobs inspect` → `read | shape`), xq-v1, rg-wrapper-v1
 truncation). **Lineage:** jso-jackson / jso-debug (graveyard) — the
 controlled-inspection doctrine, re-shaped for a runtime where data is
 already structured.
-**Not this brief:** `$history` indexing (session host), `meta stamp`
-([meta-v1](meta-v1.md)), JSON Schema generation, anything that writes.
+**Not this brief:** `$history` indexing (session host), JSON Schema
+generation, tags/notes storage (the host's journal).
 
 Treat this file as the v1 spec. Amend; do not fork.
 
@@ -40,7 +40,13 @@ bounded views, no silent omission.
 
 **Membership rule:** anything that operates on a value **in hand**
 belongs here. Anything that addresses a **stored or named** thing
-belongs to that thing's domain module (`jobs`, `nu-modules`, `meta`).
+belongs to that thing's domain module (`jobs`, `nu-modules`).
+
+Metadata is data — a different tier, not a different kind — so `meta`
+and `meta stamp` live here too. Stamping is not an exception to a
+describing-only module: you stamp on the way out *so that* census
+works on the way back. `$history | shape each` can only lift `ok` and
+`verb` because something stamped them. One loop, one module.
 
 ## Two vocabularies
 
@@ -56,6 +62,7 @@ a first-class object, not a terminal readout:
 | `shape` | census of one value |
 | `schema` | structural profile of a population |
 | `spine` | where the mass is, over a column |
+| `meta` | the provenance stamped onto a record, or `null` |
 
 **Verbs interact with whatever object is in hand.** They are
 **portable** — each means one thing wherever it appears, including in
@@ -67,6 +74,7 @@ other domains (`jobs inspect`, `nu-modules read`, `meta stamp`):
 | `read` | disclose the body |
 | `preview` | the whole structure, leaves clipped to specification |
 | `page` | one slice, with a truthful header |
+| `stamp` | write this metadata onto it — always qualified by its object (`meta stamp`) |
 
 Because they compose, a produced object is just another object:
 
@@ -252,6 +260,53 @@ $x | read
   `xq`, and the rg module apply *this*, not their own copy.
 - Peek, not pop: `read` never removes or mutates what it discloses.
 
+### `meta` — the provenance on a record
+
+```
+$rec | meta
+→ {verb, at, tag?, elapsed?, ref?}   |   null when unstamped
+```
+
+A noun like `shape`: it produces the object, it does not fetch a body.
+Projection, so consumers never reach into `$rec.meta?` by hand and
+disagree about the absent case. Never throws.
+
+Adjacent to nushell's builtin `metadata`, which returns *pipeline*
+metadata (`{span}`, plus `source` on a live pipeline) and is stripped
+on storage in `$history`. Different thing, similar name — the corpus
+says so.
+
+### `meta stamp` — write provenance onto a record
+
+```
+$rec | meta stamp --verb <string> [--tag t] [--elapsed d] [--ref {...}]
+→ $rec | merge {meta: {verb, at, tag?, elapsed?, ref?}}
+```
+
+- **Closed sub-record.** `verb` is the producing command, dotted
+  (`jobs.spawn`, `par.emit`, `xq`, `rg`, `note`) — **not** `kind`,
+  which is spoken for by the journal record kind, `page`'s unit, and
+  rg's finding kind ([vocabulary](../notes/vocabulary.md)).
+  `at` = `date now`. `ref` points at other entries: `{history: 7}`
+  (the `$history` index) or `{tag: "sweep"}`.
+- **Records are stamped; tables stay bare.** On a non-record input
+  `stamp` wraps: `{meta, value}` — opt-in, never automatic. Wrapping a
+  table would break `| where` on the thing agents pipe most.
+- `stamp` is qualified by its object because the verb is **portable**:
+  a module that writes timestamps would have its own `stamp`, meaning
+  the same act on a different object. Bare `stamp` is refused — that
+  is the rubber-stamp metaphor, which is not what this does.
+- Stamping twice replaces `meta`; it never nests.
+- Pure: no env, no storage, no clock beyond `date now`.
+
+**Why it earns its place in the discipline.** A verb that catches an
+error and returns `ok: false` is a *successful evaluate* to the engine
+— it gets a `history_index` and looks like any other entry. `meta`
+plus the universal `ok` is what keeps that legible:
+`$history | shape each | where ok == false` finds every caught failure
+without opening one. Without stamps the session spine is values and
+positions and nothing else.
+
 ## Result hygiene (the drill loop, taught in the skill)
 
 ```
@@ -270,7 +325,8 @@ disclosure per result.
 
 ```
 mcp/nushell-mcp/modules/dataspection/
-  mod.nu              # shape, shape each, schema (+diff/check/stats), spine, page, preview, read
+  mod.nu              # shape, shape each, schema (+diff/check/stats), spine,
+                      # meta, meta stamp, read, preview, page
 mcp/nushell-mcp/skills/nushell/references/dataspection.md
   the two vocabularies, the disclosure ladder, the drill loop, jso lineage
 mcp/nushell-mcp/skills/nushell/references/mcp.md
@@ -304,6 +360,12 @@ of the roadmap) switch `jobs-census` to `shape`, and `par emit` /
   window with line numbers on strings; never reorders
 - `preview`: long string clipped with marker per mode; long list
   clipped with `[+K more]`; nested record keeps keys; idempotent
+- `meta stamp`: record gains a closed `meta` with `verb`/`at`;
+  `tag`/`elapsed`/`ref` present iff given; non-record wraps as
+  `{meta, value}`; a table is wrapped, not merged per row; stamping
+  twice replaces rather than nests
+- `meta`: returns the sub-record; on an unstamped value → `null`, no
+  throw
 - `read`: under cap returns the value; over cap returns
   `{disclosed: false, tag, bytes, retrieve}` and the value is
   retrievable by that tag; peek not pop
@@ -325,7 +387,6 @@ output limit; `$history.N | get <path> | page 2 --size 20` → header +
 ## Non-goals (v1)
 
 - Reading `$history` implicitly (pipe it) — and no `hist` verb
-- `meta stamp` — moved to its own module ([meta-v1](meta-v1.md))
 - JSON Schema *generation* (a projection of `schema`, later if wanted)
 - Column statistics beyond `nulls` / length stats (`polars` territory)
 - Byte caps inside `page`/`preview`; smart sizing

@@ -39,7 +39,8 @@ index is exactly the ornament to avoid.
 | `inspect` | **portable verb** — describe without disclosing | `jobs inspect`, `nu-modules inspect`; on a value in hand: `shape` |
 | `read` | **portable verb** — disclose the body; the one cap rule (inline if it fits, else a receipt naming the retrieval) | `jobs read`, `$x \| read` |
 | `preview` / `page` | **portable verbs** — bounded disclosure: leaves clipped / one slice | dataspection |
-| `stamp` | **portable verb** — write this metadata onto it; always qualified by its object | `meta stamp` |
+| `stamp` | **portable verb** — write this metadata onto it; always qualified by its object | `meta stamp` (dataspection) |
+| `meta` | the provenance stamped onto a record — a **noun**, like `shape`. Not nushell's `metadata` builtin (pipeline `{span}`, stripped on storage) | dataspection |
 | `shape` | the census core `{type, length, bytes, columns?}` | `inspect` module; `jobs inspect` calls it |
 | `spine` | `{key, n}` census of where the mass is | `inspect`, rg |
 | `stash` | put a payload in the registry | `jobs` |

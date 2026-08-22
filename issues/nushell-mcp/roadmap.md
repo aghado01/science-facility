@@ -97,9 +97,10 @@ context window as the scarcest resource in the loop:
   returns has a closed `meta` sub-record (`verb, at, tag?, elapsed?,
   ref?`) via one pure `stamp` primitive; tables stay bare. `$history`
   is a spine of values + positions; `meta` is how entries describe
-  themselves and point at each other. ([meta-v1](briefs/meta-v1.md);
-  `stamp` takes a noun domain because the verb is portable — a
-  timestamp module would have its own.)
+  themselves and point at each other. `meta stamp` lives in
+  [dataspection](briefs/dataspection-v1.md) — metadata is data, a
+  different tier not a different kind — and takes a noun domain
+  because the verb is portable: a timestamp module would have its own.
 
 ## Sequence
 
@@ -110,13 +111,10 @@ context window as the scarcest resource in the loop:
 2. **dataspection v1** — [briefs/dataspection-v1.md](briefs/dataspection-v1.md)
    · filed (supersedes [hist-v1](.archive/hist-v1.md)). The discipline
    as a module: nouns that produce data objects (`shape`, `schema`,
-   `spine`) and portable verbs that interact with them (`inspect`,
-   `read`, `preview`, `page`), composing freely. Carries the
-   **disclosure ladder** and the one `bytes` definition. No deps —
-   can land in parallel with H. **Next to build.**
-2a. **meta v1** — [briefs/meta-v1.md](briefs/meta-v1.md) · filed.
-   `meta stamp` / `meta of`; split out of dataspection because it
-   writes rather than describes. Tiny; lands with or just after 2.
+   `spine`, `meta`) and portable verbs that interact with them
+   (`inspect`, `read`, `preview`, `page`, `stamp`), composing freely.
+   Carries the **disclosure ladder** and the one `bytes` definition.
+   No deps — can land in parallel with H. **Next to build.**
 3. **par-jobs amendments** — to scribe, before 4. `jobs disclose` is
    **not** needed: the cap rule is what `read` does, so `jobs read`
    adopts dataspection's `read` rather than a new verb. Receipts gain
@@ -188,7 +186,6 @@ here. Term senses — whose word is whose — are in
 |---|---|
 | [par-jobs-v1](.archive/par-jobs-v1.md) | landed 2026-08-21 |
 | [dataspection-v1](briefs/dataspection-v1.md) | filed, not started; no deps; **next to build** |
-| [meta-v1](briefs/meta-v1.md) | filed, not started; no deps; tiny |
 | [hist-v1](.archive/hist-v1.md) | superseded → dataspection-v1 (primitives) + session-host-v1 (index) |
 | [session-host-v1](briefs/session-host-v1.md) | filed, not started; parallel track |
 | [xq-v1](briefs/xq-v1.md) | filed, not started; depends on par-jobs-v1 + `read` cap rule |

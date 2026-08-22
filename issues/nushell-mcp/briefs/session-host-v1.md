@@ -48,7 +48,7 @@ protocol".
 values beyond a closed set of fields: the engine result's `cwd`,
 `history_index`, `timestamp`, `output`/`note`, error records, and — when
 present on a record output — `ok` and `meta.{verb, at, tag, elapsed, ref}` (the
-receipt-stamp convention, meta-v1). Everything else is opaque NUON
+receipt-stamp convention, dataspection-v1). Everything else is opaque NUON
 passed through. Semantics live in Nu modules; the host is transport +
 ledger + identity + policy. If a feature needs the host to understand a
 Nu value, it is a Nu verb, not a host feature.
@@ -71,7 +71,7 @@ transfer when this host is plugged in as a visitor MCP.
 | `console` | one record: engine version, identity, session id, stream, journal depth, `inlineLimit`, `jobs status` |
 | `spawn` / `list` / `kill` | engine lifecycle, para-agent names (see Persistence without a mux). Host-level; the engine cannot list or kill itself |
 
-No other tools. `par`/`jobs`/`xq`/probe/rg stay Nu verbs through
+No other tools. `par`/`jobs`/`xq`/`dataspection`/rg stay Nu verbs through
 `evaluate` — the host adds no per-module tools.
 
 ## Ledger = a Console Journal Contract v1 stream
@@ -370,7 +370,7 @@ disk with identity in their names.
 | scoped history artifact | session layer "later" | host, standard issue |
 | informative truncation | per-wrapper (`spine`, `disclose`) | still per-wrapper for *findings*; host adds census for *any* truncated result |
 | `par`/`jobs`/`xq`/probe/rg | Nu modules | unchanged |
-| receipt `meta` stamps | meta-v1 convention | unchanged; the host reads them |
+| receipt `meta` stamps | dataspection convention | unchanged; the host reads them |
 
 ## Non-goals (v1)
 
