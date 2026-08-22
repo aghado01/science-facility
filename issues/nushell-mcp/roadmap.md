@@ -110,3 +110,4 @@ history work from 6; 6 keeps only what needs a true daemon.
 | [session-host-v1](briefs/session-host-v1.md) | filed, not started; parallel track |
 | [xq-v1](briefs/xq-v1.md) | filed, not started; depends on par-jobs-v1 |
 | [rg-wrapper-v1](briefs/rg-wrapper-v1.md) | filed, not started; depends on par-jobs-v1, xq-v1 |
+| [write-conventions-v1](briefs/write-conventions-v1.md) | filed; governs every write (state vs scratch, locality, chronology, precedence) |

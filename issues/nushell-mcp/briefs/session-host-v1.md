@@ -89,7 +89,7 @@ not a dependency"; ours too). See
 Layout, per the contract, one stream per engine session:
 
 ```
-<root>/streams/nu-<session_id>-<agent_id>/
+<root>/streams/<YYYYMMDD_HHmmss>_nu-<agent_id>-<session8>/   # stamp = session start
     journal.jsonl          append-only, seq-ordered
     turns/000017.out       NUON body, byte-exact, when over inlineLimit
 ```
@@ -240,7 +240,7 @@ Config `host.json` next to `config.nu` (single owner of host layout;
   "engine": "./deps/nushell/nu.exe",
   "config": "./config.nu",
   "output_limit": "20kb",
-  "journal_root": "./.sessions",
+  "journal_root": "./.nushell-mcp/journals",
   "keepalive": "30min",
   "retention": {"max_files": 50, "max_age": "30d"},
   "identity": {"default_agent": "claude", "from_env": "NU_MCP_AGENT_ID"},
@@ -254,7 +254,7 @@ Config `host.json` next to `config.nu` (single owner of host layout;
   `$history.<index> | shape` to the engine and appends the census to the
   result (`{truncated: true, shape: {...}, hint: "read {index}"}`). The
   agent always learns *what* it has, never just that it was cut.
-- `.sessions/` is gitignored. `retention` prunes by count/age — the only
+- `.nushell-mcp/` is gitignored (`**/.nushell-mcp/**`). Roots and precedence: [write-conventions-v1](write-conventions-v1.md). `retention` prunes by count/age — the only
   destructive action the host takes, and only on its own files.
 - `redact` is a list of regexes applied to `source` before persistence
   (never to in-memory records). Empty by default.

@@ -20,6 +20,7 @@
 !**/.doc-dive/README.md
 **/.snapshot/** 
 **/.para-agent/**
+**/.nushell-mcp/**
 
 **__/pycache__/**
 **/.pytest_cache/**
