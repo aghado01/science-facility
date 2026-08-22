@@ -13,8 +13,15 @@ context window as the scarcest resource in the loop:
 
 - **Non-blocking operations** — slow work runs while the agent keeps
   thinking; the console never holds `evaluate` hostage.
-- **Payload quarantine** — big results are written to file or held in
+- **Deferred bodies** — big results are written to file or held in
   engine memory and *queried as results*, never dumped into context.
+  (Vocabulary from para-agent's Console Journal Contract; "quarantine"
+  means something else there — see
+  [notes/para-agent-archaeology.md](notes/para-agent-archaeology.md).)
+  Its four design priorities are ours, in its order: **no silent
+  omission** (anything withheld names the call that retrieves it),
+  **token economy** (the default read is a summary), **selectivity**,
+  **facility** ("what happened since I last looked" is one call).
 - **Skeletal metadata first** — receipts, census, and spine views expose
   the shape of a dataset so retrieval can be surgical and responsible.
 
@@ -85,7 +92,7 @@ context window as the scarcest resource in the loop:
 7. **para-agent visitor grant** — later. Admit this MCP to a
    participant; same verbs, no new surface.
 
-**H. Session host v1** — [briefs/session-host-v1.md](briefs/session-host-v1.md)
+**H. Session host v1** — [briefs/session-host-v1.md](briefs/session-host-v1.md) (journal = para-agent Console Journal Contract v1; archaeology in [notes](notes/para-agent-archaeology.md))
 · filed. Parallel track: thin TS MCP host in front of `nu --mcp` —
 host-side history ledger (at, source, census), `annotate`, `read`,
 `console`, caller-routed identity with one engine per `(session,

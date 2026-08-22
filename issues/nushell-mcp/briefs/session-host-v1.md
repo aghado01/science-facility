@@ -35,7 +35,7 @@ surface is cheap to own.
 ```
 agent ──MCP (stdio)──▶ host ──MCP client (stdio)──▶ nu --mcp child (per identity)
                         │
-                        ├─ ledger      host-side history index + scoped artifacts
+                        ├─ journal     Console Journal Contract v1 stream per engine session
                         ├─ identity    caller → engine child, env injected at spawn
                         └─ policy      cap, informative truncation, retention
 ```
@@ -58,49 +58,76 @@ Nu value, it is a Nu verb, not a host feature.
 Small, structural, and `evaluate`-compatible so existing skills do not
 change.
 
+Tool names match para-agent's Console plane so skills and habits
+transfer when this host is plugged in as a visitor MCP.
+
 | Tool | Contract |
 |---|---|
-| `evaluate {input}` | passthrough to the engine; result relayed verbatim except: on engine truncation the host appends a census (below) |
-| `history {since?, kind?, tag?, last?}` | receipt table from the host ledger — `{index, at, ms, source, bytes, ok, kind?, tag?, tags, note}`. Never bodies |
-| `read {index, path?, page?, size?}` | one entry or one cell path from `$history`, bounded (`page`/`size` → the engine's `page` verb). One body per call |
-| `annotate {index, tags?, note?}` | agent labels on the ledger — the only thing the engine cannot know |
-| `console` | one record: engine version, identity, session id, ledger depth, cap, `jobs status` |
-
-Resources: `nu://history/{index}` (= `read`), `nu://history` (= the
-receipt table). Optional in v1; the tools are the contract.
+| `evaluate {input}` | passthrough to the engine; result relayed verbatim except: on engine truncation the host appends a census (Policy) |
+| `log {from?, to?, limit?, kind?, tag?}` | journal read → records + **unconditional receipt** (`complete`, `withheld[]`, `deferredBodies[]`, `cursor`). Never bodies beyond `inlineLimit` |
+| `body {turn, path?, page?, size?}` | one deferred body — from the body file, or live from `$history.<turn>` with a cell path / page when the engine is up. One body per call |
+| `find {pattern, kind?, from?}` | search `cmd`/`preview`/`note` text in the journal; receipt as `log` |
+| `annotate {turn, tags?, note?}` | appends a `note` record `{turn, data: {tags, note}}` — agent labels, the one thing the engine cannot know |
+| `console` | one record: engine version, identity, session id, stream, journal depth, `inlineLimit`, `jobs status` |
 
 No other tools. `par`/`jobs`/`xq`/probe/rg stay Nu verbs through
 `evaluate` — the host adds no per-module tools.
 
-## Ledger (the history index, done where the data is)
+## Ledger = a Console Journal Contract v1 stream
 
-Every relayed `evaluate` writes one ledger row:
+Do not invent a ledger. para-agent's
+`contract/CONSOLE-CONTRACT.md` is a **format-based** contract — any
+conforming producer is a valid source — and it already encodes
+receipts-not-bodies, bodies-as-files, unconditional receipts, integer
+cursors, and no-silent-omission. The host is a **new producer** of
+conforming journals; para-agent's reader works over engine streams
+with zero code dependency in either direction (its rule: "a plugin is
+not a dependency"; ours too). See
+[notes/para-agent-archaeology.md](../notes/para-agent-archaeology.md).
+
+Layout, per the contract, one stream per engine session:
 
 ```
-{index: int, at: datetime, ms: int, source: string, bytes: int, ok: bool,
- truncated: bool, kind?: string, tag?: string, ref?: record,
- tags: list<string>, note?: string}
+<root>/streams/nu-<session_id>-<agent_id>/
+    journal.jsonl          append-only, seq-ordered
+    turns/000017.out       NUON body, byte-exact, when over inlineLimit
 ```
 
-- `index`/`at` from the engine result; `source` = the `input` the host
-  sent; `ms` measured by the host; `bytes` = relayed output length;
-  `kind`/`tag`/`ref` lifted from `meta` when the output is a stamped
-  record. `tags`/`note` from `annotate`.
-- `source` is stored **verbatim** — it is the spine's "what produced
-  this". Redaction is policy (below), never default.
-- The ledger is the **session history artifact**: persisted as it grows
-  (JSONL append), identity-scoped, routed by config:
-  `<history_dir>/history-<session_id>-<agent_id>.jsonl`. No generic
-  filenames (par-jobs-v1 → Persistence and identity). Standard issue:
-  on by default.
-- The in-engine `$history` stays the value store; the ledger never
-  copies values. `read` goes to the engine. If the engine child dies,
-  the ledger survives and rows mark `lost: true` on `read`.
+Per relayed `evaluate`, the host writes:
+
+- `turn` — `cmd` = `input` verbatim, `cwd` from the engine result,
+  `shell: "nu"`, `origin: "evaluate"`, `cmd_hash`. `turn` number =
+  the engine's `history_index`, so journal and `$history` share an
+  index.
+- `out` — `bytes`/`lines`/`out_hash` over the NUON output; `text`
+  inlined iff `bytes <= inlineLimit`, else `ref` + `preview`.
+  `truncatedInline: false`, always.
+- `exit` — `ok` from the engine, `code: null` (no process),
+  `duration_ms` host-measured, `outcome: completed | died`.
+- `note` — engine spawn/respawn/keepalive expiry/lost `$history`;
+  `data` carries `meta` lifted from stamped receipts
+  (`kind`, `tag`, `ref`) and `annotate` labels, keyed by `turn`.
+
+Contract amendments to file against para-agent (additive): `shell`
+gains `nu`; `origin` gains `evaluate`. Nothing else.
+
+Consequences:
+
+- The journal **is** the session history artifact — identity in the
+  stream name, standard issue, no generic filenames. Big outputs land
+  as byte-exact NUON files: the vision's "written to file" for free,
+  and they **survive engine death** (`body` serves from the file; a
+  dead engine costs only the ability to slice by cell path).
+- `$history` stays the in-engine value store for slicing; the journal
+  never replaces it, it outlives it.
+- The engine has no `.done`/`.cancel` sentinels — JSON-RPC completes
+  and `jobs cancel` is in-engine. Producer-side `note` records cover
+  what the PTY signals covered.
 
 This retires the Nu-side index sidecar sketched for hist-v1: in-engine,
 `$history | shape each` (probe) remains the idiom for an agent that
 wants census without the host; `stamp` remains the convention that
-makes ledger rows rich. Nothing in Nu tracks tags/notes.
+makes journal `note` data rich. Nothing in Nu tracks tags/notes.
 
 ## Identity and sessions
 
@@ -112,13 +139,22 @@ makes ledger rows rich. Nothing in Nu tracks tags/notes.
   `NU_MCP_SESSION_ID` / `NU_MCP_AGENT_ID` injected (the one deliberate
   extension to the `--config`-only launcher contract). Joint sessions
   stop being a filename problem: each agent has its own engine and its
-  own ledger file.
+  own journal stream.
 - **Sessions can outlive the client.** The host keeps a child alive for
   `keepalive` (config) after disconnect; a reconnect with the same ids
   resumes `$history`, `$env.JOBS`, running jobs. This is the first slice
   of "jobs that outlive the MCP child" without a daemon.
-- Child crash → host respawns on next `evaluate`, ledger intact, prior
-  entries `lost`.
+- Child crash → host respawns on next `evaluate`, journal intact; prior
+  turns get a `note` (lost `$history`) and `body` serves from files.
+- **Governance is not the host's.** Whether a participant may reach
+  nushell-mcp is para-agent's visitor-registry question
+  (`issues/para-agent/notes/visitor-mcp-registration.md`); the host
+  only routes. Posture from para-agent, adopted: **label, don't gate**
+  — an unrecognized caller gets the configured default identity plus a
+  `note` saying so, never a refusal.
+- Identities are validated as well-formed Unicode scalar sequences
+  before they touch a stream name (para-agent `identity.js` rule), so
+  two logical identities cannot collide through replacement characters.
 
 ## Policy
 
@@ -130,7 +166,7 @@ Config `host.json` next to `config.nu` (single owner of host layout;
   "engine": "./deps/nushell/nu.exe",
   "config": "./config.nu",
   "output_limit": "20kb",
-  "history_dir": "./.sessions",
+  "journal_root": "./.sessions",
   "keepalive": "30min",
   "retention": {"max_files": 50, "max_age": "30d"},
   "identity": {"default_agent": "claude", "from_env": "NU_MCP_AGENT_ID"},
@@ -147,7 +183,7 @@ Config `host.json` next to `config.nu` (single owner of host layout;
 - `.sessions/` is gitignored. `retention` prunes by count/age — the only
   destructive action the host takes, and only on its own files.
 - `redact` is a list of regexes applied to `source` before persistence
-  (never to in-memory ledger rows). Empty by default.
+  (never to in-memory records). Empty by default.
 
 ## Tree
 
@@ -157,7 +193,7 @@ mcp/nushell-mcp/host/
   host.json              # policy (above)
   src/server.ts          # MCP server: tools, resources
   src/engine.ts          # MCP client to nu --mcp; spawn/respawn/keepalive
-  src/ledger.ts          # rows, JSONL append, routing, retention
+  src/journal.ts         # Console Journal v1 producer + minimal reader, routing, retention
   src/identity.ts        # caller → ids, env injection
   src/policy.ts          # cap, informative truncation, redact
   test/                  # vitest against a real child (deps/nushell)
@@ -165,46 +201,46 @@ mcp/nushell-mcp/host/
 ```
 
 `evaluate`'s description text is copied from the engine's so skills
-stay valid; `history`/`read`/`annotate`/`console` get their own.
+stay valid; `log`/`body`/`find`/`annotate`/`console` get their own.
 
 ## Tests (vitest, real engine child)
 
 - `evaluate` relays verbatim: same `history_index`, `timestamp`,
   `output` as a direct `nu --mcp` call
-- ledger row per evaluate: `source` verbatim, `at`/`index` match the
+- turn/out/exit records per evaluate: `cmd` verbatim, `turn` = `history_index`, `ts` match the
   engine, `ms` > 0, `bytes` = output length
 - stamped record → row has `kind`/`tag`/`ref`; bare table → row has
   none, no error
 - truncated result (cap forced low) → relayed result carries
   `truncated: true` and a `shape` census; one extra engine round-trip,
   not N
-- `history` returns receipts only; `last`/`kind`/`tag` filters work;
+- `log` returns records + unconditional receipt (`complete`, `withheld` naming retrieval); `kind`/`tag` filters work;
   never includes output
-- `read {index, path}` returns one body; `page`/`size` bound it
-- `annotate` persists; appears on `history` and in the JSONL file
-- identity: two callers → two children, two ledger files, names carry
+- `body {turn, path}` returns one body (file or live); `page`/`size` bound it
+- `annotate` persists; appears as a `note` record on `log` and in journal.jsonl
+- identity: two callers → two children, two journal streams, names carry
   both ids; no generic filename ever written
 - keepalive: disconnect, reconnect with same ids within window →
-  `$history` length continues; after window → fresh engine, old ledger
+  `$history` length continues; after window → fresh engine, old journal
   file untouched
-- child killed out-of-band → next `evaluate` respawns; old rows `lost`
+- child killed out-of-band → next `evaluate` respawns; a `note` records the loss; `body` still serves from files
 - retention prunes oldest beyond `max_files`; never touches other dirs
 
 ## Exit gate
 
 Agent connects through the host; three `evaluate`s (`jobs spawn { 1..8
 | par {|i| $i * $i} } --tag sq`, `jobs collect`, `jobs read sq`) behave
-exactly as against bare `nu --mcp`. `history` shows three rows with
+exactly as against bare `nu --mcp`. `log` shows three turns with
 `source`, `at`, and `kind: jobs.spawn` on the first. A forced-truncated
 fourth evaluate comes back with a `shape` census. A second identity gets
-its own engine and ledger file. Kill the host; the JSONL ledgers are on
+its own engine and journal stream. Kill the host; the journals are on
 disk with identity in their names.
 
 ## What moves, what stays
 
 | Concern | Before | After |
 |---|---|---|
-| history index (at, source) | impossible in-engine | host ledger |
+| history index (at, source) | impossible in-engine | host journal (Console Journal v1) |
 | tags / notes | Nu sidecar (hist-v1 sketch) | host `annotate` |
 | identity routing | doctrine only | host, env injected |
 | scoped history artifact | session layer "later" | host, standard issue |
@@ -221,7 +257,7 @@ disk with identity in their names.
 - Per-module MCP tools (`jobs_*`, `rg_*`, …)
 - Cross-engine job tables, shared `$env` between identities
 - A true daemon (survives host restart) — keepalive is the v1 slice
-- Web UI, dashboards, transcripts beyond the ledger row
+- Web UI, dashboards, transcripts beyond journal records
 
 ---
 
