@@ -1,12 +1,9 @@
 <#
 .SYNOPSIS
-    Materializes the pinned Node dependency graph into deps/node_modules and links it
-    at the package root.
+    Materializes the pinned Node dependency graph into deps/node_modules.
 
 .DESCRIPTION
-    The four steps of the node recipe. Steps 1-3 are ordinary npm hygiene; step 4 is the
-    one a fresh clone cannot derive from tracked files, and the one whose absence looks
-    like a missing package rather than a missing link.
+    The three steps of the node recipe:
 
       1. Stage copies of package.json and package-lock.json into the install prefix.
          npm ci requires both beside its target. The copies are ignored; edit only the
@@ -14,15 +11,9 @@
       2. npm ci into the prefix, with npm's download cache pointed at build/node/npm-cache
          so routine restoration never touches the user profile or rewrites the canonical lock.
       3. Verify the staged lock did not drift from the canonical lock, and fail if it did.
-      4. Junction the package root's node_modules at deps/node_modules, because Node
-         resolves bare specifiers by walking up from the importing file and never looks
-         inside deps/.
-
-.PARAMETER Force
-    Re-create the junction even if one is already present.
 #>
 [CmdletBinding()]
-param([switch]$Force)
+param()
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -32,7 +23,6 @@ $packageRoot = (Resolve-Path (Join-Path $recipe '..' '..')).Path
 $deps        = Join-Path $packageRoot 'deps'
 $cache       = Join-Path $packageRoot 'build/node/npm-cache'
 $payload     = Join-Path $deps 'node_modules'
-$junction    = Join-Path $packageRoot 'node_modules'
 
 $canonicalManifest = Join-Path $recipe 'package.json'
 $canonicalLock     = Join-Path $recipe 'package-lock.json'
@@ -48,9 +38,10 @@ Copy-Item -LiteralPath $canonicalLock     -Destination (Join-Path $deps 'package
 Write-Host "staged pins -> $deps"
 
 # --- 2. install -----------------------------------------------------------------
+$npm = if (Get-Command npm.cmd -ErrorAction SilentlyContinue) { 'npm.cmd' } else { 'npm' }
 Push-Location $deps
 try {
-    npm ci --cache $cache --no-audit --no-fund
+    $null | & $npm ci --cache $cache --no-audit --no-fund
     if ($LASTEXITCODE -ne 0) { throw "npm ci failed with exit code $LASTEXITCODE" }
 }
 finally { Pop-Location }
@@ -71,34 +62,12 @@ regenerate with 'npm install --package-lock-only' in that directory, review the 
 }
 Write-Host "lock verified against canonical pin"
 
-# --- 4. junction ----------------------------------------------------------------
-if (Test-Path -LiteralPath $junction) {
-    $item = Get-Item -LiteralPath $junction -Force
-    $isLink = $item.LinkType -in @('Junction', 'SymbolicLink')
-    if (-not $isLink) {
-        throw @"
-$junction exists as a real directory, not a junction.
-Something (usually a stray 'npm install' run at the package root) replaced the link with a
-second dependency graph. Delete it and re-run this script; the payload in deps/node_modules
-is the only graph this package has.
-"@
-    }
-    if ($Force) {
-        Remove-Item -LiteralPath $junction -Force
-        Write-Host "removed existing junction (-Force)"
-    }
-}
-
-if (-not (Test-Path -LiteralPath $junction)) {
-    New-Item -ItemType Junction -Path $junction -Target $payload | Out-Null
-    Write-Host "junction $junction -> $payload"
-}
-else { Write-Host "junction already present (pass -Force to re-create)" }
-
 # --- report ---------------------------------------------------------------------
-Push-Location $packageRoot
-try {
-    $tsc = npx tsc --version 2>&1
+$tscBin = Join-Path $payload 'typescript/bin/tsc'
+if (Test-Path -LiteralPath $tscBin) {
+    $tsc = node $tscBin --version 2>&1
     Write-Host "restore complete: $tsc"
 }
-finally { Pop-Location }
+else {
+    Write-Host "restore complete (node_modules restored in $payload)"
+}

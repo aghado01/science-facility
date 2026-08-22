@@ -10,15 +10,13 @@ import { dirname, join } from 'node:path'
 // any engine code to check, on purpose -- so no module is ever written unchecked.
 
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)))
-const tscBin = join(packageRoot, 'node_modules', 'typescript', 'bin', 'tsc')
+const tscBin = join(packageRoot, 'deps', 'node_modules', 'typescript', 'bin', 'tsc')
 
-test('the pinned typescript is reachable from the package root', () => {
+test('the pinned typescript is reachable under deps', () => {
   assert.ok(
     existsSync(tscBin),
     `${tscBin} is absent.\n` +
-      'The dependency payload lives in deps/node_modules and is reached through a junction at\n' +
-      'the package root. A stray `npm install` can remove the junction and leave the payload\n' +
-      'intact but unreachable. Run brewery/node/restore-node.ps1 to repair it.',
+      'The dependency payload lives in deps/node_modules. Run brewery/node/restore-node.ps1 to restore it.',
   )
 })
 

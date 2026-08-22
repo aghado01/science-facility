@@ -22,11 +22,9 @@ true of *this* package.
 
 | Shelf | Recipe | Payload | State |
 |---|---|---|---|
-| node | `brewery/node/` — `package.json`, `package-lock.json`, `restore-node.ps1` | `deps/node_modules` + root junction | **complete** |
+| node | `brewery/node/` — `package.json`, `package-lock.json`, `restore-node.ps1` | `deps/node_modules` | **complete** |
 
-There is one shelf and it has no gaps: pins, lock, and a restore script that runs end to end. That
-is a deliberate departure from para-agent, whose node recipe has complete pins and no script, and
-whose junction is made by hand. Starting empty is the only cheap moment to close that.
+There is one shelf and it has no gaps: pins, lock, and a restore script that runs end to end.
 
 ### node
 
@@ -36,9 +34,9 @@ because Node reads `type` by walking up from each source file and never reaches 
 files, same name, different jobs; keep dependency edits here and manifest edits there.
 
 `restore-node.ps1` stages the pins into the install prefix, runs `npm ci` with npm's cache pointed
-at `build/node/npm-cache`, verifies the staged lock did not drift from the canonical one, and
-junctions `node_modules` at the package root onto `deps/node_modules`. Run it after a clean clone,
-and again if the junction is ever lost.
+at `build/node/npm-cache`, and verifies the staged lock did not drift from the canonical one.
+Tooling and test gates target `deps/node_modules` directly without requiring root junctions. Run
+`restore-node.ps1` after a clean clone.
 
 To move versions deliberately: edit `package.json` here, regenerate with
 `npm install --package-lock-only` in this directory, review the lock diff, then re-run the script.

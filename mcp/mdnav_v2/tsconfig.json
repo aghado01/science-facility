@@ -8,6 +8,7 @@
     "module": "nodenext",
     "moduleResolution": "nodenext",
     "types": ["node"],
+    "typeRoots": ["./deps/node_modules/@types"],
 
     // --- strictness: the point of the exercise ---
     "strict": true,
@@ -34,5 +35,5 @@
     "skipLibCheck": true
   },
   "include": ["src/**/*.ts", "tests/**/*.ts"],
-  "exclude": ["deps", "build", "node_modules"]
+  "exclude": ["deps/node_modules", "build"]
 }
