@@ -49,6 +49,13 @@ context window as the scarcest resource in the loop:
   `--config` + identity); scoped session history is **standard issue**
   for a persistent session, other historical stores opt-in. Full text in
   [par-jobs-v1](briefs/par-jobs-v1.md) → Persistence and identity.
+- **Identity routing is one shape.** Resolved from context by a pure
+  router, injected per process; registry external and declarative; no
+  global mutation; unknown context labeled, not refused; governance
+  separate from routing. Console identity (caller → engine env) and
+  GitHub identity (gitdir → `GH_TOKEN`) are two bindings of it, sharing
+  the identity receipt `{scope, id, source, via}` — shape, not code.
+  [notes/identity-routing.md](notes/identity-routing.md).
 - **`nu --mcp` is the engine protocol, not the product surface**
   (decided 2026-08-21). It uniquely provides a persistent engine behind
   JSON-RPC — keep it. Its surface is narrow (verified: one tool,
@@ -135,3 +142,4 @@ here.
 | [xq-v1](briefs/xq-v1.md) | filed, not started; depends on par-jobs-v1 + `jobs disclose` amendment |
 | [rg-wrapper-v1](briefs/rg-wrapper-v1.md) | filed, not started; depends on par-jobs-v1, xq-v1 |
 | [write-conventions-v1](briefs/write-conventions-v1.md) | filed; governs every write (state vs scratch, locality, chronology, precedence) |
+| [gh-v1](briefs/gh-v1.md) | filed, not started; depends on xq-v1; needs `gh` ≥ 2.40 in `deps/cli` |
