@@ -14,63 +14,36 @@ RUNTIME_UV_EXECUTABLE = server.MCP_ROOT / "deps" / "bin" / "uv" / "uv.exe"
 
 
 class PowerShellExecutableTests(unittest.TestCase):
-    def test_configured_executable_has_precedence_over_bundled_and_path(self):
-        environment = {"MCP_POWERSHELL_EXECUTABLE": "C:/shared/pwsh.exe"}
+    def test_configured_executable_overrides_default(self):
+        environment = {"MCP_POWERSHELL_EXECUTABLE": "C:/custom/pwsh.exe"}
 
         with mock.patch.dict(os.environ, environment, clear=True):
-            with mock.patch(
-                "server._bundled_powershell_executable"
-            ) as bundled_executable:
-                with mock.patch("server.shutil.which") as which:
-                    executable = server._resolve_powershell_executable()
+            executable = server._resolve_powershell_executable()
 
-        self.assertEqual(executable, "C:/shared/pwsh.exe")
-        bundled_executable.assert_not_called()
-        which.assert_not_called()
+        self.assertEqual(executable, "C:/custom/pwsh.exe")
 
-    def test_bundled_executable_has_precedence_over_path(self):
-        bundled_path = "C:/mcp/deps/bin/pwsh/pwsh.exe"
-
+    def test_default_executable_is_bundled_pwsh(self):
         with mock.patch.dict(os.environ, {}, clear=True):
-            with mock.patch(
-                "server._bundled_powershell_executable",
-                return_value=bundled_path,
-            ):
-                with mock.patch("server.shutil.which") as which:
-                    executable = server._resolve_powershell_executable()
+            executable = server._resolve_powershell_executable()
 
-        self.assertEqual(executable, bundled_path)
-        which.assert_not_called()
+        self.assertEqual(executable, str(server.DEFAULT_POWERSHELL_EXECUTABLE))
 
-    def test_blank_configured_executable_falls_back_to_path_when_bundle_missing(self):
-        def resolve_from_path(name):
-            return "C:/path/pwsh.exe" if name == "pwsh" else None
-
+    def test_blank_configured_executable_uses_default(self):
         with mock.patch.dict(
             os.environ, {"MCP_POWERSHELL_EXECUTABLE": "   "}, clear=True
         ):
-            with mock.patch(
-                "server._bundled_powershell_executable", return_value=None
-            ):
-                with mock.patch(
-                    "server.shutil.which",
-                    side_effect=resolve_from_path,
-                ):
-                    executable = server._resolve_powershell_executable()
+            executable = server._resolve_powershell_executable()
 
-        self.assertEqual(executable, "C:/path/pwsh.exe")
+        self.assertEqual(executable, str(server.DEFAULT_POWERSHELL_EXECUTABLE))
 
 
 class PowerShellProfileTests(unittest.TestCase):
     def test_default_profile_resolves_to_bundled_profile_when_variable_is_absent(self):
         with mock.patch.dict(os.environ, {}, clear=True):
-            with mock.patch(
-                "server._bundled_powershell_profile",
-                return_value="C:/mcp/scripts/pwsh/profile-pwsh.ps1",
-            ):
-                profile = server._resolve_powershell_profile()
+            profile = server._resolve_powershell_profile()
 
-        self.assertEqual(profile, "C:/mcp/scripts/pwsh/profile-pwsh.ps1")
+        expected = str(server.DEFAULT_POWERSHELL_PROFILE) if server.DEFAULT_POWERSHELL_PROFILE.is_file() else None
+        self.assertEqual(profile, expected)
 
     def test_blank_profile_resolves_to_none(self):
         with mock.patch.dict(

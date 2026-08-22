@@ -29,40 +29,28 @@ FastMCPSettings.model_rebuild()
 mcp = FastMCP("pwsh_exec")
 
 
-def _bundled_powershell_executable() -> str | None:
-    if DEFAULT_POWERSHELL_EXECUTABLE.is_file():
-        return str(DEFAULT_POWERSHELL_EXECUTABLE)
-
-    return None
-
-
 def _resolve_powershell_executable() -> str:
-    configured_executable = os.environ.get(POWERSHELL_EXECUTABLE_ENV_VAR)
-    if configured_executable and configured_executable.strip():
-        return configured_executable
-
-    bundled_executable = _bundled_powershell_executable()
-    if bundled_executable:
-        return bundled_executable
-
-    return shutil.which("pwsh") or shutil.which("powershell") or "pwsh"
-
-
-def _bundled_powershell_profile() -> str | None:
-    if DEFAULT_POWERSHELL_PROFILE.is_file():
-        return str(DEFAULT_POWERSHELL_PROFILE)
-
-    return None
+    configured = os.environ.get(POWERSHELL_EXECUTABLE_ENV_VAR)
+    if configured and configured.strip():
+        candidate = Path(configured.strip())
+        if candidate.is_file():
+            return str(candidate.resolve())
+        return configured.strip()
+    return str(DEFAULT_POWERSHELL_EXECUTABLE)
 
 
 def _resolve_powershell_profile() -> str | None:
-    configured_profile = os.environ.get(POWERSHELL_PROFILE_ENV_VAR)
-    if configured_profile is not None:
-        if configured_profile.strip():
-            return configured_profile.strip()
-        return None
-
-    return _bundled_powershell_profile()
+    configured = os.environ.get(POWERSHELL_PROFILE_ENV_VAR)
+    if configured is not None:
+        if not configured.strip():
+            return None
+        candidate = Path(configured.strip())
+        if candidate.is_file():
+            return str(candidate.resolve())
+        return configured.strip()
+    if DEFAULT_POWERSHELL_PROFILE.is_file():
+        return str(DEFAULT_POWERSHELL_PROFILE)
+    return None
 
 
 def _build_powershell_code(code: str) -> str:

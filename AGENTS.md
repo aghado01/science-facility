@@ -19,3 +19,8 @@ Currently WIP, but user wants to improve hygiene by localizing tests under diffe
 ## Ledger documents 
 
 Changelogs, decision logs, and other types of markdown documentation with changelog like semantics should be prepended to the file with an *Edit tool* anchored on the header of the file e.g. in a changelog, onthe # Changelog header line in order to avoid the full read and its perfunctory full return read. Keep entries short. if historical analysis of a document's content is necessary, prefer targeted search or telescopic reads via `utils/mdnav` instead of full reads. 
+
+## Git commits 
+
+If you are doing surgical work on the repo, make pointed commits for files you modified, not blanket git adds over the whole repo. there might be concurrent work in other folders or directories you're not working on. 
+

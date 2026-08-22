@@ -13,22 +13,21 @@
       }
     },
     "pwsh_exec": {
-      "command": "./mcp/pwsh_exec/.venv/Scripts/uv.exe",
+      "command": "./mcp/pwsh_exec/deps/bin/uv/uv.exe",
       "args": [
         "run",
         "--project",
         "./mcp/pwsh_exec",
-        "--no-cache",
         "--locked",
-        "--no-sync",
-        "python",
-        "-B",
         "./mcp/pwsh_exec/server.py"
       ],
-      "env": {}
+      "env": {
+        "MCP_POWERSHELL_EXECUTABLE": "./mcp/pwsh_exec/deps/bin/pwsh/pwsh.exe",
+        "MCP_POWERSHELL_PROFILE": "./mcp/pwsh_exec/scripts/pwsh/profile-pwsh.ps1"
+      }
     },
     "nushell": {
-      "command": "nu",
+      "command": "./mcp/nushell-mcp/deps/nushell/nu.exe",
       "args": [
         "--mcp",
         "--config",
