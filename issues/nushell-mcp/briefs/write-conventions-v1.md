@@ -32,7 +32,12 @@ in para-agent, mirrored here) and are not governed by this brief.
 2. **State** lives in a dotdir at the workspace root: `.nushell-mcp/`.
    Globally gitignored (`**/.nushell-mcp/**`), exactly as
    `**/.para-agent/**` is today. Workspace-local because a session's
-   history belongs with the work it was about.
+   history belongs with the work it was about. Naming convention
+   across the family: **`.<mcp-name>/`** — para-agent's dotdir is
+   expected to become `.para-agent-mcp/` (owner, 2026-08-21); when it
+   does, add `**/.para-agent-mcp/**` to the root `.gitignore` and
+   update the co-design hook below. Neither dotdir is ever nested in
+   the other.
 3. **Scratch** goes to `<workspace>/artifacts/nushell-mcp/` when the
    workspace already has an `artifacts/` tree (codex-scientiae rule:
    first segment is the module, `nushell-mcp`), else to
