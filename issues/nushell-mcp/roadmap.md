@@ -114,15 +114,21 @@ context window as the scarcest resource in the loop:
    `spine`, `meta`) and portable verbs that interact with them
    (`inspect`, `read`, `preview`, `page`, `stamp`), composing freely.
    Carries the **disclosure ladder** and the one `bytes` definition.
-   No deps — can land in parallel with H. **Next to build.**
-3. **par-jobs amendments** — to scribe, before 4. `jobs disclose` is
-   **not** needed: the cap rule is what `read` does, so `jobs read`
-   adopts dataspection's `read` rather than a new verb. Receipts gain
-   `meta` via `meta stamp` (spawn/inspect/status/cancel; tests
-   change). `jobs inspect <tag>` becomes literally
-   `jobs read <tag> | shape` plus identity fields — one census
-   definition, not two. Landed code changes, so an amendment with its
-   own follow-up entry.
+   Load after par/jobs (`use par *; use jobs *; use dataspection *`).
+   Census/preview/page/meta are pure; `read` is `--env` and stashes
+   over cap through `jobs stash`. Cap knobs from
+   `$env.NU_PAR.max_inline_bytes` else `NU_MCP_OUTPUT_LIMIT`. Can land
+   in parallel with H. **Next to build.**
+3. **par-jobs amendments** — after 2, before 4. `jobs disclose` is
+   **not** needed: in-hand cap is `read`; `jobs read` later adopts the
+   same cap for *terminal* disclose of an addressed payload, and must
+   keep a path that actually returns the stored body (or a bounded
+   view). **`jobs inspect` is not `jobs read | shape`.** Inspect stays
+   jobs' own receipt; it calls `shape` on the stored payload
+   internally so `bytes` is one definition — no `jobs shape` export.
+   Receipts gain `meta` via `meta stamp` (spawn/inspect/status/cancel;
+   tests change). Landed code changes, so an amendment with its own
+   follow-up entry.
 4. **`xq` v1** — [briefs/xq-v1.md](briefs/xq-v1.md) · filed; depends
    on 1–3. Execute, capture, payload-quarantine for every external:
    `complete` + census + `read`'s cap rule, job-aware via `job id`. The
@@ -185,7 +191,7 @@ here. Term senses — whose word is whose — are in
 | Brief | Status |
 |---|---|
 | [par-jobs-v1](.archive/par-jobs-v1.md) | landed 2026-08-21 |
-| [dataspection-v1](briefs/dataspection-v1.md) | filed, not started; no deps; **next to build** |
+| [dataspection-v1](briefs/dataspection-v1.md) | filed, not started; `read` depends on par-jobs; **next to build** |
 | [hist-v1](.archive/hist-v1.md) | superseded → dataspection-v1 (primitives) + session-host-v1 (index) |
 | [session-host-v1](briefs/session-host-v1.md) | filed, not started; parallel track |
 | [xq-v1](briefs/xq-v1.md) | filed, not started; depends on par-jobs-v1 + `read` cap rule |

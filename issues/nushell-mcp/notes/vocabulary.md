@@ -30,8 +30,8 @@ index is exactly the ornament to avoid.
 
 | Term | Sense | Where |
 |---|---|---|
-| `index` | position in an input sequence, 0-based | `par` rows, `inspect`'s `shape each` |
-| `bytes` | NUON-serialized UTF-8 length, computed once | `inspect`'s `shape`; everything else calls it |
+| `index` | position in an input sequence, 0-based | `par` rows, dataspection's `shape each` |
+| `bytes` | NUON-serialized UTF-8 length, computed once | dataspection's `shape`; everything else calls it |
 | `ok` | did this thing succeed — **universal on every record** | layer-wide (AGENTS.md 4a) |
 | `error` / `trace` | short first line / full rendered error, on `ok: false` | layer-wide |
 | `tag` | the name of a stored or handled thing | `jobs` registry, `stamp`, stash keys |
@@ -41,8 +41,8 @@ index is exactly the ornament to avoid.
 | `preview` / `page` | **portable verbs** — bounded disclosure: leaves clipped / one slice | dataspection |
 | `stamp` | **portable verb** — write this metadata onto it; always qualified by its object | `meta stamp` (dataspection) |
 | `meta` | the provenance stamped onto a record — a **noun**, like `shape`. Not nushell's `metadata` builtin (pipeline `{span}`, stripped on storage) | dataspection |
-| `shape` | the census core `{type, length, bytes, columns?}` | `inspect` module; `jobs inspect` calls it |
-| `spine` | `{key, n}` census of where the mass is | `inspect`, rg |
+| `shape` | the census core `{type, length, bytes, columns?}` | dataspection; jobs inspect fills payload fields from it internally |
+| `spine` | `{key, n}` census of where the mass is | dataspection, rg |
 | `stash` | put a payload in the registry | `jobs` |
 | `payload quarantine` | keeping a big result out of context | doctrine — **always qualified**, see below |
 
@@ -62,9 +62,18 @@ index is exactly the ornament to avoid.
   private helper name — renamed to `load-unit` in `nu-modules` to keep
   the word out of circulation.
 
+- **`jobs inspect` is not `read | shape`** (2026-08-22). Inspect
+  discloses nothing; `read` may decline, and then `| shape` would
+  census the receipt. Jobs keeps its own inspect receipt and may call
+  `shape` on the stored payload internally so `bytes` is one
+  definition. `jobs read t | shape` is compose after a lawful
+  disclose. Load order is runtime primitives first (`par`, `jobs`),
+  then the access discipline (`dataspection`); over-cap `read` stashes
+  through `jobs stash`.
+
 - **`meta.kind` → `meta.verb`.** `kind` was already spoken for three
   times over: the journal record kind (`turn | out | exit | note`,
-  para-agent's, unrenameable), `inspect`'s `page` unit
+  para-agent's, unrenameable), dataspection `page`'s unit
   (`rows | lines | chars`), rg `findings.kind` (`match | context`).
   The stamp field's values are verb names, so `verb` is both precise
   and collision-free. Consequence: the host's `log {kind?}`

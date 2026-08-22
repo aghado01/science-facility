@@ -11,9 +11,12 @@ package-level rules.
 - `config.nu` — **single owner of the layer's layout.** Launchers pass
   `--config` (plus identity, when the host lands) and nothing else.
   Sets `NU_LIB_DIRS`, `NU_SKILL_DIR`, prepends `deps/cli` to PATH,
-  preloads the modules.
+  preloads the modules. Order: `nu-skills`, `nu-modules`, `par`,
+  `jobs`, `dataspection` — runtime primitives, then the access
+  discipline.
 - `modules/` — Nu-native modules loaded into the engine (`par`, `jobs`,
-  `argx`, `nu-skills`, `nu-modules`, …). Contracts live in docstrings.
+  `dataspection`, `argx`, `nu-skills`, `nu-modules`, …). Contracts live
+  in docstrings.
 - `skills/nushell/` — the reference corpus (`SKILL.md` +
   `references/*.md`) agents read through `nu-skills`.
 - `deps/` — vendored binaries, gitignored except `README.md`:
@@ -43,13 +46,17 @@ package-level rules.
 4. **Receipts before bodies.** One tool result carries at most one
    payload. Anything withheld names the call that retrieves it.
    `read` is the only verb that may decline, and when it declines it
-   names the retrieval — the disclosure ladder is `shape` (always
-   fits) → `read` (if it fits) → `preview`/`page` (bounded).
+   names the retrieval (`jobs read <tag>`) — the disclosure ladder is
+   `shape` (always fits) → `read` (if it fits) → `preview`/`page`
+   (bounded). Over-cap `read` stashes through `jobs stash`; it is
+   `--env`. Other dataspection commands stay pure.
 4b. **Portable verbs.** A verb means one thing wherever it appears,
    and takes a noun domain when it addresses a stored or named thing:
    `jobs inspect`, `nu-modules read`, `meta stamp`. Commands acting on
    a value **in hand** are flat, because the value arrives by pipe
-   rather than by address.
+   rather than by address. `jobs inspect` is **not** `jobs read | shape`:
+   inspect discloses nothing; jobs keeps its own receipt and may call
+   `shape` on the payload internally.
 4a. **`ok` is universal; failure is data.** Every record the layer
    returns carries `ok: bool`. A verb that catches an error returns
    `ok: false` + `error` (short) — and `trace` where it captured one —

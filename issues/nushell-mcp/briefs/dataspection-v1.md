@@ -1,15 +1,18 @@
 # `dataspection` v1 — disciplined access to data
 
 **Status:** filed, not started · **Filed:** 2026-08-21 · **Home:**
-`mcp/nushell-mcp/modules/dataspection`, Nu-native, pure (value in,
-value out), used through `evaluate`. **Supersedes:**
-[hist-v1](../.archive/hist-v1.md).
-**Depends on:** nothing in-layer. **Consumed by:** par-jobs
-amendments (`jobs inspect` → `read | shape`), xq-v1, rg-wrapper-v1
-(`spine`), the session host (calls `shape` for informative
-truncation). **Lineage:** jso-jackson / jso-debug (graveyard) — the
-controlled-inspection doctrine, re-shaped for a runtime where data is
-already structured.
+`mcp/nushell-mcp/modules/dataspection`, Nu-native, used through
+`evaluate`. Census, schema, spine, preview, page, and meta are pure
+(value in, value out). `read` is `--env` and stashes over cap through
+`jobs`. **Supersedes:** [hist-v1](../.archive/hist-v1.md).
+**Depends on:** [par-jobs-v1](../.archive/par-jobs-v1.md) for `read`
+only (`jobs stash`; cap knobs on `$env.NU_PAR`). Other commands:
+nothing in-layer. **Consumed by:** par-jobs amendments (`jobs inspect`
+calls `shape` on the stored payload internally — not `read | shape`),
+xq-v1, rg-wrapper-v1 (`spine`), the session host (calls `shape` for
+informative truncation). **Lineage:** jso-jackson / jso-debug
+(graveyard) — the controlled-inspection doctrine, re-shaped for a
+runtime where data is already structured.
 **Not this brief:** `$history` indexing (session host), JSON Schema
 generation, tags/notes storage (the host's journal).
 
@@ -48,6 +51,21 @@ describing-only module: you stamp on the way out *so that* census
 works on the way back. `$history | shape each` can only lift `ok` and
 `verb` because something stamped them. One loop, one module.
 
+**Load order.** Runtime primitives first, access discipline second.
+`config.nu` and every child suite:
+
+```
+use par *
+use jobs *
+use dataspection *
+```
+
+`par` freezes cap knobs; `jobs` is the registry `read` stashes into.
+Cross-module calls resolve at run time — `jobs emit` already calls
+`par emit` this way. Dataspection does not `use jobs` internally;
+over-cap `read` invokes `jobs stash` from the overlay, same as jobs
+invokes `par emit`.
+
 ## Two vocabularies
 
 Data objects are nouns; interactions are verbs; they compose. The
@@ -82,21 +100,26 @@ Because they compose, a produced object is just another object:
 $x | schema | preview            # the schema is large — clip it
 $x | spine file | page 2         # the spine is long — slice it
 $x | schema | shape              # how big is this schema, actually
-jobs read sq | shape             # pull the payload, then shape it
+jobs read sq | shape             # disclose, then census the body
 ```
 
-That last line is an identity worth stating: **`jobs inspect <tag>` ≡
-`jobs read <tag> | shape`, plus the job's identity fields.** Same for
-`nu-modules inspect`. `inspect` on an addressed thing simply *is*
-read-then-shape, which is why there is one census definition and not
-several.
+That last line is **compose after a lawful disclose**, not an
+identity. **`jobs inspect` is not `jobs read | shape`.** `inspect`
+discloses nothing; `read` may decline and then `| shape` would census
+the decline receipt, not the payload. `jobs inspect` keeps jobs' own
+receipt (identity fields plus payload census). One `bytes` definition
+means the amendment calls `$payload | shape` **internally** to fill
+those census fields — it does not export `jobs shape`, and it does
+not route inspect through read. `nu-modules inspect` is a command
+listing, a different object entirely.
 
 **Holding is not seeing.** From the agent's side every value in the
 engine is a handle — `$x`, `$history.7`, a registry payload, an
 intermediate pipeline stage. The agent never has the bytes, only a
 name the engine can resolve, and nothing is disclosed unless it fits
 the cap. So `read` is meaningful on a piped value, not only on a
-stored one, and the verb vocabulary is uniform across both.
+stored one. An unnamed terminal `big | read` that declines **stashes**
+so the body is not lost when `$history` records the receipt.
 
 ## The disclosure ladder
 
@@ -106,7 +129,7 @@ stops being prose and becomes enforceable:
 | Verb | Discloses | Always fits? |
 |---|---|---|
 | `inspect` / `shape` | nothing — census only | yes, by construction |
-| `read` | the whole body | **only if under cap** — otherwise a receipt naming where it went and pointing at the bounded verbs |
+| `read` | the whole body | **only if under cap** — otherwise a receipt naming `jobs read <tag>` |
 | `preview` | whole structure, leaves clipped | yes, bounded per leaf |
 | `page` | one slice | yes, bounded per slice |
 
@@ -249,16 +272,36 @@ $x | preview [--chars 200] [--items 5] [--mode head|tail|sandwich]
 $x | read
 → the value itself when it fits the cap
 → {ok: true, disclosed: false, tag: string, bytes: int,
-   retrieve: string} when it does not
+   retrieve: string, error?: string, trace?: string}
+   | merge {meta: {verb: "read", at, …}} when it does not
 ```
 
-- The **disclosure verb**, and the only one that may decline. Under
-  `max_inline_bytes` it returns the value. Over it, the value is
-  stashed and the receipt names the retrieval (`retrieve: "page"` /
-  `"preview"` / `"jobs read <tag>"`) — never a bare "too big".
-- This is the one cap rule for the whole layer. `jobs read`,
-  `xq`, and the rg module apply *this*, not their own copy.
-- Peek, not pop: `read` never removes or mutates what it discloses.
+`export def --env`. The **disclosure verb**, and the only one that may
+decline. Declining is not failure (`ok: true`).
+
+- **Cap.** Same knobs par already froze: `$env.NU_PAR.max_inline_bytes`
+  if set, else `$env.NU_MCP_OUTPUT_LIMIT`, else `20000`. Do not open
+  `policy.json`. `bytes` is `shape`'s definition (NUON UTF-8 length).
+- **Under cap** → the value itself. Not wrapped, not stamped.
+- **Over cap** → `jobs stash` (default tag `stash:<seq>`); the
+  receipt copies `tag` and `bytes`, and `retrieve` is the pasteable
+  command `"jobs read <tag>"` — never a bare "too big". v1 retrieval
+  is today's uncapped `jobs read`. Bounded verbs stay the ladder on a
+  value in hand (`$x | preview`, `jobs read t | page`); they are not
+  the decline's `retrieve`.
+- **Jobs missing** (overlay has no `jobs stash`) →
+  `{ok: false, disclosed: false, error, trace}`. Misconfigured
+  session, not a production path; `config.nu` always loads jobs
+  first. The body is not in the result.
+- Duplicate tag / stash failure → that error as data (`ok: false`).
+- Peek, not pop: `read` never removes or mutates `$in`; a bound `$x`
+  still holds the value after a decline.
+- This is the one cap rule for in-hand disclose. `xq` and rg apply
+  *this*. `jobs read` adopting the same cap for *terminal* disclose
+  of an addressed payload is the par-jobs amendment — and that
+  amendment must keep a path that actually returns the stored body
+  (or a bounded view of it). It must not make `jobs inspect` go
+  through a declining `read`.
 
 ### `meta` — the provenance on a record
 
@@ -331,12 +374,13 @@ mcp/nushell-mcp/skills/nushell/references/dataspection.md
   the two vocabularies, the disclosure ladder, the drill loop, jso lineage
 mcp/nushell-mcp/skills/nushell/references/mcp.md
   + `$history | shape each` as the history idiom
-config.nu             # use dataspection *   (before par/jobs, which call shape/read)
+config.nu             # use par *; use jobs *; use dataspection *
 ```
 
 Docstrings on every command. On landing, par-jobs amendments (step 3
-of the roadmap) switch `jobs-census` to `shape`, and `par emit` /
-`jobs read` to the `read` cap rule.
+of the roadmap) switch `jobs-census` / `par emit` to `$payload | shape`
+internally (inspect receipt stays jobs-shaped), and teach `jobs read`
+the cap rule for terminal disclose.
 
 ## Tests (child `nu -n`)
 
@@ -366,9 +410,13 @@ of the roadmap) switch `jobs-census` to `shape`, and `par emit` /
   twice replaces rather than nests
 - `meta`: returns the sub-record; on an unstamped value → `null`, no
   throw
-- `read`: under cap returns the value; over cap returns
-  `{disclosed: false, tag, bytes, retrieve}` and the value is
-  retrievable by that tag; peek not pop
+- `read`: suite loads `par`, `jobs`, then `dataspection`. Under cap
+  returns the value. Over cap (force a low `$env.NU_PAR.max_inline_bytes`)
+  returns `{ok: true, disclosed: false, tag, bytes, retrieve}` with
+  `retrieve` matching `jobs read <tag>`; `jobs read <tag>` returns
+  the original value; peek not pop (`$in` / a bound name still holds
+  it). Decline receipt carries `meta.verb == "read"`. Jobs missing →
+  `{ok: false, disclosed: false, error, trace}`
 - every verb on `null` and on `""`: returns its shape, no throw
 - forced internal failure (e.g. a closure value for `schema`, an
   unserializable value for `shape`): result has `error` (short) and
@@ -383,6 +431,8 @@ table whose `index` matches the reported `history_index` values;
 coverage; `$history.N | preview` → the record, clipped, under the
 output limit; `$history.N | get <path> | page 2 --size 20` → header +
 20 items. Each is one receipt or one bounded body; nothing floods.
+Over-cap `read` of a large string → decline receipt; `jobs read <tag>`
+returns the string.
 
 ## Non-goals (v1)
 
@@ -392,7 +442,13 @@ output limit; `$history.N | get <path> | page 2 --size 20` → header +
 - Byte caps inside `page`/`preview`; smart sizing
 - Searching inside values (`find` is the host's, over the journal;
   in-engine it is `where`)
-- Any write, any env mutation, any dependency on `jobs`
+- A second store. Over-cap `read` uses `$env.JOBS` via `jobs stash`;
+  it does not grow `$env.DATASPECTION` or write files
+- Exporting `inspect` (nushell's builtin stays). On a value in hand
+  the census noun is `shape`
+- `jobs shape` / collapsing `jobs inspect` into `read | shape` — jobs
+  keeps its own inspect receipt; that is the amendment's problem, not
+  this module's export list
 
 ---
 
