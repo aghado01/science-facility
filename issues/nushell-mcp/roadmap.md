@@ -31,8 +31,8 @@ context window as the scarcest resource in the loop:
 - **Interactive fan-out over batch compute.** Parallel search inside a
   session is the design center; dataset processing is secondary,
   big-data ergonomics deferred. Ambiguous calls favor the console.
-- **Non-blocking + quarantine is the product; parallelism is a
-  feature.** A single `jobs spawn` at parallelism 1 is a design-center
+- **Non-blocking + payload quarantine is the product; parallelism is
+  a feature.** A single `jobs spawn` at parallelism 1 is a design-center
   use, not a degenerate case.
 - **Division of labor:** `rg` owns textual search throughput (internally
   parallel — never sharded through `par` for speed); `par` owns
@@ -75,31 +75,55 @@ context window as the scarcest resource in the loop:
    `shape` (+ `each`), `schema` (+ `diff`/`check`/`stats`), `spine`,
    `page`, `preview`, `stamp`. jso-jackson's controlled-exploration
    doctrine in Nu's data orientation; the `bytes` definition lives here
-   once. No deps — can land in parallel with 3 and H.
-3. **`xq` v1** — [briefs/xq-v1.md](briefs/xq-v1.md) · filed; depends
-   on 1. Execute-and-quarantine for every external: `complete` + census
-   + inline-under-cap / stash-over-cap, job-aware via `job id`. The
-   primitive rg is a special case of — build before 4.
-4. **`rg` wrapper v1** — [briefs/rg-wrapper-v1.md](briefs/rg-wrapper-v1.md)
-   · filed, not started; depends on 1 and 3. `xq` + JSON-event parse +
-   spine; `--wrapped` query side, registry storage via `jobs stash`.
-5. **Query tools on the envelope** — mdnav_v2 chunk shards, `nu-skills
-   search` fan-out. First real parallelism consumers; `par emit` shipped
-   with par-jobs-v1. Align the chunk shape with mdnav_v2's brief rather
-   than inventing twice.
-6. **Session layer / daemon** — later. Scoped per-agent history
-   (standard issue), identity plumbing exercised for real, jobs that
-   outlive the MCP child, queueing at cap, process isolation.
-7. **para-agent visitor grant** — later. Admit this MCP to a
-   participant; same verbs, no new surface.
+   once. No deps — can land in parallel with H. **Next to build.**
+3. **par-jobs amendments** — to scribe, before 4: `jobs disclose`
+   (value → inline under cap, else `stash` + `tag`; the one cap rule
+   `emit`/`xq`/rg all consume — today it is split across `stash` and a
+   private cap resolver); receipts gain `meta` via `stamp`
+   (spawn/inspect/status/cancel records; tests change); `jobs inspect`
+   calls `shape`. Small, but landed code changes, so an amendment with
+   its own follow-up entry.
+4. **`xq` v1** — [briefs/xq-v1.md](briefs/xq-v1.md) · filed; depends
+   on 1–3. Execute, capture, payload-quarantine for every external:
+   `complete` + census + `jobs disclose`, job-aware via `job id`. The
+   primitive the rg module is a special case of — build before 5.
+5. **`rg` module v1** — [briefs/rg-wrapper-v1.md](briefs/rg-wrapper-v1.md)
+   · filed, not started; depends on 1, 4. `xq` + JSON-event parse +
+   `spine`; `--wrapped` query side. (The module; ripgrep itself is in
+   `deps/cli`.)
+6. **Query tools on the envelope** — mdnav_v2 chunk shards, `nu-skills
+   search` fan-out. First real parallelism consumers. Align the chunk
+   shape with mdnav_v2's brief rather than inventing twice.
+7. **Host v2: daemon + shim; snapshot/restore** — later. The host
+   becomes a daemon, the stdio MCP process a thin shim over a local
+   socket (psmux's server/client split); engines survive client and
+   shim restarts; jobs outlive the client for real. Engine-state
+   snapshot into the stream dir is the step after.
+8. **para-agent deployment** — later; its own brief, co-designed.
+   nushell-mcp as a visitor MCP: writes under the `.para-agent-mcp/`
+   umbrella with conventions modified in that context (open — see
+   [write-conventions-v1](briefs/write-conventions-v1.md)); roots and
+   identity routed at spawn; Console Journal amendments `shell: nu`,
+   `origin: evaluate`; retire para-agent's `nu.js` one-shot;
+   `turn.agent` only if a shared engine is ever granted.
 
-**H. Session host v1** — [briefs/session-host-v1.md](briefs/session-host-v1.md) (journal = para-agent Console Journal Contract v1; archaeology in [notes](notes/para-agent-archaeology.md))
-· filed. Parallel track: thin TS MCP host in front of `nu --mcp` —
-host-side history ledger (at, source, census), `annotate`, `read`,
-`console`, caller-routed identity with one engine per `(session,
-agent)`, scoped JSONL history artifacts, keepalive, informative
-truncation. Absorbs the hist-v1 index sidecar and the session-layer
-history work from 6; 6 keeps only what needs a true daemon.
+**H. Session host v1** — [briefs/session-host-v1.md](briefs/session-host-v1.md)
+· filed. Parallel track, can start now: thin TS MCP host in front of
+`nu --mcp` — a **Console Journal Contract v1 producer** (one stream
+per engine session, `turn` session-monotonic across engine
+generations, NUON bodies as files that survive engine death); tools
+`log`/`body`/`find`/`annotate`/`console` + `spawn`/`list`/`kill` with
+para-agent's names; caller-routed identity, one engine per `(session,
+agent)`, keepalive; informative truncation (one follow-up `shape`);
+writes per [write-conventions-v1](briefs/write-conventions-v1.md).
+Archaeology in [notes](notes/para-agent-archaeology.md). Absorbed the
+session-layer history work; 7 keeps only what needs a daemon.
+
+**Standing obligation (every landed brief):** "documented, not
+encoded" means each landing also updates
+`skills/nushell/references/*.md` and the Claude-side adapter skill
+(`~/.claude/skills/nushell-mcp`), in the same change. A module without
+its reference entry is not landed.
 
 ## Briefs
 
@@ -108,6 +132,6 @@ history work from 6; 6 keeps only what needs a true daemon.
 | [par-jobs-v1](briefs/par-jobs-v1.md) | landed 2026-08-21 |
 | [hist-v1](briefs/hist-v1.md) | superseded → probe-v1 (primitives) + session-host-v1 (index) |
 | [session-host-v1](briefs/session-host-v1.md) | filed, not started; parallel track |
-| [xq-v1](briefs/xq-v1.md) | filed, not started; depends on par-jobs-v1 |
+| [xq-v1](briefs/xq-v1.md) | filed, not started; depends on par-jobs-v1 + `jobs disclose` amendment |
 | [rg-wrapper-v1](briefs/rg-wrapper-v1.md) | filed, not started; depends on par-jobs-v1, xq-v1 |
 | [write-conventions-v1](briefs/write-conventions-v1.md) | filed; governs every write (state vs scratch, locality, chronology, precedence) |
