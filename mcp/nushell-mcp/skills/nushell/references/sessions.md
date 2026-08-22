@@ -18,7 +18,7 @@ The built-in MCP server (`nu --mcp`) runs a single, continuous in-memory engine 
   - **Failed evaluates leave no entry.** An error result carries no `history_index`; the next success takes the next slot. `history_index` counts successes, not evaluates.
   - **A `nothing` result is stored as `[]`** (and relayed as `[]`). `$history.N == null` is false for it; `shape` reports `list`, length 0 — correct for what is stored.
   - **Two failure levels.** An evaluate that throws is engine-level: error result, no entry. A layer verb that *catches* a failure and returns it as data (`ok: false`, `error`, maybe `trace`) is a successful evaluate with an entry — legible only through its own `ok`. Every layer record carries `ok`.
-  - Census without dumping: `$history | shape each` (probe) — `index` *is* the `history_index`; `ok` is lifted, so `| where ok == false` finds caught failures.
+  - Census without dumping: `$history | shape each` (dataspection) — `index` *is* the `$history` slot the tool result reports as `history_index`; `ok` is lifted, so `| where ok == false` finds caught failures.
 - **Token Economy**: If output exceeds `$env.NU_MCP_OUTPUT_LIMIT` and gets truncated, slice the preserved in-memory data in the next turn without re-running:
   ```nu
   $history.0 | where status == "error" | select id message | first 5

@@ -117,8 +117,8 @@ context window as the scarcest resource in the loop:
    Load after par/jobs (`use par *; use jobs *; use dataspection *`).
    Census/preview/page/meta are pure; `read` is `--env` and stashes
    over cap through `jobs stash`. Cap knobs from
-   `$env.NU_PAR.max_inline_bytes` else `NU_MCP_OUTPUT_LIMIT`. Can land
-   in parallel with H. **Next to build.**
+   `$env.NU_PAR.max_inline_bytes` else `NU_MCP_OUTPUT_LIMIT`. **Landed
+   2026-08-22.** Can still be used in parallel with H.
 3. **par-jobs amendments** — after 2, before 4. `jobs disclose` is
    **not** needed: in-hand cap is `read`; `jobs read` later adopts the
    same cap for *terminal* disclose of an addressed payload, and must
@@ -191,7 +191,7 @@ here. Term senses — whose word is whose — are in
 | Brief | Status |
 |---|---|
 | [par-jobs-v1](.archive/par-jobs-v1.md) | landed 2026-08-21 |
-| [dataspection-v1](briefs/dataspection-v1.md) | filed, not started; `read` depends on par-jobs; **next to build** |
+| [dataspection-v1](briefs/dataspection-v1.md) | landed 2026-08-22 |
 | [hist-v1](.archive/hist-v1.md) | superseded → dataspection-v1 (primitives) + session-host-v1 (index) |
 | [session-host-v1](briefs/session-host-v1.md) | filed, not started; parallel track |
 | [xq-v1](briefs/xq-v1.md) | filed, not started; depends on par-jobs-v1 + `read` cap rule |

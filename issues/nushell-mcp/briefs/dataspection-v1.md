@@ -1,6 +1,6 @@
 # `dataspection` v1 — disciplined access to data
 
-**Status:** filed, not started · **Filed:** 2026-08-21 · **Home:**
+**Status:** landed · **Filed:** 2026-08-21 · **Landed:** 2026-08-22 · **Home:**
 `mcp/nushell-mcp/modules/dataspection`, Nu-native, used through
 `evaluate`. Census, schema, spine, preview, page, and meta are pure
 (value in, value out). `read` is `--env` and stashes over cap through
@@ -454,4 +454,14 @@ returns the string.
 
 ## Follow-up report
 
-_Chip or implementer: append outcome, tests run, deviations from this spec._
+- Landed 2026-08-22. Tree as spec: `modules/dataspection/mod.nu`, `references/dataspection.md`, `config.nu` preloads `par` then `jobs` then `dataspection`. Corpus: `mcp.md`, `sessions.md`, `gotchas.md`, `SKILL.md`. Adapters: `~/.claude/skills/nushell-mcp`, `~/.grok/skills/nushell-mcp`.
+- Child tests: `nu -n mcp/nushell-mcp/tests/dataspection-v1.nu` — 13/13 (shape table + scalars + each, schema + diff/check/stats, spine, page, preview, meta stamp, read under/over cap, read jobs-missing child, null/"", forced failure).
+- MCP exit gate: `$history | shape each` after a few evaluates; `$history.N | schema` / `preview` / `page`; over-cap `read` then `jobs read <tag>`.
+- Deviations / spec fills:
+  - `schema` on a top-level closure is fail-as-data (`ok: false` + `error`/`trace`). Walking a closure would otherwise return `[]` and hide the unserializable case the test list asked for.
+  - `spine` groups with a closure (`group-by {|row| $row | get $column}`). A string variable is an unsupported grouper; a literal column name still works at the REPL.
+  - Sort is n-desc then key-asc by grouping on `n`, then sorting each group by NUON of `key` (Nu `sort-by` is not a stable two-key sort).
+  - `shape each` builds `ok`/`verb` in one record; mutating `ok: null` to a bool is a type mismatch.
+  - Jobs-missing `read` is a child `nu -n -c` without `use jobs` (cannot unload jobs from the suite overlay).
+  - `schema` shadows SQLite's `schema` while the module is in the overlay — recorded in `gotchas.md`.
+- Not this brief (unchanged): `$history` indexing, JSON Schema generation, tags/notes storage, `jobs inspect` calling `shape` (step 3).
