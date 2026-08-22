@@ -2,7 +2,7 @@
 
 **Status:** captured conversation, not a spec. Superseded where it
 conflicts with filed briefs: `xq` → [xq-v1](../briefs/xq-v1.md);
-`hist`/`shape`/`peek`/`cap` → [probe-v1](../briefs/probe-v1.md)
+`hist`/`shape`/`peek`/`cap` → [inspect-v1](../briefs/inspect-v1.md)
 (there is no `hist` module — `$history | shape each` is the idiom);
 `console` → [session-host-v1](../briefs/session-host-v1.md).
 Still unclaimed: `jobs spill`. Terminology here predates

@@ -38,7 +38,7 @@ package-level rules.
    landing: outcome, tests run, deviations.
 3. **Closed shapes.** Receipts, envelopes, and rows have closed column
    sets. Native fields never leak. `bytes` has one definition
-   (NUON-serialized UTF-8 length, computed once) — in `probe` once it
+   (NUON-serialized UTF-8 length, computed once) — in `inspect` once it
    lands; never re-derive it.
 4. **Receipts before bodies.** One tool result carries at most one
    payload. Anything withheld names the call that retrieves it.
@@ -53,7 +53,7 @@ package-level rules.
 5. **Never cap a live pipeline** (`first N`, `head`) — slice `$history`
    or `jobs read` afterward. This is the MCP's own rule; the modules
    exist to make obeying it easy.
-6. **Writes follow** `issues/nushell-mcp/briefs/write-conventions-v1.md`:
+6. **Writes follow** `issues/nushell-mcp/notes/write-conventions-v1.md`:
    state under `.nushell-mcp/`, scratch under `artifacts/nushell-mcp/`,
    never OS temp, ISO stamps on run dirs.
 7. **Vocabulary.** Term senses live in

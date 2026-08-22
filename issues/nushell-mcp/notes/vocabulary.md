@@ -30,21 +30,32 @@ index is exactly the ornament to avoid.
 
 | Term | Sense | Where |
 |---|---|---|
-| `index` | position in an input sequence, 0-based | `par` rows, probe `shape each` |
-| `bytes` | NUON-serialized UTF-8 length, computed once | probe `shape`; everything else calls it |
+| `index` | position in an input sequence, 0-based | `par` rows, `inspect`'s `shape each` |
+| `bytes` | NUON-serialized UTF-8 length, computed once | `inspect`'s `shape`; everything else calls it |
 | `ok` | did this thing succeed — **universal on every record** | layer-wide (AGENTS.md 4a) |
 | `error` / `trace` | short first line / full rendered error, on `ok: false` | layer-wide |
 | `tag` | the name of a stored or handled thing | `jobs` registry, `stamp`, stash keys |
 | `verb` | the producing command, dotted (`jobs.spawn`, `par.emit`, `xq`) | `meta.verb` |
-| `spine` | `{key, n}` census of where the mass is | probe, rg |
+| `inspect` | describe a thing without disclosing it | `jobs`, `nu-modules`; value-domain member is `shape` |
+| `read` | the body, one at a time — inspect's partner | `jobs`, `nu-modules` |
+| `shape` | the census core `{type, length, bytes, columns?}` | `inspect` module; `jobs inspect` calls it |
+| `spine` | `{key, n}` census of where the mass is | `inspect`, rg |
 | `stash` | put a payload in the registry | `jobs` |
 | `payload quarantine` | keeping a big result out of context | doctrine — **always qualified**, see below |
 
 ## Renamed 2026-08-22
 
+- **module `probe` → `inspect`.** "Probe" was a coined word for a thing
+  the layer already named twice (`jobs inspect`, `nu-modules inspect`).
+  `inspect` = *tell me about it, don't give it to me*; its partner is
+  `read`. The module exports no `main`, so nushell's builtin `inspect`
+  (a debug **passthrough**) is not shadowed. `probe` survives only as a
+  private helper name — renamed to `load-unit` in `nu-modules` to keep
+  the word out of circulation.
+
 - **`meta.kind` → `meta.verb`.** `kind` was already spoken for three
   times over: the journal record kind (`turn | out | exit | note`,
-  para-agent's, unrenameable), probe `page`'s `kind`
+  para-agent's, unrenameable), `inspect`'s `page` unit
   (`rows | lines | chars`), rg `findings.kind` (`match | context`).
   The stamp field's values are verb names, so `verb` is both precise
   and collision-free. Consequence: the host's `log {kind?}`

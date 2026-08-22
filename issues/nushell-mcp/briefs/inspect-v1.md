@@ -1,7 +1,7 @@
-# `probe` v1 — controlled exploration of structured data
+# `inspect` v1 — controlled exploration of structured data
 
 **Status:** filed, not started · **Filed:** 2026-08-21 · **Home:**
-`mcp/nushell-mcp/modules/probe`, Nu-native, pure (value in, value
+`mcp/nushell-mcp/modules/inspect`, Nu-native, pure (value in, value
 out), used through `evaluate`. **Supersedes:** [hist-v1](../.archive/hist-v1.md).
 **Depends on:** nothing in-layer. **Consumed by:** par-jobs
 amendments (`jobs inspect` → `shape`, receipts → `stamp`), xq-v1,
@@ -31,7 +31,42 @@ file layer, the formatters, and the declarative-search layer (closures
 are the safe form here); what survives is **census, profile, window,
 preview, provenance** — six pure verbs.
 
-## Verbs (flat names; `use probe *`)
+## `inspect` — one concept, three domains
+
+The name is deliberate: the layer already had two `inspect`s, and they
+are the same idea applied to different things. **Inspect tells you
+about a thing without giving you the thing.** Its partner verb is
+`read` — the body, one at a time.
+
+| Domain | Inspect | Read |
+|---|---|---|
+| a value in hand | `$x \| shape` (this module) | `page` / `preview` (bounded) |
+| a stored payload | `jobs inspect <tag>` | `jobs read <tag>` |
+| a module | `nu-modules inspect <unit>` | `nu-modules read <unit>` |
+
+The inspect/read pairing already existed twice, unstated. It is now
+doctrine, and this module is the value-domain member — hence the name.
+
+**What actually merges is the census core.** `{type, length, bytes,
+columns?}` is one function, defined here (`shape`), called by
+`jobs inspect` for its payload. A module is not a value, so
+`nu-modules inspect` shares the *contract* (identity + description,
+never the body), not the fields. Do not force a common record on
+domains that do not have one — the shared thing is the discipline and
+the `bytes` definition, not a universal shape.
+
+**The builtin is not shadowed.** Nushell's `inspect` is a `debug`
+command that prints a table and **passes its input through**
+(verified: `[1 2 3] | inspect` → `list<int>`). Under `--mcp` there is
+no terminal for the table, and the passthrough means the whole value
+lands in the tool result — a flood wearing the name an agent would
+reach for first. This module therefore exports **no `main`**: `use
+inspect *` brings in the flat verbs and leaves builtin `inspect`
+reachable, per the standing rule against monkey-patching builtins
+(par-jobs-v1). The corpus must say plainly: *builtin `inspect` is a
+passthrough; for census use `shape`.*
+
+## Verbs (flat names; `use inspect *`)
 
 Every verb is a receipt except `page` and `preview`, which are the
 bounded body verbs. **No verb throws on odd input — failure is data.**
@@ -197,13 +232,13 @@ handle plane. `page`/`preview` are the only body verbs; never `each
 ## Tree
 
 ```
-mcp/nushell-mcp/modules/probe/
+mcp/nushell-mcp/modules/inspect/
   mod.nu              # shape, shape each, schema (+diff/check/stats), spine, page, preview, stamp
-mcp/nushell-mcp/skills/nushell/references/probe.md
+mcp/nushell-mcp/skills/nushell/references/inspect.md
   the drill loop, each verb's shape, the stamp convention, jso lineage map
 mcp/nushell-mcp/skills/nushell/references/mcp.md
   + `$history | shape each` as the history idiom
-config.nu             # use probe *   (before par/jobs, which will call shape)
+config.nu             # use inspect *   (before par/jobs, which will call shape)
 ```
 
 Docstrings on every verb. On landing, par-jobs amendments (step 3 of

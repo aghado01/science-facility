@@ -69,7 +69,7 @@ context window as the scarcest resource in the loop:
   returns has a closed `meta` sub-record (`verb, at, tag?, elapsed?,
   ref?`) via one pure `stamp` primitive; tables stay bare. `$history`
   is a spine of values + positions; `meta` is how entries describe
-  themselves and point at each other. (probe-v1 `stamp`.)
+  themselves and point at each other. (inspect-v1 `stamp`.)
 
 ## Sequence
 
@@ -77,7 +77,7 @@ context window as the scarcest resource in the loop:
    · landed 2026-08-21. Data plane + handle plane + budget on the
    persistent engine. Carries the envelope contract (shape 4) and the
    registry mechanics.
-2. **probe v1** — [briefs/probe-v1.md](briefs/probe-v1.md) · filed (supersedes
+2. **inspect v1** — [briefs/inspect-v1.md](briefs/inspect-v1.md) · filed (supersedes
    [hist-v1](.archive/hist-v1.md)). Pure primitives, one module:
    `shape` (+ `each`), `schema` (+ `diff`/`check`/`stats`), `spine`,
    `page`, `preview`, `stamp`. jso-jackson's controlled-exploration
@@ -137,8 +137,8 @@ here. Term senses — whose word is whose — are in
 | Brief | Status |
 |---|---|
 | [par-jobs-v1](.archive/par-jobs-v1.md) | landed 2026-08-21 |
-| [probe-v1](briefs/probe-v1.md) | filed, not started; no deps; **next to build** |
-| [hist-v1](.archive/hist-v1.md) | superseded → probe-v1 (primitives) + session-host-v1 (index) |
+| [inspect-v1](briefs/inspect-v1.md) | filed, not started; no deps; **next to build** |
+| [hist-v1](.archive/hist-v1.md) | superseded → inspect-v1 (primitives) + session-host-v1 (index) |
 | [session-host-v1](briefs/session-host-v1.md) | filed, not started; parallel track |
 | [xq-v1](briefs/xq-v1.md) | filed, not started; depends on par-jobs-v1 + `jobs disclose` amendment |
 | [rg-wrapper-v1](briefs/rg-wrapper-v1.md) | filed, not started; depends on par-jobs-v1, xq-v1 |

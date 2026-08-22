@@ -60,9 +60,9 @@ def resolve [name: string]: nothing -> record {
     $hit | first
 }
 
-# Load a unit in a child `nu -n` and return what the engine says about it.
+# Load a unit in a child nu and return what the engine says about it.
 # Single mechanism for both "does it load" and "what does it export".
-def probe [u: record]: nothing -> record {
+def load-unit [u: record]: nothing -> record {
     let stem = ($u.unit | path parse | get stem)
     let script = ([
         'const NU_LIB_DIRS = ' (lib-dirs | to nuon) '; '
@@ -71,7 +71,11 @@ def probe [u: record]: nothing -> record {
         'let cmds = (scope commands | where name in ($m.commands.name) | select name description signatures attributes is_sub); '
         '{module: $m.name, file: $m.file, has_env: $m.has_env_block, description: $m.description, commands: $cmds} | to nuon'
     ] | str join)
-    let r = (^nu -n -c $script | complete)
+    # `$nu.current-exe`, not `^nu`: the MCP child's PATH need not contain a
+    # `nu` at all (the engine is launched by absolute path from .mcp.json, and
+    # config.nu prepends only deps/cli). Using the running binary also pins the
+    # child to this session's engine version.
+    let r = (^$nu.current-exe -n -c $script | complete)
     if $r.exit_code == 0 {
         let info = ($r.stdout | from nuon)
         {loads: true, error: "", info: $info}
@@ -117,7 +121,7 @@ export def main [
 # List every `use`-able unit on NU_LIB_DIRS with loadability decided by loading it
 export def "nu-modules list" []: nothing -> table {
     all-units | each {|u|
-        let p = (probe $u)
+        let p = (load-unit $u)
         {
             unit: $u.unit,
             kind: $u.kind,
@@ -135,7 +139,7 @@ export def "nu-modules inspect" [
     unit: string # Unit name as shown by `nu-modules list`
 ]: nothing -> table {
     let u = (resolve $unit)
-    let p = (probe $u)
+    let p = (load-unit $u)
     if not $p.loads {
         error make { msg: $"Unit '($unit)' does not load:\n($p.error)" }
     }
