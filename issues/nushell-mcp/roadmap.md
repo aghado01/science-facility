@@ -170,6 +170,12 @@ writes per [write-conventions-v1](notes/write-conventions-v1.md).
 Archaeology in [notes](notes/para-agent-archaeology.md). Absorbed the
 session-layer history work; 7 keeps only what needs a daemon.
 
+**Parked:** module prefixing — whether furnished capabilities carry a
+`nu-` prefix to distinguish them from vendored utilities once
+everything is `use`-pinned. Rationale accumulated in
+[notes/module-prefixing.md](notes/module-prefixing.md); nothing
+assumes it.
+
 Package rules (landing obligations, closed shapes, write conventions,
 vocabulary) live in
 [`mcp/nushell-mcp/AGENTS.md`](../../mcp/nushell-mcp/AGENTS.md), not
