@@ -38,10 +38,18 @@ package-level rules.
    landing: outcome, tests run, deviations.
 3. **Closed shapes.** Receipts, envelopes, and rows have closed column
    sets. Native fields never leak. `bytes` has one definition
-   (NUON-serialized UTF-8 length, computed once) — in `inspect` once it
-   lands; never re-derive it.
+   (NUON-serialized UTF-8 length, computed once) — in `dataspection`
+   once it lands; never re-derive it.
 4. **Receipts before bodies.** One tool result carries at most one
    payload. Anything withheld names the call that retrieves it.
+   `read` is the only verb that may decline, and when it declines it
+   names the retrieval — the disclosure ladder is `shape` (always
+   fits) → `read` (if it fits) → `preview`/`page` (bounded).
+4b. **Portable verbs.** A verb means one thing wherever it appears,
+   and takes a noun domain when it addresses a stored or named thing:
+   `jobs inspect`, `nu-modules read`, `meta stamp`. Commands acting on
+   a value **in hand** are flat, because the value arrives by pipe
+   rather than by address.
 4a. **`ok` is universal; failure is data.** Every record the layer
    returns carries `ok: bool`. A verb that catches an error returns
    `ok: false` + `error` (short) — and `trace` where it captured one —

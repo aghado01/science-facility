@@ -97,7 +97,9 @@ context window as the scarcest resource in the loop:
   returns has a closed `meta` sub-record (`verb, at, tag?, elapsed?,
   ref?`) via one pure `stamp` primitive; tables stay bare. `$history`
   is a spine of values + positions; `meta` is how entries describe
-  themselves and point at each other. (inspect-v1 `stamp`.)
+  themselves and point at each other. ([meta-v1](briefs/meta-v1.md);
+  `stamp` takes a noun domain because the verb is portable — a
+  timestamp module would have its own.)
 
 ## Sequence
 
@@ -105,22 +107,27 @@ context window as the scarcest resource in the loop:
    · landed 2026-08-21. Data plane + handle plane + budget on the
    persistent engine. Carries the envelope contract (shape 4) and the
    registry mechanics.
-2. **inspect v1** — [briefs/inspect-v1.md](briefs/inspect-v1.md) · filed (supersedes
-   [hist-v1](.archive/hist-v1.md)). Pure primitives, one module:
-   `shape` (+ `each`), `schema` (+ `diff`/`check`/`stats`), `spine`,
-   `page`, `preview`, `stamp`. jso-jackson's controlled-exploration
-   doctrine in Nu's data orientation; the `bytes` definition lives here
-   once. No deps — can land in parallel with H. **Next to build.**
-3. **par-jobs amendments** — to scribe, before 4: `jobs disclose`
-   (value → inline under cap, else `stash` + `tag`; the one cap rule
-   `emit`/`xq`/rg all consume — today it is split across `stash` and a
-   private cap resolver); receipts gain `meta` via `stamp`
-   (spawn/inspect/status/cancel records; tests change); `jobs inspect`
-   calls `shape`. Small, but landed code changes, so an amendment with
-   its own follow-up entry.
+2. **dataspection v1** — [briefs/dataspection-v1.md](briefs/dataspection-v1.md)
+   · filed (supersedes [hist-v1](.archive/hist-v1.md)). The discipline
+   as a module: nouns that produce data objects (`shape`, `schema`,
+   `spine`) and portable verbs that interact with them (`inspect`,
+   `read`, `preview`, `page`), composing freely. Carries the
+   **disclosure ladder** and the one `bytes` definition. No deps —
+   can land in parallel with H. **Next to build.**
+2a. **meta v1** — [briefs/meta-v1.md](briefs/meta-v1.md) · filed.
+   `meta stamp` / `meta of`; split out of dataspection because it
+   writes rather than describes. Tiny; lands with or just after 2.
+3. **par-jobs amendments** — to scribe, before 4. `jobs disclose` is
+   **not** needed: the cap rule is what `read` does, so `jobs read`
+   adopts dataspection's `read` rather than a new verb. Receipts gain
+   `meta` via `meta stamp` (spawn/inspect/status/cancel; tests
+   change). `jobs inspect <tag>` becomes literally
+   `jobs read <tag> | shape` plus identity fields — one census
+   definition, not two. Landed code changes, so an amendment with its
+   own follow-up entry.
 4. **`xq` v1** — [briefs/xq-v1.md](briefs/xq-v1.md) · filed; depends
    on 1–3. Execute, capture, payload-quarantine for every external:
-   `complete` + census + `jobs disclose`, job-aware via `job id`. The
+   `complete` + census + `read`'s cap rule, job-aware via `job id`. The
    primitive the rg module is a special case of — build before 5.
 5. **`rg` module v1** — [briefs/rg-wrapper-v1.md](briefs/rg-wrapper-v1.md)
    · filed, not started; depends on 1, 4. `xq` + JSON-event parse +
@@ -174,10 +181,11 @@ here. Term senses — whose word is whose — are in
 | Brief | Status |
 |---|---|
 | [par-jobs-v1](.archive/par-jobs-v1.md) | landed 2026-08-21 |
-| [inspect-v1](briefs/inspect-v1.md) | filed, not started; no deps; **next to build** |
-| [hist-v1](.archive/hist-v1.md) | superseded → inspect-v1 (primitives) + session-host-v1 (index) |
+| [dataspection-v1](briefs/dataspection-v1.md) | filed, not started; no deps; **next to build** |
+| [meta-v1](briefs/meta-v1.md) | filed, not started; no deps; tiny |
+| [hist-v1](.archive/hist-v1.md) | superseded → dataspection-v1 (primitives) + session-host-v1 (index) |
 | [session-host-v1](briefs/session-host-v1.md) | filed, not started; parallel track |
-| [xq-v1](briefs/xq-v1.md) | filed, not started; depends on par-jobs-v1 + `jobs disclose` amendment |
+| [xq-v1](briefs/xq-v1.md) | filed, not started; depends on par-jobs-v1 + `read` cap rule |
 | [rg-wrapper-v1](briefs/rg-wrapper-v1.md) | filed, not started; depends on par-jobs-v1, xq-v1 |
 | [write-conventions-v1](notes/write-conventions-v1.md) | filed; governs every write (state vs scratch, locality, chronology, precedence) |
 | [gh-v1](briefs/gh-v1.md) | filed, not started; depends on xq-v1; needs `gh` ≥ 2.40 in `deps/cli` |

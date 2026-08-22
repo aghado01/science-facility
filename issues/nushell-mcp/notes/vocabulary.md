@@ -36,8 +36,10 @@ index is exactly the ornament to avoid.
 | `error` / `trace` | short first line / full rendered error, on `ok: false` | layer-wide |
 | `tag` | the name of a stored or handled thing | `jobs` registry, `stamp`, stash keys |
 | `verb` | the producing command, dotted (`jobs.spawn`, `par.emit`, `xq`) | `meta.verb` |
-| `inspect` | describe a thing without disclosing it | `jobs`, `nu-modules`; value-domain member is `shape` |
-| `read` | the body, one at a time — inspect's partner | `jobs`, `nu-modules` |
+| `inspect` | **portable verb** — describe without disclosing | `jobs inspect`, `nu-modules inspect`; on a value in hand: `shape` |
+| `read` | **portable verb** — disclose the body; the one cap rule (inline if it fits, else a receipt naming the retrieval) | `jobs read`, `$x \| read` |
+| `preview` / `page` | **portable verbs** — bounded disclosure: leaves clipped / one slice | dataspection |
+| `stamp` | **portable verb** — write this metadata onto it; always qualified by its object | `meta stamp` |
 | `shape` | the census core `{type, length, bytes, columns?}` | `inspect` module; `jobs inspect` calls it |
 | `spine` | `{key, n}` census of where the mass is | `inspect`, rg |
 | `stash` | put a payload in the registry | `jobs` |
@@ -45,7 +47,13 @@ index is exactly the ornament to avoid.
 
 ## Renamed 2026-08-22
 
-- **module `probe` → `inspect`.** "Probe" was a coined word for a thing
+- **module `probe` → `inspect` → `dataspection`** (2026-08-22).
+  Named for the practice, not its contents — `jobs`/`nu-modules` are
+  domain modules, this one is a discipline. `inspect` was wrong as a
+  module name because it is a *portable verb* that appears in other
+  domains. Membership: operates on a value **in hand** → here;
+  addresses a **stored or named** thing → that thing's domain.
+  Earlier reasoning kept for the trail: "Probe" was a coined word for a thing
   the layer already named twice (`jobs inspect`, `nu-modules inspect`).
   `inspect` = *tell me about it, don't give it to me*; its partner is
   `read`. The module exports no `main`, so nushell's builtin `inspect`

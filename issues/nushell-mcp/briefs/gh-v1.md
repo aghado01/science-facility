@@ -72,7 +72,7 @@ missing auth names the *user*, never the token. Test it.
 ## Return path
 
 Through `xq`: `complete` + census + payload quarantine via
-`jobs disclose`, job-aware. Same return-path detection as the rg
+`read`'s cap rule, job-aware. Same return-path detection as the rg
 module: stdout that parses as JSON (the agent passed `--json …`) →
 `mode: json`, rows; otherwise `mode: text`. The module adds no
 `--json` itself.
