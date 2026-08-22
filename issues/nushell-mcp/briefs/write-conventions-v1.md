@@ -36,8 +36,16 @@ in para-agent, mirrored here) and are not governed by this brief.
    across the family: **`.<mcp-name>/`** — para-agent's dotdir is
    expected to become `.para-agent-mcp/` (owner, 2026-08-21); when it
    does, add `**/.para-agent-mcp/**` to the root `.gitignore` and
-   update the co-design hook below. Neither dotdir is ever nested in
-   the other.
+   update the co-design hook below.
+   **Stand-alone:** `.nushell-mcp/` is a sibling dotdir. **Deployed
+   inside para-agent:** nushell-mcp's writes move under the
+   `.para-agent-mcp/` umbrella and its conventions are *modified in
+   that context* — exact shape is pending co-design (owner,
+   2026-08-21; open question, not yet a rule). What this brief fixes
+   is only the invariant that makes either answer cheap: every root
+   is a parameter, so the umbrella placement is a routing decision by
+   para-agent at spawn, never a code path in nushell-mcp that knows
+   about para-agent.
 3. **Scratch** goes to `<workspace>/artifacts/nushell-mcp/` when the
    workspace already has an `artifacts/` tree (codex-scientiae rule:
    first segment is the module, `nushell-mcp`), else to
@@ -82,11 +90,17 @@ root (para-agent `resolvePath` rule). Every effective path is reported
 by `console`; an override that does not exist is created, never
 silently replaced by a default.
 
-**Co-design hook:** when para-agent deploys nushell-mcp as a visitor,
-it routes `NU_MCP_JOURNAL_ROOT` to its own journal root so engine
-streams sit beside pane streams under one `streams/` — the same
-caller-routing as identity. Standalone, the default above applies.
-Neither side hard-codes the other's dotdir.
+**Co-design hook (open):** when para-agent deploys nushell-mcp as a
+visitor, nushell-mcp's writes come under the `.para-agent-mcp/`
+umbrella and its conventions are modified in that context. The
+mechanism is settled — para-agent routes the roots
+(`NU_MCP_JOURNAL_ROOT`, `NU_MCP_ARTIFACTS_ROOT`, possibly a stream
+naming prefix) at spawn, the same caller-routing as identity — but
+the *shape* is not: whether engine streams sit beside pane streams
+under one `streams/`, whether scratch shares para-agent's buckets,
+and what of this brief's naming survives the umbrella are co-design
+questions for the para-agent deployment brief. Standalone, the
+defaults above apply. Neither side hard-codes the other's dotdir.
 
 ## Ownership and deletion
 
