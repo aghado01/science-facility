@@ -49,6 +49,14 @@ context window as the scarcest resource in the loop:
   `--config` + identity); scoped session history is **standard issue**
   for a persistent session, other historical stores opt-in. Full text in
   [par-jobs-v1](.archive/par-jobs-v1.md) → Persistence and identity.
+- **Inherit from the process; do not look up in the environment.** The
+  layer takes what it can from the running process — `$nu.current-exe`
+  for the engine binary, `path self` for layout, `$nu.os-info` for the
+  OS — and reads only a small, audited **launch surface** from its
+  host. Ambient lookups are what break when a component moves hosts;
+  this is what lets para-agent's engine choice propagate for free
+  without nushell-mcp ever naming `PARA_NU_BIN`.
+  [notes/launch-surface.md](notes/launch-surface.md).
 - **Identity routing is one shape.** Resolved from context by a pure
   router, injected per process; registry external and declarative; no
   global mutation; unknown context labeled, not refused; governance
@@ -112,7 +120,12 @@ context window as the scarcest resource in the loop:
    [write-conventions-v1](notes/write-conventions-v1.md)); roots and
    identity routed at spawn; Console Journal amendments `shell: nu`,
    `origin: evaluate`; retire para-agent's `nu.js` one-shot;
-   `turn.agent` only if a shared engine is ever granted.
+   `turn.agent` only if a shared engine is ever granted. Contract with
+   the host is [notes/launch-surface.md](notes/launch-surface.md) —
+   engine binary inherited (so `PARA_NU_BIN` needs no mention), plus
+   its four hazards: spawn **cwd decides GitHub identity**, engine
+   version skew, two `deps` trees on PATH, and the launcher owning
+   `NU_MCP_OUTPUT_LIMIT`.
 
 **H. Session host v1** — [briefs/session-host-v1.md](briefs/session-host-v1.md)
 · filed. Parallel track, can start now: thin TS MCP host in front of
