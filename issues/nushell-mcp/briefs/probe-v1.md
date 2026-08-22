@@ -68,13 +68,23 @@ $x | shape
 
 ```
 $list | shape each
-→ table: {index, type, length, bytes, head}
+→ table: {index, type, length, bytes, ok?: bool, kind?: string, head}
 ```
 
 `columns`/`nulls` omitted (that is what `shape` on one element is
 for). `index` = list position — for `$history` it **is** the
 `history_index`, which is the whole `hist` idea and needs no verb.
 Empty → empty table.
+
+**`ok` and `kind` are lifted, not computed:** when an element is a
+record carrying the layer's `ok` field and/or a `meta.kind`, the row
+shows them; otherwise they are `null`. This is how a caught failure
+stays legible in `$history`: a verb that returns failure-as-data is a
+*successful evaluate* to the engine (it gets a `history_index`), so
+the only evidence it failed is the value's own `ok: false`. `shape
+each` surfaces that at census level — `$history | shape each | where
+ok == false` finds every domain failure without opening one. `shape`
+on a single record lifts `ok?` the same way.
 
 ### `schema` — structural profile of a population
 

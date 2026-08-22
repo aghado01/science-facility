@@ -47,7 +47,7 @@ protocol".
 **Thinness rule (enforced by review):** the host never interprets Nu
 values beyond a closed set of fields: the engine result's `cwd`,
 `history_index`, `timestamp`, `output`/`note`, error records, and — when
-present on a record output — `meta.{kind, at, tag, elapsed, ref}` (the
+present on a record output — `ok` and `meta.{kind, at, tag, elapsed, ref}` (the
 receipt-stamp convention, probe-v1). Everything else is opaque NUON
 passed through. Semantics live in Nu modules; the host is transport +
 ledger + identity + policy. If a feature needs the host to understand a
@@ -111,11 +111,17 @@ Per relayed `evaluate`, the host writes:
 - `out` — `bytes`/`lines`/`out_hash` over the NUON output; `text`
   inlined iff `bytes <= inlineLimit`, else `ref` + `preview`.
   `truncatedInline: false`, always.
-- `exit` — `ok` from the engine, `code: null` (no process),
-  `duration_ms` host-measured, `outcome: completed | died`.
+- `exit` — `ok` from the engine (**engine-level**: did the evaluate
+  throw), `code: null` (no process), `duration_ms` host-measured,
+  `outcome: completed | died`.
 - `note` — engine spawn/respawn/keepalive expiry/lost `$history`;
-  `data` carries `meta` lifted from stamped receipts
-  (`kind`, `tag`, `ref`) and `annotate` labels, keyed by `turn`.
+  `data` carries what is lifted from a record output — the layer's
+  `ok` (**domain-level**: a verb caught a failure and returned it as
+  data; the evaluate itself succeeded and has a `history_index`) and
+  `meta` (`kind`, `tag`, `ref`) — plus `annotate` labels, keyed by
+  `turn`. The two `ok`s are different facts and are never merged:
+  `exit.ok: true` with `data.ok: false` is the normal signature of a
+  caught failure, and `log --kind` / `find` can select on it.
 
 Contract amendments to file against para-agent (additive): `shell`
 gains `nu`; `origin` gains `evaluate`. Nothing else.

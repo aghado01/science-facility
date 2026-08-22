@@ -42,6 +42,14 @@ package-level rules.
    lands; never re-derive it.
 4. **Receipts before bodies.** One tool result carries at most one
    payload. Anything withheld names the call that retrieves it.
+4a. **`ok` is universal; failure is data.** Every record the layer
+   returns carries `ok: bool`. A verb that catches an error returns
+   `ok: false` + `error` (short) — and `trace` where it captured one —
+   instead of throwing. Know the two failure levels: an evaluate that
+   *throws* leaves no `$history` entry (engine-level); a caught failure
+   is a *successful* evaluate with a `history_index` (domain-level),
+   legible only through its own `ok: false`. `shape each` lifts `ok`
+   so `$history | shape each | where ok == false` finds them.
 5. **Never cap a live pipeline** (`first N`, `head`) — slice `$history`
    or `jobs read` afterward. This is the MCP's own rule; the modules
    exist to make obeying it easy.
