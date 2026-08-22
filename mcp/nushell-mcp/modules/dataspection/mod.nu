@@ -54,16 +54,18 @@ def head-of [s: string]: nothing -> string {
 }
 
 def resolve-inline-cap []: nothing -> int {
-    let k = ($env.NU_PAR?.max_inline_bytes? | default null)
-    if $k != null {
-        let d = ($k | describe)
-        if $d == "int" { $k
-        } else if $d == "filesize" { $k | into int
-        } else { try { $k | into filesize | into int } catch { 20000 } }
-    } else if ($env.NU_MCP_OUTPUT_LIMIT? != null) {
-        try { $env.NU_MCP_OUTPUT_LIMIT | into filesize | into int } catch { 20000 }
-    } else {
-        20000
+    try { par cap } catch {
+        let k = ($env.NU_PAR?.max_inline_bytes? | default null)
+        if $k != null {
+            let d = ($k | describe)
+            if $d == "int" { $k
+            } else if $d == "filesize" { $k | into int
+            } else { try { $k | into filesize | into int } catch { 20000 } }
+        } else if ($env.NU_MCP_OUTPUT_LIMIT? != null) {
+            try { $env.NU_MCP_OUTPUT_LIMIT | into filesize | into int } catch { 20000 }
+        } else {
+            20000
+        }
     }
 }
 
@@ -601,7 +603,7 @@ export def preview [
     }
 }
 
-# Disclose the body. Under cap → the value. Over cap → stash via `jobs stash` and a receipt naming `jobs read <tag>`. `--env`. The only verb that may decline.
+# Disclose the body. Under cap → the value. Over cap → stash via `jobs stash` and a receipt naming `jobs read <tag> --full`. `--env`. The only verb that may decline.
 export def --env read []: any -> any {
     try {
         let x = $in
@@ -642,7 +644,7 @@ export def --env read []: any -> any {
             disclosed: false
             tag: $tag
             bytes: $bytes
-            retrieve: $"jobs read ($tag)"
+            retrieve: $"jobs read ($tag) --full"
         } "read"
     } catch {|e|
         let f = (catch-fields $e)

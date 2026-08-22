@@ -100,7 +100,7 @@ Because they compose, a produced object is just another object:
 $x | schema | preview            # the schema is large — clip it
 $x | spine file | page 2         # the spine is long — slice it
 $x | schema | shape              # how big is this schema, actually
-jobs read sq | shape             # disclose, then census the body
+jobs read sq --full | shape      # disclose, then census the body
 ```
 
 That last line is **compose after a lawful disclose**, not an
@@ -108,9 +108,9 @@ identity. **`jobs inspect` is not `jobs read | shape`.** `inspect`
 discloses nothing; `read` may decline and then `| shape` would census
 the decline receipt, not the payload. `jobs inspect` keeps jobs' own
 receipt (identity fields plus payload census). One `bytes` definition
-means the amendment calls `$payload | shape` **internally** to fill
-those census fields — it does not export `jobs shape`, and it does
-not route inspect through read. `nu-modules inspect` is a command
+means jobs calls `$payload | shape` **internally** to fill those
+census fields — it does not export `jobs shape`, and it does not
+route inspect through read. `nu-modules inspect` is a command
 listing, a different object entirely.
 
 **Holding is not seeing.** From the agent's side every value in the
@@ -129,7 +129,7 @@ stops being prose and becomes enforceable:
 | Verb | Discloses | Always fits? |
 |---|---|---|
 | `inspect` / `shape` | nothing — census only | yes, by construction |
-| `read` | the whole body | **only if under cap** — otherwise a receipt naming `jobs read <tag>` |
+| `read` | the whole body | **only if under cap** — otherwise a receipt naming `jobs read <tag> --full` |
 | `preview` | whole structure, leaves clipped | yes, bounded per leaf |
 | `page` | one slice | yes, bounded per slice |
 
@@ -279,16 +279,15 @@ $x | read
 `export def --env`. The **disclosure verb**, and the only one that may
 decline. Declining is not failure (`ok: true`).
 
-- **Cap.** Same knobs par already froze: `$env.NU_PAR.max_inline_bytes`
-  if set, else `$env.NU_MCP_OUTPUT_LIMIT`, else `20000`. Do not open
-  `policy.json`. `bytes` is `shape`'s definition (NUON UTF-8 length).
+- **Cap.** `par cap`: `$env.NU_PAR.max_inline_bytes` if set, else
+  `$env.NU_MCP_OUTPUT_LIMIT`, else `20000`. Do not open `policy.json`.
+  `bytes` is `shape`'s definition (NUON UTF-8 length).
 - **Under cap** → the value itself. Not wrapped, not stamped.
 - **Over cap** → `jobs stash` (default tag `stash:<seq>`); the
   receipt copies `tag` and `bytes`, and `retrieve` is the pasteable
-  command `"jobs read <tag>"` — never a bare "too big". v1 retrieval
-  is today's uncapped `jobs read`. Bounded verbs stay the ladder on a
-  value in hand (`$x | preview`, `jobs read t | page`); they are not
-  the decline's `retrieve`.
+  command `"jobs read <tag> --full"` — never a bare "too big". Bounded
+  verbs stay the ladder on a value in hand (`$x | preview`,
+  `jobs read t --full | page`); they are not the decline's `retrieve`.
 - **Jobs missing** (overlay has no `jobs stash`) →
   `{ok: false, disclosed: false, error, trace}`. Misconfigured
   session, not a production path; `config.nu` always loads jobs
@@ -297,11 +296,9 @@ decline. Declining is not failure (`ok: true`).
 - Peek, not pop: `read` never removes or mutates `$in`; a bound `$x`
   still holds the value after a decline.
 - This is the one cap rule for in-hand disclose. `xq` and rg apply
-  *this*. `jobs read` adopting the same cap for *terminal* disclose
-  of an addressed payload is the par-jobs amendment — and that
-  amendment must keep a path that actually returns the stored body
-  (or a bounded view of it). It must not make `jobs inspect` go
-  through a declining `read`.
+  *this*. `jobs read` uses the same cap for terminal disclose of an
+  addressed payload; `--full` returns the stored body. `jobs inspect`
+  never routes through `read`.
 
 ### `meta` — the provenance on a record
 
@@ -377,10 +374,9 @@ mcp/nushell-mcp/skills/nushell/references/mcp.md
 config.nu             # use par *; use jobs *; use dataspection *
 ```
 
-Docstrings on every command. On landing, par-jobs amendments (step 3
-of the roadmap) switch `jobs-census` / `par emit` to `$payload | shape`
-internally (inspect receipt stays jobs-shaped), and teach `jobs read`
-the cap rule for terminal disclose.
+Docstrings on every command. par-jobs amendments (step 3) landed
+2026-08-22: `jobs-census` / `par emit` call `$payload | shape`
+internally; `jobs read` uses the cap rule; retrieve is `--full`.
 
 ## Tests (child `nu -n`)
 
@@ -413,7 +409,7 @@ the cap rule for terminal disclose.
 - `read`: suite loads `par`, `jobs`, then `dataspection`. Under cap
   returns the value. Over cap (force a low `$env.NU_PAR.max_inline_bytes`)
   returns `{ok: true, disclosed: false, tag, bytes, retrieve}` with
-  `retrieve` matching `jobs read <tag>`; `jobs read <tag>` returns
+  `retrieve` matching `jobs read <tag> --full`; `jobs read <tag> --full` returns
   the original value; peek not pop (`$in` / a bound name still holds
   it). Decline receipt carries `meta.verb == "read"`. Jobs missing →
   `{ok: false, disclosed: false, error, trace}`
@@ -431,7 +427,7 @@ table whose `index` matches the reported `history_index` values;
 coverage; `$history.N | preview` → the record, clipped, under the
 output limit; `$history.N | get <path> | page 2 --size 20` → header +
 20 items. Each is one receipt or one bounded body; nothing floods.
-Over-cap `read` of a large string → decline receipt; `jobs read <tag>`
+Over-cap `read` of a large string → decline receipt; `jobs read <tag> --full`
 returns the string.
 
 ## Non-goals (v1)

@@ -4,7 +4,7 @@ Agent console **is** this REPL. Write pipelines; do not generate strings to eval
 
 Design center: interactive fan-out (and a **single** `jobs spawn` at parallelism 1). Non-blocking + payload quarantine is the product; parallelism is a feature on top. `rg` finds *where* (do not shard it through `par` for speed). `par` judges *what*.
 
-Two modules, preloaded (`use par *; use jobs *` in `config.nu`). MATLAB / vscodepilot **names** (`parfor`, `parfeval`, `getJobResults`, …) are a corpus map only — they are not exported.
+Two modules, preloaded (`use par *; use jobs *; use dataspection *` in `config.nu`). `par cap` is the cap resolver. MATLAB / vscodepilot **names** (`parfor`, `parfeval`, `getJobResults`, …) are a corpus map only — they are not exported.
 
 ## Native vs this layer
 
@@ -36,9 +36,9 @@ Row shape, input order:
 {index: int, ok: bool, item: any, value: any, error: string?, elapsed: duration?}
 ```
 
-`par budget <items> [--threads] [--cores] …` is pure (testable). Returns `{grant, ceiling, cores, graded, clamped, warning}`.
+`par budget <items> [--threads] [--cores] …` is pure (testable). Returns `{grant, ceiling, cores, graded, clamped, warning}`. `par cap` is the one inline/query cap resolver.
 
-`par emit` wraps a findings table in the query envelope (below). Built for wrappers. Over cap it omits `findings` and stores nothing — in the foreground prefer `jobs emit`, which stashes the full table under a tag you can `jobs read`.
+`par emit` wraps a findings table in the query envelope (below). Built for wrappers. Over cap it omits `findings` and stores nothing — in the foreground prefer `jobs emit`, which stashes the full table under a tag you can `jobs read --full`. Cap is `par cap`.
 
 ## `jobs` — handle plane (receipts until one `read`)
 
@@ -47,18 +47,18 @@ Row shape, input order:
 | `jobs spawn { ... } --tag <string>` | running receipt, or `{ok: false, error: "budget", budget}` |
 | `jobs list` | all receipts, **seq** order. No payloads |
 | `jobs collect [--timeout 5sec]` | finished receipts only (`completed\|failed\|cancelled`), seq order |
-| `jobs inspect <id\|tag>` | shape/census, never body |
-| `jobs read <id\|tag>` | **one** payload (peek, not pop) |
-| `jobs cancel <id>` | `{job_id, cancelled}` |
-| `jobs status` | knobs, cores, ceiling, inflight, policy |
+| `jobs inspect <id\|tag>` | jobs receipt + payload census from `shape` internally; never body |
+| `jobs read <id\|tag> [--full]` | portable `read`: body if under cap; else decline naming `jobs read <tag> --full` |
+| `jobs cancel <id>` | `{job_id, cancelled, meta}` |
+| `jobs status` | knobs, cores, ceiling, inflight, policy, `meta` |
 | `jobs policy --max-workers N …` | mutate session knobs; still clamped |
 | `$v \| jobs stash [--tag t]` | store any value as a completed-on-arrival row (`job_id: null`); receipt back, `read` later |
 | `$findings \| jobs emit [--tag t]` | `par emit` + stash when truncated; envelope gains `tag` only if stored |
 
-Receipt (no `output` column):
+Receipt (no `output` column). Single-record returns (`spawn` / `stash` / `inspect` / `status` / `cancel`) carry `meta` via `meta stamp`. `list` / `collect` are tables and stay bare.
 
 ```
-{seq, tag, job_id, ok, status, bytes, type, length, error, started, finished, elapsed}
+{seq, tag, job_id, ok, status, bytes, type, length, error, started, finished, elapsed, meta?}
 ```
 
 `status`: `pending | running | completed | failed | cancelled`. Budget refusal is **not** a job row.
@@ -68,26 +68,26 @@ Receipt (no `output` column):
 - `collect` never `job recv` without timeout. `0sec` drains ready; default `5sec` is a short bound. Partial = what's done.
 - At inflight ≥ ceiling: **refuse**. Do not block `evaluate` for a slot.
 - `jobs spawn` uses ceiling only (each job = 1 inflight). `par` grades by item count.
-- Census (`bytes`/`type`/`length`) is NUON byte length / `describe` / list length, computed **once at drain**.
+- Census (`bytes`/`type`/`length`) is dataspection `shape` (NUON UTF-8 length), filled at drain. `jobs inspect` recomputes via `shape`; it is not `jobs read | shape`.
 - `list`/`collect` drain the mailbox **first**, then mark vanished (`error: "vanished"`) if absent from native `job list` with no pending message.
 - `cancel` stamps the row; a killed job never hits the wrapper `catch`.
 
 ## Result hygiene
 
-One tool result never contains more than **one** payload. `collect`/`list`/`inspect` are receipts. `jobs read` is one body. Do not loop `read` over tags in one `evaluate`.
+One tool result never contains more than **one** payload. `collect`/`list`/`inspect` are receipts. Bare `jobs read` discloses only under cap; over cap compose `jobs read t --full | page` (or `| preview` / `| shape`). Do not loop `read` over tags in one `evaluate`.
 
 Query / search consumers return **findings + metadata**, not a receipt table of workers:
 
 1. Foreground: `$data | par {|row| query $row }` — the row table **is** findings.
 2. Flatten hits inside `value` **by `index`**, then in-list order. Not completion order.
-3. One background job: `jobs spawn { $data | par {|row| query $row} }` then `jobs read` **once**.
+3. One background job: `jobs spawn { $data | par {|row| query $row} }` then `jobs inspect` / `jobs read` **once** ( `--full` if over cap).
 4. Envelope (`par emit` / wrapper contract):
 
 ```
 {ok, n, n_ok, n_err, elapsed, bytes, truncated, findings?}
 ```
 
-`findings` present iff `truncated == false`. Cap is `max_inline_bytes` (JSON `null` → this process's `NU_MCP_OUTPUT_LIMIT`).
+`findings` present iff `truncated == false`. Cap is `par cap` (`max_inline_bytes`, JSON `null` → this process's `NU_MCP_OUTPUT_LIMIT`, else 20000).
 
 ## Policy
 
@@ -107,7 +107,7 @@ Registry and `$history` die with the MCP child. When a store appears later: iden
 |---|---|
 | `parfor` / `parforeach` | `par` |
 | `parfeval` / `startParallelJob` | `jobs spawn --tag` |
-| `fetchOutputs` / `getJobResults` | `jobs collect` (receipts) then `jobs read` (one body) |
+| `fetchOutputs` / `getJobResults` | `jobs collect` (receipts) then `jobs read` (one body; `--full` if over cap) |
 | `cancel` / `job kill` | `jobs cancel` |
 | `parwhile` / `paruntil` / FileHash batches | not v1 |
 | `gcp` / batch / `%TEMP%` jsonl | not v1 |

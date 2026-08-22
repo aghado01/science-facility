@@ -120,15 +120,14 @@ context window as the scarcest resource in the loop:
    `$env.NU_PAR.max_inline_bytes` else `NU_MCP_OUTPUT_LIMIT`. **Landed
    2026-08-22.** Can still be used in parallel with H.
 3. **par-jobs amendments** — after 2, before 4. `jobs disclose` is
-   **not** needed: in-hand cap is `read`; `jobs read` later adopts the
-   same cap for *terminal* disclose of an addressed payload, and must
-   keep a path that actually returns the stored body (or a bounded
-   view). **`jobs inspect` is not `jobs read | shape`.** Inspect stays
-   jobs' own receipt; it calls `shape` on the stored payload
-   internally so `bytes` is one definition — no `jobs shape` export.
-   Receipts gain `meta` via `meta stamp` (spawn/inspect/status/cancel;
-   tests change). Landed code changes, so an amendment with its own
-   follow-up entry.
+   **not** needed: in-hand cap is `read`; `jobs read` adopts the same
+   cap for *terminal* disclose of an addressed payload; `--full` is
+   the path that returns the stored body. **`jobs inspect` is not
+   `jobs read | shape`.** Inspect stays jobs' own receipt; it calls
+   `shape` on the stored payload internally so `bytes` is one
+   definition — no `jobs shape` export. Receipts gain `meta` via
+   `meta stamp` (spawn/stash/inspect/status/cancel). `par cap` is the
+   one cap resolver. **Landed 2026-08-22.**
 4. **`xq` v1** — [briefs/xq-v1.md](briefs/xq-v1.md) · filed; depends
    on 1–3. Execute, capture, payload-quarantine for every external:
    `complete` + census + `read`'s cap rule, job-aware via `job id`. The
@@ -190,11 +189,11 @@ here. Term senses — whose word is whose — are in
 
 | Brief | Status |
 |---|---|
-| [par-jobs-v1](.archive/par-jobs-v1.md) | landed 2026-08-21 |
+| [par-jobs-v1](.archive/par-jobs-v1.md) | landed 2026-08-21; amended 2026-08-22 (dataspection consumption) |
 | [dataspection-v1](briefs/dataspection-v1.md) | landed 2026-08-22 |
 | [hist-v1](.archive/hist-v1.md) | superseded → dataspection-v1 (primitives) + session-host-v1 (index) |
 | [session-host-v1](briefs/session-host-v1.md) | filed, not started; parallel track |
-| [xq-v1](briefs/xq-v1.md) | filed, not started; depends on par-jobs-v1 + `read` cap rule |
+| [xq-v1](briefs/xq-v1.md) | filed, not started; depends on 1–3 (`par cap`, `jobs read --full`) |
 | [rg-wrapper-v1](briefs/rg-wrapper-v1.md) | filed, not started; depends on par-jobs-v1, xq-v1 |
 | [write-conventions-v1](notes/write-conventions-v1.md) | filed; governs every write (state vs scratch, locality, chronology, precedence) |
 | [gh-v1](briefs/gh-v1.md) | filed, not started; depends on xq-v1; needs `gh` ≥ 2.40 in `deps/cli` |

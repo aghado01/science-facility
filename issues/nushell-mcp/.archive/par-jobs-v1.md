@@ -1,6 +1,6 @@
 # `par` / `jobs` v1 — agent parallelism in nushell-mcp
 
-**Status:** landed · **Filed:** 2026-08-21 · **Landed:** 2026-08-21 · **Home:**
+**Status:** landed · **Filed:** 2026-08-21 · **Landed:** 2026-08-21 · **Amended:** 2026-08-22 (dataspection: `shape` / `meta stamp` / cap) · **Home:**
 `mcp/nushell-mcp`, Nu-native modules, used only through `evaluate`.
 **Prior art (shape, not code):** vscodepilot `parallel-tools.ts` job
 lifecycle; colonel `Resolve-WorkerBudget` + sticky knobs.
@@ -90,8 +90,8 @@ vscodepilot TS API as Nu verbs. Hide mailbox protocol.
 | `jobs spawn { ... } --tag <string>` | receipt `{tag, job_id, status: running}` or budget-failure row |
 | `jobs list` | receipt table: tag, job_id, status, + native `job list` fields. **No payloads.** |
 | `jobs collect --timeout <duration>` | receipt table of *finished* jobs (see below). Still-running stay on `list` |
-| `jobs inspect <id\|tag>` | shape only: `{tag, job_id, ok, type, length, bytes, columns?}` |
-| `jobs read <id\|tag>` | **one** payload. MCP `$history` / `NU_MCP_OUTPUT_LIMIT` still apply |
+| `jobs inspect <id\|tag>` | jobs receipt + payload census from `$payload \| shape` internally. Never body. Not `jobs read \| shape` |
+| `jobs read <id\|tag> [--full]` | portable `read` of one stored payload. Under cap → body; over cap → decline naming `jobs read <tag> --full`. `--full` always returns the stored body |
 | `jobs cancel <id>` | `{job_id, cancelled: bool}` |
 | `jobs status` | record: knobs, cores, ceiling, inflight, policy |
 | `jobs policy ...` | mutate sticky knobs; still clamped |
@@ -244,10 +244,11 @@ Timing is **census**, not payload. Cheap scalars belong on receipts and
 - `error` short (~240 chars, first line). Stacks only via `inspect`/`read`.
 - `bytes` / `type` / `length` / `finished` / `elapsed` are census (`null`
   while running). `started` is set at spawn.
-- `bytes` = NUON-serialized byte length of the stored payload, computed
-  **once at drain**. Same definition everywhere the column appears
-  (receipts, `inspect`, query envelopes). It is not row length, not
-  on-disk size, not a re-serialization per read.
+- `bytes` = dataspection `shape`'s definition (NUON UTF-8 length),
+  filled at drain via `$payload | shape`. Same definition everywhere
+  the column appears (receipts, `inspect`, query envelopes). It is not
+  row length, not on-disk size. `inspect` may recompute via `shape`;
+  nobody re-derives the formula. Unserializable → `bytes: null`.
 - `ok: false` + `status: failed|cancelled` is still a **row**. Collect
   includes it in `seq` order next to successes.
 - `spawn` returns one receipt (`status: running`, census null except
@@ -264,20 +265,49 @@ Timing is **census**, not payload. Cheap scalars belong on receipts and
 
 ```
 {seq, tag, job_id, ok, status, type, length, bytes, columns?: list<string>,
- error?: string, started, finished?, elapsed?}
+ error?: string, started, finished?, elapsed?, meta}
 ```
 
-### `jobs read` — the stored value (any)
+Census fields (`type`, `length`, `bytes`, `columns?`) come from
+`$payload | shape` internally. `columns` stays `list<string>` (names
+only — not shape's `{name, type}` rows). `head` / shape `ok` / shape
+`error` do not leak onto this receipt. `jobs inspect` is **not**
+`jobs read | shape`: inspect discloses nothing and never routes through
+`read`. Running rows keep census null (no shape call). Stamped
+`meta.verb: jobs.inspect`.
+
+### `jobs read` — portable `read` of one stored payload
+
+Same cap rule as in-hand `read` (`par cap`). Does **not** re-stash.
+
+- Still running → throw (`jobs: '<key>' still running`)
+- `--full` → always the stored body (the retrieve path; compose
+  `jobs read t --full | page`)
+- Under cap, no `--full` → the body (unwrapped, unstamped)
+- Over cap, no `--full` → decline `{ok: true, disclosed: false, tag,
+  bytes, retrieve: "jobs read <tag> --full"}` stamped `jobs.read`.
+  Declining is not failure. `retrieve` uses the row's `tag`.
+- Unserializable (`bytes: null`) → disclose, same as in-hand `read`
 
 Order inside a list/table payload is whatever was stored (for `par`,
-that is input order). `read` does not re-sort. One id only. `read` is a
-**peek, not a pop**: repeatable, never removes or mutates the row.
+that is input order). `read` does not re-sort. One id only. Peek, not
+pop: repeatable, never removes or mutates the row.
+
+In-hand `read`'s decline `retrieve` is this `--full` path. Bounded
+views stay the ladder on a value in hand (`jobs read t --full | page`).
 
 ### `jobs status` — one record (not a table)
 
-Knobs, cores, ceiling, inflight, policy. No job rows.
+Knobs, cores, ceiling, inflight, policy. No job rows. Stamped
+`meta.verb: jobs.status`.
 
-### `jobs cancel` — `{job_id: int, cancelled: bool}`
+### `jobs cancel` — `{job_id: int, cancelled: bool, meta}`
+
+Stamped `jobs.cancel`. `meta.tag` is the row's tag when a row was found.
+
+Single-record receipts (`spawn`, `stash`, budget/duplicate refusals)
+are stamped (`jobs.spawn` / `jobs.stash`). `list` / `collect` are
+tables and stay bare.
 
 ### Conservation
 
@@ -528,7 +558,35 @@ never exceeds ceiling.
 
 ---
 
+## Amendment 2026-08-22 — dataspection consumption
+
+After dataspection-v1. No `jobs disclose`. No `jobs shape` export.
+
+- **`par cap`** — exported resolver (`$env.NU_PAR.max_inline_bytes` else
+  `NU_MCP_OUTPUT_LIMIT` else `20000`). `par emit`, in-hand `read`, and
+  `jobs read` all call it. Do not copy.
+- **`jobs-census` / `par emit` bytes** — `$payload | shape` internally.
+  `jobs` `use dataspection *` and `par` `use dataspection [shape]` at
+  module scope (overlay `use *` does not leak into private helpers).
+- **`jobs inspect`** — calls `shape` on the stored payload; receipt
+  stays jobs-shaped. Not `jobs read | shape`.
+- **`jobs read`** — cap for terminal disclose; `--full` is the path
+  that returns the stored body. Over-cap does not re-stash.
+- **`meta stamp`** — spawn / stash / inspect / status / cancel (and
+  their refusal records). Tables (`list` / `collect`) stay bare.
+- **In-hand `read` retrieve** — `jobs read <tag> --full` (was uncapped
+  `jobs read <tag>`).
+
 ## Follow-up report
+
+- Amended 2026-08-22. Tree: `par cap`; `par emit` / `jobs-census` / `jobs inspect` call `shape`; `jobs read [--full]`; receipts stamped (`jobs.spawn` / `jobs.stash` / `jobs.inspect` / `jobs.status` / `jobs.cancel` / `jobs.read` on decline). In-hand `read` retrieve is `jobs read <tag> --full`. Corpus: `references/jobs.md`, `references/dataspection.md`, `AGENTS.md`. Adapters: `~/.claude/skills/nushell-mcp`, `~/.grok/skills/nushell-mcp`. xq-v1 retrieve paths updated.
+- Child tests: `nu -n mcp/nushell-mcp/tests/par-jobs-v1.nu` — 27/27 (prior 25 + `par cap resolver` + `jobs read over cap declines`; inspect/shape bytes match; spawn/stash/inspect/status/cancel `meta.verb`). `nu -n mcp/nushell-mcp/tests/dataspection-v1.nu` — 13/13 (`retrieve` / `--full`).
+- Deviations / spec fills:
+  - `use dataspection *` in `jobs/mod.nu` and `use dataspection [shape]` in `par/mod.nu`. Overlay `use *` does not leak into private helpers. Not `export use`.
+  - `jobs stash` stamped (`jobs.stash`) in addition to spawn/inspect/status/cancel.
+  - `meta stamp --elapsed` is `duration`; null elapsed/tag are omitted, not passed.
+  - Test harness `$"… test(s) …"` interpolated `(s)` as a command; now `tests failed`.
+- Not this brief: `jobs preview` / `jobs page`; host truncation; `xq`.
 
 - Landed 2026-08-21. Tree as spec: `modules/par/{mod.nu,policy.json}`, `modules/jobs/mod.nu`, `references/jobs.md`, `config.nu` preloads both.
 - Child tests: `nu -n mcp/nushell-mcp/tests/par-jobs-v1.nu` — 22/22 (budget table + clamp, fail-soft, keep-order, mixed-error collect, seq-not-completion, read quarantine, inspect, flatten-by-index, envelope over cap, collect 0sec, ceiling+1, cancel stamp, vanished, undrained-not-vanished, peek, `--env` spawn/list, duplicate tag, status, exit-gate).

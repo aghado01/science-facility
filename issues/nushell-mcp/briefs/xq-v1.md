@@ -72,8 +72,9 @@ $in | xq <cmd> [...args]    # pipeline input becomes the child's stdin
 - `truncated == false` → `stdout` and `stderr` present (possibly empty
   strings). `truncated == true` → both omitted, `tag` present, and the
   record `{stdout, stderr}` is stashed via
-  `jobs stash --tag xq:<cmd>:<seq>` (e.g. `xq:cargo:3`). `jobs read`
-  returns that record; slice `.stdout | lines` from `$history`.
+  `jobs stash --tag xq:<cmd>:<seq>` (e.g. `xq:cargo:3`). `jobs read
+  <tag> --full` returns that record (over cap by construction);
+  slice `.stdout | lines` from `$history`, or compose `| page`.
 - `tag` present **iff** something was stashed — same rule as `jobs emit`.
 - `error` present only for wrapper-level failures (not found, spawn
   failure). A child that runs and exits non-zero is `ok: false` with
@@ -83,9 +84,9 @@ $in | xq <cmd> [...args]    # pipeline input becomes the child's stdin
 
 Registry only (`jobs stash`) — one queryable store, no `$env.XQ_LAST`.
 `jobs list` shows `xq:*` rows next to jobs; `jobs inspect` gives census;
-`jobs read xq:cargo:3` returns `{stdout, stderr}`.
+`jobs read xq:cargo:3 --full` returns `{stdout, stderr}`.
 
-Drill: `(jobs read xq:cargo:3).stderr | lines | where $it =~ '^error'`.
+Drill: `(jobs read xq:cargo:3 --full).stderr | lines | where $it =~ '^error'`.
 Paging is ordinary Nu on `$history`. For a long-running child, prefer
 `jobs spawn { xq cargo build } --tag build` — non-blocking, and the job
 row *is* the quarantine.
@@ -95,8 +96,7 @@ to page; a consumer re-implementing cap/stash instead of calling `xq`.
 
 ## Policy
 
-Reads `max_inline_bytes` through the same resolver `par emit` uses
-(export it as `par cap` if not already; do not duplicate). No threads,
+Reads `max_inline_bytes` through `par cap` (do not duplicate). No threads,
 no timeouts in v1 (a hung child is the agent's to `jobs cancel` when
 spawned; foreground `xq` blocks `evaluate` like any external does).
 
@@ -126,21 +126,22 @@ parse when stdout is events").
 - stdin passthrough: `"abc" | xq nu -n -c 'print $in'`-style child
   echoes input
 - over cap (cap forced low, child prints a large block): `truncated:
-  true`, no streams, `tag: xq:nu:0`, `jobs read` returns `{stdout,
+  true`, no streams, `tag: xq:nu:0`, `jobs read --full` returns `{stdout,
   stderr}` with the full text; registry row `completed`, `job_id: null`
 - two over-cap runs: seq monotonic in tags
 - inside a job: `jobs spawn { xq nu -n -c <big print> }`, `collect`,
-  `read` → envelope has full `stdout`, `truncated: false`, no `tag`;
-  registry has exactly one row (the job), no `xq:*` row
+  `jobs read --full` → envelope has full `stdout`, `truncated: false`,
+  no `tag`; registry has exactly one row (the job), no `xq:*` row
 - `args` echo excludes `cmd`; `cmd` == first token
 - elapsed is a duration > 0
 
 ## Exit gate
 
 Two `evaluate`s: `xq nu -n -c "1..5000 | to text"` → envelope with
-census, `truncated: true`, `tag`, no text; `jobs read <tag>` → the
+census, `truncated: true`, `tag`, no text; `jobs read <tag> --full` → the
 record. Then `jobs spawn { xq nu -n -c "..." } --tag bg` → receipt;
-`jobs read bg` → full envelope inline. No raw child output ever hits a
+`jobs read bg` → full envelope inline (in-job `xq` never stashes, so
+under the jobs-read cap or `--full`). No raw child output ever hits a
 tool result over the cap.
 
 ## Non-goals (v1)

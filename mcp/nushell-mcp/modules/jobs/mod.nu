@@ -11,6 +11,10 @@ export-env {
     }
 }
 
+# `shape` / `meta stamp` live in dataspection. Import here so private helpers
+# resolve them; overlay `use *` does not leak into this module's scope.
+use dataspection *
+
 # --- pure helpers -------------------------------------------------------------
 
 def jobs-short [msg: string]: nothing -> string {
@@ -18,17 +22,48 @@ def jobs-short [msg: string]: nothing -> string {
     if ($line | str length) <= 240 { $line } else { $line | str substring 0..239 }
 }
 
+def jobs-shape [payload] {
+    try { $payload | shape } catch { null }
+}
+
+# Census via dataspection `shape` when present (one `bytes` definition). Fallback is local NUON length.
 def jobs-census [payload]: nothing -> record {
-    let typ = ($payload | describe)
-    let bytes = (try { $payload | to nuon --raw | str length --utf-8-bytes } catch { 0 })
-    let length = (
-        if $typ =~ '^(table|list)' {
-            try { $payload | length } catch { null }
-        } else if $typ == "string" {
-            try { $payload | str length --utf-8-bytes } catch { null }
-        } else { null }
-    )
-    {bytes: $bytes, type: $typ, length: $length}
+    let s = (jobs-shape $payload)
+    if $s != null {
+        {bytes: $s.bytes, type: $s.type, length: $s.length}
+    } else {
+        let typ = ($payload | describe)
+        let bytes = (try { $payload | to nuon --raw | str length --utf-8-bytes } catch { 0 })
+        let length = (
+            if $typ =~ '^(table|list)' {
+                try { $payload | length } catch { null }
+            } else if $typ == "string" {
+                try { $payload | str length --utf-8-bytes } catch { null }
+            } else { null }
+        )
+        {bytes: $bytes, type: $typ, length: $length}
+    }
+}
+
+def jobs-stamp-receipt [
+    rec
+    verb: string
+    --tag: any
+    --elapsed: any
+] {
+    try {
+        if $tag != null and $elapsed != null {
+            $rec | meta stamp --verb $verb --tag $tag --elapsed $elapsed
+        } else if $tag != null {
+            $rec | meta stamp --verb $verb --tag $tag
+        } else if $elapsed != null {
+            $rec | meta stamp --verb $verb --elapsed $elapsed
+        } else {
+            $rec | meta stamp --verb $verb
+        }
+    } catch {
+        $rec
+    }
 }
 
 def jobs-project [row: record]: nothing -> record {
@@ -179,13 +214,13 @@ export def --env "jobs spawn" [
     jobs-harvest 0sec
     if ($env.JOBS? != null) and (not ($env.JOBS | is-empty)) {
         if not ($env.JOBS | where tag == $tag | is-empty) {
-            return {ok: false, error: "duplicate tag", tag: $tag}
+            return (jobs-stamp-receipt {ok: false, error: "duplicate tag", tag: $tag} "jobs.spawn" --tag $tag)
         }
     }
     let ceiling = $env.NU_PAR.ceiling
     let inflight = (jobs-running)
     if $inflight >= $ceiling {
-        return {
+        return (jobs-stamp-receipt {
             ok: false
             error: "budget"
             budget: {
@@ -193,7 +228,7 @@ export def --env "jobs spawn" [
                 inflight: $inflight
                 cores: $env.NU_PAR.cores
             }
-        }
+        } "jobs.spawn")
     }
     let seq = (jobs-next-seq)
     let started = (date now)
@@ -222,7 +257,7 @@ export def --env "jobs spawn" [
         output: null
     }
     $env.JOBS = ($env.JOBS | default [] | append $row)
-    jobs-project $row
+    jobs-stamp-receipt (jobs-project $row) "jobs.spawn" --tag $row.tag
 }
 
 # All registry rows, seq ascending. Drains ready messages then reconciles vanished. No payloads.
@@ -246,6 +281,7 @@ export def --env "jobs collect" [
 }
 
 # Shape only: census, no body. `key` is job_id (int) or tag (string).
+# Census fields from `$payload | shape` internally. Not `jobs read | shape`.
 export def --env "jobs inspect" [
     key: any                                # job_id (int) or tag (string)
 ]: nothing -> record {
@@ -266,23 +302,50 @@ export def --env "jobs inspect" [
     }
     let payload = $row.output
     if $payload != null {
-        let d = ($payload | describe)
-        if $d =~ '^table' {
-            $rec = ($rec | insert columns ($payload | columns))
+        let s = (jobs-shape $payload)
+        if $s != null {
+            $rec = ($rec | upsert type $s.type | upsert length $s.length | upsert bytes $s.bytes)
+            if ("columns" in ($s | columns)) {
+                $rec = ($rec | upsert columns ($s.columns | get name))
+            }
+        } else {
+            let d = ($payload | describe)
+            if $d =~ '^table' {
+                $rec = ($rec | insert columns ($payload | columns))
+            }
         }
     }
-    $rec
+    jobs-stamp-receipt $rec "jobs.inspect" --tag $row.tag --elapsed $row.elapsed
 }
 
-# One stored payload. Peek, not pop — repeatable. One id only. Still running → error.
+# Portable `read` of one stored payload. Peek, not pop — repeatable. One id only.
+# Under cap → body. Over cap → decline naming `jobs read <tag> --full`. `--full` always returns the body.
+# Still running → error. Does not re-stash.
 export def --env "jobs read" [
     key: any                                # job_id (int) or tag (string)
+    --full                                  # Always return the stored body (retrieve path; compose `| page`)
 ]: nothing -> any {
     let row = (jobs-require-row $key)
     if $row.status == "running" {
         error make {msg: $"jobs: '($key)' still running"}
     }
-    $row.output
+    let payload = $row.output
+    if $full {
+        return $payload
+    }
+    let census = (jobs-census $payload)
+    let bytes = $census.bytes
+    let cap = (try { par cap } catch { 20000 })
+    if $bytes == null or $bytes <= $cap {
+        return $payload
+    }
+    jobs-stamp-receipt {
+        ok: true
+        disclosed: false
+        tag: $row.tag
+        bytes: $bytes
+        retrieve: $"jobs read ($row.tag) --full"
+    } "jobs.read" --tag $row.tag
 }
 
 # Store a value in the registry as a completed-on-arrival row (no native job; `job_id: null`).
@@ -297,7 +360,7 @@ export def --env "jobs stash" [
     let tag = (if $tag != null { $tag } else { $"stash:($seq)" })
     if ($env.JOBS? != null) and (not ($env.JOBS | is-empty)) {
         if not ($env.JOBS | where tag == $tag | is-empty) {
-            return {ok: false, error: "duplicate tag", tag: $tag}
+            return (jobs-stamp-receipt {ok: false, error: "duplicate tag", tag: $tag} "jobs.stash" --tag $tag)
         }
     }
     let now = (date now)
@@ -318,11 +381,11 @@ export def --env "jobs stash" [
         output: $payload
     }
     $env.JOBS = ($env.JOBS | default [] | append $row)
-    jobs-project $row
+    jobs-stamp-receipt (jobs-project $row) "jobs.stash" --tag $tag --elapsed 0sec
 }
 
 # Query envelope with quarantine: `par emit`, plus — when truncated — the full findings
-# table is stashed under `tag` so `jobs read <tag>` retrieves it. Envelope gains `tag`
+# table is stashed under `tag` so `jobs read <tag> --full` retrieves it. Envelope gains `tag`
 # only when something was stored. Foreground `par emit` alone is lossy over cap.
 export def --env "jobs emit" [
     --tag: string                           # Registry tag for the stored findings; default `emit:<seq>`
@@ -346,14 +409,15 @@ export def --env "jobs cancel" [
     jobs-harvest 0sec
     let hit = (jobs-find $id)
     if ($hit | is-empty) {
-        return {job_id: $id, cancelled: false}
+        return (jobs-stamp-receipt {job_id: $id, cancelled: false} "jobs.cancel")
     }
     let row = ($hit | first)
     if $row.status != "running" {
-        return {job_id: $id, cancelled: false}
+        return (jobs-stamp-receipt {job_id: $id, cancelled: false} "jobs.cancel" --tag $row.tag)
     }
     try { job kill $id } catch { }
     let finished = (date now)
+    let elapsed = ($finished - $row.started)
     $env.JOBS = (
         $env.JOBS | each {|r|
             if $r.job_id == $id and $r.status == "running" {
@@ -362,19 +426,19 @@ export def --env "jobs cancel" [
                     status: "cancelled"
                     error: "cancelled"
                     finished: $finished
-                    elapsed: ($finished - $r.started)
+                    elapsed: $elapsed
                 }
             } else { $r }
         }
     )
-    {job_id: $id, cancelled: true}
+    jobs-stamp-receipt {job_id: $id, cancelled: true} "jobs.cancel" --tag $row.tag --elapsed $elapsed
 }
 
 # Knobs, cores, ceiling, inflight, policy. No job rows. Harvests ready so inflight is true.
 export def --env "jobs status" []: nothing -> record {
     jobs-require-par
     jobs-harvest 0sec
-    $env.NU_PAR | merge {inflight: (jobs-running)}
+    jobs-stamp-receipt ($env.NU_PAR | merge {inflight: (jobs-running)}) "jobs.status"
 }
 
 # Session-scoped knob mutation. Recalculates ceiling via `par budget`; does not write policy.json.

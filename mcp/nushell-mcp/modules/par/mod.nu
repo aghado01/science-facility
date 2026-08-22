@@ -4,6 +4,9 @@
 
 const SELF_DIR = (path self | path dirname)
 
+# `shape` for the one `bytes` definition. Overlay `use *` does not leak into this module.
+use dataspection [shape]
+
 # --- host facts / knobs -------------------------------------------------------
 
 def discover-cores [] {
@@ -85,6 +88,12 @@ def resolve-inline-cap []: nothing -> int {
     } else {
         20000
     }
+}
+
+# Inline / query cap. `$env.NU_PAR.max_inline_bytes` if set, else `NU_MCP_OUTPUT_LIMIT`, else 20000.
+# One resolver: `par emit`, in-hand `read`, and `jobs read` all call this.
+export def "par cap" []: nothing -> int {
+    resolve-inline-cap
 }
 
 export-env {
@@ -180,6 +189,7 @@ export def main [
 
 # Query envelope: findings + census. `findings` omitted when over max_inline_bytes.
 # Contract for wrappers. Truncate on bytes, not rows. n is row count (flatten first if you need hit count).
+# `bytes` is dataspection `shape`'s definition when `shape` is in overlay.
 export def "par emit" []: any -> record {
     let findings = $in
     let n = (if ($findings | is-empty) { 0 } else { $findings | length })
@@ -192,9 +202,16 @@ export def "par emit" []: any -> record {
             try { $findings | get elapsed | compact | math max } catch { null }
         } else { null }
     )
-    let bytes = (try { $findings | to nuon --raw | str length --utf-8-bytes } catch { 0 })
-    let cap = (resolve-inline-cap)
-    let truncated = ($bytes > $cap)
+    let s = (try { $findings | shape } catch { null })
+    let bytes = (
+        if $s != null {
+            $s.bytes?
+        } else {
+            try { $findings | to nuon --raw | str length --utf-8-bytes } catch { 0 }
+        }
+    )
+    let cap = (par cap)
+    let truncated = (if $bytes == null { true } else { $bytes > $cap })
     let envelope = {
         ok: ($n_err == 0)
         n: $n

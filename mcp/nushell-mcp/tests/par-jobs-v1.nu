@@ -7,6 +7,7 @@ const JOBS_MBOX = 0x4A4F4253
 
 use par *
 use jobs *
+use dataspection *
 
 def assert-eq [left, right, msg: string] {
     if $left != $right {
@@ -152,14 +153,21 @@ let results = [
         assert-eq (jobs read rb) "beta" "rb still stored"
     })
     (t "inspect has no body" {
-        let _ = (jobs spawn { {secret: 99} } --tag insp)
+        let spawned = (jobs spawn { {secret: 99} } --tag insp)
+        assert-eq $spawned.meta.verb "jobs.spawn" "spawn stamped"
         let _ = (jobs collect --timeout 3sec)
         let i = (jobs inspect insp)
         assert-true ("output" not-in ($i | columns)) "no output field"
         assert-true ("secret" not-in ($i | columns)) "no payload keys"
+        assert-true ("disclosed" not-in ($i | columns)) "inspect is not a decline"
         assert-eq $i.ok true "ok"
         assert-true ($i.bytes != null) "bytes"
         assert-true ($i.type != null) "type"
+        assert-eq $i.meta.verb "jobs.inspect" "inspect stamped"
+        let s = (jobs read insp | shape)
+        assert-eq $i.bytes $s.bytes "bytes from shape"
+        assert-eq $i.type $s.type "type from shape"
+        assert-eq $i.length $s.length "length from shape"
         assert-eq (jobs read insp) {secret: 99} "body only via read"
     })
     (t "flatten-by-index" {
@@ -213,6 +221,8 @@ let results = [
         let a = (jobs spawn { sleep 5sec; 1 } --tag can)
         let k = (jobs cancel $a.job_id)
         assert-eq $k.cancelled true "cancelled true"
+        assert-eq $k.meta.verb "jobs.cancel" "cancel stamped"
+        assert-eq $k.meta.tag "can" "cancel meta tag"
         let listed = (jobs list)
         assert-eq ($listed | get 0.status) "cancelled" "status"
         assert-true (($listed | get 0.finished) != null) "finished stamped by cancel"
@@ -283,6 +293,7 @@ let results = [
         assert-true ($s.min_items_per_worker != null) "min_items_per_worker"
         assert-true ($s.inflight != null) "inflight"
         assert-true ($s.policy != null) "policy"
+        assert-eq $s.meta.verb "jobs.status" "status stamped"
     })
     (t "finished jobs never marked vanished (stress)" {
         # Jobs that send then exit while harvest is running must never be `vanished`.
@@ -313,6 +324,7 @@ let results = [
         assert-true ($r.bytes > 0) "bytes"
         assert-eq $r.length 3 "length"
         assert-true ("output" not-in ($r | columns)) "receipt has no body"
+        assert-eq $r.meta.verb "jobs.stash" "stash stamped"
         assert-eq (jobs read s) [1 2 3] "readable"
         assert-true ("output" not-in (jobs inspect s | columns)) "inspect no body"
         assert-eq (jobs collect --timeout 0sec | length) 1 "collect includes it"
@@ -330,7 +342,7 @@ let results = [
         assert-eq $e.truncated true "truncated"
         assert-true ("findings" not-in ($e | columns)) "no findings inline"
         assert-eq $e.tag "q" "tag on envelope"
-        assert-eq (jobs read q) $rows "full findings retrievable"
+        assert-eq (jobs read q --full) $rows "full findings retrievable"
         assert-eq (jobs list | get 0.status) "completed" "registry row"
         let small = ([{a: 1}] | jobs emit --tag small)
         assert-eq $small.truncated false "under cap"
@@ -352,6 +364,37 @@ let results = [
         assert-eq ($table | length) 8 "eight rows"
         assert-eq ($table | get value) [1 4 9 16 25 36 49 64] "squares"
     })
+    (t "par cap resolver" {
+        let saved = $env.NU_PAR.max_inline_bytes
+        $env.NU_PAR = ($env.NU_PAR | upsert max_inline_bytes 50)
+        assert-eq (par cap) 50 "explicit"
+        $env.NU_PAR = ($env.NU_PAR | upsert max_inline_bytes null)
+        let c = (par cap)
+        assert-true ($c >= 1) "default int"
+        $env.NU_PAR = ($env.NU_PAR | upsert max_inline_bytes $saved)
+    })
+    (t "jobs read over cap declines" {
+        $env.NU_PAR = ($env.NU_PAR | upsert max_inline_bytes 20)
+        let v = (1..20 | each { "xxxx" } | str join)
+        let _ = ($v | jobs stash --tag big)
+        let i = (jobs inspect big)
+        assert-true ("output" not-in ($i | columns)) "inspect no body"
+        assert-true ("disclosed" not-in ($i | columns)) "inspect is not a decline"
+        assert-eq $i.meta.verb "jobs.inspect" "inspect stamped"
+        assert-true ($i.bytes > 20) "bytes over cap"
+        let s = (jobs read big --full | shape)
+        assert-eq $i.bytes $s.bytes "inspect bytes from shape"
+        assert-eq $i.type $s.type "inspect type from shape"
+        let d = (jobs read big)
+        assert-eq $d.ok true "decline ok"
+        assert-eq $d.disclosed false "not disclosed"
+        assert-eq $d.retrieve "jobs read big --full" "retrieve"
+        assert-eq $d.tag "big" "tag"
+        assert-eq $d.meta.verb "jobs.read" "read stamped"
+        assert-eq (jobs read big --full) $v "full body"
+        assert-eq (jobs list | length) 1 "did not re-stash"
+        $env.NU_PAR = ($env.NU_PAR | upsert max_inline_bytes null)
+    })
 ]
 
 reset-jobs
@@ -368,5 +411,5 @@ print -e ($summary | to nuon --raw)
 if ($failed | is-empty) {
     $results | select name ok
 } else {
-    error make {msg: $"($failed | length) test(s) failed: ($failed | get name | str join ', ')"}
+    error make {msg: $"($failed | length) tests failed: ($failed | get name | str join ', ')"}
 }

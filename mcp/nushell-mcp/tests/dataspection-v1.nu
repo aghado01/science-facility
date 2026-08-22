@@ -216,9 +216,9 @@ let results = [
         assert-eq $r.disclosed false "not disclosed"
         assert-true ($r.tag != null) "tag"
         assert-true ($r.bytes > 20) "bytes over cap"
-        assert-eq $r.retrieve $"jobs read ($r.tag)" "retrieve"
+        assert-eq $r.retrieve $"jobs read ($r.tag) --full" "retrieve"
         assert-eq $r.meta.verb "read" "stamped"
-        assert-eq (jobs read $r.tag) $v "retrievable"
+        assert-eq (jobs read $r.tag --full) $v "retrievable"
         assert-eq $v (long-str 20) "peek not pop"
         $env.NU_PAR = ($env.NU_PAR | upsert max_inline_bytes null)
     })

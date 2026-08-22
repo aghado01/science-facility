@@ -28,17 +28,17 @@ Nouns produce a data object. Verbs are **portable** (one meaning wherever they a
 ```
 $x | schema | preview
 $x | spine file | page 2
-jobs read sq | shape          # compose after a lawful disclose, not an identity
+jobs read sq --full | shape   # compose after a lawful disclose, not an identity
 ```
 
-`jobs inspect` is **not** `jobs read | shape`. Inspect discloses nothing; jobs keeps its own receipt and may call `shape` on the payload internally.
+`jobs inspect` is **not** `jobs read | shape`. Inspect discloses nothing; jobs keeps its own receipt and calls `shape` on the stored payload internally.
 
 ## Disclosure ladder
 
 | Verb | Discloses | Always fits? |
 |---|---|---|
 | `shape` | nothing — census | yes |
-| `read` | the whole body | only under cap; else a receipt naming `jobs read <tag>` |
+| `read` | the whole body | only under cap; else a receipt naming `jobs read <tag> --full` |
 | `preview` | whole structure, leaves clipped | yes, per leaf |
 | `page` | one slice | yes, per slice |
 
@@ -70,7 +70,7 @@ Never `each {|i| ... | page $i}` in one evaluate. `$history | shape each` is the
 
 **`preview [--chars 200] [--items 5] [--mode head|tail|sandwich]`** — strings `… [+N chars]`, lists `[+K more]`, records keep every key. Idempotent.
 
-**`read`** (`--env`) — under cap, the value; over cap, `jobs stash` and `{ok: true, disclosed: false, tag, bytes, retrieve, meta.verb: "read"}`. Cap: `$env.NU_PAR.max_inline_bytes` else `NU_MCP_OUTPUT_LIMIT` else 20000. Peek, not pop. Jobs missing → `{ok: false, disclosed: false, error, trace}`.
+**`read`** (`--env`) — under cap, the value; over cap, `jobs stash` and `{ok: true, disclosed: false, tag, bytes, retrieve, meta.verb: "read"}`. `retrieve` is `jobs read <tag> --full`. Cap is `par cap`. Peek, not pop. Jobs missing → `{ok: false, disclosed: false, error, trace}`. `jobs read` is the same cap rule for an addressed payload (`--full` always returns the stored body).
 
 **`meta`** — `{verb, at, tag?, elapsed?, ref?}` or `null`. Not the builtin `metadata` (pipeline `{span}`, stripped in `$history`).
 

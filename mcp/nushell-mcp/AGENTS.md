@@ -16,7 +16,8 @@ package-level rules.
   discipline.
 - `modules/` — Nu-native modules loaded into the engine (`par`, `jobs`,
   `dataspection`, `argx`, `nu-skills`, `nu-modules`, …). Contracts live
-  in docstrings.
+  in docstrings. `jobs` imports `dataspection` at module scope (`shape`,
+  `meta stamp`); overlay load order is still `par`, `jobs`, `dataspection`.
 - `skills/nushell/` — the reference corpus (`SKILL.md` +
   `references/*.md`) agents read through `nu-skills`.
 - `deps/` — vendored binaries, gitignored except `README.md`:
@@ -46,17 +47,19 @@ package-level rules.
 4. **Receipts before bodies.** One tool result carries at most one
    payload. Anything withheld names the call that retrieves it.
    `read` is the only verb that may decline, and when it declines it
-   names the retrieval (`jobs read <tag>`) — the disclosure ladder is
+   names the retrieval (`jobs read <tag> --full`) — the disclosure ladder is
    `shape` (always fits) → `read` (if it fits) → `preview`/`page`
-   (bounded). Over-cap `read` stashes through `jobs stash`; it is
-   `--env`. Other dataspection commands stay pure.
+   (bounded). Over-cap in-hand `read` stashes through `jobs stash`; it is
+   `--env`. `jobs read` is the same cap for an addressed payload; `--full`
+   is the path that returns the stored body. Other dataspection commands
+   stay pure. Cap is `par cap`.
 4b. **Portable verbs.** A verb means one thing wherever it appears,
    and takes a noun domain when it addresses a stored or named thing:
    `jobs inspect`, `nu-modules read`, `meta stamp`. Commands acting on
    a value **in hand** are flat, because the value arrives by pipe
    rather than by address. `jobs inspect` is **not** `jobs read | shape`:
-   inspect discloses nothing; jobs keeps its own receipt and may call
-   `shape` on the payload internally.
+   inspect discloses nothing; jobs keeps its own receipt and calls
+   `shape` on the stored payload internally.
 4a. **`ok` is universal; failure is data.** Every record the layer
    returns carries `ok: bool`. A verb that catches an error returns
    `ok: false` + `error` (short) — and `trace` where it captured one —
@@ -66,7 +69,7 @@ package-level rules.
    legible only through its own `ok: false`. `shape each` lifts `ok`
    so `$history | shape each | where ok == false` finds them.
 5. **Never cap a live pipeline** (`first N`, `head`) — slice `$history`
-   or `jobs read` afterward. This is the MCP's own rule; the modules
+   or `jobs read --full` afterward. This is the MCP's own rule; the modules
    exist to make obeying it easy.
 6. **Writes follow** `issues/nushell-mcp/notes/write-conventions-v1.md`:
    state under `.nushell-mcp/`, scratch under `artifacts/nushell-mcp/`,
