@@ -13,15 +13,16 @@ context window as the scarcest resource in the loop:
 
 - **Non-blocking operations** — slow work runs while the agent keeps
   thinking; the console never holds `evaluate` hostage.
-- **Deferred bodies** — big results are written to file or held in
+- **Payload quarantine** — big results are written to file or held in
   engine memory and *queried as results*, never dumped into context.
-  (Vocabulary from para-agent's Console Journal Contract; "quarantine"
-  means something else there — see
-  [notes/para-agent-archaeology.md](notes/para-agent-archaeology.md).)
-  Its four design priorities are ours, in its order: **no silent
-  omission** (anything withheld names the call that retrieves it),
-  **token economy** (the default read is a summary), **selectivity**,
-  **facility** ("what happened since I last looked" is one call).
+  Always say it with the qualifier: para-agent's mediation plane has
+  **commit quarantine** (ambiguous-commit evidence), a different thing
+  — see [notes/para-agent-archaeology.md](notes/para-agent-archaeology.md).
+  The Console Journal Contract's four design priorities are ours, in
+  its order: **no silent omission** (anything withheld names the call
+  that retrieves it), **token economy** (the default read is a
+  summary), **selectivity**, **facility** ("what happened since I last
+  looked" is one call).
 - **Skeletal metadata first** — receipts, census, and spine views expose
   the shape of a dataset so retrieval can be surgical and responsible.
 

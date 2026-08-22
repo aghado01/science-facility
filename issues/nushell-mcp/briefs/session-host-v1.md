@@ -65,10 +65,11 @@ transfer when this host is plugged in as a visitor MCP.
 |---|---|
 | `evaluate {input}` | passthrough to the engine; result relayed verbatim except: on engine truncation the host appends a census (Policy) |
 | `log {from?, to?, limit?, kind?, tag?}` | journal read → records + **unconditional receipt** (`complete`, `withheld[]`, `deferredBodies[]`, `cursor`). Never bodies beyond `inlineLimit` |
-| `body {turn, path?, page?, size?}` | one deferred body — from the body file, or live from `$history.<turn>` with a cell path / page when the engine is up. One body per call |
+| `body {turn, path?, page?, size?}` | one quarantined payload — from the body file, or live from `$history.<turn>` with a cell path / page when the engine is up. One body per call |
 | `find {pattern, kind?, from?}` | search `cmd`/`preview`/`note` text in the journal; receipt as `log` |
 | `annotate {turn, tags?, note?}` | appends a `note` record `{turn, data: {tags, note}}` — agent labels, the one thing the engine cannot know |
 | `console` | one record: engine version, identity, session id, stream, journal depth, `inlineLimit`, `jobs status` |
+| `spawn` / `list` / `kill` | engine lifecycle, para-agent names (see Persistence without a mux). Host-level; the engine cannot list or kill itself |
 
 No other tools. `par`/`jobs`/`xq`/probe/rg stay Nu verbs through
 `evaluate` — the host adds no per-module tools.
@@ -128,6 +129,74 @@ This retires the Nu-side index sidecar sketched for hist-v1: in-engine,
 `$history | shape each` (probe) remains the idiom for an agent that
 wants census without the host; `stamp` remains the convention that
 makes journal `note` data rich. Nothing in Nu tracks tags/notes.
+
+## Persistence without a mux
+
+para-agent's persistence is a property of the **multiplexer daemon**:
+the MCP process is stateless, panes live in psmux, and "a session" is
+a named pane an agent returns to. That idea emerged at the interface
+between the primary agent and para-agent, and it is pane-shaped.
+Muxless does not mean daemonless — it means the persistent thing is an
+**engine process** instead of a pane, and something has to own it.
+
+**The host is the mux for engines.** Every structural role psmux plays
+for panes, the host plays for `nu --mcp` children:
+
+| psmux (para-agent Console plane) | Session host (nushell-mcp) |
+|---|---|
+| server daemon (`-L` namespace) | host process (one per `journal_root`) |
+| session / pane, by name | engine child, by `(session_id, agent_id)` |
+| `spawn` / `list` / `kill` | same verbs, same names, over engines |
+| `send-keys` + `capture-pane` | `evaluate` (sync) — values in, values out |
+| `run`/`exec` + `.done` sentinel | `evaluate` completes in-protocol; `jobs spawn`/`collect` for async |
+| `wait` (stable screen / pattern) | `jobs collect --timeout`; nothing to wait *on* for sync evaluates |
+| pane scrollback | `$history` (values) + journal bodies (files) |
+| Console Journal stream per pane | Console Journal stream per engine — same contract |
+| human `attach` to a pane | **no equivalent in v1** (see below) |
+| shared pane (two agents, one shell) | not in v1: one engine per identity; a *shared* engine is an explicit grant, later |
+
+Lifecycle verbs are therefore part of the host surface — `spawn`
+(an engine for an identity), `list` (engines, with journal depth and
+inflight), `kill` — using para-agent's names so a participant who
+knows the Console plane knows this one. They are host-level, not Nu
+verbs: the engine cannot list or kill itself.
+
+**Lifetimes, in three steps.** (1) v1: engine lifetime = host lifetime,
+plus `keepalive` across client disconnect — already more than a pane
+gets from a stateless MCP. (2) v2: the host becomes a daemon and the
+MCP stdio process becomes a thin shim connecting to it over a local
+socket/named pipe — exactly psmux's server/client split, and the point
+at which engines survive client *and* shim restarts. (3) Engine-state
+snapshot/restore (`$env` export, registry spill into the stream dir)
+for survival across host restarts — daemon-era, not promised.
+
+**What a pane has that an engine lacks — say it plainly:**
+
+- **A screen.** A human can `attach` to a pane and watch. An engine
+  has no terminal; a human sees the journal (`log --follow` is the v1
+  answer) and may later get a local REPL client that speaks `evaluate`
+  to a named engine (`host attach <session>`) — the honest analogue of
+  attach, filed as future.
+- **Shared state with a human shell.** A nu pane *is* a shell a human
+  could also type into. The engine's `$env`, `$history`, `$env.JOBS`
+  are reachable only through `evaluate`. Deploying into para-agent
+  therefore gives participants two different nu things: panes (text,
+  shareable, watchable) and engines (values, per-identity, journaled).
+  Both are legitimate; the visitor grant decides which a participant
+  gets, and the journal reader does not care.
+
+**Co-design hooks for the para-agent deployment**, recorded now so the
+host does not drift from them:
+
+- Stream naming: `nu-<session>-<agent>` lives under the same
+  `<root>/streams/` as pane streams. para-agent's `log`/`body`/`find`
+  must accept engine stream names; nothing else changes for it.
+- A shared engine (if ever granted) needs per-turn attribution the
+  contract lacks — a `turn.agent` field. Amendment to file *only* when
+  that grant exists; until then one engine per identity keeps `turn`
+  = `history_index` exact.
+- Mediated turns may `ref` engine turns (`{stream, turn}`) as evidence.
+  That is the mediation plane's amendment to make, not the host's.
 
 ## Identity and sessions
 

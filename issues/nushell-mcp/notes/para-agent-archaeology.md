@@ -45,7 +45,7 @@ honor to feel like the same product:
 | Assumption (para-agent) | nushell-mcp equivalent |
 |---|---|
 | A session is a named, long-lived thing the agent returns to | an engine child per `(session, agent)`, keepalive across client disconnect |
-| `run` returns a **receipt**, not output; `body` fetches a payload on demand | `evaluate` result + journal `out` record; `body` for deferred bodies; in-engine `jobs read` |
+| `run` returns a **receipt**, not output; `body` fetches a payload on demand | `evaluate` result + journal `out` record; `body` for quarantined payloads; in-engine `jobs read` |
 | Bodies are byte-exact files beside the journal, never truncated by the transport | NUON bodies as files (`turns/<seq>.out`) when over the inline limit |
 | Every read returns a receipt, unconditionally; `complete`/`withheld` name retrieval | adopt verbatim (see §3) |
 | Cursor = one integer (`seq`), reader-owned | adopt; `history_index` is the engine's turn number |
@@ -119,12 +119,13 @@ commit could not be proven, inspected read-only via
 `quarantine_status`, mutated only by an offline CLI under a writer
 lease. It is a safety/evidence term with a CLI behind it.
 
-nushell-mcp has been using "payload quarantine" for deferring bodies
-out of context. Once the two share a host, that overloading will
-mislead. Recommendation: nushell-mcp docs adopt the journal's word —
-**deferred bodies** (and `stash` for the in-engine act) — and retire
-"quarantine" from the roadmap doctrine and the `xq` brief title. Nu
-verb names are unaffected (`jobs stash`, `jobs emit` never said it).
+nushell-mcp uses "payload quarantine" for keeping big results out of
+context. Both are legitimate uses of an ordinary word; the fix is a
+qualifier, not a new term (owner ruling 2026-08-21). Write **commit
+quarantine** for para-agent's mediation-plane evidence and **payload
+quarantine** for nushell-mcp's results discipline, and never bare
+"quarantine" in a document both sides read. Nu verb names are
+unaffected (`jobs stash`, `jobs emit`).
 
 ## 6. Things that do *not* transfer
 
@@ -151,7 +152,7 @@ verb names are unaffected (`jobs stash`, `jobs emit` never said it).
    `console-journal.schema.json` (the contract is prose-only today —
    a schema both sides validate against is a shared artifact with no
    code coupling).
-3. **Roadmap doctrine:** replace "payload quarantine" with "deferred
-   bodies"; import the four design priorities by name.
+3. **Roadmap doctrine:** keep "payload quarantine", always qualified;
+   import the four design priorities by name. (Applied.)
 4. **Do not** make nushell-mcp import para-agent code, ever. The
    contract is the coupling; para-agent's rule, and ours.
