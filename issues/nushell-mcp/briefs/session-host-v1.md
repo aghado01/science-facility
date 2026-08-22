@@ -90,9 +90,43 @@ Layout, per the contract, one stream per engine session:
 
 ```
 <root>/streams/<YYYYMMDD_HHmmss>_nu-<agent_id>-<session8>/   # stamp = session start
-    journal.jsonl          append-only, seq-ordered
+    journal.jsonl          append-only, seq-ordered — the truth
+    journal.idx            writer-maintained offset index (below)
+    turns.idx              turn → first seq (+ generation, history_index?)
     turns/000017.out       NUON body, byte-exact, when over inlineLimit
 ```
+
+**Fast lookup: the offset index.** Every journal record is one
+physical line, and the host is the writer, so the byte offset of each
+line is known at append time — no scan ever builds this index.
+
+- `journal.idx` is **fixed-width binary**, one entry per `seq`:
+  `u64 offset, u32 len` (12 bytes). Because `seq` is dense and
+  gap-free (contract), the entry's *position* is the `seq`: lookup is
+  `seek(seq * 12)`, read 12 bytes, `seek(offset)`, read `len`. O(1),
+  no parsing of anything but the one record wanted. A JSONL index
+  would itself need scanning; fixed width is the point.
+- `turns.idx` is the same shape over turns: `u32 first_seq, u16
+  generation, u32 history_index (0xFFFFFFFF = none)` — the sparse map
+  `turn → {generation, history_index?}` from above, persisted, and
+  also O(1) by position since `turn` is session-monotonic.
+- **Truth is `journal.jsonl`; the indexes are caches.** Written *after*
+  the journal line is flushed. On open, the host validates
+  `idx.length == seq_count * 12` and that the last entry's
+  `offset + len == journal size`; any mismatch → rebuild both indexes
+  with one sequential scan (cheap: bodies are external, so the journal
+  is small) and emit a `note`. A reader that finds no index, or a
+  stale one, scans — it never fails and never trusts a bad index.
+- Bodies are already O(1) by construction (`turns/<seq>.out` is the
+  path). `cmd_hash`/`out_hash` (contract fields) give cheap identity
+  for dedup and recall; a hash → seq map is *not* built in v1 — `find`
+  over a small journal is a scan, and that is fine until measured
+  otherwise.
+- Contract posture: the Console Journal Contract already places
+  "reader-side index" outside itself. `journal.idx`/`turns.idx` are
+  exactly that — optional, tolerated if absent or stale, never
+  required by any reader. Propose upstream as an *optional* layout
+  note, not a requirement.
 
 Per relayed `evaluate`, the host writes:
 
@@ -308,6 +342,13 @@ stay valid; `log`/`body`/`find`/`annotate`/`console` get their own.
   file untouched
 - child killed out-of-band → next `evaluate` respawns; a `note` records the loss; `body` still serves from files
 - retention prunes oldest beyond `max_files`; never touches other dirs
+- offset index: `journal.idx` entry `seq` resolves to exactly that line
+  (seek, no scan); `turns.idx` resolves `turn` → `{generation,
+  history_index?}`; a failed turn has `history_index: none`
+- index validation: truncate `journal.idx` by 12 bytes → host rebuilds
+  both indexes on open, emits a `note`, results identical; delete the
+  indexes → reader scans, no error; indexes always written after the
+  journal line
 
 ## Exit gate
 
