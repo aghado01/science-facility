@@ -128,8 +128,15 @@ context window as the scarcest resource in the loop:
    definition — no `jobs shape` export. Receipts gain `meta` via
    `meta stamp` (spawn/stash/inspect/status/cancel). `par cap` is the
    one cap resolver. **Landed 2026-08-22.**
+3b. **layering v1** — [briefs/layering-v1.md](briefs/layering-v1.md)
+   · filed, decision open. The amendment in 3 imported `dataspection`
+   into `par`/`jobs` and broke in-hand `read` under `--config` (MCP
+   path). Census/stamp are shareable in-hand primitives; `read` is
+   quarantine and must not sit in a module the handle plane imports.
+   Pick A (sibling primitives, dataspection as facade) or B (invert:
+   `read` moves onto jobs). Blocks 4.
 4. **`xq` v1** — [briefs/xq-v1.md](briefs/xq-v1.md) · filed; depends
-   on 1–3. Execute, capture, payload-quarantine for every external:
+   on 1–3b. Execute, capture, payload-quarantine for every external:
    `complete` + census + `read`'s cap rule, job-aware via `job id`. The
    primitive the rg module is a special case of — build before 5.
 5. **`rg` module v1** — [briefs/rg-wrapper-v1.md](briefs/rg-wrapper-v1.md)
@@ -191,9 +198,10 @@ here. Term senses — whose word is whose — are in
 |---|---|
 | [par-jobs-v1](.archive/par-jobs-v1.md) | landed 2026-08-21; amended 2026-08-22 (dataspection consumption) |
 | [dataspection-v1](briefs/dataspection-v1.md) | landed 2026-08-22 |
+| [layering-v1](briefs/layering-v1.md) | filed, decision open; blocks xq |
 | [hist-v1](.archive/hist-v1.md) | superseded → dataspection-v1 (primitives) + session-host-v1 (index) |
 | [session-host-v1](briefs/session-host-v1.md) | filed, not started; parallel track |
-| [xq-v1](briefs/xq-v1.md) | filed, not started; depends on 1–3 (`par cap`, `jobs read --full`) |
+| [xq-v1](briefs/xq-v1.md) | filed, not started; depends on 1–3b (layering cut, then `par cap` / retrieve) |
 | [rg-wrapper-v1](briefs/rg-wrapper-v1.md) | filed, not started; depends on par-jobs-v1, xq-v1 |
 | [write-conventions-v1](notes/write-conventions-v1.md) | filed; governs every write (state vs scratch, locality, chronology, precedence) |
 | [gh-v1](briefs/gh-v1.md) | filed, not started; depends on xq-v1; needs `gh` ≥ 2.40 in `deps/cli` |

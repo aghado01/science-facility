@@ -2,7 +2,9 @@
 
 **Status:** filed, not started · **Filed:** 2026-08-21 · **Home:**
 `mcp/nushell-mcp/modules/xq`, Nu-native, used only through `evaluate`.
-**Depends on:** [par-jobs-v1](../.archive/par-jobs-v1.md) (`jobs stash`)
+**Depends on:** [layering-v1](layering-v1.md) (cut before this lands;
+`mod.nu` must `use jobs *` / `use par *` at module scope),
+[par-jobs-v1](../.archive/par-jobs-v1.md) (`jobs stash`)
 and [dataspection-v1](dataspection-v1.md) — the cap rule is `read`'s,
 not a copy; `xq` applies it, never re-implements it. **Consumed by:** [rg-wrapper-v1](rg-wrapper-v1.md) — rg is
 `xq` + JSON-event parse + spine; build this first.
