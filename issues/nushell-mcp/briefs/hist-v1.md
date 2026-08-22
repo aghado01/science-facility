@@ -1,6 +1,11 @@
 # `hist` / `shape` / `page` v1 — census and paging over the console's store
 
-**Status:** filed, not started · **Filed:** 2026-08-21 · **Home:**
+**Status:** superseded 2026-08-21 — primitives (`shape`, `page`) move to
+probe-v1; the `$history` index moves to the host ledger in
+[session-host-v1](session-host-v1.md) (hooks never fire in-engine and
+`$history` is output-only, so the index belongs where `source` and
+`timestamp` are seen). Kept for the trail; do not implement. ·
+**Filed:** 2026-08-21 · **Home:**
 `mcp/nushell-mcp/modules/hist`, Nu-native, used only through `evaluate`.
 **Depends on:** nothing in-layer (pure value → value). Shares the
 `bytes` definition with par-jobs-v1.

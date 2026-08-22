@@ -41,6 +41,20 @@ context window as the scarcest resource in the loop:
   `--config` + identity); scoped session history is **standard issue**
   for a persistent session, other historical stores opt-in. Full text in
   [par-jobs-v1](briefs/par-jobs-v1.md) → Persistence and identity.
+- **`nu --mcp` is the engine protocol, not the product surface**
+  (decided 2026-08-21). It uniquely provides a persistent engine behind
+  JSON-RPC — keep it. Its surface is narrow (verified: one tool,
+  output-only `$history`, hooks never fire, metadata stripped), so a
+  **thin TypeScript host** fronts it: transport, ledger, identity,
+  policy. Thinness rule: the host never implements Nu semantics; if a
+  feature needs the host to understand a Nu value, it is a Nu verb.
+  The agent's experience stays pure Nushell. See
+  [session-host-v1](briefs/session-host-v1.md).
+- **Receipts carry provenance by convention.** Every record the layer
+  returns has a closed `meta` sub-record (`kind, at, tag?, elapsed?,
+  ref?`) via one pure `stamp` primitive; tables stay bare. `$history`
+  is a spine of values + positions; `meta` is how entries describe
+  themselves and point at each other. (probe-v1, to be filed.)
 
 ## Sequence
 
@@ -48,10 +62,12 @@ context window as the scarcest resource in the loop:
    · landed 2026-08-21. Data plane + handle plane + budget on the
    persistent engine. Carries the envelope contract (shape 4) and the
    registry mechanics.
-2. **`hist` / `shape` / `page` v1** — [briefs/hist-v1.md](briefs/hist-v1.md)
-   · filed. Census over `$history` and any value; the cheapest fix to
-   the console's largest blind spot (the store has no receipt surface).
-   Pure, no deps — can land in parallel with 3.
+2. **probe v1** — to be filed (supersedes
+   [briefs/hist-v1.md](briefs/hist-v1.md)). Pure primitives, one module:
+   `shape` (+ `each`), `schema` (+ `diff`/`check`/`stats`), `spine`,
+   `page`, `preview`, `stamp`. jso-jackson's controlled-exploration
+   doctrine in Nu's data orientation; the `bytes` definition lives here
+   once. No deps — can land in parallel with 3 and H.
 3. **`xq` v1** — [briefs/xq-v1.md](briefs/xq-v1.md) · filed; depends
    on 1. Execute-and-quarantine for every external: `complete` + census
    + inline-under-cap / stash-over-cap, job-aware via `job id`. The
@@ -69,11 +85,20 @@ context window as the scarcest resource in the loop:
 7. **para-agent visitor grant** — later. Admit this MCP to a
    participant; same verbs, no new surface.
 
+**H. Session host v1** — [briefs/session-host-v1.md](briefs/session-host-v1.md)
+· filed. Parallel track: thin TS MCP host in front of `nu --mcp` —
+host-side history ledger (at, source, census), `annotate`, `read`,
+`console`, caller-routed identity with one engine per `(session,
+agent)`, scoped JSONL history artifacts, keepalive, informative
+truncation. Absorbs the hist-v1 index sidecar and the session-layer
+history work from 6; 6 keeps only what needs a true daemon.
+
 ## Briefs
 
 | Brief | Status |
 |---|---|
 | [par-jobs-v1](briefs/par-jobs-v1.md) | landed 2026-08-21 |
-| [hist-v1](briefs/hist-v1.md) | filed, not started; no deps |
+| [hist-v1](briefs/hist-v1.md) | superseded → probe-v1 (primitives) + session-host-v1 (index) |
+| [session-host-v1](briefs/session-host-v1.md) | filed, not started; parallel track |
 | [xq-v1](briefs/xq-v1.md) | filed, not started; depends on par-jobs-v1 |
 | [rg-wrapper-v1](briefs/rg-wrapper-v1.md) | filed, not started; depends on par-jobs-v1, xq-v1 |
