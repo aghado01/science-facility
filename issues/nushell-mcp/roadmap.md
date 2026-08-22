@@ -62,7 +62,7 @@ context window as the scarcest resource in the loop:
   returns has a closed `meta` sub-record (`kind, at, tag?, elapsed?,
   ref?`) via one pure `stamp` primitive; tables stay bare. `$history`
   is a spine of values + positions; `meta` is how entries describe
-  themselves and point at each other. (probe-v1, to be filed.)
+  themselves and point at each other. (probe-v1 `stamp`.)
 
 ## Sequence
 
@@ -70,7 +70,7 @@ context window as the scarcest resource in the loop:
    · landed 2026-08-21. Data plane + handle plane + budget on the
    persistent engine. Carries the envelope contract (shape 4) and the
    registry mechanics.
-2. **probe v1** — to be filed (supersedes
+2. **probe v1** — [briefs/probe-v1.md](briefs/probe-v1.md) · filed (supersedes
    [briefs/hist-v1.md](briefs/hist-v1.md)). Pure primitives, one module:
    `shape` (+ `each`), `schema` (+ `diff`/`check`/`stats`), `spine`,
    `page`, `preview`, `stamp`. jso-jackson's controlled-exploration
@@ -119,17 +119,17 @@ writes per [write-conventions-v1](briefs/write-conventions-v1.md).
 Archaeology in [notes](notes/para-agent-archaeology.md). Absorbed the
 session-layer history work; 7 keeps only what needs a daemon.
 
-**Standing obligation (every landed brief):** "documented, not
-encoded" means each landing also updates
-`skills/nushell/references/*.md` and the Claude-side adapter skill
-(`~/.claude/skills/nushell-mcp`), in the same change. A module without
-its reference entry is not landed.
+Package rules (landing obligations, closed shapes, write conventions,
+vocabulary) live in
+[`mcp/nushell-mcp/AGENTS.md`](../../mcp/nushell-mcp/AGENTS.md), not
+here.
 
 ## Briefs
 
 | Brief | Status |
 |---|---|
 | [par-jobs-v1](briefs/par-jobs-v1.md) | landed 2026-08-21 |
+| [probe-v1](briefs/probe-v1.md) | filed, not started; no deps; **next to build** |
 | [hist-v1](briefs/hist-v1.md) | superseded → probe-v1 (primitives) + session-host-v1 (index) |
 | [session-host-v1](briefs/session-host-v1.md) | filed, not started; parallel track |
 | [xq-v1](briefs/xq-v1.md) | filed, not started; depends on par-jobs-v1 + `jobs disclose` amendment |
