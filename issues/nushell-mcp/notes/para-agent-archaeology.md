@@ -17,8 +17,10 @@ Two things, neither of which is what we are building now:
   spawn a `nu` per call, wrap the script in a `do {} catch {}` program
   that prints a JSON envelope (`protocol: para-agent.nu.v1`, `ok`,
   `error`, `exit_code`). Stateless by construction. This is the
-  `pwsh_exec` model. `nu.js` is dead weight now and should be retired
-  when the visitor registry lands.
+  `pwsh_exec` model. **Not ours to retire** (corrected 2026-08-22):
+  para-agent's backend nu is a requirement there, decoupled from and
+  independent of any console visitor — see
+  [launch-surface](launch-surface.md).
 - **Nu as a pane dialect.** `framing.js` has `DEFAULT_DIALECT = "nu"`;
   `capture.js` runs framed/captured commands in a multiplexer pane
   whose shell is `nu` (`PARA_NU_BIN`). Persistent — the pane outlives
@@ -48,7 +50,7 @@ honor to feel like the same product:
 | `run` returns a **receipt**, not output; `body` fetches a payload on demand | `evaluate` result + journal `out` record; `body` for quarantined payloads; in-engine `jobs read` |
 | Bodies are byte-exact files beside the journal, never truncated by the transport | NUON bodies as files (`turns/<seq>.out`) when over the inline limit |
 | Every read returns a receipt, unconditionally; `complete`/`withheld` name retrieval | adopt verbatim (see §3) |
-| Cursor = one integer (`seq`), reader-owned | adopt; `history_index` is the engine's turn number |
+| Cursor = one integer (`seq`), reader-owned | adopt. NB `turn` ≠ `history_index` — the latter counts only *successful* evaluates (verified 2026-08-22); the host maps between them |
 | Cancellation is cooperative and recorded (`.cancel`, `outcome: cancelled`) | `jobs cancel` in-engine; host records `exit.outcome` |
 | Producers that lose data **must** say so (`note`) | engine restart / lost `$history` → `note` + `outcome: died` |
 
@@ -73,7 +75,7 @@ What the host writes, per evaluate:
 - `exit` — `ok` from the engine result, `code: null` (no process),
   `duration_ms` host-measured, `outcome: completed | died`.
 - `note` — engine spawn/respawn/keepalive-expiry; `data` carries
-  `meta` lifted from stamped receipts (`kind`, `tag`, `ref`) and agent
+  `meta` lifted from stamped receipts (`verb`, `tag`, `ref`) and agent
   annotations (`tags`, `note`), keyed by `turn`.
 
 Contract amendments this needs (small, additive): `shell` gains `nu`;
@@ -147,8 +149,7 @@ unaffected (`jobs stash`, `jobs emit`).
    `console`); bodies as files beside the journal; unconditional
    receipts with `complete`/`withheld`/`deferredBodies`.
 2. **To file against para-agent:** contract amendment (`shell: nu`,
-   `origin: evaluate`); retire `src/nu.js` and `PARA_NU_BIN` one-shot
-   when the visitor registry lands; optionally contribute
+   `origin: evaluate`); optionally contribute
    `console-journal.schema.json` (the contract is prose-only today —
    a schema both sides validate against is a shared artifact with no
    code coupling).

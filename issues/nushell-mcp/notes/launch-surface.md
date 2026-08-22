@@ -31,13 +31,12 @@ Worked example, and the reason this note exists:
   found`` in the live session (found and fixed 2026-08-22).
 - Fix: `^$nu.current-exe`. The running binary, by absolute path.
 
-**Why this matters for re-entry.** Under para-agent, `$nu.current-exe`
-*is* whatever para-agent launched the engine with — including
-`PARA_NU_BIN`. The binary choice propagates **for free**, and
-nushell-mcp never names, reads, or knows about `PARA_NU_BIN`. That is
-the shape to keep reaching for: para-agent's mux-era concerns are
-handled by para-agent *launching things*, not by nushell-mcp learning
-about mux.
+**Why this matters for embedding.** `$nu.current-exe` is whatever
+binary launched this engine, whoever launched it. The choice
+propagates for free and the layer never reads a host's variable to
+learn it. That is the shape to keep reaching for: a host's concerns
+are handled by the host *launching things*, not by nushell-mcp
+learning about the host.
 
 ## The complete surface (audited from source, 2026-08-22)
 
@@ -66,29 +65,50 @@ are legitimately PATH-resolved, and `config.nu`'s `deps/cli` prepend is
 what makes them deterministic. Keep that the only mechanism — no
 module hunts for a binary itself (rg-v1, gh-v1 both say so).
 
-## Hazards for the visitor deployment
+## Interactions with a host (para-agent as the worked case)
 
-1. **cwd decides GitHub identity.** [gh-v1](../briefs/gh-v1.md) routes
-   identity from `git config github.user`, which resolves against the
-   engine's **cwd** via `includeIf gitdir:`. So whoever spawns the
-   engine chooses which account it acts as. Correct by design
-   (workspace-routed), but it must be *deliberate*: a visitor engine
-   spawned in para-agent's own package directory would resolve the
-   wrong identity, or none. Co-design item: para-agent spawns visitor
-   engines in the participant's workspace, not its own.
-2. **Engine version skew.** If the host launches a nu other than the
-   pinned `deps/nushell/nu.exe`, the modules run on an untested
-   engine. `$nu.current-exe` keeps parent and child *consistent*, which
-   is the important half; visibility is the other half — the host's
-   `console` reports engine version so skew is legible rather than
-   mysterious.
-3. **Two `deps` trees.** para-agent keys executables `deps/bin/{tool}`;
-   nushell-mcp uses `deps/cli`. Both may sit on PATH; the prepend means
-   the layer's pinned tools win *inside the engine*. Deterministic, but
-   decide it deliberately rather than discovering it.
-4. **The cap must be set by the launcher.** Stand-alone that is
-   `.mcp.json`; as a visitor it is para-agent's spawn. An unset
-   `NU_MCP_OUTPUT_LIMIT` silently changes truncation behavior.
+**Workspace scoping is the host's guarantee, and para-agent already
+makes it.** Verified in `src/index.js`: `WORKSPACE_ROOT =
+PARA_WORKSPACE_ROOT ?? process.cwd()`, documented as *"Launch cwd is
+that workspace by convention"*, with `spawn` defaulting to
+`cwd ?? WORKSPACE_ROOT` and journals under it. A para-agent session
+runs in the same workspace as the primary agent that called it, by
+design. [gh-v1](../briefs/gh-v1.md) *relies* on this: GitHub identity
+resolves from the engine's cwd through `includeIf gitdir:`, so
+workspace-scoped spawn is what makes workspace-routed identity correct.
+Not a hazard — a dependency on a guarantee that exists.
+
+**Two nu dependencies, deliberately decoupled** (owner, 2026-08-22).
+They were fused during incubation — one `deps/bin/nu` served both — and
+are not any more:
+
+| | para-agent's backend nu | the console engine |
+|---|---|---|
+| Status | **requirement** — `nu.js` structured exec, pane dialect | **nice-to-have**, one console option among others |
+| Binary | para-agent's `deps/bin/nu` (`resolveNuBin`, `PARA_NU_BIN`) | nushell-mcp's own pinned `deps/nushell` |
+| Versioned by | para-agent | nushell-mcp |
+
+So a visitor engine is launched by **nushell-mcp's own launcher with
+its own pinned engine** — not with `PARA_NU_BIN`. There is no version
+skew to watch for, because nothing is shared: `$nu.current-exe`
+inherits nushell-mcp's binary, and para-agent upgrades its backend nu
+on its own schedule. (Earlier drafts of this note assumed the fused
+model and warned about skew; that warning is retired.)
+
+**Corollary — nushell-mcp must not assume it *is* the console.**
+para-agent's console plane should be console-agnostic and
+user-configurable; a Nushell console is one choice a participant may
+be given. Practical consequences here: stand-alone usefulness is the
+priority and integration is not a design driver; nothing in this layer
+may require para-agent; and the visitor grant stays optional in both
+directions.
+
+**Settled, not hazards** (raised and closed): the `deps/cli` prepend
+*is* the decision — `config.nu` owns it, so the layer's pinned tools
+win inside the engine deterministically, and para-agent's `deps/bin`
+coexists without contest. `NU_MCP_OUTPUT_LIMIT` being the launcher's
+to set is a launch-surface entry, not a risk. Both are ordinary
+co-design in unfinished work.
 
 ## The promise
 

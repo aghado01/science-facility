@@ -53,10 +53,16 @@ context window as the scarcest resource in the loop:
   layer takes what it can from the running process — `$nu.current-exe`
   for the engine binary, `path self` for layout, `$nu.os-info` for the
   OS — and reads only a small, audited **launch surface** from its
-  host. Ambient lookups are what break when a component moves hosts;
-  this is what lets para-agent's engine choice propagate for free
-  without nushell-mcp ever naming `PARA_NU_BIN`.
+  host. Ambient lookups are what break when a component moves hosts.
   [notes/launch-surface.md](notes/launch-surface.md).
+- **A console, not a requirement** (owner, 2026-08-22). para-agent's
+  *backend* nu is a requirement there (`nu.js`, pane dialect, its own
+  `deps/bin/nu`); this layer is a **nice-to-have console**, one option
+  a participant may be configured with — the two nu dependencies are
+  decoupled and separately versioned. Consequences: stand-alone
+  usefulness is the priority, integration is not a design driver,
+  nothing here may require para-agent, and the visitor grant stays
+  optional in both directions.
 - **Identity routing is one shape.** Resolved from context by a pure
   router, injected per process; registry external and declarative; no
   global mutation; unknown context labeled, not refused; governance
@@ -119,13 +125,15 @@ context window as the scarcest resource in the loop:
    umbrella with conventions modified in that context (open — see
    [write-conventions-v1](notes/write-conventions-v1.md)); roots and
    identity routed at spawn; Console Journal amendments `shell: nu`,
-   `origin: evaluate`; retire para-agent's `nu.js` one-shot;
-   `turn.agent` only if a shared engine is ever granted. Contract with
-   the host is [notes/launch-surface.md](notes/launch-surface.md) —
-   engine binary inherited (so `PARA_NU_BIN` needs no mention), plus
-   its four hazards: spawn **cwd decides GitHub identity**, engine
-   version skew, two `deps` trees on PATH, and the launcher owning
-   `NU_MCP_OUTPUT_LIMIT`.
+   `origin: evaluate`; `turn.agent` only if a shared engine is ever
+   granted. (Whether para-agent's own `nu.js` one-shot stays is
+   para-agent's call — its backend nu is a requirement there,
+   independent of any console visitor.) Contract with
+   the host is [notes/launch-surface.md](notes/launch-surface.md): the
+   visitor engine is nushell-mcp's own pinned binary (**not**
+   `PARA_NU_BIN` — the two nu dependencies are decoupled), and
+   workspace-scoped spawn, which para-agent already guarantees, is
+   what makes gh identity routing resolve correctly.
 
 **H. Session host v1** — [briefs/session-host-v1.md](briefs/session-host-v1.md)
 · filed. Parallel track, can start now: thin TS MCP host in front of
