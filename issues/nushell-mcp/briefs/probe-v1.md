@@ -34,16 +34,21 @@ preview, provenance** — six pure verbs.
 ## Verbs (flat names; `use probe *`)
 
 Every verb is a receipt except `page` and `preview`, which are the
-bounded body verbs. **No verb errors on odd input** — an agent probing
-the unknown must always get something back; fallback shapes, never
-exceptions.
+bounded body verbs. **No verb throws on odd input — failure is data.**
+An agent probing the unknown must always get the verb's shape back;
+when a step fails internally, the verb catches it and the result
+carries `error: string` (first line, ~240 chars) **and** `trace:
+string` (the full rendered error, `$e.rendered`/`$e.debug`) so the
+cause is never lost — a fallback that hides why it fell back is silent
+omission. Both fields are absent on success; `trace` is a separate
+column so a consumer can `reject trace` when it only wants receipts.
 
 ### `shape` — census of one value
 
 ```
 $x | shape
 → {type: string, length: int?, bytes: int, columns?: list<record>,
-   nulls?: int, head: string}
+   nulls?: int, head: string, error?: string, trace?: string}
 ```
 
 - `type`: `table | list | record | string | int | float | bool |
@@ -52,8 +57,8 @@ $x | shape
 - `length`: rows (table/list), UTF-8 bytes (string), `null` otherwise.
 - **`bytes`**: NUON-serialized UTF-8 length — **the one definition**
   for the whole layer. `jobs-census`, `par emit`, and every envelope
-  call this; nobody re-derives it. Unserializable → `bytes: null`,
-  never an error.
+  call this; nobody re-derives it. Unserializable → `bytes: null` +
+  `error`/`trace`, never a throw.
 - `columns` (table/record): `[{name, type}]`, type from row 0.
   `nulls` (table): count of null cells.
 - `head`: first ~80 chars of the NUON, one line. Recognizable, never a
@@ -216,7 +221,11 @@ their records.
   clipped with `[+K more]`; nested record keeps keys; idempotent
 - `stamp`: record gains `meta` with `kind`/`at`; non-record wraps
   `{meta, value}`; `ref`/`tag`/`elapsed` present iff given
-- every verb on `null` and on `""`: returns, no error
+- every verb on `null` and on `""`: returns its shape, no throw
+- forced internal failure (e.g. a closure value for `schema`, an
+  unserializable value for `shape`): result has `error` (short) and
+  `trace` (full rendered error, non-empty); success results have
+  neither column
 
 ## Exit gate
 
