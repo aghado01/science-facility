@@ -98,13 +98,16 @@ Per relayed `evaluate`, the host writes:
 
 - `turn` — `cmd` = `input` verbatim, `cwd` from the engine result,
   `shell: "nu"`, `origin: "evaluate"`, `cmd_hash`. `turn` is
-  **session-monotonic**, not the engine's `history_index`: a respawned
-  engine restarts `$history` at 0, so the host keeps a per-engine
-  **generation** with a base offset (`turn = base + history_index`),
-  records each generation in a `note`, and `body`'s live path uses
-  `history_index = turn - base`. Within one generation the two agree;
-  across generations the journal stays gap-free and the engine does
-  not.
+  **session-monotonic and counts every evaluate**; `history_index` is
+  neither. Verified 2026-08-22: `$history` is a bare `list<any>` of
+  returned values, **failed evaluates leave no entry** (the error
+  result has no `history_index`; the next success takes the next
+  slot), a `nothing` result is stored as `[]`, and a respawned engine
+  restarts at 0. So the host keeps an explicit sparse map
+  `turn → {generation, history_index?}` — no offset arithmetic — and
+  records each generation in a `note`. `body`'s live path resolves
+  through that map; a failed turn has no live body, only its `exit`
+  and whatever `stderr`-like text the error result carried.
 - `out` — `bytes`/`lines`/`out_hash` over the NUON output; `text`
   inlined iff `bytes <= inlineLimit`, else `ref` + `preview`.
   `truncatedInline: false`, always.

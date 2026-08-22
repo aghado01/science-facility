@@ -13,8 +13,11 @@ The built-in MCP server (`nu --mcp`) runs a single, continuous in-memory engine 
 - **Block / Closure Scope**: Inner variables inside `do { ... }` or `each { ... }` are discarded when the block exits.
 
 ## `$history` Evaluation Buffer
-- Every `evaluate` call stores its complete, untruncated return value in the `$history` table.
-- **Index Access**: First call is `$history.0`, second is `$history.1`, etc.
+- `$history` is a bare `list<any>`: one element per **successful** `evaluate`, the element being exactly the returned value (records keep their keys; nested structure intact; never truncated). No envelope — no timestamp, command text, cwd, or error; pipeline metadata is stripped (only `span` survives).
+- **Index Access**: `$history.0`, `$history.1`, … The tool result's `history_index` is the slot. Verified 2026-08-22 on nu 0.114.1:
+  - **Failed evaluates leave no entry.** An error result carries no `history_index`; the next success takes the next slot. `history_index` counts successes, not evaluates.
+  - **A `nothing` result is stored as `[]`** (and relayed as `[]`). `$history.N == null` is false for it; `shape` reports `list`, length 0 — correct for what is stored.
+  - Census without dumping: `$history | shape each` (probe) — `index` *is* the `history_index`.
 - **Token Economy**: If output exceeds `$env.NU_MCP_OUTPUT_LIMIT` and gets truncated, slice the preserved in-memory data in the next turn without re-running:
   ```nu
   $history.0 | where status == "error" | select id message | first 5
