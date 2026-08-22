@@ -65,15 +65,21 @@ package-level rules.
    quarantine* (para-agent's), always qualified; *rg module* vs
    *ripgrep* (the binary in `deps/cli`); `meta.verb` (producing
    command) vs `kind` (journal record / page unit / rg finding).
-8. **Inherit from the process, don't look up.** `$nu.current-exe` for
+8. **Stay in scope.** This package is one MCP user's console
+   experience, plus its own embedding surface (`notes/launch-surface.md`
+   — what a host may vary). Integration design — how a host mediates
+   between a bare shell and an MCP-wrapped console, what adapters that
+   needs — belongs to that host, in `issues/para-agent/`. Do not design
+   it here, and do not add a dependency on it.
+9. **Inherit from the process, don't look up.** `$nu.current-exe` for
    the engine binary (never `^nu`), `path self` for layout (never cwd),
    `$nu.os-info` for the OS. A host varies only the audited launch
    surface in `issues/nushell-mcp/notes/launch-surface.md`; the layer
    names no host concept (no `PARA_NU_BIN`, no pane, no mux). Modules
    never hunt for a binary — `config.nu`'s `deps/cli` prepend is the
    one mechanism.
-9. **No Nu semantics outside Nu.** The host (when it exists) is
+10. **No Nu semantics outside Nu.** The host (when it exists) is
    transport, journal, identity, policy. If a feature needs the host to
    understand a value, it is a Nu verb.
-10. **Edit source with the editor, not scripts.** One file at a time,
+11. **Edit source with the editor, not scripts.** One file at a time,
    targeted edits; no bulk regex surgery.

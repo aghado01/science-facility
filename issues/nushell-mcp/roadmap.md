@@ -63,6 +63,20 @@ context window as the scarcest resource in the loop:
   usefulness is the priority, integration is not a design driver,
   nothing here may require para-agent, and the visitor grant stays
   optional in both directions.
+- **Scope split — what this repo designs, and what it does not**
+  (owner, 2026-08-22). nushell-mcp designs **one MCP user's console
+  experience**, plus its own *embedding surface* — the audited list of
+  what a host may vary ([launch-surface](notes/launch-surface.md)).
+  That is why isolation is the default (an engine per identity) rather
+  than sharing: the unit of design is one user's console, and several
+  of them are isolated instances, not a shared platform.
+  It does **not** design the integration. Exposing enough TypeScript
+  mediation and abstraction to accommodate either a nushell-mcp-equipped
+  client or a bare console — and being intrinsically extensible enough
+  to do so — is **para-agent's** responsibility and its extensibility
+  problem. Step 8 is deliberately nebulous; do not resolve it from this
+  side. Console-integration design belongs in `issues/para-agent/`, not
+  here.
 - **Identity routing is one shape.** Resolved from context by a pure
   router, injected per process; registry external and declarative; no
   global mutation; unknown context labeled, not refused; governance
@@ -120,7 +134,9 @@ context window as the scarcest resource in the loop:
    socket (psmux's server/client split); engines survive client and
    shim restarts; jobs outlive the client for real. Engine-state
    snapshot into the stream dir is the step after.
-8. **para-agent deployment** — later; its own brief, co-designed.
+8. **para-agent deployment** — later; **nebulous on purpose**, and
+   para-agent's to shape (see the scope split above). Listed here only
+   so this side knows what it would owe.
    nushell-mcp as a visitor MCP: writes under the `.para-agent-mcp/`
    umbrella with conventions modified in that context (open — see
    [write-conventions-v1](notes/write-conventions-v1.md)); roots and

@@ -95,13 +95,21 @@ inherits nushell-mcp's binary, and para-agent upgrades its backend nu
 on its own schedule. (Earlier drafts of this note assumed the fused
 model and warned about skew; that warning is retired.)
 
-**Corollary — nushell-mcp must not assume it *is* the console.**
-para-agent's console plane should be console-agnostic and
-user-configurable; a Nushell console is one choice a participant may
-be given. Practical consequences here: stand-alone usefulness is the
-priority and integration is not a design driver; nothing in this layer
-may require para-agent; and the visitor grant stays optional in both
-directions.
+**Corollary — nushell-mcp must not assume it *is* the console.** The
+owner's direction for para-agent is a console-agnostic,
+user-configurable console plane, where a Nushell console is one choice
+a participant may be given; how that is exposed is para-agent's design
+to make, not this repo's to specify. Consequences **here** are the only
+thing this note asserts: stand-alone usefulness is the priority,
+integration is not a design driver, nothing in this layer may require
+para-agent, and the visitor grant stays optional in both directions.
+
+**Where the line falls.** This note is the *embedding surface* — what a
+host may vary about a nushell-mcp engine. It is deliberately not a
+console-integration design. Whether a participant's shell is bare or
+wrapped in an MCP, what mediation and adapters that needs, and how
+para-agent stays extensible across both, are para-agent's questions;
+work them in `issues/para-agent/`, not here.
 
 **Settled, not hazards** (raised and closed): the `deps/cli` prepend
 *is* the decision — `config.nu` owns it, so the layer's pinned tools
