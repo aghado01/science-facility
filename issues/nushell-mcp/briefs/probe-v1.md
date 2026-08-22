@@ -2,7 +2,7 @@
 
 **Status:** filed, not started · **Filed:** 2026-08-21 · **Home:**
 `mcp/nushell-mcp/modules/probe`, Nu-native, pure (value in, value
-out), used through `evaluate`. **Supersedes:** [hist-v1](hist-v1.md).
+out), used through `evaluate`. **Supersedes:** [hist-v1](../.archive/hist-v1.md).
 **Depends on:** nothing in-layer. **Consumed by:** par-jobs
 amendments (`jobs inspect` → `shape`, receipts → `stamp`), xq-v1,
 rg-wrapper-v1 (`spine`), the session host (reads `meta`, calls `shape`
@@ -68,16 +68,17 @@ $x | shape
 
 ```
 $list | shape each
-→ table: {index, type, length, bytes, ok?: bool, kind?: string, head}
+→ table: {index, type, length, bytes, ok?: bool, verb?: string, head}
 ```
 
 `columns`/`nulls` omitted (that is what `shape` on one element is
-for). `index` = list position — for `$history` it **is** the
-`history_index`, which is the whole `hist` idea and needs no verb.
-Empty → empty table.
+for). `index` = position in the input list. Piping `$history` gives
+the **`$history` index** — the same slot nushell's tool result reports
+as `history_index` — so census over the evaluation buffer needs no
+verb of its own. Empty → empty table.
 
-**`ok` and `kind` are lifted, not computed:** when an element is a
-record carrying the layer's `ok` field and/or a `meta.kind`, the row
+**`ok` and `verb` are lifted, not computed:** when an element is a
+record carrying the layer's `ok` field and/or a `meta.verb`, the row
 shows them; otherwise they are `null`. This is how a caught failure
 stays legible in `$history`: a verb that returns failure-as-data is a
 *successful evaluate* to the engine (it gets a `history_index`), so
@@ -161,15 +162,17 @@ $x | preview [--chars 200] [--items 5] [--mode head|tail|sandwich]
 ### `stamp` — provenance by convention
 
 ```
-$rec | stamp --kind xq [--tag t] [--elapsed d] [--ref {...}]
-→ $rec | merge {meta: {kind, at, tag?, elapsed?, ref?}}
+$rec | stamp --verb xq [--tag t] [--elapsed d] [--ref {...}]
+→ $rec | merge {meta: {verb, at, tag?, elapsed?, ref?}}
 ```
 
 - The receipt-stamp convention (roadmap doctrine): every **record** the
   layer returns carries one closed `meta` sub-record. `at` = `date
-  now`. `kind` is the producing verb, dotted (`jobs.spawn`, `par.emit`,
-  `xq`, `rg`, `note`). `ref` points at other entries
-  (`{history: 7}`, `{tag: "sweep"}`).
+  now`. `verb` is the producing command, dotted (`jobs.spawn`,
+  `par.emit`, `xq`, `rg`, `note`) — **not** `kind`, which is spoken for
+  by the journal record kind, `page`'s unit, and rg's finding kind
+  ([vocabulary](../notes/vocabulary.md)). `ref` points at other
+  entries (`{history: 7}` — the `$history` index — or `{tag: "sweep"}`).
 - On a non-record input, `stamp` **wraps**: `{meta, value}`. Tables
   stay bare by default; an agent opts in by piping through `stamp`.
   Never automatic, never babying.
@@ -229,7 +232,7 @@ their records.
   window with line numbers on strings; never reorders
 - `preview`: long string clipped with marker per mode; long list
   clipped with `[+K more]`; nested record keeps keys; idempotent
-- `stamp`: record gains `meta` with `kind`/`at`; non-record wraps
+- `stamp`: record gains `meta` with `verb`/`at`; non-record wraps
   `{meta, value}`; `ref`/`tag`/`elapsed` present iff given
 - every verb on `null` and on `""`: returns its shape, no throw
 - forced internal failure (e.g. a closure value for `schema`, an

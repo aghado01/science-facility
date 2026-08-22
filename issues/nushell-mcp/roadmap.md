@@ -48,7 +48,7 @@ context window as the scarcest resource in the loop:
   identity is **routed by the caller** at spawn (launcher contract =
   `--config` + identity); scoped session history is **standard issue**
   for a persistent session, other historical stores opt-in. Full text in
-  [par-jobs-v1](briefs/par-jobs-v1.md) → Persistence and identity.
+  [par-jobs-v1](.archive/par-jobs-v1.md) → Persistence and identity.
 - **Identity routing is one shape.** Resolved from context by a pure
   router, injected per process; registry external and declarative; no
   global mutation; unknown context labeled, not refused; governance
@@ -66,19 +66,19 @@ context window as the scarcest resource in the loop:
   The agent's experience stays pure Nushell. See
   [session-host-v1](briefs/session-host-v1.md).
 - **Receipts carry provenance by convention.** Every record the layer
-  returns has a closed `meta` sub-record (`kind, at, tag?, elapsed?,
+  returns has a closed `meta` sub-record (`verb, at, tag?, elapsed?,
   ref?`) via one pure `stamp` primitive; tables stay bare. `$history`
   is a spine of values + positions; `meta` is how entries describe
   themselves and point at each other. (probe-v1 `stamp`.)
 
 ## Sequence
 
-1. **`par` / `jobs` v1** — [briefs/par-jobs-v1.md](briefs/par-jobs-v1.md)
+1. **`par` / `jobs` v1** — [par-jobs-v1](.archive/par-jobs-v1.md)
    · landed 2026-08-21. Data plane + handle plane + budget on the
    persistent engine. Carries the envelope contract (shape 4) and the
    registry mechanics.
 2. **probe v1** — [briefs/probe-v1.md](briefs/probe-v1.md) · filed (supersedes
-   [briefs/hist-v1.md](briefs/hist-v1.md)). Pure primitives, one module:
+   [hist-v1](.archive/hist-v1.md)). Pure primitives, one module:
    `shape` (+ `each`), `schema` (+ `diff`/`check`/`stats`), `spine`,
    `page`, `preview`, `stamp`. jso-jackson's controlled-exploration
    doctrine in Nu's data orientation; the `bytes` definition lives here
@@ -109,7 +109,7 @@ context window as the scarcest resource in the loop:
 8. **para-agent deployment** — later; its own brief, co-designed.
    nushell-mcp as a visitor MCP: writes under the `.para-agent-mcp/`
    umbrella with conventions modified in that context (open — see
-   [write-conventions-v1](briefs/write-conventions-v1.md)); roots and
+   [write-conventions-v1](notes/write-conventions-v1.md)); roots and
    identity routed at spawn; Console Journal amendments `shell: nu`,
    `origin: evaluate`; retire para-agent's `nu.js` one-shot;
    `turn.agent` only if a shared engine is ever granted.
@@ -122,24 +122,25 @@ generations, NUON bodies as files that survive engine death); tools
 `log`/`body`/`find`/`annotate`/`console` + `spawn`/`list`/`kill` with
 para-agent's names; caller-routed identity, one engine per `(session,
 agent)`, keepalive; informative truncation (one follow-up `shape`);
-writes per [write-conventions-v1](briefs/write-conventions-v1.md).
+writes per [write-conventions-v1](notes/write-conventions-v1.md).
 Archaeology in [notes](notes/para-agent-archaeology.md). Absorbed the
 session-layer history work; 7 keeps only what needs a daemon.
 
 Package rules (landing obligations, closed shapes, write conventions,
 vocabulary) live in
 [`mcp/nushell-mcp/AGENTS.md`](../../mcp/nushell-mcp/AGENTS.md), not
-here.
+here. Term senses — whose word is whose — are in
+[notes/vocabulary.md](notes/vocabulary.md).
 
 ## Briefs
 
 | Brief | Status |
 |---|---|
-| [par-jobs-v1](briefs/par-jobs-v1.md) | landed 2026-08-21 |
+| [par-jobs-v1](.archive/par-jobs-v1.md) | landed 2026-08-21 |
 | [probe-v1](briefs/probe-v1.md) | filed, not started; no deps; **next to build** |
-| [hist-v1](briefs/hist-v1.md) | superseded → probe-v1 (primitives) + session-host-v1 (index) |
+| [hist-v1](.archive/hist-v1.md) | superseded → probe-v1 (primitives) + session-host-v1 (index) |
 | [session-host-v1](briefs/session-host-v1.md) | filed, not started; parallel track |
 | [xq-v1](briefs/xq-v1.md) | filed, not started; depends on par-jobs-v1 + `jobs disclose` amendment |
 | [rg-wrapper-v1](briefs/rg-wrapper-v1.md) | filed, not started; depends on par-jobs-v1, xq-v1 |
-| [write-conventions-v1](briefs/write-conventions-v1.md) | filed; governs every write (state vs scratch, locality, chronology, precedence) |
+| [write-conventions-v1](notes/write-conventions-v1.md) | filed; governs every write (state vs scratch, locality, chronology, precedence) |
 | [gh-v1](briefs/gh-v1.md) | filed, not started; depends on xq-v1; needs `gh` ≥ 2.40 in `deps/cli` |

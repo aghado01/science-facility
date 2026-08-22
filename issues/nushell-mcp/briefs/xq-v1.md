@@ -2,7 +2,7 @@
 
 **Status:** filed, not started · **Filed:** 2026-08-21 · **Home:**
 `mcp/nushell-mcp/modules/xq`, Nu-native, used only through `evaluate`.
-**Depends on:** [par-jobs-v1](par-jobs-v1.md) (`jobs stash`, cap
+**Depends on:** [par-jobs-v1](../.archive/par-jobs-v1.md) (`jobs stash`, cap
 resolver). **Consumed by:** [rg-wrapper-v1](rg-wrapper-v1.md) — rg is
 `xq` + JSON-event parse + spine; build this first.
 **Not this brief:** per-tool wrappers (fd, jq, jj, delta), a shell, a

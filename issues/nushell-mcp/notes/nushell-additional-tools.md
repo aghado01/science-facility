@@ -1,3 +1,15 @@
+# Additional tools — ideation capture (2026-08-21)
+
+**Status:** captured conversation, not a spec. Superseded where it
+conflicts with filed briefs: `xq` → [xq-v1](../briefs/xq-v1.md);
+`hist`/`shape`/`peek`/`cap` → [probe-v1](../briefs/probe-v1.md)
+(there is no `hist` module — `$history | shape each` is the idiom);
+`console` → [session-host-v1](../briefs/session-host-v1.md).
+Still unclaimed: `jobs spill`. Terminology here predates
+[vocabulary.md](vocabulary.md).
+
+---
+
 Let me ground this in what the layer already exposes before suggesting what's missing.
 
 Here's my read, anchored on the layer as it stands (nu-skills/nu-modules for discovery, par/jobs for dispatch and quarantine, `$history` as the native store, and — I notice — `.mcp.json` now launching the pinned `deps/nushell/nu.exe`). I'll rank by how much each closes a real gap in the console vision rather than list everything plausible.

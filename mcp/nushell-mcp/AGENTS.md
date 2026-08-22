@@ -56,9 +56,15 @@ package-level rules.
 6. **Writes follow** `issues/nushell-mcp/briefs/write-conventions-v1.md`:
    state under `.nushell-mcp/`, scratch under `artifacts/nushell-mcp/`,
    never OS temp, ISO stamps on run dirs.
-7. **Vocabulary.** *payload quarantine* (ours) vs *commit quarantine*
-   (para-agent's) — always qualified. *rg module* vs *ripgrep* — the
-   binary is in `deps/cli`, the module wraps it.
+7. **Vocabulary.** Term senses live in
+   `issues/nushell-mcp/notes/vocabulary.md` — read it before naming a
+   field. The rule: quote a foreign name verbatim and attributed
+   (`history_index` is nushell's tool-result field), never adopt it as
+   our concept's name (ours is `index`). Never prefix a field with its
+   container. Standing pairs: *payload quarantine* (ours) vs *commit
+   quarantine* (para-agent's), always qualified; *rg module* vs
+   *ripgrep* (the binary in `deps/cli`); `meta.verb` (producing
+   command) vs `kind` (journal record / page unit / rg finding).
 8. **No Nu semantics outside Nu.** The host (when it exists) is
    transport, journal, identity, policy. If a feature needs the host to
    understand a value, it is a Nu verb.

@@ -47,7 +47,7 @@ protocol".
 **Thinness rule (enforced by review):** the host never interprets Nu
 values beyond a closed set of fields: the engine result's `cwd`,
 `history_index`, `timestamp`, `output`/`note`, error records, and — when
-present on a record output — `ok` and `meta.{kind, at, tag, elapsed, ref}` (the
+present on a record output — `ok` and `meta.{verb, at, tag, elapsed, ref}` (the
 receipt-stamp convention, probe-v1). Everything else is opaque NUON
 passed through. Semantics live in Nu modules; the host is transport +
 ledger + identity + policy. If a feature needs the host to understand a
@@ -64,9 +64,9 @@ transfer when this host is plugged in as a visitor MCP.
 | Tool | Contract |
 |---|---|
 | `evaluate {input}` | passthrough to the engine; result relayed verbatim except: on engine truncation the host appends a census (Policy) |
-| `log {from?, to?, limit?, kind?, tag?}` | journal read → records + **unconditional receipt** (`complete`, `withheld[]`, `deferredBodies[]`, `cursor`). Never bodies beyond `inlineLimit` |
+| `log {from?, to?, limit?, kind?, verb?, tag?}` | journal read → records + **unconditional receipt** (`complete`, `withheld[]`, `deferredBodies[]`, `cursor`). Never bodies beyond `inlineLimit` |
 | `body {turn, path?, page?, size?}` | one quarantined payload — from the body file, or live from `$history.<turn>` with a cell path / page when the engine is up. One body per call |
-| `find {pattern, kind?, from?}` | search `cmd`/`preview`/`note` text in the journal; receipt as `log` |
+| `find {pattern, kind?, verb?, from?}` | search `cmd`/`preview`/`note` text in the journal; receipt as `log` |
 | `annotate {turn, tags?, note?}` | appends a `note` record `{turn, data: {tags, note}}` — agent labels, the one thing the engine cannot know |
 | `console` | one record: engine version, identity, session id, stream, journal depth, `inlineLimit`, `jobs status` |
 | `spawn` / `list` / `kill` | engine lifecycle, para-agent names (see Persistence without a mux). Host-level; the engine cannot list or kill itself |
@@ -155,7 +155,7 @@ Per relayed `evaluate`, the host writes:
   `meta` (`kind`, `tag`, `ref`) — plus `annotate` labels, keyed by
   `turn`. The two `ok`s are different facts and are never merged:
   `exit.ok: true` with `data.ok: false` is the normal signature of a
-  caught failure, and `log --kind` / `find` can select on it.
+  caught failure, and `log --verb` / `find` can select on it.
 
 Contract amendments to file against para-agent (additive): `shell`
 gains `nu`; `origin` gains `evaluate`. Nothing else.
@@ -297,7 +297,7 @@ Config `host.json` next to `config.nu` (single owner of host layout;
   `$history.<index> | shape` to the engine and appends the census to the
   result (`{truncated: true, shape: {...}, hint: "read {index}"}`). The
   agent always learns *what* it has, never just that it was cut.
-- `.nushell-mcp/` is gitignored (`**/.nushell-mcp/**`). Roots and precedence: [write-conventions-v1](write-conventions-v1.md). `retention` prunes by count/age — the only
+- `.nushell-mcp/` is gitignored (`**/.nushell-mcp/**`). Roots and precedence: [write-conventions-v1](../notes/write-conventions-v1.md). `retention` prunes by count/age — the only
   destructive action the host takes, and only on its own files.
 - `redact` is a list of regexes applied to `source` before persistence
   (never to in-memory records). Empty by default.
@@ -326,7 +326,7 @@ stay valid; `log`/`body`/`find`/`annotate`/`console` get their own.
   `output` as a direct `nu --mcp` call
 - turn/out/exit records per evaluate: `cmd` verbatim, `turn` session-monotonic (a failed evaluate still gets a turn, with no `history_index`), `ts` match the
   engine, `ms` > 0, `bytes` = output length
-- stamped record → row has `kind`/`tag`/`ref`; bare table → row has
+- stamped record → row has `verb`/`tag`/`ref`; bare table → row has
   none, no error
 - truncated result (cap forced low) → relayed result carries
   `truncated: true` and a `shape` census; one extra engine round-trip,
