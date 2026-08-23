@@ -14,14 +14,24 @@ declared as pass-throughs in `membrane.contract.json` and
 `ingest.contract.json`, and dropped by `assemble`'s exclusion list. They read as
 residue.
 
-They are not residue. Two things say so:
+They are not residue — but the reason is narrower than it first looks, and worth
+stating precisely because the weak version of it is tempting.
 
-1. **They are free only at crawl.** All eight come off one `FileInfo` — one
-   stat. Getting them later costs a fresh stat per survivor. Clause 4 of #38.
-2. **Crawler has exaptation value on its own.** It has been wanted outside the
-   RS pipeline before, and a filesystem walker's remit is filesystem facts. The
-   RS pipeline's disinterest in a field is a *profile setting*, not evidence the
-   field is wrong.
+**The weak version:** "they are free only at crawl, so keep them." All eight do
+come off one `FileInfo`, and ingest holds no filesystem object at all
+(`file-read.ps1` reads by path — no `FileInfo`, no retained handle), so a fact
+crawl did not stamp genuinely costs a fresh syscall downstream. But a stat is
+~1–2 µs; at a thousand survivors that is single-digit milliseconds for an entire
+run. **The syscall count does not carry the argument.** Nor does availability
+(#38 clause 0): neither field feeds a subtree rollup, so unlike `SizeBytes`
+neither is crawl-only by construction.
+
+**The version that stands:** crawler has **exaptation value on its own**. It has
+been wanted outside the RS pipeline before, and a filesystem walker's remit is
+filesystem facts. The RS pipeline's disinterest in a field is a *profile
+setting*, not evidence the field is wrong. That argument needs no help from the
+other two, and the live question these fields raise is **whether to gather
+them** — which is this brief's — not *where*, which #38 already settles.
 
 So the fix is not to delete them and not to leave them silent — a field with no
 reader reads as an oversight to the next person. The fix is to make what crawler
