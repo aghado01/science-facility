@@ -3,6 +3,7 @@
 
 use core/capture.nu ["process capture"]
 use core/meta.nu ["meta stamp"]
+use core/failure.nu ["failure fields"]
 use core/execution.nu ["execution context"]
 use core/stream.nu ["stream bytes"]
 use jobs ["jobs stash"]
@@ -12,8 +13,8 @@ def xq-stem [cmd: string]: nothing -> string {
     $cmd | path basename | str replace -a '.exe' '' | str replace -a '.EXE' ''
 }
 
-def xq-fail [cmd: string, args: list, error: string, elapsed] {
-    {
+def xq-fail [cmd: string, args: list, error: string, elapsed, --trace: string] {
+    mut rec = {
         ok: false
         cmd: $cmd
         args: $args
@@ -25,7 +26,11 @@ def xq-fail [cmd: string, args: list, error: string, elapsed] {
         error: $error
         stdout: ""
         stderr: ""
-    } | meta stamp --verb xq
+    }
+    if $trace != null and (($trace | str length) > 0) {
+        $rec = ($rec | insert trace $trace)
+    }
+    $rec | meta stamp --verb xq
 }
 
 # Execute an external. Under cap, streams inline. Over cap in the foreground, stash
@@ -49,11 +54,12 @@ export def --env --wrapped main [...args] {
                 process capture ...$args
             }
         } catch {|e|
-            {ok: false, error: ($e.msg | default "capture failed"), exit_code: null, stdout: "", stderr: "", elapsed: 0sec}
+            let f = (failure fields $e)
+            {ok: false, error: $f.error, trace: $f.trace, exit_code: null, stdout: "", stderr: "", elapsed: 0sec}
         }
     )
     if ($capd.ok? == false) {
-        return (xq-fail $cmd $tail ($capd.error? | default "not found") ($capd.elapsed? | default 0sec))
+        return (xq-fail $cmd $tail ($capd.error? | default "not found") ($capd.elapsed? | default 0sec) --trace ($capd.trace? | default ""))
     }
     let stdout = ($capd.stdout | default "")
     let stderr = ($capd.stderr | default "")

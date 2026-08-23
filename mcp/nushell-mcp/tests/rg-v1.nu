@@ -197,6 +197,8 @@ let results = [
         let r = (with-env { PATH: [], Path: [] } { rg needle })
         assert-eq $r.ok false "ok false"
         assert-true (($r.error | default "") | str contains "not found") "not found"
+        assert-true ("trace" in ($r | columns)) "rg keeps trace"
+        assert-true (($r.trace | default "") | str contains "not found") "trace names miss"
         assert-eq (jobs list | length) 0 "nothing stashed"
     })
     (t "help rg is wrapper" {

@@ -80,6 +80,8 @@ let results = [
         assert-eq $r.ok false "ok"
         assert-eq $r.exit_code null "exit null"
         assert-true (($r.error | default "") | str starts-with "not found:") "not found"
+        assert-true ("trace" in ($r | columns)) "xq keeps trace"
+        assert-true (($r.trace | default "") | str contains "not found") "trace names miss"
         assert-eq (jobs list | length) 0 "nothing stashed"
         let c = (process capture definitely-not-a-cmd-xyz)
         assert-eq $c.ok false "capture ok false"

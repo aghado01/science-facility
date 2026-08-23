@@ -3,6 +3,9 @@
 Newest first. Point at commits and briefs. Counts are from the commit
 they were observed at, not standing claims.
 
+- **2026-08-23 — xq/rg keep capture `trace`.** Spawn-failure envelopes forward
+  `process capture`'s trace. xq-v1 8/8, rg-v1 13/13.
+
 - **2026-08-23 — tagless jobs spawn allocates `spawn:<n>`.** Omitted `--tag`
   uses registry allocation; `job spawn --description` never sees null.
   par-jobs-v1 30/30.

@@ -96,8 +96,8 @@ def rg-parse [stdout: string] {
     {mode: "json", findings: $findings, n: $n, n_files: $n_files, elapsed: $elapsed}
 }
 
-def rg-fail [args: list, error: string, elapsed] {
-    {
+def rg-fail [args: list, error: string, elapsed, --trace: string] {
+    mut rec = {
         ok: false
         mode: "text"
         n: 0
@@ -107,7 +107,11 @@ def rg-fail [args: list, error: string, elapsed] {
         truncated: false
         args: $args
         error: $error
-    } | meta stamp --verb rg
+    }
+    if $trace != null and (($trace | str length) > 0) {
+        $rec = ($rec | insert trace $trace)
+    }
+    $rec | meta stamp --verb rg
 }
 
 # Search via ripgrep. `--wrapped`; injects `--json` once if absent. Mode is detected
@@ -130,12 +134,12 @@ export def --env --wrapped main [...args] {
             }
         } catch {|e|
             let f = (failure fields $e)
-            {ok: false, error: $f.error, exit_code: null, stdout: "", stderr: "", elapsed: 0sec}
+            {ok: false, error: $f.error, trace: $f.trace, exit_code: null, stdout: "", stderr: "", elapsed: 0sec}
         }
     )
     let elapsed_wall = ($capd.elapsed? | default 0sec)
     if ($capd.ok? == false) {
-        return (rg-fail $forwarded ($capd.error? | default "not found: rg") $elapsed_wall)
+        return (rg-fail $forwarded ($capd.error? | default "not found: rg") $elapsed_wall --trace ($capd.trace? | default ""))
     }
     let stdout = ($capd.stdout | default "")
     let stderr = ($capd.stderr | default "")
