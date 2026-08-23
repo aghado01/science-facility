@@ -4,7 +4,7 @@ Agent console **is** this REPL. Write pipelines; do not generate strings to eval
 
 Design center: interactive fan-out (and a **single** `jobs spawn` at parallelism 1). Non-blocking + payload quarantine is the product; parallelism is a feature on top. `rg` finds *where* (do not shard it through `par` for speed). `par` judges *what*.
 
-Two modules, preloaded (`use par *; use jobs *; use dataspection *` in `config.nu`). `par cap` is the cap resolver. MATLAB / vscodepilot **names** (`parfor`, `parfeval`, `getJobResults`, …) are a corpus map only — they are not exported.
+Preloaded (`use par *; use jobs *; use dataspection *; use xq *` in `config.nu`). `par cap` is the cap resolver. MATLAB / vscodepilot **names** (`parfor`, `parfeval`, `getJobResults`, …) are a corpus map only — they are not exported.
 
 ## Native vs this layer
 
@@ -112,3 +112,11 @@ Registry and `$history` die with the MCP child. When a store appears later: iden
 | `cancel` / `job kill` | `jobs cancel` |
 | `parwhile` / `paruntil` / FileHash batches | not v1 |
 | `gcp` / batch / `%TEMP%` jsonl | not v1 |
+
+## `xq` — execute and quarantine
+
+`xq <cmd> [...args]` (`--wrapped`). Runs `process capture`, then stream census vs `par cap`. Under cap, `stdout`/`stderr` inline. Over cap, stash `{stdout, stderr}` as `xq:<cmd>:<seq>` and return census + `tag` (no streams). `ok` is `exit_code == 0`. Child non-zero is `ok: false` with streams, no `error`. Missing binary: `error` starts `not found:`, `exit_code: null`.
+
+`process capture` (`core/capture.nu`) is unbounded full streams — for wrappers (rg), not the agent default. Skills say `xq`.
+
+Inside `jobs spawn { xq ... }`: never stash; the job row is the quarantine. Drill: `jobs fetch <tag>` then `.stderr | lines`. Do not attach stdin unless `$in` is not `nothing`.

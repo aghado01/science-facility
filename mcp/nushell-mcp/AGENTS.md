@@ -12,7 +12,7 @@ package-level rules.
   `--config` (plus identity, when the host lands) and nothing else.
   Sets `NU_LIB_DIRS`, `NU_SKILL_DIR`, prepends `deps/cli` to PATH,
   preloads the modules. Order: `nu-skills`, `nu-modules`, `par`,
-  `jobs`, `dataspection` — runtime services, then the access façade.
+  `jobs`, `dataspection`, `xq` — runtime services, access façade, then externals.
   Overlay preload is not DI into module bodies ([layering-v1](../../issues/nushell-mcp/briefs/layering-v1.md)).
 - `modules/` — Nu-native modules. `modules/core/*.nu` are dependency
   file units (`census`, `meta`, `value`, `failure`, …); `par`/`jobs`

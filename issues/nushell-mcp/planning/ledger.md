@@ -3,6 +3,10 @@
 Newest first. Point at commits and briefs. Counts are from the commit
 they were observed at, not standing claims.
 
+- **2026-08-22 — xq v1 + `process capture`.** `core/capture.nu` unbounded;
+  `xq` stamps, caps on stream bytes vs `par cap`, stashes `{stdout, stderr}`.
+  In-job never stashes. Child tests xq-v1 8/8. N11 landed.
+
 - **2026-08-22 — N15 jobs/read failure contract** (Sol core review P1/P2).
   Missing/running/failed/cancelled are data; retrieve tags NUON-quoted;
   unknown bytes fail closed; core failure records carry `ok: false`;

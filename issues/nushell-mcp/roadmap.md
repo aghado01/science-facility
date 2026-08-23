@@ -133,10 +133,9 @@ context window as the scarcest resource in the loop:
    · **landed** 2026-08-22 (A). `modules/core/*.nu` file units;
    dataspection façade owns `read`; `par`/`jobs` never import
    `dataspection/mod.nu`. N10 (`jobs fetch`) after this, before 4.
-4. **`xq` v1** — [briefs/xq-v1.md](briefs/xq-v1.md) · filed; depends
-   on 3b and N10. `process capture` in
-   `core/capture.nu` (unbounded); ordinary `xq` is the terminal
-   command (census, `par cap`, stash).
+4. **`xq` v1** — [briefs/xq-v1.md](briefs/xq-v1.md) · **landed**
+   2026-08-22. `process capture` in `core/capture.nu` (unbounded);
+   ordinary `xq` is the terminal command (census, `par cap`, stash).
 5. **`rg` module v1** — [briefs/rg-wrapper-v1.md](briefs/rg-wrapper-v1.md)
    · filed, not started; depends on 4. Consumes `process capture` +
    `spine`, not ordinary `xq`. (The module; ripgrep itself is in
@@ -199,7 +198,7 @@ here. Term senses — whose word is whose — are in
 | [layering-v1](briefs/layering-v1.md) | landed A 2026-08-22 |
 | [hist-v1](.archive/hist-v1.md) | superseded → dataspection-v1 (primitives) + session-host-v1 (index) |
 | [session-host-v1](briefs/session-host-v1.md) | filed, not started; parallel track |
-| [xq-v1](briefs/xq-v1.md) | filed, not started; depends on 3b; `process capture` + terminal `xq` |
+| [xq-v1](briefs/xq-v1.md) | landed 2026-08-22 |
 | [rg-wrapper-v1](briefs/rg-wrapper-v1.md) | filed, not started; depends on xq-v1 capture, not ordinary `xq` |
 | [write-conventions-v1](notes/write-conventions-v1.md) | filed; governs every write (state vs scratch, locality, chronology, precedence) |
 | [gh-v1](briefs/gh-v1.md) | filed, not started; depends on xq-v1; needs `gh` ≥ 2.40 in `deps/cli` |

@@ -33,10 +33,11 @@ if ($DEPS_CLI_DIR | path exists) {
 
 # Preload the augmentation modules into the persistent engine state.
 # `par` freezes `$env.NU_PAR` (cores, knobs, ceiling) once via export-env;
-# `jobs` initializes `$env.JOBS`. dataspection loads after — runtime
-# primitives, then the access discipline. All die with the MCP child.
+# `jobs` initializes `$env.JOBS`. dataspection then xq. Do not preload
+# `core/capture.nu`; xq (and later rg) import it. All die with the MCP child.
 use nu-skills *
 use nu-modules *
 use par *
 use jobs *
 use dataspection *
+use xq *

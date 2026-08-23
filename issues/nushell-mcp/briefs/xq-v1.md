@@ -1,6 +1,6 @@
 # `xq` v1 — execute-and-quarantine for externals
 
-**Status:** filed, not started · **Filed:** 2026-08-21 · **Home:**
+**Status:** landed · **Filed:** 2026-08-21 · **Landed:** 2026-08-22 · **Home:**
 `mcp/nushell-mcp/modules/xq`, Nu-native, used only through `evaluate`.
 **Depends on:** [layering-v1](layering-v1.md) (N9 landed in code first),
 [par-jobs-v1](../.archive/par-jobs-v1.md) (`jobs stash`),
@@ -181,4 +181,10 @@ throw. `rg` must not appear in xq's tests as a caller of ordinary `xq`.
 
 ## Follow-up report
 
-_Chip or implementer: append outcome, tests run, deviations from this spec._
+- Landed 2026-08-22. `modules/core/capture.nu` (`process capture`, `--wrapped`, not `main`); `modules/xq/mod.nu` (`--env --wrapped main`); `config.nu` `use xq *` after dataspection. Corpus: `references/jobs.md` `xq` section. Adapters: Claude/Grok.
+- Child tests: `nu -n mcp/nushell-mcp/tests/xq-v1.nu` — 8/8 (exit 0, non-zero, not found, empty argv, stdin, over cap stash, monotonic tags, in-job no stash). Regression: dataspection-v1 13/13, par-jobs-v1 29/29.
+- Deviations:
+  - Capture miss/empty records include `ok`, `cmd`, `args` so xq can map them; success capture stays `{stdout, stderr, exit_code, elapsed}`.
+  - Tag stem is `path basename` minus `.exe` (envelope `cmd` remains argv[0], which may be an absolute path).
+  - `elapsed > 0` not asserted; type is duration (Windows may report `0sec`).
+- Not this brief: rg, gh, `jobs fetch` (already N10).

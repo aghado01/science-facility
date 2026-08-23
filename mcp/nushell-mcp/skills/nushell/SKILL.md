@@ -42,7 +42,7 @@ Query specific sub-topics individually to avoid context window clutter:
 - **`gotchas`**: Syntax edge-cases, parenthesized strings, escaping, closure scoping.
 - **`mcp`**: Native `nu --mcp` launch, configuration, and stream handling.
 - **`sessions`**: In-memory engine lifecycle, state persistence, scoping, and `$history` buffer slicing.
-- **`jobs`**: `par` / `jobs` — budgeted data-plane map, handle-plane receipts, native `job`/`par-each` vs module verbs.
+- **`jobs`**: `par` / `jobs` / `xq` — budgeted map, receipts, execute-and-quarantine for externals.
 - **`dataspection`**: census / disclose / bounded views on a value in hand (`shape`, `schema`, `spine`, `read`, `preview`, `page`, `meta`).
 
 _Query inventory via `nu-skills list` or read sub-topics via `nu-skills read <topic>` (or open `references/<topic>.md`)._
