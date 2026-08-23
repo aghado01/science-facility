@@ -27,8 +27,23 @@ $env.NU_SKILL_DIR = $SKILLS_DIR
 # Vendored CLI deps: prepend so the layer's pinned binaries win over whatever the
 # host PATH happens to carry (deterministic console). Absent dir → no-op; wrappers
 # like `rg` still fail closed if their binary is missing.
+# Windows MCP hosts often hand in PATH as one semicolon-delimited string;
+# `prepend` would then collapse host dirs into a single unusable entry.
 if ($DEPS_CLI_DIR | path exists) {
-    $env.PATH = ($env.PATH | prepend $DEPS_CLI_DIR | uniq)
+    let raw = ($env.PATH | default "")
+    let dirs = (
+        if ($raw | describe) =~ "list" { $raw } else { $raw | split row (char esep) }
+    )
+    let path = (
+        $dirs
+        | where {|p| ($p | into string | str length) > 0 }
+        | prepend $DEPS_CLI_DIR
+        | uniq
+    )
+    $env.PATH = $path
+    if ($nu.os-info.name == "windows") {
+        $env.Path = $path
+    }
 }
 
 # Preload the augmentation modules into the persistent engine state.

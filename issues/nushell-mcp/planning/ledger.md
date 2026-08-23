@@ -3,6 +3,10 @@
 Newest first. Point at commits and briefs. Counts are from the commit
 they were observed at, not standing claims.
 
+- **2026-08-23 — split inherited PATH before deps/cli.** Windows string PATH
+  is split on `char esep` so host dirs stay separate entries. Child test
+  dataspection-v1 14/14 (`config PATH splits a Windows string`).
+
 - **2026-08-23 — composition stream cut.** `core/stream.nu`; `process capture`
   `ok` is spawn success (exit independent); string/binary streams sized as
   returned; `rg` rejects binary streams and `path.bytes`/`lines.bytes`. Child

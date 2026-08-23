@@ -7,7 +7,10 @@ const JOBS_MBOX = 0x4A4F4253
 const CLI = (path self | path dirname | path dirname | path join deps cli)
 
 if ($CLI | path exists) {
-    $env.PATH = ($env.PATH | prepend $CLI)
+    let path = (
+        if ($env.PATH | describe) =~ "list" { $env.PATH } else { $env.PATH | split row (char esep) }
+    )
+    $env.PATH = ($path | prepend $CLI)
 }
 
 use par *

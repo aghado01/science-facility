@@ -234,6 +234,24 @@ let results = [
         assert-eq $val.retrieve $"jobs fetch ($val.tag | to nuon --raw)" "retrieve"
         assert-eq $val.meta.verb "read" "stamped"
     })
+    (t "config PATH splits a Windows string" {
+        let cfg = ($MODULES_DIR | path dirname | path join config.nu)
+        let collapsed = "C:\\Windows\\System32;C:\\Windows"
+        let script = '{describe: ($env.PATH | describe), collapsed: ($env.PATH | any {|p| $p | str contains ";"}), first: ($env.PATH | first)} | to nuon --raw'
+        let out = (
+            with-env { PATH: $collapsed, Path: $collapsed } {
+                ^$nu.current-exe --config $cfg -c $script | complete
+            }
+        )
+        assert-eq $out.exit_code 0 "config child ok"
+        let val = ($out.stdout | str trim | from nuon)
+        assert-true ($val.describe | str starts-with "list") "path is list"
+        assert-eq $val.collapsed false "no semicolon entry"
+        let cli = ($MODULES_DIR | path dirname | path join deps cli)
+        if ($cli | path exists) {
+            assert-eq $val.first $cli "deps/cli first"
+        }
+    })
     (t "null and empty string" {
         assert-eq (null | shape | get type) "nothing" "shape null"
         assert-eq ("" | shape | get type) "string" "shape empty"

@@ -7,7 +7,10 @@ const NU_LIB_DIRS = [$MODULES_DIR]
 const JOBS_MBOX = 0x4A4F4253
 
 if ($CLI | path exists) {
-    $env.PATH = ($env.PATH | prepend $CLI)
+    let path = (
+        if ($env.PATH | describe) =~ "list" { $env.PATH } else { $env.PATH | split row (char esep) }
+    )
+    $env.PATH = ($path | prepend $CLI)
 }
 
 use par *
