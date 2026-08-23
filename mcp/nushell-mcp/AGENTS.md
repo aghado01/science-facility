@@ -3,7 +3,7 @@
 nushell-mcp is a science-facility research project meant to be
 stand-alone: a persistent, agent-facing Nushell console on top of
 `nu --mcp`, and later a visitor MCP inside para-agent. Specs live in
-`issues/nushell-mcp/` (roadmap, briefs, notes); this file is the
+`issues/nushell-mcp/` (roadmap, briefs, notes, planning); this file is the
 package-level rules.
 
 ## Layout
@@ -28,6 +28,11 @@ package-level rules.
   table; a suite that cannot run must say so, never report green.
 - `dev/` — module outtakes and inspiration; nothing here is loaded.
 - `host/` — (planned) the thin TypeScript session host.
+
+Specs: `issues/nushell-mcp/` — `roadmap.md` (sequence), `briefs/` (specs),
+`notes/` (vocabulary, launch surface), `planning/decisions.md` (rulings),
+`planning/ledger.md` (landed work). Briefs are the specs; do not restate
+them in the decisions file.
 
 ## Rules
 

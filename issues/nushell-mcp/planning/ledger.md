@@ -1,0 +1,22 @@
+# nushell-mcp ledger — completed
+
+Newest first. Point at commits and briefs. Counts are from the commit
+they were observed at, not standing claims.
+
+- **2026-08-22 — layering-v1 filed (not landed)** `72e0b23`. Spec for
+  the census/quarantine cut after `$x | read` broke under `--config`.
+  Decision still open (N9). Blocks xq.
+
+- **2026-08-22 — par-jobs amendment** `058f887`. `jobs inspect` fills
+  census from `shape`; `jobs read` adopts `par cap` with `--full` as
+  retrieve; receipts stamped via `meta stamp`; `par cap` exported.
+  Child tests: `par-jobs-v1.nu` 27/27, `dataspection-v1.nu` 13/13
+  (`nu -n` only — MCP `--config` path later found `read` broken, N8/N9).
+
+- **2026-08-22 — dataspection v1** `5381bf3` (prep `7462c34`, `4f18d0f`,
+  `74328e0`). `shape` / `schema` / `spine` / `preview` / `page` / `meta`
+  / in-hand `read`. Child tests 13/13. `hist-v1` remains superseded.
+
+- **2026-08-21 — par / jobs v1** (brief follow-up; later stash/emit
+  review fix on the same brief). Data plane + handle plane + budget.
+  Archived spec: [par-jobs-v1](../.archive/par-jobs-v1.md).

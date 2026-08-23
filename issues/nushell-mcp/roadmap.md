@@ -2,7 +2,8 @@
 
 **Status:** living doc — amend in place, newest thinking wins ·
 **Started:** 2026-08-21 · **Home:** `mcp/nushell-mcp` (implementation),
-this folder (specs).
+this folder (specs). **Rulings:** [planning/decisions.md](planning/decisions.md)
+· **Done:** [planning/ledger.md](planning/ledger.md).
 
 ## North star
 
