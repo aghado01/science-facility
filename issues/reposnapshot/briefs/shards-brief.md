@@ -79,11 +79,16 @@ Measure-Row(entry, header) =
   §SPEC) over the processed content already in memory; `spanBytes` is computed
   without allocating (`Measure-ContentSpan`, a counting fold over the same rule
   table `ConvertTo-ContentSpan` materializes with).
-- **Termination is `NL` = LF alone; the LTS trailing `|` is dropped** (leaning,
-  ledger #45 — the container is newline-delimited, one physical line per row,
-  jsonl-like). Byte-exactness assumes **UTF-8 without BOM and `\n` only**; the
-  writer controls newline bytes explicitly regardless of platform. *(Propagate
-  to shard-container-brief.)*
+- **Termination is `NL` = LF alone; the LTS trailing `|` is dropped** (**settled**
+  2026-08-22, ledger #45 — the container is newline-delimited, one physical row
+  per line, jsonl-like). Byte-exactness assumes **UTF-8 without BOM and `\n`
+  only**; the writer controls newline bytes explicitly regardless of platform.
+  Under the item model (#49) there is no trailing-mark item to drop in the first
+  place, and `container.tests` asserts both halves.
+- **Row bytes are `Σ item bytes + (item count − 1) + terminator`** (#49) —
+  what `Measure-Row` returns, and the number this stage packs with. Nothing is
+  hidden inside a concatenation, so a size vector is exact before any byte is
+  written. See `shard-container-brief` §The item model.
 - Shard file size = `headerBytes` + Σ `rowBytes`. Plan = file, by construction.
 
 **One grammar site, three callers.** `Format-Row → pieces` in

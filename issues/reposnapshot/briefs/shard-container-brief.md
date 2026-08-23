@@ -1,18 +1,30 @@
 # Shard container — header row, record rows, and the grammar that keeps them coherent — brief
 
-**Status:** **landed 2026-08-17** — `reposnapshot-v3/rs.core.container.psm1`
-(`Resolve-Layout` · `Measure-ContentSpan`/`ConvertTo-ContentSpan` · `Format-Row` →
+**Status:** **landed 2026-08-17; realigned 2026-08-22** —
+`reposnapshot-v3/rs.core.container.psm1` (`Resolve-Layout` ·
+`Measure-ContentSpan`/`ConvertTo-ContentSpan` · `Format-Row` →
 `Measure-Row`/`Build-Row` · header-row pair), `tests/container.tests.ps1`
-(70 asserts: plan = file by construction, codec SPEC rules 1–4 with
+(78 asserts: plan = file by construction, codec SPEC rules 1–4 with
 measure == encode across a surrogate/terminator/control battery, offsets with
 inclusive ends and the seek round-trip, empty markers, width overflow, and the
-value walk of every `psr.header.json` source against a real `rs-content_meta`
-entry). Open calls below still stand where marked. · **Filed:** 2026-08-15, merging
+value walk of every declared accessor against a real `rs-content_meta` entry)
+plus `tests/container-spec.tests.ps1` (34 asserts: the declaration executed —
+every `$ref` walked, and rows rendered through the spec's templates validated
+against the spec's own patterns in all four on/off configurations).
+
+The 2026-08-22 realignment is what this brief is being reconciled against: the
+declaration was restructured and renamed (`schema/psr.header.json` →
+`contracts/container.spec.jsonc`), the module became its **interpreter** rather
+than a reader of hardcoded shape, and **the wire changed** — see §The item
+model. Where this document said `gidx<int:N>` it now says `gidx: int(4)`.
+Open calls below still stand where marked. · **Filed:** 2026-08-15, merging
 `schema-derivation-brief.md` (2026-08-15) and `row-grammar-brief.md`
 (2026-08-15), both archived under `briefs/.archive/` · **Track:** V3 e2e
 sprint, export phase (`rs.core.shards` → `rs.core.serialize` →
-`rs.core.manifest`) · **Spec:** `design/shard-format-notes.md` (codec, framing,
-posture) · **Sources:** LTS emission spans (`RepoSnapshotLts.psm1` ~2277–2520,
+`rs.core.manifest`) · **Spec:** `design/shard-format-notes.md` **§Content codec
+— SPEC only** (posture + the four rules). That document's §Row grammar is an
+**LTS specimen**, not v3's wire — v3's is `contracts/container.spec.jsonc` and
+§The item model below. · **Sources:** LTS emission spans (`RepoSnapshotLts.psm1` ~2277–2520,
 `Get-EntryByteOffsets:953`), the conceptual decomposition in
 `discussion/opus-reposnapshotV3-LTS-updates.md`, `payload-manifest-ledger.md`.
 
@@ -31,9 +43,12 @@ tables** too: a declared column set, typed, and rows that conform.
   fixed column set* (shard-format-notes §Configurability).
 - **record row** — one entry rendered per the header row: positional values,
   framed; the content span addressed by recorded offsets.
-- **framing** — the length prefix + delimiters that let a reader seek to a
-  content span without parsing the row.
-- *"schema"* now means **stage I/O contract** (`reposnapshot-v3/schema/`), not
+- **framing** — the length prefix + structural marks that let a reader seek to a
+  content span without parsing the row. Note the marks are **items**, not
+  delimiters carrying their own spacing (§The item model).
+- **item** — the unit a row is built from: a value, a key (carrying its trailing
+  colon), or a structural mark. A row is its item list joined by one space.
+- *"schema"* now means **stage I/O contract** (`reposnapshot-v3/contracts/`), not
   the payload's column set. *"Row grammar"* is retired — the header row **is**
   the grammar; rows are rendered from it.
 
@@ -87,11 +102,14 @@ in an ugly way and it is the reason a verbatim port is refused (ledger #5):
    `row_meta_end` last byte before the content delimiter · `row_content_begin`
    · `row_content_end` (== begin when empty).
    The layout is a **dependency of two stages**, so it lives in its own small
-   module — `rs.core.container` — as `Format-Row → pieces`, from which
+   module — `rs.core.container` — as `Format-Row → items`, from which
    `Measure-Row` (shards, sums lengths) and `Build-Row` (serialize, writes)
    derive; likewise `Measure-ContentSpan` / `ConvertTo-ContentSpan` over the one codec
    rule table (count without allocating vs materialize), and the header-row
    pair. One grammar site, three callers; plan and file cannot disagree.
+   `Format-Row` returns items through `content_bytes` — the mark before
+   `content` and the span itself are `Build-Row`'s — so `items -join item_join`
+   is exactly the prefix whose last byte is `row_meta_end`.
 3. **Grouping decides membership, not how bytes are written.** One emission
    path consumes a shard's row list regardless of how `rs.core.shards` grouped
    it (Flat / ByFileType / …). The Flat-vs-grouped divergence disappears rather
@@ -102,28 +120,82 @@ in an ugly way and it is the reason a verbatim port is refused (ledger #5):
 The container spec is named **psr** (*piped snapshot rows*); the file
 extension stays `.txt` as a reader accommodation (tool allowlists,
 preview/truncation windows), not a format marker. Its admissible column set is
-declared once, in `reposnapshot-v3/schema/psr.header.json` — **read by code**
-(`rs.core.container` resolves the run's layout from it; ledger #6), and
-deliberately not `*.contract.json` (stage contracts, ledger #33/#34 — renamed
-from `*.schema.json` 2026-08-16 so "schema" stops doing double duty).
+declared once, in `reposnapshot-v3/contracts/container.spec.jsonc` — **read by
+code** (`rs.core.container` resolves the run's layout from it; ledger #6), and
+deliberately not a `*.contract.json` (those are stage contracts, ledger #33/#34
+— renamed from `*.schema.json` 2026-08-16 so "schema" stops doing double duty).
+It sits *among* them because it points *into* them: each column binds its value
+by a `$ref` into the contract that owns it, and `contracts.tests` is told to
+skip it precisely because it is a declaration, not a stage.
 
-Wire order and roles:
+Wire order and roles — the header row at the default configuration, verbatim:
 
 ```
-gidx<int:N> | path<str> | content_meta:{chars<int> words<int> ws_ratio<float> entropy<float>} | content_bytes<int> | content<str>
-   record       record            content (extensible block)                                content          content
+gidx: int(4) | path: string | content_meta: [ line_mean: double , num_chars: int , num_words: int , ws_ratio: double , entropy: double ] | content_bytes: int | content: string
+   record         record                              content (extensible block)                                                            content            content
+```
+
+and the record row beneath it, same positions, values only:
+
+```
+0042 | src/Foo.cs | [ 9.5000 , 30 , 5 , 0.4037 , 4.2516 ] | 30 | line one\nline two\n<TAB>tabbed é
 ```
 
 - Required: `path`, `content_bytes`, `content`. Optional: `gidx` (one address
   scheme among several; open), `content_meta` (renamed from LTS `attributes` —
   a noun, and prefixed `content_` because it is metadata *about the content
   span*, pairing it with `content_bytes` and `content`; sub-fields are run
-  configuration and extensible by processors).
+  configuration and extensible by processors, ordered by `val_rank`, with the
+  default set marked `default: true`).
 - `content_bytes` is the exact byte width of the encoded content span in the
-  file — the number a reader seeks with. Not `SizeBytes`, not `chars`. It
+  file — the number a reader seeks with. Not `SizeBytes`, not `num_chars`. It
   immediately precedes `content`; that adjacency is the seek contract. The
   *row* span (whole physical line) is not a column.
-- LF terminator, no trailing `|`; UTF-8, no BOM (ledger #45).
+- **`gidx` is zero-padded to `digits(EntryCount)`**, resolved once per run —
+  the only padded field, because it is the only one assigned *after* packing
+  (#46). Zero, never space: a space-padded value would put whitespace inside an
+  item, at exactly the level where the join is doing structural work. Overflow
+  is a plan-time throw, never a silent widen. `content_bytes` is unpadded and
+  canonical (no leading zeros) — it is known before packing, so nothing needs
+  bounding.
+- LF terminator, no trailing mark; UTF-8, no BOM (ledger #45, **settled**
+  2026-08-22 — with marks as items there is no trailing-mark item to drop, and
+  `container.tests` asserts both).
+
+## The item model — how a row is built (ledger #49, 2026-08-22)
+
+**A row is a list of ITEMS joined by exactly one space.** Items are values, keys
+(a key carries its trailing colon), and the structural marks `|` `[` `]` `,`.
+A sub-grammar with its own internal syntax — a type expression `int(4)`, the
+encoded content span — renders itself **first** and enters as **one** item; its
+internal spacing is its own business.
+
+Three consequences the rest of the export phase leans on:
+
+1. **The writer's arithmetic is exact by construction**: `row bytes = Σ item
+   bytes + (item count − 1) + record_delimiter`. Nothing is hidden inside a
+   concatenation — under the old shape a block's internal delimiters were buried
+   in one pre-assembled piece and had to be re-measured.
+2. **There is no padding property and must not be one.** Padding is what the
+   join does. The declaration carries the separator as a *character* (so it can
+   interpolate into a regex character class) and the join separately; a
+   `" | "` string would break both at once.
+3. **Lexing is structural, never a whitespace split.** Items may contain spaces
+   — `content` does by construction, and `path` did in 23.5% of a real corpus
+   (chat-export fixtures with sentence-fragment filenames). A reader splits on
+   `" | "`, then `" , "` inside a block.
+
+The choice was made on declaration and interpreter simplicity, not economy:
+measured on a real 4.6 MB payload the spacing costs **+0.046%** tokens against
+a fully tight `|`, and removes the one real boundary artifact — under tight
+`|` the token `]|` merged the block close with the column separator in
+**102/102** rows.
+
+**An empty value is a zero-length item**, which the join surfaces as a doubled
+space rather than as nothing (`… |  | …`). That is an improvement over a tight
+separator, where the same defect would have hidden as an unremarkable `||`.
+psr never emits one by design; a reader that meets one should read it as a
+defect signal, not data.
 
 **The header row's declaration determines the datatypes of every field in
 every record row, so a record row has no schema of its own.** A row is the
@@ -155,7 +227,7 @@ entries forces a choice:
   nothing requires two shards to agree.
 
 **(c) was the leaning — superseded 2026-08-16 by one header per run; (a) with
-the empty marker is what `psr.header.json` declares.** Retained as record: under
+the empty marker is what `container.spec.jsonc` declares.** Retained as record: under
 `ByFileType` a shard is homogeneous by construction, so a language-specific
 element is present on every row or none, and the header states which —
 honestly, per shard. Corpus-wide 30% coverage becomes 100% in three shards and
@@ -174,18 +246,25 @@ must match.
 - **Column order** — deterministic, or payloads differ run to run for no
   reason. `Elements` is first-observed order: stable given stable ingest order,
   but an accident, not a guarantee.
-- **Type annotations** (`idx<int>`, `path<str>`, `whitespace_ratio<float>`) —
-  LTS hardcodes them. Derived from values is fragile (an all-integer float
-  column reads `<int>`); declared by the producing processor is honest and
-  implies processors describe their own elements (same mechanism as the
-  disposition above).
-- **Nested blocks** — `attributes:{…}` is positional-values-in-braces;
-  generalizing to arbitrary nesting needs a rule and probably a depth limit.
-- **Wire naming** — in-memory PascalCase by doctrine; snake_case in the payload
-  is a writer rendering decision. The mapping lives here.
-- **Header per shard vs per run** — (c) above implies per shard; confirm the
-  manifest's `ColumnHeader` is then per-shard too, or a union with per-shard
-  detail.
+- **Type annotations** (`gidx: int(4)`, `path: string`, `ws_ratio: double`) —
+  **answered in shape 2026-08-22, not fully closed.** Neither LTS's hardcoding
+  nor derivation-from-values (fragile: an all-integer double column reads
+  `int`). The type is declared once in `container.spec.jsonc` as `record_type` /
+  `val_type` — wire-facing, one place — while the *value* binds by `$ref` into
+  the contract of whatever produced it, and a dangling pointer **fails at
+  load**. So the container spec cannot name a value the producer does not
+  declare, without the processor having to know the wire exists. What remains
+  open is the disposition question above: nothing yet lets a processor say
+  *whether* its element should become a column at all.
+- **Nested blocks** — `content_meta: [ … ]` is positional-values-in-brackets and
+  the recursion rule is now stated: a cell renders itself atomically, and the
+  block is the **one** cell that is itself an item list. Depth stays at one
+  deliberately; arbitrary nesting would need a rule and a limit, and no consumer
+  wants it.
+- **Wire naming** — in-memory PascalCase by doctrine; snake_case in the payload.
+  The mapping is no longer prose: it is the `$ref` crosswalk (`num_chars` →
+  `…/out/ContentMeta/CharCount`), one concept in three casings by convention
+  (wire `content_meta` · in-memory `ContentMeta` · processor `rs-content_meta`).
 
 ## What must NOT come across from LTS
 
@@ -236,20 +315,33 @@ rebalancing, that is a new stage after serialize, not a loop.
 
 ## Exit gate
 
-- **The seek contract round-trips, byte-exact**: for every emitted row, reading
+Marked against the battery at **17 suites · 1049 passed · 0 failed** (2026-08-22).
+
+- ✅ **The seek contract round-trips, byte-exact**: for every emitted row, reading
   the shard file at `row_content_begin..row_content_end` returns exactly the
   encoded content span, and the row's declared length equals its UTF-8 byte
-  count. The one property an eyeball review cannot verify.
-- **One layout site, provable by construction** — only one function can produce
-  a record row; header row and every record row in a shard agree on column
-  count, asserted not assumed.
-- Header derived from a real IR reproduces the LTS column set for the
-  equivalent configuration (derivation is not merely *different*).
-- A bag carrying a **novel** element reaches the payload as a column with zero
-  writer changes — the open-element-model claim, never tested e2e.
-- Column order stable across repeated runs on identical input.
-- Flat and grouped membership produce identical bytes for identical membership.
-- Full battery green **and error stream clean**.
+  count. The one property an eyeball review cannot verify — asserted on the
+  bytes themselves, not on the offsets.
+- ✅ **One layout site, provable by construction** — only one function can produce
+  a record row; header row and every record row agree on column count, asserted
+  not assumed. Strengthened 2026-08-22: `Measure-Row == Build-Row.Bytes.Length`
+  is checked, *and* the `#49` byte identity is asserted independently of the
+  implementation that computes it.
+- ✅ **Column order stable across repeated runs on identical input** — now
+  ordered by the declaration's `col_position` rather than by key enumeration.
+  The old code sorted by `$decl.columns.Keys`, which PowerShell does not
+  guarantee for a hashtable; the ordering was correct by luck.
+- ⬜ Header derived from a real IR reproduces the LTS column set for the
+  equivalent configuration (derivation is not merely *different*). **Not built**
+  — needs an LTS-side fixture, and the wire has since diverged deliberately, so
+  the comparison is now column *set*, never column *text*.
+- ⬜ A bag carrying a **novel** element reaches the payload as a column with zero
+  writer changes — the open-element-model claim, still never tested e2e. Cheaper
+  now than when written: the test is a new sub-field in the spec + its `$ref`,
+  and nothing in the module should move.
+- ⬜ Flat and grouped membership produce identical bytes for identical
+  membership. Blocked on `rs.core.shards`, by construction.
+- ✅ Full battery green **and error stream clean**.
 
 ## Non-goals
 
@@ -262,15 +354,18 @@ rebalancing, that is a new stage after serialize, not a loop.
 
 ## Open calls
 
-- Streaming vs per-shard buffering — the cursor shape makes streaming
+- Streaming vs per-shard buffering — **open**. The cursor shape makes streaming
   possible; per-shard buffering already beats LTS's whole-corpus double copy.
-- Where the layout lives — leaning `rs.core.container` (a dependency of shards
-  and serialize), with `rs.core.serialize` (0 bytes today) owning the emission
-  loop over a plan. Lay it out so the manifest split is a cut, not an untangle.
-- Empty-content rows — LTS emits `row_content_end == row_content_begin` for a
-  zero-length span. Under LeanPayload empty content never becomes an entry;
-  confirm the case is unreachable and drop the branch rather than port dead
-  semantics.
-- Sequencing — freeze the header object's shape → build the renderer against a
-  fixed instance → land the derivation. Keeps the two halves independently
-  landable.
+  `Build-Row` touches no stream, so the call stays `rs.core.serialize`'s.
+- Empty-content rows — **open**. LTS emits `row_content_end == row_content_begin`
+  for a zero-length span, and the branch is ported and asserted. Under
+  LeanPayload empty content never becomes an entry; confirm the case is
+  unreachable and drop the branch rather than keep dead semantics alive by test.
+- ~~Where the layout lives~~ — **settled**: `rs.core.container`, a dependency of
+  shards and serialize, with `rs.core.serialize` owning the emission loop over a
+  plan. The manifest split is a cut: nothing in the layout module knows a
+  manifest exists.
+- ~~Sequencing~~ — **done** as planned: the layout object's shape was frozen,
+  the renderer built against it, the derivation landed. The realignment then
+  proved the sequencing was right — the wire changed underneath and only the
+  renderer and its suite moved.

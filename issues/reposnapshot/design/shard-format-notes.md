@@ -8,6 +8,23 @@ containers, optimized for LLM/agent consumption.
 
 ## Row grammar
 
+> **This section is an LTS specimen, not the v3 wire.** Recorded as observed on
+> 2026-07-22 and left verbatim — it is evidence. v3's wire is declared in
+> `reposnapshot-v3/contracts/container.spec.jsonc` and explained in
+> [shard-container-brief](../briefs/shard-container-brief.md) §The item model;
+> it has since diverged deliberately in every visible respect: `idx` → `gidx`
+> (zero-padded), `length` → `content_bytes`, `attributes` → `content_meta` with
+> `[ … ]` not `{ … }`, `name<type>` → `name: type`, no trailing `|` (ledger
+> #45), and rows built as space-joined item lists rather than delimiter-padded
+> fields (ledger #49). **What carries forward unchanged is the doctrine**, not
+> the syntax: header row as the schema, positional value-only rows, the nested
+> block repeating no keys, and the length prefix framing the content span.
+>
+> The one section of this document that IS a v3 spec is
+> [§Content codec — SPEC](#content-codec--spec-user-2026-08-14-supersedes-the-2026-08-09-litigation-below);
+> everything above it describes LTS and everything below §Escape regime is
+> superseded litigation kept as evidence.
+
 Full form (snapshot `reposnapshot_20260723_035834`, header row enabled):
 
 ```

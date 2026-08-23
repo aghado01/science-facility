@@ -400,8 +400,12 @@ a reader will spend it as an offset or an exact length. Packing is not that.
 
 **Supersedes the "layer 2 is the right packing input" position above.** The
 `Attributes` element is a **reader-facing triage block** — it exists to populate
-the row's `attributes:{char_count word_count whitespace_ratio entropy}` segment
-so a reader can rank or skip rows before fetching. It was never meant to be a
+the row's `content_meta: [ line_mean , num_chars , num_words , ws_ratio ,
+entropy ]` segment so a reader can rank or skip rows before fetching. *(Named
+`attributes:{char_count …}` when this was written; renamed 2026-08-17 —
+element `ContentMeta`, wire `content_meta`, processor `rs-content_meta` — and
+the block became bracketed under ledger #49. The argument below is untouched by
+either.)* It was never meant to be a
 planning input for the packer. `rs.core.shards` owns its own measurement.
 
 **The argument that settles it, in one line:** the property that makes

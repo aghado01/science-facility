@@ -7,6 +7,28 @@ never as standing claims, and never hand-copied from prose.
 Rulings live in [decisions.md](decisions.md); what remains lives in
 [roadmap.md](roadmap.md).
 
+- **2026-08-23 — `shard-container-brief` reconciled to the landed wire**, before
+  `rs.core.shards` is built against it. It was three generations stale at once:
+  the pre-#49 annotation form (`gidx<int:N>`), a declaration path retired on
+  08-18 (`schema/psr.header.json`), the pre-rename `attributes:{…}` block, and
+  sub-field names (`chars`, `words`) renamed on 08-17. New §The item model; wire
+  example replaced with the verbatim default header **and** a record row beneath
+  it; `gidx` zero-padding stated with its reason (only field assigned after
+  packing; zero not space, because a space-padded value puts whitespace inside an
+  item). Exit gate marked item by item — **4 met, 3 not**, the unmet ones now
+  named rather than implied (LTS column-set comparison; novel-element e2e;
+  Flat-vs-grouped, blocked on shards). Two open calls closed (where the layout
+  lives; sequencing), two left live (streaming vs buffering; whether the
+  empty-content branch is reachable at all under LeanPayload).
+  **#45 settled** and propagated — under #49 there is no trailing-mark item to
+  drop, so the question cannot reopen.
+  Swept the neighbours the brief cites: `shard-format-notes` §Row grammar is an
+  **LTS specimen** and was *marked*, not rewritten — a reader following the
+  brief's "Spec:" pointer was landing on LTS output that reads like a v3
+  declaration; the pointer now names §Content codec as the only v3-spec section.
+  Also corrected: decisions #33 (`schema/` → `contracts/`), numerics-roadmap's
+  `hash` declaration path, assemble-design §Attributes' block syntax.
+
 - **2026-08-22 — container realigned onto the declaration; the spec became
   executable**: `rs.core.container` is now the declaration's interpreter — column
   register from `shard_container_schema.properties` in `col_position` order,

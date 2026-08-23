@@ -53,9 +53,17 @@ Each of these is recorded as owed, not answered. The live discussion lives in th
 source doc; the ledgers only record that the call is outstanding.
 
 **Decisions ledger** — #22 ops mostly non-configurable (leaning) · #42
-`AllowOversizedShards` retirement (leaning) · #45 LF-only row termination,
-trailing `|` dropped (leaning; propagate to `shard-container-brief`) · #46 which
-address columns v3 carries (open) · #48 `PackObjective` default (open).
+`AllowOversizedShards` retirement (leaning) · #46 which address columns v3
+carries (open) · #48 `PackObjective` default (open). *(#45 closed 2026-08-22 —
+settled and propagated.)*
+
+**Container brief** (reconciled 2026-08-22, two calls left live) — streaming vs
+per-shard buffering, `rs.core.serialize`'s to make · empty-content rows:
+the LTS `row_content_end == row_content_begin` branch is ported and asserted,
+but under LeanPayload the case may be unreachable, in which case the branch
+should go rather than be kept alive by its own test. Two exit-gate items are
+also still unmet and now named as such: the LTS column-set comparison, and the
+novel-element e2e claim.
 
 **Payload manifest** — #6 channels carried · #10 ignore/selection regime · #12
 header `flags` block, retire vs keep · #13 `Header.Root` emission posture vs path
