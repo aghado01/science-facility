@@ -176,13 +176,33 @@ def --env jobs-harvest [timeout: duration = 0sec] {
     jobs-reconcile $ids
 }
 
-def --env jobs-require-row [key] {
+def --env jobs-resolve [key] {
     jobs-harvest 0sec
     let hit = (jobs-find $key)
     if ($hit | is-empty) {
-        error make {msg: $"jobs: no job matching ($key)"}
+        {ok: false, error: $"no job matching ($key | to nuon --raw)"}
+    } else {
+        {ok: true, row: ($hit | first)}
     }
-    $hit | first
+}
+
+def jobs-retrieve [tag]: nothing -> string {
+    $"jobs fetch ($tag | to nuon --raw)"
+}
+
+def jobs-not-payload [row, verb: string] {
+    let err = (
+        if $row.status == "running" { "still running"
+        } else if $row.error != null { $row.error
+        } else { $row.status }
+    )
+    jobs-stamp-receipt {
+        ok: false
+        disclosed: false
+        tag: $row.tag
+        status: $row.status
+        error: $err
+    } $verb --tag $row.tag
 }
 
 # --- exports ------------------------------------------------------------------
@@ -268,7 +288,11 @@ export def --env "jobs collect" [
 export def --env "jobs inspect" [
     key: any                                # job_id (int) or tag (string)
 ]: nothing -> record {
-    let row = (jobs-require-row $key)
+    let found = (jobs-resolve $key)
+    if $found.ok == false {
+        return (jobs-stamp-receipt {ok: false, error: $found.error} "jobs.inspect")
+    }
+    let row = $found.row
     mut rec = {
         seq: $row.seq
         tag: $row.tag
@@ -295,19 +319,33 @@ export def --env "jobs inspect" [
 }
 
 # Portable `read` of one stored payload. Peek, not pop — repeatable. One id only.
-# Under cap → body. Over cap → decline naming `jobs fetch <tag>`. Still running → error. Does not re-stash.
+# Completed + under cap → body. Over cap → decline naming `jobs fetch <tag>`.
+# Missing, running, failed, cancelled, or unknown size → stamped `ok: false`. Does not re-stash.
 export def --env "jobs read" [
     key: any                                # job_id (int) or tag (string)
 ]: nothing -> any {
-    let row = (jobs-require-row $key)
-    if $row.status == "running" {
-        error make {msg: $"jobs: '($key)' still running"}
+    let found = (jobs-resolve $key)
+    if $found.ok == false {
+        return (jobs-stamp-receipt {ok: false, disclosed: false, error: $found.error} "jobs.read")
+    }
+    let row = $found.row
+    if $row.status != "completed" {
+        return (jobs-not-payload $row "jobs.read")
     }
     let payload = $row.output
-    let census = (jobs-census $payload)
-    let bytes = $census.bytes
-    let cap = (par cap)
-    if $bytes == null or $bytes <= $cap {
+    let s = ($payload | shape)
+    let bytes = $s.bytes
+    if $bytes == null {
+        return (jobs-stamp-receipt {
+            ok: false
+            disclosed: false
+            tag: $row.tag
+            bytes: null
+            error: ($s.error? | default "unserializable")
+            trace: ($s.trace? | default null)
+        } "jobs.read" --tag $row.tag)
+    }
+    if $bytes <= (par cap) {
         return $payload
     }
     jobs-stamp-receipt {
@@ -315,18 +353,22 @@ export def --env "jobs read" [
         disclosed: false
         tag: $row.tag
         bytes: $bytes
-        retrieve: $"jobs fetch ($row.tag)"
+        retrieve: (jobs-retrieve $row.tag)
     } "jobs.read" --tag $row.tag
 }
 
-# Uncapped retrieve of one stored payload. Peek, not pop. Still running → error.
-# The retrieve named by a declining `read`. Compose: `jobs fetch t | page`.
+# Uncapped retrieve of one completed payload. Peek, not pop.
+# Missing, running, failed, cancelled → stamped `ok: false`. Compose: `jobs fetch t | page`.
 export def --env "jobs fetch" [
     key: any                                # job_id (int) or tag (string)
 ]: nothing -> any {
-    let row = (jobs-require-row $key)
-    if $row.status == "running" {
-        error make {msg: $"jobs: '($key)' still running"}
+    let found = (jobs-resolve $key)
+    if $found.ok == false {
+        return (jobs-stamp-receipt {ok: false, disclosed: false, error: $found.error} "jobs.fetch")
+    }
+    let row = $found.row
+    if $row.status != "completed" {
+        return (jobs-not-payload $row "jobs.fetch")
     }
     $row.output
 }

@@ -3,6 +3,12 @@
 Newest first. Point at commits and briefs. Counts are from the commit
 they were observed at, not standing claims.
 
+- **2026-08-22 — N15 jobs/read failure contract** (Sol core review P1/P2).
+  Missing/running/failed/cancelled are data; retrieve tags NUON-quoted;
+  unknown bytes fail closed; core failure records carry `ok: false`;
+  dataspection suite `error make`s on `n_err`. par-jobs-v1 29/29,
+  dataspection-v1 13/13.
+
 - **2026-08-22 — N10 `jobs fetch`.** Uncapped retrieve; `jobs read` drops
   `--full`. Decline `retrieve` is `jobs fetch <tag>`. Child tests:
   par-jobs-v1 27/27, dataspection-v1 13/13 (including `--config` smoke).

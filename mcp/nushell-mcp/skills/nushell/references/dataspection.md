@@ -70,7 +70,7 @@ Never `each {|i| ... | page $i}` in one evaluate. `$history | shape each` is the
 
 **`preview [--chars 200] [--items 5] [--mode head|tail|sandwich]`** — strings `… [+N chars]`, lists `[+K more]`, records keep every key. Idempotent.
 
-**`read`** (`--env`) — under cap, the value; over cap, `jobs stash` and `{ok: true, disclosed: false, tag, bytes, retrieve, meta.verb: "read"}`. `retrieve` is `jobs fetch <tag>`. Cap is `par cap`. Peek, not pop. Façade statically `use`s `jobs stash`; a session without jobs cannot load `dataspection`. `jobs read` is the same cap rule for an addressed payload; `jobs fetch` always returns the stored body.
+**`read`** (`--env`) — known size under cap, the value; over cap, `jobs stash` and `{ok: true, disclosed: false, tag, bytes, retrieve, meta.verb: "read"}`. `retrieve` is `jobs fetch` plus the tag as NUON (pasteable). Unknown size (`shape.bytes == null`) → `{ok: false, disclosed: false, error, trace}`. Cap is `par cap`. Peek, not pop. `jobs fetch` is the uncapped hatch.
 
 Census/schema/spine/views/meta live in `modules/core/*.nu`; this module re-exports them. `value.*` / `failure fields` are not on `use dataspection *`.
 

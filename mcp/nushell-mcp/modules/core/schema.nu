@@ -213,6 +213,6 @@ export def "schema stats" [path: string]: any -> record {
         }
     } catch {|e|
         let f = (failure fields $e)
-        {path: $path, n: 0, len_min: null, len_max: null, len_avg: null, len_p95: null, error: $f.error, trace: $f.trace}
+        {ok: false, path: $path, n: 0, len_min: null, len_max: null, len_avg: null, len_p95: null, error: $f.error, trace: $f.trace}
     }
 }

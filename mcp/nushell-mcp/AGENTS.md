@@ -54,7 +54,7 @@ them in the decisions file.
 4. **Receipts before bodies.** One tool result carries at most one
    payload. Anything withheld names the call that retrieves it.
    `read` is the only verb that may decline, and when it declines it
-   names the retrieval (`jobs fetch <tag>`) — the disclosure ladder is
+   names the retrieval (`jobs fetch` + tag as NUON) — the disclosure ladder is
    `shape` (always fits) → `read` (if it fits) → `preview`/`page`
    (bounded). Over-cap in-hand `read` stashes through `jobs stash`; it is
    `--env`. `jobs read` is the same cap for an addressed payload; `jobs fetch`

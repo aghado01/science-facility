@@ -40,7 +40,8 @@ export def main []: any -> any {
         if ("ref" in ($m | value columns)) { $out = $out | insert ref $m.ref }
         $out
     } catch {|e|
-        null
+        let f = (failure fields $e)
+        {ok: false, error: $f.error, trace: $f.trace}
     }
 }
 

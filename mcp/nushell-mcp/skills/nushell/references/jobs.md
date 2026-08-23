@@ -48,8 +48,8 @@ Row shape, input order:
 | `jobs list` | all receipts, **seq** order. No payloads |
 | `jobs collect [--timeout 5sec]` | finished receipts only (`completed\|failed\|cancelled`), seq order |
 | `jobs inspect <id\|tag>` | jobs receipt + payload census from `shape` internally; never body |
-| `jobs read <id\|tag>` | portable `read`: body if under cap; else decline naming `jobs fetch <tag>` |
-| `jobs fetch <id\|tag>` | uncapped stored body (retrieve path; compose `\| page`) |
+| `jobs read <id\|tag>` | completed + under cap → body; over cap → decline naming `jobs fetch <quoted-tag>`; missing/running/failed/cancelled/unserializable → `{ok: false}` |
+| `jobs fetch <id\|tag>` | completed → stored body; otherwise stamped `{ok: false}` (compose `\| page`) |
 | `jobs cancel <id>` | `{job_id, cancelled, meta}` |
 | `jobs status` | knobs, cores, ceiling, inflight, policy, `meta` |
 | `jobs policy --max-workers N …` | mutate session knobs; still clamped |

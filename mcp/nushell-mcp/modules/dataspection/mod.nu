@@ -20,7 +20,15 @@ export def --env read []: any -> any {
         let s = ($x | shape)
         let cap = (par cap)
         let bytes = $s.bytes
-        if $bytes == null or $bytes <= $cap {
+        if $bytes == null {
+            return ({
+                ok: false
+                disclosed: false
+                error: ($s.error? | default "unserializable")
+                trace: ($s.trace? | default "unserializable")
+            } | meta stamp --verb read)
+        }
+        if $bytes <= $cap {
             return $x
         }
         let stashed = (try { $x | jobs stash } catch {|e|
@@ -43,7 +51,7 @@ export def --env read []: any -> any {
             disclosed: false
             tag: $tag
             bytes: $bytes
-            retrieve: $"jobs fetch ($tag)"
+            retrieve: $"jobs fetch ($tag | to nuon --raw)"
         } | meta stamp --verb read
     } catch {|e|
         let f = (failure fields $e)

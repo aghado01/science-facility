@@ -216,7 +216,7 @@ let results = [
         assert-eq $r.disclosed false "not disclosed"
         assert-true ($r.tag != null) "tag"
         assert-true ($r.bytes > 20) "bytes over cap"
-        assert-eq $r.retrieve $"jobs fetch ($r.tag)" "retrieve"
+        assert-eq $r.retrieve $"jobs fetch ($r.tag | to nuon --raw)" "retrieve"
         assert-eq $r.meta.verb "read" "stamped"
         assert-eq (jobs fetch $r.tag) $v "retrievable"
         assert-eq $v (long-str 20) "peek not pop"
@@ -231,7 +231,7 @@ let results = [
         assert-eq $val.ok true "decline ok"
         assert-eq $val.disclosed false "not disclosed"
         assert-true ($val.tag != null) "tag"
-        assert-eq $val.retrieve $"jobs fetch ($val.tag)" "retrieve"
+        assert-eq $val.retrieve $"jobs fetch ($val.tag | to nuon --raw)" "retrieve"
         assert-eq $val.meta.verb "read" "stamped"
     })
     (t "null and empty string" {
@@ -261,8 +261,12 @@ let results = [
         let sh = ({|x| $x} | shape)
         assert-has $sh "error" "shape error"
         assert-has $sh "trace" "shape trace"
+        assert-eq $sh.ok false "shape ok false"
         assert-missing ({a: 1} | shape) "error" "success no error"
         assert-missing ({a: 1} | shape) "trace" "success no trace"
+        let cr = ({|x| $x} | read)
+        assert-eq $cr.ok false "read unserializable"
+        assert-eq $cr.disclosed false "not disclosed"
     })
 ]
 
@@ -278,5 +282,5 @@ print -e ($summary | to nuon --raw)
 if ($failed | is-empty) {
     $results | select name ok
 } else {
-    $results | select name ok error
+    error make {msg: $"($failed | length) tests failed: ($failed | get name | str join ', ')"}
 }

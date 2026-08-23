@@ -143,7 +143,7 @@ export def page [
         }
     } catch {|e|
         let f = (failure fields $e)
-        {kind: "rows", total: 0, size: 50, page: 1, pages: 0, at: 0, n: 0, items: [], error: $f.error, trace: $f.trace}
+        {ok: false, kind: "rows", total: 0, size: 50, page: 1, pages: 0, at: 0, n: 0, items: [], error: $f.error, trace: $f.trace}
     }
 }
 

@@ -53,7 +53,7 @@ def shape-core [x]: nothing -> record {
         }
     }
     if $info.ok == false {
-        $rec = ($rec | insert error $info.error | insert trace $info.trace)
+        $rec = ($rec | upsert ok false | insert error $info.error | insert trace $info.trace)
     }
     $rec
 }
@@ -81,7 +81,7 @@ def shape-each-row [index: int, item] {
 
 def fail-shape [e]: nothing -> record {
     let f = (failure fields $e)
-    {type: "other", length: null, bytes: null, head: "", error: $f.error, trace: $f.trace}
+    {ok: false, type: "other", length: null, bytes: null, head: "", error: $f.error, trace: $f.trace}
 }
 
 # Census of one value. Always fits. `{type, length, bytes, head}` plus `columns`/`nulls` when they apply.

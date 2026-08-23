@@ -282,10 +282,11 @@ decline. Declining is not failure (`ok: true`).
 - **Cap.** `par cap`: `$env.NU_PAR.max_inline_bytes` if set, else
   `$env.NU_MCP_OUTPUT_LIMIT`, else `20000`. Do not open `policy.json`.
   `bytes` is `shape`'s definition (NUON UTF-8 length).
-- **Under cap** → the value itself. Not wrapped, not stamped.
+- **Unknown size** (`bytes: null`) → `{ok: false, disclosed: false, error, trace}` from `shape`. Not disclosed. `jobs fetch` is the hatch if the value was already stashed.
+- **Under cap** (known `bytes` ≤ cap) → the value itself. Not wrapped, not stamped.
 - **Over cap** → `jobs stash` (default tag `stash:<seq>`); the
   receipt copies `tag` and `bytes`, and `retrieve` is the pasteable
-  command `"jobs fetch <tag>"` — never a bare "too big". Bounded
+  command `"jobs fetch <tag-as-nuon>"` — never a bare "too big". Bounded
   verbs stay the ladder on a value in hand (`$x | preview`,
   `jobs fetch t | page`); they are not the decline's `retrieve`.
 - **Jobs missing** (overlay has no `jobs stash`) →

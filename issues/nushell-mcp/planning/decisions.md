@@ -31,6 +31,7 @@ amendment, do not fork this file.
 | N12 | parked | Module prefixing (`nu-` vs bare). [module-prefixing.md](../notes/module-prefixing.md) |
 | N13 | carried | Write conventions (state `.nushell-mcp/`, scratch `artifacts/nushell-mcp/`). [write-conventions-v1](../notes/write-conventions-v1.md) |
 | N14 | carried | Identity routing one shape `{scope, id, source, via}`. [identity-routing.md](../notes/identity-routing.md), [gh-v1](../briefs/gh-v1.md) |
+| N15 | landed | Missing/running/failed/cancelled jobs are stamped `ok: false`, not throws or `null` payloads. Only `completed` yields a body. Retrieve tags are NUON-quoted. Unknown `shape.bytes` is not disclosed (`ok: false`); `jobs fetch` remains the hatch. |
 
 ## N9 — layering cut (landed A, 2026-08-22)
 

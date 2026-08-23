@@ -129,6 +129,11 @@ let results = [
         assert-true (($c | get 0.error | str length) > 0) "short error"
         assert-true (($c | get 0.error | str length) <= 240) "error short"
         assert-eq (jobs read err-b) 7 "success readable"
+        let bad = (jobs read err-a)
+        assert-eq $bad.ok false "failed read is data"
+        assert-eq $bad.disclosed false "not disclosed"
+        assert-eq $bad.status "failed" "status"
+        assert-eq (jobs fetch err-a).ok false "failed fetch is data"
         assert-eq (jobs list | where status == "cancelled" | length) 0 "sibling not cancelled"
     })
     (t "collect seq order not completion order" {
@@ -388,11 +393,44 @@ let results = [
         let d = (jobs read big)
         assert-eq $d.ok true "decline ok"
         assert-eq $d.disclosed false "not disclosed"
-        assert-eq $d.retrieve "jobs fetch big" "retrieve"
+        assert-eq $d.retrieve $"jobs fetch ($d.tag | to nuon --raw)" "retrieve"
         assert-eq $d.tag "big" "tag"
         assert-eq $d.meta.verb "jobs.read" "read stamped"
         assert-eq (jobs fetch big) $v "full body"
         assert-eq (jobs list | length) 1 "did not re-stash"
+        $env.NU_PAR = ($env.NU_PAR | upsert max_inline_bytes null)
+    })
+    (t "missing running cancelled are data" {
+        let miss = (jobs inspect nope)
+        assert-eq $miss.ok false "inspect missing"
+        assert-eq $miss.meta.verb "jobs.inspect" "inspect stamped"
+        let rm = (jobs read nope)
+        assert-eq $rm.ok false "read missing"
+        assert-eq $rm.disclosed false "read not disclosed"
+        assert-eq (jobs fetch nope).ok false "fetch missing"
+        let a = (jobs spawn { sleep 5sec; 1 } --tag run)
+        let rr = (jobs read run)
+        assert-eq $rr.ok false "read running"
+        assert-eq $rr.error "still running" "running error"
+        assert-eq (jobs fetch run).error "still running" "fetch running"
+        let k = (jobs cancel $a.job_id)
+        assert-eq $k.cancelled true "cancelled"
+        let fc = (jobs fetch run)
+        assert-eq $fc.ok false "fetch cancelled"
+        assert-eq $fc.status "cancelled" "cancelled status"
+    })
+    (t "retrieve quotes tags" {
+        $env.NU_PAR = ($env.NU_PAR | upsert max_inline_bytes 20)
+        let v = (1..20 | each { "xxxx" } | str join)
+        let _ = ($v | jobs stash --tag "my tag")
+        let d = (jobs read "my tag")
+        assert-eq $d.retrieve "jobs fetch \"my tag\"" "space quoted"
+        assert-eq (jobs fetch "my tag") $v "fetch space tag"
+        let qtag = "say \"hi\""
+        let _ = ($v | jobs stash --tag $qtag)
+        let dq = (jobs read $qtag)
+        assert-eq $dq.retrieve $"jobs fetch ($qtag | to nuon --raw)" "quote quoted"
+        assert-eq (jobs fetch $qtag) $v "fetch quoted tag"
         $env.NU_PAR = ($env.NU_PAR | upsert max_inline_bytes null)
     })
 ]

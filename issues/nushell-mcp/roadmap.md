@@ -122,8 +122,8 @@ context window as the scarcest resource in the loop:
    2026-08-22.** Can still be used in parallel with H.
 3. **par-jobs amendments** — after 2, before 4. `jobs disclose` is
    **not** needed: in-hand cap is `read`; `jobs read` adopts the same
-   cap for *terminal* disclose of an addressed payload; `--full` is
-   the path that returns the stored body. **`jobs inspect` is not
+   cap for *terminal* disclose of an addressed payload; `--full` was
+   the retrieve path (**superseded by N10 `jobs fetch`**). **`jobs inspect` is not
    `jobs read | shape`.** Inspect stays jobs' own receipt; it calls
    `shape` on the stored payload internally so `bytes` is one
    definition — no `jobs shape` export. Receipts gain `meta` via
