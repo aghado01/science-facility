@@ -1,14 +1,27 @@
 # `rg` wrapper v1 — disciplined search returns in nushell-mcp
 
-**Status:** landed · **Filed:** 2026-08-20 · **Landed:** 2026-08-22 · **Home:**
+**Status:** landed v1 · **Hardening:**
+[composition-v1](composition-v1.md) filed, not landed ·
+**Filed:** 2026-08-20 · **Landed:** 2026-08-22 · **Home:**
 `mcp/nushell-mcp`, Nu-native module, used only through `evaluate`.
-**Depends on:** [layering-v1](layering-v1.md), [par-jobs-v1](../.archive/par-jobs-v1.md)
-(registry), [xq-v1](xq-v1.md) — **`process capture`**, not ordinary `xq`.
+**Depends on:** [layering-v1](../.archive/briefs/layering-v1.md),
+[par-jobs-v1](../.archive/briefs/par-jobs-v1.md) (registry),
+[xq-v1](xq-v1.md) — **`process capture`**, not ordinary `xq` — and
+[composition-v1](composition-v1.md).
 Rg runs `process capture`, parses JSON events (or falls to text), then
 applies its own spine/envelope/quarantine. Build capture first.
 **Not this brief:** a search engine, rg flag curation, mdnav chunking.
 
 Treat this file as the v1 spec. Amend; do not fork.
+
+> **Composition amendment:** [composition-v1](composition-v1.md) is
+> normative for the pending hardening cuts. It supersedes this landed
+> report where v1 predicts `rg:<seq>`, publishes a tag before storage
+> is confirmed, treats `job id` as the complete payload-owner test,
+> accepts failed quarantine as a successful wrapper outcome, assumes a
+> string capture stream, or turns ripgrep `path.bytes` / `lines.bytes`
+> into empty text. The follow-up report below remains evidence of the
+> landed 2026-08-22 code, not evidence that the amendment has landed.
 
 ## Problem
 

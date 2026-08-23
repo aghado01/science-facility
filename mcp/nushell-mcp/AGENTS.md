@@ -13,7 +13,8 @@ package-level rules.
   Sets `NU_LIB_DIRS`, `NU_SKILL_DIR`, prepends `deps/cli` to PATH,
   preloads the modules. Order: `nu-skills`, `nu-modules`, `par`,
   `jobs`, `dataspection`, `xq`, `rg` — runtime services, access façade, then externals.
-  Overlay preload is not DI into module bodies ([layering-v1](../../issues/nushell-mcp/briefs/layering-v1.md)).
+  Overlay preload is not DI into module bodies
+  ([layering-v1](../../issues/nushell-mcp/.archive/briefs/layering-v1.md)).
 - `modules/` — Nu-native modules. `modules/core/*.nu` are dependency
   file units (`census`, `meta`, `value`, `failure`, …); `par`/`jobs`
   import those, never `dataspection/mod.nu`. `dataspection` is the
@@ -31,8 +32,9 @@ package-level rules.
 - `dev/` — module outtakes and inspiration; nothing here is loaded.
 - `host/` — (planned) the thin TypeScript session host.
 
-Specs: `issues/nushell-mcp/` — `roadmap.md` (sequence), `briefs/` (specs),
-`notes/` (vocabulary, launch surface), `planning/decisions.md` (rulings),
+Specs: `issues/nushell-mcp/` — `roadmap.md` (sequence), `briefs/` (active
+specs), `.archive/briefs/` (landed/superseded specs), `notes/`
+(vocabulary, launch surface), `planning/decisions.md` (rulings),
 `planning/ledger.md` (landed work). Briefs are the specs; do not restate
 them in the decisions file.
 
@@ -68,14 +70,26 @@ them in the decisions file.
    rather than by address. `jobs inspect` is **not** `jobs read | shape`:
    inspect discloses nothing; jobs keeps its own receipt and calls
    `shape` on the stored payload internally.
-4a. **`ok` is universal; failure is data.** Every record the layer
-   returns carries `ok: bool`. A verb that catches an error returns
-   `ok: false` + `error` (short) — and `trace` where it captured one —
-   instead of throwing. Know the two failure levels: an evaluate that
-   *throws* leaves no `$history` entry (engine-level); a caught failure
-   is a *successful* evaluate with a `history_index` (domain-level),
-   legible only through its own `ok: false`. `shape each` lifts `ok`
-   so `$history | shape each | where ok == false` finds them.
+4a. **`ok` is universal at outcome boundaries; failure is data.** Every
+   operation result, receipt, envelope, and outcome row carries
+   `ok: bool`. Arbitrary payload records, findings, census/budget
+   records, and `meta` sub-records are not outcomes and do not acquire
+   `ok` merely because they are records. A verb that catches an error
+   returns `ok: false` + `error` (short) — and `trace` where it captured
+   one — instead of throwing. Know the two failure levels: an evaluate
+   that *throws* leaves no `$history` entry (engine-level); a caught
+   failure is a *successful* evaluate with a `history_index`
+   (domain-level), legible through its own `ok: false`. `shape each`
+   lifts `ok` so `$history | shape each | where ok == false` finds them.
+   Composition through `par`/`jobs` is specified in
+   [composition-v1](../../issues/nushell-mcp/briefs/composition-v1.md).
+4c. **The registry owns retrieval addresses.** Generated tags are
+   allocated by `jobs` in the foreground mutation that stores the
+   payload. A caller publishes `tag` only after storage succeeds; a
+   background job or parallel worker never claims that a local
+   `$env.JOBS` mutation persisted. Context behavior and the pending
+   hardening cuts are specified in
+   [composition-v1](../../issues/nushell-mcp/briefs/composition-v1.md).
 5. **Never cap a live pipeline** (`first N`, `head`) — slice `$history`
    or `jobs fetch` afterward. This is the MCP's own rule; the modules
    exist to make obeying it easy.

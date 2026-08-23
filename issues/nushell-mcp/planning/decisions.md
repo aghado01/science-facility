@@ -17,15 +17,18 @@ amendment, do not fork this file.
 
 | # | Status | Decision |
 |---|---|---|
+| N18 | carried | Terminal streams are string or binary and are measured as returned; unsupported values fail closed. Ripgrep byte-backed JSON is explicit unsupported-encoding failure in this cut. [composition-v1](../briefs/composition-v1.md) |
+| N17 | carried | The persistent foreground registry allocates generated tags and callers publish a retrieval `tag` only after storage succeeds. Background jobs and parallel workers never claim local registry mutation persisted. [composition-v1](../briefs/composition-v1.md) |
+| N16 | carried | `ok` is universal at outcome-bearing boundaries, not arbitrary records. `par` / `jobs` summarize declared returned outcomes while retaining the original value; jobs lifecycle `status` remains separate. [composition-v1](../briefs/composition-v1.md) |
 | N1 | landed | `nu --mcp` is the engine protocol, not the product surface. Thin host later. [session-host-v1](../briefs/session-host-v1.md) |
 | N2 | landed | This package designs one MCP user's console plus an embedding surface. Integration is para-agent's. [launch-surface](../notes/launch-surface.md) |
 | N3 | landed | Portable verbs (`inspect`, `read`, `preview`, `page`, `stamp`) are meanings. In-hand vs addressed is membership, not a second vocabulary. [vocabulary.md](../notes/vocabulary.md) |
-| N4 | landed | One `bytes` definition: NUON UTF-8 length via `shape`. [dataspection-v1](../briefs/dataspection-v1.md) `5381bf3` |
+| N4 | landed | One `bytes` definition: NUON UTF-8 length via `shape`. [dataspection-v1](../.archive/briefs/dataspection-v1.md) `5381bf3` |
 | N5 | landed | `jobs inspect` is not `jobs read \| shape`. Inspect calls `shape` internally. `058f887` |
 | N6 | landed | `par cap` is the one inline/query cap resolver. `058f887` |
 | N7 | landed | In-hand `read` and `jobs read` share the cap rule. Retrieve is `jobs fetch <tag>` (was `--full`, N10). |
-| N8 | landed | Overlay `use *` is not dependency injection into module bodies. Config.nu composes the agent surface. Witness: `$x \| read` under `--config` → `Command jobs not found` after N5. [layering-v1](../briefs/layering-v1.md) |
-| N9 | landed | Cut A: `modules/core/*.nu` file units; dataspection façade owns `read`; `par`/`jobs` never import `dataspection/mod.nu`. [layering-v1](../briefs/layering-v1.md) |
+| N8 | landed | Overlay `use *` is not dependency injection into module bodies. Config.nu composes the agent surface. Witness: `$x \| read` under `--config` → `Command jobs not found` after N5. [layering-v1](../.archive/briefs/layering-v1.md) |
+| N9 | landed | Cut A: `modules/core/*.nu` file units; dataspection façade owns `read`; `par`/`jobs` never import `dataspection/mod.nu`. [layering-v1](../.archive/briefs/layering-v1.md) |
 | N10 | landed | `jobs fetch` is the uncapped stored body. `jobs read` no longer has `--full`. Retrieve strings name `jobs fetch <tag>`. |
 | N11 | landed | Unbounded `process capture` lives in `core/capture.nu`. Ordinary `xq` is the terminal command; rg consumes capture, not `xq`. [xq-v1](../briefs/xq-v1.md), [rg-wrapper-v1](../briefs/rg-wrapper-v1.md) landed 2026-08-22 |
 | N12 | parked | Module prefixing (`nu-` vs bare). [module-prefixing.md](../notes/module-prefixing.md) |
@@ -40,8 +43,8 @@ amendment, do not fork this file.
 `dataspection/mod.nu` re-exports the agent-facing commands and owns
 `read`. `par`/`jobs` `use core/census.nu` / `core/meta.nu`.
 `capture.nu` waits for xq-v1 (N11). Layout and nits in
-[layering-v1](../briefs/layering-v1.md). Trail:
-[sol-nushell-mcp-rearchitect-revisions.md](../discussion/sol-nushell-mcp-rearchitect-revisions.md).
+[layering-v1](../.archive/briefs/layering-v1.md). Trail:
+[sol-nushell-mcp-rearchitect-revisions.md](../.archive/discussion/sol-nushell-mcp-rearchitect-revisions.md).
 
 B (read on jobs), `dataspection-core`, `nushell-mcp-core`, and nested
 `core/census/mod.nu` are rejected.

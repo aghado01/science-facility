@@ -48,4 +48,4 @@ they were observed at, not standing claims.
 
 - **2026-08-21 — par / jobs v1** (brief follow-up; later stash/emit
   review fix on the same brief). Data plane + handle plane + budget.
-  Archived spec: [par-jobs-v1](../.archive/par-jobs-v1.md).
+  Archived spec: [par-jobs-v1](../.archive/briefs/par-jobs-v1.md).

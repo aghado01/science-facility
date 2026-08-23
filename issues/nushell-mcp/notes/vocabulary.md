@@ -32,9 +32,12 @@ index is exactly the ornament to avoid.
 |---|---|---|
 | `index` | position in an input sequence, 0-based | `par` rows, dataspection's `shape each` |
 | `bytes` | NUON-serialized UTF-8 length, computed once | agent-facing: `shape`. Internal measurement: `value nuon` in `core/value.nu`. `par`/`jobs` call `shape`, not `value nuon` |
-| `ok` | did this thing succeed — **universal on every record** | layer-wide (AGENTS.md 4a) |
+| `ok` | did the operation represented by this outcome-bearing result succeed | operation results, receipts, envelopes, and outcome rows; not arbitrary payload records |
 | `error` / `trace` | short first line / full rendered error, on `ok: false` | layer-wide |
-| `tag` | the name of a stored or handled thing | `jobs` registry, `stamp`, stash keys |
+| `outcome` | an explicit top-level boolean `ok`, or a top-level table whose every row has boolean `ok`; may be summarized but the original value is retained | composition through `par` / `jobs` |
+| `status` | execution lifecycle, not domain success | `jobs`: `pending \| running \| completed \| failed \| cancelled` |
+| `tag` | the name of a stored or handled thing; a retrieval result publishes one only after storage succeeds | `jobs` registry, `stamp`, stash keys |
+| `registry owner` | the persistent foreground context whose `$env.JOBS` mutation survives the command | payload-quarantine composition |
 | `verb` | the producing command, dotted (`jobs.spawn`, `par.emit`, `xq`) | `meta.verb` |
 | `inspect` | **portable verb** — describe without disclosing | `jobs inspect`, `nu-modules inspect`; on a value in hand: `shape` |
 | `read` | **portable verb** — disclose the body; the one cap rule (inline if it fits, else a receipt naming the retrieval) | `jobs read`, `$x \| read`; over-cap retrieve is `jobs fetch <tag>` |
@@ -46,6 +49,15 @@ index is exactly the ornament to avoid.
 | `spine` | `{key, n}` census of where the mass is | dataspection, rg |
 | `stash` | put a payload in the registry | `jobs` |
 | `payload quarantine` | keeping a big result out of context | doctrine — **always qualified**, see below |
+| `stdout_bytes` / `stderr_bytes` | byte length of the captured terminal stream value: UTF-8 length for string, byte length for binary | `xq`; deliberately not the unqualified NUON census `bytes` |
+
+An **outcome-bearing boundary** is a role, not a record type. A command
+result or orchestration row carries `ok`; an rg finding, census/budget
+record, arbitrary stored payload, or `meta` sub-record does not acquire
+`ok` merely because it is a record. Engine completion and returned
+domain outcome remain separate facts. The projection and storage-owner
+rules are specified in
+[composition-v1](../briefs/composition-v1.md).
 
 ## Renamed 2026-08-22
 

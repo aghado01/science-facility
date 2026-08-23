@@ -1,14 +1,26 @@
 # `xq` v1 — execute-and-quarantine for externals
 
-**Status:** landed · **Filed:** 2026-08-21 · **Landed:** 2026-08-22 · **Home:**
+**Status:** landed v1 · **Hardening:**
+[composition-v1](composition-v1.md) filed, not landed ·
+**Filed:** 2026-08-21 · **Landed:** 2026-08-22 · **Home:**
 `mcp/nushell-mcp/modules/xq`, Nu-native, used only through `evaluate`.
-**Depends on:** [layering-v1](layering-v1.md) (N9 landed in code first),
-[par-jobs-v1](../.archive/par-jobs-v1.md) (`jobs stash`),
-[dataspection-v1](dataspection-v1.md). **Consumed by:** [rg-wrapper-v1](rg-wrapper-v1.md)
+**Depends on:** [layering-v1](../.archive/briefs/layering-v1.md) (N9 landed in code first),
+[par-jobs-v1](../.archive/briefs/par-jobs-v1.md) (`jobs stash`),
+[dataspection-v1](../.archive/briefs/dataspection-v1.md), and
+[composition-v1](composition-v1.md). **Consumed by:** [rg-wrapper-v1](rg-wrapper-v1.md)
 — rg consumes `process capture`, not ordinary `xq`. **Not this brief:**
 per-tool wrappers (fd, jq, jj, delta), a shell, a job queue, sandboxing.
 
 Treat this file as the v1 spec. Amend; do not fork.
+
+> **Composition amendment:** [composition-v1](composition-v1.md) is
+> normative for the pending hardening cuts. It supersedes this landed
+> report where v1 omits `ok: true` from successful capture, treats all
+> capture failures as `not found`, assumes string-only streams, defines
+> terminal `xq.ok` only from `exit_code`, predicts tags from registry
+> length, or treats `job id` as the complete payload-owner test. The
+> follow-up report below remains evidence of the landed 2026-08-22 code,
+> not evidence that the amendment has landed.
 
 ## Problem
 

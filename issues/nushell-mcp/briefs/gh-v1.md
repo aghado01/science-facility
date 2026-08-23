@@ -1,8 +1,10 @@
 # `gh` module v1 — workspace-routed GitHub identity
 
-**Status:** filed, not started · **Filed:** 2026-08-22 · **Home:**
-`mcp/nushell-mcp/modules/gh`, Nu-native. **Depends on:** [xq-v1](xq-v1.md) (ordinary terminal `xq`, not
-`process capture`); the shape in
+**Status:** filed, blocked on
+[composition-v1](composition-v1.md) · **Filed:** 2026-08-22 · **Home:**
+`mcp/nushell-mcp/modules/gh`, Nu-native. **Depends on:**
+[xq-v1](xq-v1.md) (ordinary terminal `xq`, not `process capture`),
+[composition-v1](composition-v1.md); the shape in
 [notes/identity-routing.md](../notes/identity-routing.md).
 **Prerequisite:** `gh` ≥ 2.40 (multi-account: `auth token --user`) on
 the child's PATH — vendor into `deps/cli` like ripgrep.

@@ -49,7 +49,7 @@ context window as the scarcest resource in the loop:
   identity is **routed by the caller** at spawn (launcher contract =
   `--config` + identity); scoped session history is **standard issue**
   for a persistent session, other historical stores opt-in. Full text in
-  [par-jobs-v1](.archive/par-jobs-v1.md) → Persistence and identity.
+  [par-jobs-v1](.archive/briefs/par-jobs-v1.md) → Persistence and identity.
 - **Inherit from the process; do not look up in the environment.** The
   layer takes what it can from the running process — `$nu.current-exe`
   for the engine binary, `path self` for layout, `$nu.os-info` for the
@@ -94,23 +94,25 @@ context window as the scarcest resource in the loop:
   feature needs the host to understand a Nu value, it is a Nu verb.
   The agent's experience stays pure Nushell. See
   [session-host-v1](briefs/session-host-v1.md).
-- **Receipts carry provenance by convention.** Every record the layer
-  returns has a closed `meta` sub-record (`verb, at, tag?, elapsed?,
-  ref?`) via one pure `stamp` primitive; tables stay bare. `$history`
-  is a spine of values + positions; `meta` is how entries describe
+- **Receipts carry provenance by convention.** Terminal receipts and
+  envelopes carry a closed `meta` sub-record
+  (`verb, at, tag?, elapsed?, ref?`) via one pure `stamp` primitive;
+  arbitrary payload records and tables stay bare. `$history` is a
+  spine of values + positions; `meta` is how stamped outcomes describe
   themselves and point at each other. `meta stamp` lives in
-  [dataspection](briefs/dataspection-v1.md) — metadata is data, a
+  [dataspection](.archive/briefs/dataspection-v1.md) — metadata is data, a
   different tier not a different kind — and takes a noun domain
   because the verb is portable: a timestamp module would have its own.
 
 ## Sequence
 
-1. **`par` / `jobs` v1** — [par-jobs-v1](.archive/par-jobs-v1.md)
+1. **`par` / `jobs` v1** — [par-jobs-v1](.archive/briefs/par-jobs-v1.md)
    · landed 2026-08-21. Data plane + handle plane + budget on the
    persistent engine. Carries the envelope contract (shape 4) and the
    registry mechanics.
-2. **dataspection v1** — [briefs/dataspection-v1.md](briefs/dataspection-v1.md)
-   · filed (supersedes [hist-v1](.archive/hist-v1.md)). The discipline
+2. **dataspection v1** — [dataspection-v1](.archive/briefs/dataspection-v1.md)
+   · **landed** 2026-08-22 (supersedes
+   [hist-v1](.archive/briefs/hist-v1.md)). The discipline
    as a module: nouns that produce data objects (`shape`, `schema`,
    `spine`, `meta`) and portable verbs that interact with them
    (`inspect`, `read`, `preview`, `page`, `stamp`), composing freely.
@@ -129,7 +131,7 @@ context window as the scarcest resource in the loop:
    definition — no `jobs shape` export. Receipts gain `meta` via
    `meta stamp` (spawn/stash/inspect/status/cancel). `par cap` is the
    one cap resolver. **Landed 2026-08-22.**
-3b. **layering v1** — [briefs/layering-v1.md](briefs/layering-v1.md)
+3b. **layering v1** — [layering-v1](.archive/briefs/layering-v1.md)
    · **landed** 2026-08-22 (A). `modules/core/*.nu` file units;
    dataspection façade owns `read`; `par`/`jobs` never import
    `dataspection/mod.nu`. N10 (`jobs fetch`) after this, before 4.
@@ -139,6 +141,14 @@ context window as the scarcest resource in the loop:
 5. **`rg` module v1** — [briefs/rg-wrapper-v1.md](briefs/rg-wrapper-v1.md)
    · **landed** 2026-08-22. Consumes `process capture` + `spine`, not
    ordinary `xq`. (The module; ripgrep itself is in `deps/cli`.)
+5a. **result composition hardening** —
+   [briefs/composition-v1.md](briefs/composition-v1.md) · **filed, not
+   landed** 2026-08-23. Outcome-bearing `ok` composes through
+   `par`/`jobs` without discarding values; jobs lifecycle remains a
+   separate fact. The foreground registry allocates retrieval tags and
+   owns payload quarantine; capture measures string/binary streams as
+   returned. Blocks 6 and `gh-v1`; does not block the transport-only H
+   track.
 6. **Query tools on the envelope** — mdnav_v2 chunk shards, `nu-skills
    search` fan-out. First real parallelism consumers. Align the chunk
    shape with mdnav_v2's brief rather than inventing twice.
@@ -192,12 +202,13 @@ here. Term senses — whose word is whose — are in
 
 | Brief | Status |
 |---|---|
-| [par-jobs-v1](.archive/par-jobs-v1.md) | landed 2026-08-21; amended 2026-08-22 (dataspection consumption) |
-| [dataspection-v1](briefs/dataspection-v1.md) | landed 2026-08-22 |
-| [layering-v1](briefs/layering-v1.md) | landed A 2026-08-22 |
-| [hist-v1](.archive/hist-v1.md) | superseded → dataspection-v1 (primitives) + session-host-v1 (index) |
+| [par-jobs-v1](.archive/briefs/par-jobs-v1.md) | landed 2026-08-21; amended 2026-08-22 (dataspection consumption) |
+| [dataspection-v1](.archive/briefs/dataspection-v1.md) | landed 2026-08-22; archived |
+| [layering-v1](.archive/briefs/layering-v1.md) | landed A 2026-08-22; archived |
+| [hist-v1](.archive/briefs/hist-v1.md) | superseded → dataspection-v1 (primitives) + session-host-v1 (index) |
 | [session-host-v1](briefs/session-host-v1.md) | filed, not started; parallel track |
-| [xq-v1](briefs/xq-v1.md) | landed 2026-08-22 |
-| [rg-wrapper-v1](briefs/rg-wrapper-v1.md) | landed 2026-08-22; consumes xq-v1 capture, not ordinary `xq` |
+| [xq-v1](briefs/xq-v1.md) | landed 2026-08-22; composition hardening pending |
+| [rg-wrapper-v1](briefs/rg-wrapper-v1.md) | landed 2026-08-22; composition hardening pending |
+| [composition-v1](briefs/composition-v1.md) | filed 2026-08-23; blocks query consumers and gh-v1 |
 | [write-conventions-v1](notes/write-conventions-v1.md) | filed; governs every write (state vs scratch, locality, chronology, precedence) |
-| [gh-v1](briefs/gh-v1.md) | filed, not started; depends on xq-v1; needs `gh` ≥ 2.40 in `deps/cli` |
+| [gh-v1](briefs/gh-v1.md) | filed, blocked on composition-v1; then needs `gh` ≥ 2.40 in `deps/cli` |
