@@ -236,7 +236,7 @@ text mode the string is inline only under cap, otherwise stashed.
 ## Follow-up report
 
 - Landed 2026-08-22. `modules/rg/mod.nu` (`--env --wrapped main`); `config.nu`
-  `use rg *` after xq. Corpus: `references/search.md`. Adapters: Claude/Grok.
+  `use rg *` after xq. Corpus: `references/search.md`. Adapters: Claude/Grok/Codex.
 - Child tests: `nu -n mcp/nushell-mcp/tests/rg-v1.nu` — 13/13 (no match, unknown
   flag, small json, json-once, text version/list, `-C` context, `-e`, over-cap
   spine, text over-cap, monotonic tags, rg absent, `help rg`, in-job no stash).

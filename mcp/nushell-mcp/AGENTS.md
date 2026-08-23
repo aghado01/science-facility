@@ -41,9 +41,10 @@ them in the decisions file.
 1. **Documented, not encoded — and not landed until documented.**
    Verbs name the dispatch; shapes, error stances, and idioms live in
    the `main` docstring (`help <verb>`), in `skills/nushell/references/*.md`,
-   and in the Claude-side adapter skill (`~/.claude/skills/nushell-mcp`).
-   A landing updates all three **in the same change**. A module without
-   its reference entry is not landed.
+   and in the client adapters (`~/.claude/skills/nushell-mcp`,
+   `~/.grok/skills/nushell-mcp`, `~/.codex/skills/nushell-mcp`).
+   A landing updates the docstring, the corpus page, and those adapters
+   **in the same change**. A module without its reference entry is not landed.
 2. **Briefs are the spec.** Work from `issues/nushell-mcp/briefs/<x>.md`;
    amend in place, do not fork. Append a **Follow-up report** entry on
    landing: outcome, tests run, deviations.

@@ -181,7 +181,7 @@ throw. `rg` must not appear in xq's tests as a caller of ordinary `xq`.
 
 ## Follow-up report
 
-- Landed 2026-08-22. `modules/core/capture.nu` (`process capture`, `--wrapped`, not `main`); `modules/xq/mod.nu` (`--env --wrapped main`); `config.nu` `use xq *` after dataspection. Corpus: `references/jobs.md` `xq` section. Adapters: Claude/Grok.
+- Landed 2026-08-22. `modules/core/capture.nu` (`process capture`, `--wrapped`, not `main`); `modules/xq/mod.nu` (`--env --wrapped main`); `config.nu` `use xq *` after dataspection. Corpus: `references/jobs.md` `xq` section. Adapters: Claude/Grok/Codex.
 - Child tests: `nu -n mcp/nushell-mcp/tests/xq-v1.nu` — 8/8 (exit 0, non-zero, not found, empty argv, stdin, over cap stash, monotonic tags, in-job no stash). Regression: dataspection-v1 13/13, par-jobs-v1 29/29.
 - Deviations:
   - Capture miss/empty records include `ok`, `cmd`, `args` so xq can map them; success capture stays `{stdout, stderr, exit_code, elapsed}`.
