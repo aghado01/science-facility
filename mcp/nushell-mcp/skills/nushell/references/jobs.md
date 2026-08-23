@@ -122,6 +122,6 @@ Registry and `$history` die with the MCP child. When a store appears later: iden
 
 `xq <cmd> [...args]` (`--wrapped`). Runs `process capture`, then stream census vs `par cap`. Under cap, `stdout`/`stderr` inline. Over cap, stash `{stdout, stderr}` with `--prefix xq:<stem>` and return census + the **confirmed** `tag` (no streams). `ok` is `exit_code == 0` and any required stash succeeded. Child non-zero is `ok: false` with streams, no `error`. Missing binary: `error` starts `not found:`, `exit_code: null`.
 
-`process capture` (`core/capture.nu`) is unbounded full streams — for wrappers (rg), not the agent default. Skills say `xq`.
+`process capture` (`core/capture.nu`) is unbounded full streams — for wrappers (rg), not the agent default. Skills say `xq`. Capture `ok: true` means the spawn ran (child `exit_code` may be non-zero). Streams are `string` or `binary`, sized with `stream bytes` (not `shape.bytes`). Missing binaries normalize to `not found: <cmd>` when the diagnostic matches; other spawn failures keep their short error.
 
 Inside `jobs spawn { xq ... }`: never stash; the job row is the quarantine. Drill: `jobs fetch <tag>` then `.stderr | lines`. Do not attach stdin unless `$in` is not `nothing`.

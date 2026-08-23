@@ -17,7 +17,7 @@ amendment, do not fork this file.
 
 | # | Status | Decision |
 |---|---|---|
-| N18 | carried | Terminal streams are string or binary and are measured as returned; unsupported values fail closed. Ripgrep byte-backed JSON is explicit unsupported-encoding failure in this cut. [composition-v1](../briefs/composition-v1.md) |
+| N18 | landed | Terminal streams are string or binary and are measured as returned; unsupported values fail closed. Ripgrep byte-backed JSON is explicit unsupported-encoding failure in this cut. [composition-v1](../briefs/composition-v1.md) 2026-08-23 |
 | N17 | landed | The persistent foreground registry allocates generated tags and callers publish a retrieval `tag` only after storage succeeds. Background jobs and parallel workers never claim local registry mutation persisted. [composition-v1](../briefs/composition-v1.md) 2026-08-23 |
 | N16 | landed | `ok` is universal at outcome-bearing boundaries, not arbitrary records. `par` / `jobs` summarize declared returned outcomes while retaining the original value; jobs lifecycle `status` remains separate. [composition-v1](../briefs/composition-v1.md) 2026-08-23 |
 | N1 | landed | `nu --mcp` is the engine protocol, not the product surface. Thin host later. [session-host-v1](../briefs/session-host-v1.md) |

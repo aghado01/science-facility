@@ -21,7 +21,7 @@ Injects `--json` once if absent. No other flag rewrite. Mode is decided on the *
 - `ok`: exit 0 or 1 (no match is `ok: true, n: 0`). Exit 2 → `ok: false`, short `error`.
 - `mode`: `json | text`.
 - json census from the `summary` event: `n` = `matched_lines`, `n_files` = `searches_with_match`.
-- `bytes`: NUON of the findings table (json) or UTF-8 of stdout (text), vs `par cap`.
+- `bytes`: NUON of the findings table (json) or `stream bytes` of stdout (text), vs `par cap`. A binary capture stream is `ok: false`. Ripgrep `path.bytes` / `lines.bytes` without text is unsupported encoding (`ok: false`), never `match: ""`.
 - json: `findings` iff not truncated; `spine` iff truncated. Never both.
 - text: `text` iff not truncated; no spine.
 - `tag` iff stashed (registry-allocated `rg:<n>` on the envelope). `jobs fetch` that tag; do not predict the suffix.

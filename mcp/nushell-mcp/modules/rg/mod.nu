@@ -7,12 +7,9 @@ use core/spine.nu *
 use core/meta.nu ["meta stamp"]
 use core/failure.nu ["failure fields"]
 use core/execution.nu ["execution context"]
+use core/stream.nu ["stream bytes"]
 use jobs ["jobs stash"]
 use par ["par cap"]
-
-def utf8-bytes [s]: nothing -> int {
-    try { $s | str length --utf-8-bytes } catch { 0 }
-}
 
 def rg-has-json [args: list]: nothing -> bool {
     $args | any {|a| $a == "--json"}
@@ -25,6 +22,15 @@ def rg-strip-nl [s: string]: nothing -> string {
 def rg-error-short [stderr: string]: nothing -> string {
     let line = ($stderr | lines | first | default "")
     if ($line | str length) <= 240 { $line } else { $line | str substring ..<240 }
+}
+
+def rg-bytes-only [obj]: nothing -> bool {
+    let d = (try { $obj | describe } catch { "other" })
+    if not ($d | str starts-with "record") { return false }
+    let cols = (try { $obj | columns } catch { [] })
+    if not ("bytes" in $cols) { return false }
+    let text = (try { $obj.text } catch { null })
+    ($text == null) or ((try { $text | describe } catch { "other" }) != "string")
 }
 
 def rg-elapsed-from-summary [sum]: nothing -> any {
@@ -52,6 +58,17 @@ def rg-parse [stdout: string] {
     }
     if ($parsed | any {|r| ($r.type? | default "") == ""}) {
         return {mode: "text"}
+    }
+    let events = ($parsed | where type in ["match" "context"])
+    let encoding = (
+        try {
+            $events | any {|ev|
+                (rg-bytes-only ($ev.data.path? | default {})) or (rg-bytes-only ($ev.data.lines? | default {}))
+            }
+        } catch { false }
+    )
+    if $encoding {
+        return {mode: "encoding", error: "unsupported encoding"}
     }
     let raw_findings = (
         $parsed
@@ -127,10 +144,20 @@ export def --env --wrapped main [...args] {
         let err = (rg-error-short $stderr)
         return (rg-fail $forwarded (if $err == "" { $"rg exit ($code)" } else { $err }) $elapsed_wall)
     }
+    if (($stdout | describe) == "binary") or (($stderr | describe) == "binary") {
+        return (rg-fail $forwarded "binary stream" $elapsed_wall)
+    }
     let parsed = (rg-parse $stdout)
+    if $parsed.mode == "encoding" {
+        return (rg-fail $forwarded ($parsed.error? | default "unsupported encoding") $elapsed_wall)
+    }
     let ctx = (execution context)
     if $parsed.mode == "text" {
-        let bytes = (utf8-bytes $stdout)
+        let sm = ($stdout | stream bytes)
+        if $sm.ok == false {
+            return (rg-fail $forwarded $sm.error $elapsed_wall)
+        }
+        let bytes = $sm.bytes
         let over = ($bytes > (par cap))
         mut rec = {
             ok: true

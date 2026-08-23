@@ -4,12 +4,9 @@
 use core/capture.nu ["process capture"]
 use core/meta.nu ["meta stamp"]
 use core/execution.nu ["execution context"]
+use core/stream.nu ["stream bytes"]
 use jobs ["jobs stash"]
 use par ["par cap"]
-
-def utf8-bytes [s]: nothing -> int {
-    try { $s | str length --utf-8-bytes } catch { 0 }
-}
 
 def xq-stem [cmd: string]: nothing -> string {
     $cmd | path basename | str replace -a '.exe' '' | str replace -a '.EXE' ''
@@ -60,8 +57,16 @@ export def --env --wrapped main [...args] {
     }
     let stdout = ($capd.stdout | default "")
     let stderr = ($capd.stderr | default "")
-    let out_b = (utf8-bytes $stdout)
-    let err_b = (utf8-bytes $stderr)
+    let out_m = ($stdout | stream bytes)
+    let err_m = ($stderr | stream bytes)
+    if ($out_m.ok == false) or ($err_m.ok == false) {
+        let err = (
+            if $out_m.ok == false { $out_m.error } else { $err_m.error }
+        )
+        return (xq-fail $cmd $tail $err ($capd.elapsed? | default 0sec))
+    }
+    let out_b = $out_m.bytes
+    let err_b = $err_m.bytes
     let elapsed = ($capd.elapsed? | default 0sec)
     let code = $capd.exit_code
     let ctx = (execution context)

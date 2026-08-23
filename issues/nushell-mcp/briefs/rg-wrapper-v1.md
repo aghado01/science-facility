@@ -1,7 +1,7 @@
 # `rg` wrapper v1 — disciplined search returns in nushell-mcp
 
 **Status:** landed v1 · **Hardening:**
-[composition-v1](composition-v1.md) filed, not landed ·
+[composition-v1](composition-v1.md) landed 2026-08-23 ·
 **Filed:** 2026-08-20 · **Landed:** 2026-08-22 · **Home:**
 `mcp/nushell-mcp`, Nu-native module, used only through `evaluate`.
 **Depends on:** [layering-v1](../.archive/briefs/layering-v1.md),

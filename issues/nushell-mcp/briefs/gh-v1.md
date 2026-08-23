@@ -1,7 +1,7 @@
 # `gh` module v1 — workspace-routed GitHub identity
 
-**Status:** filed, blocked on
-[composition-v1](composition-v1.md) · **Filed:** 2026-08-22 · **Home:**
+**Status:** filed, unblocked (composition-v1 landed 2026-08-23) ·
+**Filed:** 2026-08-22 · **Home:**
 `mcp/nushell-mcp/modules/gh`, Nu-native. **Depends on:**
 [xq-v1](xq-v1.md) (ordinary terminal `xq`, not `process capture`),
 [composition-v1](composition-v1.md); the shape in

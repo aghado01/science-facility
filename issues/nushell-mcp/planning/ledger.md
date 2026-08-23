@@ -3,6 +3,12 @@
 Newest first. Point at commits and briefs. Counts are from the commit
 they were observed at, not standing claims.
 
+- **2026-08-23 — composition stream cut.** `core/stream.nu`; `process capture`
+  `ok` is spawn success (exit independent); string/binary streams sized as
+  returned; `rg` rejects binary streams and `path.bytes`/`lines.bytes`. Child
+  tests: composition-v1 31/31, par-jobs-v1 29/29, dataspection-v1 13/13,
+  xq-v1 8/8, rg-v1 13/13. N18 landed. composition-v1 landed.
+
 - **2026-08-23 — composition ownership cut.** `core/execution.nu`; `par` marks
   workers via `with-env`; `jobs stash --prefix` allocates against existing tags;
   harvest/drain are owner-only. `xq`/`rg`/`read`/`emit` use the three-context

@@ -1,6 +1,6 @@
 # composition v1 — outcomes and payload ownership
 
-**Status:** outcome and ownership cuts landed 2026-08-23; stream pending · **Filed:** 2026-08-23 · **Home:**
+**Status:** landed 2026-08-23 · **Filed:** 2026-08-23 · **Home:**
 `mcp/nushell-mcp/modules/core`, Nu-native dependency units consumed by
 `par`, `jobs`, `dataspection`, `xq`, and `rg`.
 **Amends:** [par-jobs-v1](../.archive/briefs/par-jobs-v1.md),
@@ -292,6 +292,11 @@ acceptance case for `exit.ok: true` plus returned `data.ok: false`.
 
 ## Follow-up report
 
+- **2026-08-23 — stream cut.** `modules/core/stream.nu`. Capture `ok: true` on
+  successful spawn; missing-binary normalized from error+trace; xq sizes
+  string/binary via `stream bytes` and stashes exact bytes; rg fails closed
+  on binary streams and `path.bytes`/`lines.bytes`. Child tests:
+  composition-v1 31/31 plus regressions. N18 landed. Brief landed.
 - **2026-08-23 — ownership cut.** `modules/core/execution.nu`. `par` wraps
   `par-each` in `with-env` (`NU_EXEC_WORKER` / `NU_EXEC_IN_JOB`). `jobs`
   harvest/drain refuse off-owner; `stash --prefix` allocates `$prefix:<n>`

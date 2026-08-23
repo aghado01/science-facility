@@ -2,14 +2,22 @@
 #   nu -n mcp/nushell-mcp/tests/composition-v1.nu
 
 const MODULES_DIR = (path self | path dirname | path dirname | path join modules)
+const CLI = (path self | path dirname | path dirname | path join deps cli)
 const NU_LIB_DIRS = [$MODULES_DIR]
 const JOBS_MBOX = 0x4A4F4253
+
+if ($CLI | path exists) {
+    $env.PATH = ($env.PATH | prepend $CLI)
+}
 
 use par *
 use jobs *
 use dataspection *
 use xq *
+use rg *
 use core/outcome.nu ["outcome project"]
+use core/stream.nu ["stream bytes"]
+use core/capture.nu ["process capture"]
 
 def assert-eq [left, right, msg: string] {
     if $left != $right {
@@ -277,6 +285,62 @@ let results = [
         assert-eq $envl.truncated false "not truncated"
         assert-true ("findings" in ($envl | columns)) "findings inline"
         assert-true ("tag" not-in ($envl | columns)) "no emit tag"
+    })
+    (t "stream bytes string binary record" {
+        let s = ("hello" | stream bytes)
+        assert-eq $s.ok true "string ok"
+        assert-eq $s.bytes 5 "utf8"
+        let b = (0x[00 ff 80] | stream bytes)
+        assert-eq $b.ok true "binary ok"
+        assert-eq $b.bytes 3 "binary len"
+        let r = ({a: 1} | stream bytes)
+        assert-eq $r.ok false "record fails"
+        assert-eq $r.bytes null "no zero fallback"
+    })
+    (t "capture success ok independent of exit" {
+        let exe = $nu.current-exe
+        let c = (process capture $exe -n -c "exit 2")
+        assert-eq $c.ok true "capture ran"
+        assert-eq $c.exit_code 2 "child exit"
+        assert-eq $c.cmd $exe "cmd"
+        assert-eq $c.args [-n -c "exit 2"] "args"
+        let miss = (process capture definitely-not-a-cmd-xyz --flag)
+        assert-eq $miss.ok false "miss"
+        assert-eq $miss.args [--flag] "args preserved"
+        assert-true (($miss.error | default "") | str starts-with "not found:") "normalized"
+    })
+    (t "binary stdout over cap stashed byte-for-byte" {
+        let exe = $nu.current-exe
+        let dir = ($nu.temp-dir | path join $"comp-bin-($nu.pid)")
+        mkdir $dir
+        mut acc = 0x[]
+        for _ in 1..200 { $acc = ($acc ++ 0x[ff]) }
+        let f = ($dir | path join "big.bin")
+        $acc | save --raw $f
+        $env.NU_PAR = ($env.NU_PAR | upsert max_inline_bytes 20)
+        let r = (xq $exe -n -c $"open --raw ($f | to nuon --raw)")
+        $env.NU_PAR = ($env.NU_PAR | upsert max_inline_bytes null)
+        assert-eq $r.truncated true "truncated"
+        assert-true ("stdout" not-in ($r | columns)) "no inline"
+        assert-true ($r.tag != null) "tag"
+        let body = (jobs fetch $r.tag)
+        assert-eq $body.stdout $acc "byte-for-byte"
+        try { rm -r $dir } catch { }
+    })
+    (t "rg byte-backed line is unsupported encoding" {
+        if (which rg | is-empty) {
+            error make {msg: "rg not on PATH"}
+        }
+        let dir = ($nu.temp-dir | path join $"comp-rg-($nu.pid)")
+        mkdir $dir
+        let f = ($dir | path join "a.txt")
+        0x[6e 65 65 64 6c 65 ff 0a] | save --raw $f
+        let r = (rg needle $f)
+        try { rm -r $dir } catch { }
+        assert-eq $r.ok false "ok"
+        assert-true (($r.error | default "") | str contains "encoding") "encoding"
+        assert-true ("findings" not-in ($r | columns)) "no findings"
+        assert-true ("match" not-in ($r | columns)) "no match field"
     })
     (t "worker stash spawn cancel fail as data" {
         let rows = ([1] | par {|_| "x" | jobs stash --tag w })

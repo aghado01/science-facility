@@ -142,13 +142,12 @@ context window as the scarcest resource in the loop:
    · **landed** 2026-08-22. Consumes `process capture` + `spine`, not
    ordinary `xq`. (The module; ripgrep itself is in `deps/cli`.)
 5a. **result composition hardening** —
-   [briefs/composition-v1.md](briefs/composition-v1.md) · **filed, not
-   landed** 2026-08-23. Outcome-bearing `ok` composes through
-   `par`/`jobs` without discarding values; jobs lifecycle remains a
-   separate fact. The foreground registry allocates retrieval tags and
-   owns payload quarantine; capture measures string/binary streams as
-   returned. Blocks 6 and `gh-v1`; does not block the transport-only H
-   track.
+   [briefs/composition-v1.md](briefs/composition-v1.md) · **landed**
+   2026-08-23. Outcome-bearing `ok` composes through `par`/`jobs`
+   without discarding values; jobs lifecycle remains a separate fact.
+   The foreground registry allocates retrieval tags and owns payload
+   quarantine; capture measures string/binary streams as returned.
+   Unblocks 6 and `gh-v1`.
 6. **Query tools on the envelope** — mdnav_v2 chunk shards, `nu-skills
    search` fan-out. First real parallelism consumers. Align the chunk
    shape with mdnav_v2's brief rather than inventing twice.
@@ -207,8 +206,8 @@ here. Term senses — whose word is whose — are in
 | [layering-v1](.archive/briefs/layering-v1.md) | landed A 2026-08-22; archived |
 | [hist-v1](.archive/briefs/hist-v1.md) | superseded → dataspection-v1 (primitives) + session-host-v1 (index) |
 | [session-host-v1](briefs/session-host-v1.md) | filed, not started; parallel track |
-| [xq-v1](briefs/xq-v1.md) | landed 2026-08-22; composition hardening pending |
-| [rg-wrapper-v1](briefs/rg-wrapper-v1.md) | landed 2026-08-22; composition hardening pending |
-| [composition-v1](briefs/composition-v1.md) | filed 2026-08-23; blocks query consumers and gh-v1 |
+| [xq-v1](briefs/xq-v1.md) | landed 2026-08-22; composition hardening landed 2026-08-23 |
+| [rg-wrapper-v1](briefs/rg-wrapper-v1.md) | landed 2026-08-22; composition hardening landed 2026-08-23 |
+| [composition-v1](briefs/composition-v1.md) | landed 2026-08-23 |
 | [write-conventions-v1](notes/write-conventions-v1.md) | filed; governs every write (state vs scratch, locality, chronology, precedence) |
-| [gh-v1](briefs/gh-v1.md) | filed, blocked on composition-v1; then needs `gh` ≥ 2.40 in `deps/cli` |
+| [gh-v1](briefs/gh-v1.md) | filed; composition-v1 unblocked; then needs `gh` ≥ 2.40 in `deps/cli` |

@@ -1,7 +1,7 @@
 # `xq` v1 — execute-and-quarantine for externals
 
 **Status:** landed v1 · **Hardening:**
-[composition-v1](composition-v1.md) filed, not landed ·
+[composition-v1](composition-v1.md) landed 2026-08-23 ·
 **Filed:** 2026-08-21 · **Landed:** 2026-08-22 · **Home:**
 `mcp/nushell-mcp/modules/xq`, Nu-native, used only through `evaluate`.
 **Depends on:** [layering-v1](../.archive/briefs/layering-v1.md) (N9 landed in code first),
