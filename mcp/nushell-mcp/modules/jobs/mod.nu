@@ -11,9 +11,10 @@ export-env {
     }
 }
 
-# `shape` / `meta stamp` live in dataspection. Import here so private helpers
-# resolve them; overlay `use *` does not leak into this module's scope.
-use dataspection *
+# Overlay `use *` does not leak into this module's scope. Import cores and par here.
+use core/census.nu [shape]
+use core/meta.nu ["meta stamp"]
+use par ["par cap" "par budget" "par emit"]
 
 # --- pure helpers -------------------------------------------------------------
 
@@ -22,27 +23,9 @@ def jobs-short [msg: string]: nothing -> string {
     if ($line | str length) <= 240 { $line } else { $line | str substring 0..239 }
 }
 
-def jobs-shape [payload] {
-    try { $payload | shape } catch { null }
-}
-
-# Census via dataspection `shape` when present (one `bytes` definition). Fallback is local NUON length.
 def jobs-census [payload]: nothing -> record {
-    let s = (jobs-shape $payload)
-    if $s != null {
-        {bytes: $s.bytes, type: $s.type, length: $s.length}
-    } else {
-        let typ = ($payload | describe)
-        let bytes = (try { $payload | to nuon --raw | str length --utf-8-bytes } catch { 0 })
-        let length = (
-            if $typ =~ '^(table|list)' {
-                try { $payload | length } catch { null }
-            } else if $typ == "string" {
-                try { $payload | str length --utf-8-bytes } catch { null }
-            } else { null }
-        )
-        {bytes: $bytes, type: $typ, length: $length}
-    }
+    let s = ($payload | shape)
+    {bytes: $s.bytes, type: $s.type, length: $s.length}
 }
 
 def jobs-stamp-receipt [
@@ -302,17 +285,10 @@ export def --env "jobs inspect" [
     }
     let payload = $row.output
     if $payload != null {
-        let s = (jobs-shape $payload)
-        if $s != null {
-            $rec = ($rec | upsert type $s.type | upsert length $s.length | upsert bytes $s.bytes)
-            if ("columns" in ($s | columns)) {
-                $rec = ($rec | upsert columns ($s.columns | get name))
-            }
-        } else {
-            let d = ($payload | describe)
-            if $d =~ '^table' {
-                $rec = ($rec | insert columns ($payload | columns))
-            }
+        let s = ($payload | shape)
+        $rec = ($rec | upsert type $s.type | upsert length $s.length | upsert bytes $s.bytes)
+        if ("columns" in ($s | columns)) {
+            $rec = ($rec | upsert columns ($s.columns | get name))
         }
     }
     jobs-stamp-receipt $rec "jobs.inspect" --tag $row.tag --elapsed $row.elapsed
@@ -335,7 +311,7 @@ export def --env "jobs read" [
     }
     let census = (jobs-census $payload)
     let bytes = $census.bytes
-    let cap = (try { par cap } catch { 20000 })
+    let cap = (par cap)
     if $bytes == null or $bytes <= $cap {
         return $payload
     }

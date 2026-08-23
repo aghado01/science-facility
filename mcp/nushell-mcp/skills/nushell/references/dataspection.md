@@ -70,7 +70,9 @@ Never `each {|i| ... | page $i}` in one evaluate. `$history | shape each` is the
 
 **`preview [--chars 200] [--items 5] [--mode head|tail|sandwich]`** — strings `… [+N chars]`, lists `[+K more]`, records keep every key. Idempotent.
 
-**`read`** (`--env`) — under cap, the value; over cap, `jobs stash` and `{ok: true, disclosed: false, tag, bytes, retrieve, meta.verb: "read"}`. `retrieve` is `jobs read <tag> --full`. Cap is `par cap`. Peek, not pop. Jobs missing → `{ok: false, disclosed: false, error, trace}`. `jobs read` is the same cap rule for an addressed payload (`--full` always returns the stored body).
+**`read`** (`--env`) — under cap, the value; over cap, `jobs stash` and `{ok: true, disclosed: false, tag, bytes, retrieve, meta.verb: "read"}`. `retrieve` is `jobs read <tag> --full`. Cap is `par cap`. Peek, not pop. Façade statically `use`s `jobs stash`; a session without jobs cannot load `dataspection`. `jobs read` is the same cap rule for an addressed payload (`--full` always returns the stored body).
+
+Census/schema/spine/views/meta live in `modules/core/*.nu`; this module re-exports them. `value.*` / `failure fields` are not on `use dataspection *`.
 
 **`meta`** — `{verb, at, tag?, elapsed?, ref?}` or `null`. Not the builtin `metadata` (pipeline `{span}`, stripped in `$history`).
 

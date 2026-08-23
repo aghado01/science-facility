@@ -222,22 +222,17 @@ let results = [
         assert-eq $v (long-str 20) "peek not pop"
         $env.NU_PAR = ($env.NU_PAR | upsert max_inline_bytes null)
     })
-    (t "read jobs missing" {
-        let exe = $nu.current-exe
-        let snippet = [
-            $"const NU_LIB_DIRS = [($MODULES_DIR | to nuon)]"
-            "use dataspection *"
-            "$env.NU_PAR = {max_inline_bytes: 10}"
-            "let s = (1..30 | each { 'xxxx' } | str join)"
-            "$s | read | to nuon --raw"
-        ] | str join (char nl)
-        let out = (^$exe -n -c $snippet | complete)
-        assert-eq $out.exit_code 0 "child ok"
+    (t "read over cap via --config" {
+        let cfg = ($MODULES_DIR | path dirname | path join config.nu)
+        let script = '$env.NU_PAR = ($env.NU_PAR | upsert max_inline_bytes 20); let v = (1..20 | each { "xxxx" } | str join); $v | read | to nuon --raw'
+        let out = (^$nu.current-exe --config $cfg -c $script | complete)
+        assert-eq $out.exit_code 0 "config child ok"
         let val = ($out.stdout | str trim | from nuon)
-        assert-eq $val.ok false "ok false"
+        assert-eq $val.ok true "decline ok"
         assert-eq $val.disclosed false "not disclosed"
-        assert-true ($val.error | str contains "jobs") "error names jobs"
-        assert-true (($val.trace | str length) > 0) "trace"
+        assert-true ($val.tag != null) "tag"
+        assert-eq $val.retrieve $"jobs read ($val.tag) --full" "retrieve"
+        assert-eq $val.meta.verb "read" "stamped"
     })
     (t "null and empty string" {
         assert-eq (null | shape | get type) "nothing" "shape null"

@@ -3,6 +3,11 @@
 Newest first. Point at commits and briefs. Counts are from the commit
 they were observed at, not standing claims.
 
+- **2026-08-22 — layering A landed** (`modules/core/*.nu`, dataspection
+  façade). `--config` over-cap `read` declines; overlay has `shape`/`read`
+  not `value nuon`. Child tests: dataspection-v1 13/13, par-jobs-v1 27/27.
+  N9 landed. Next: N10 (`jobs fetch`) then xq (`core/capture.nu`).
+
 - **2026-08-22 — N9 ruled A** (docs, not code). `layering-v1` frozen:
   `modules/core/*.nu` file units, dataspection façade. B / `dataspection-core`
   / `nushell-mcp-core` rejected. N11 carried into xq-v1 (`process capture`).

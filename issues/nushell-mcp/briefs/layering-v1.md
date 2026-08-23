@@ -255,4 +255,10 @@ follow-up. Sequence: this cut, then N10 (`jobs fetch`), then xq-v1
 
 ## Follow-up report
 
-_Chip or implementer: outcome, `--config` smoke, child suites, deviations._
+- Landed 2026-08-22. Tree as spec: `modules/core/{failure,value,census,schema,spine,views,meta}.nu`; façade `dataspection/mod.nu` (`export use` those, `use jobs ["jobs stash"]`, `use par ["par cap"]`, owns `read`). `par` `use core/census.nu [shape]`; `jobs` `use core/census.nu [shape]`, `core/meta.nu ["meta stamp"]`, `par ["par cap" "par budget" "par emit"]`. No `capture.nu`.
+- Child tests: `nu -n mcp/nushell-mcp/tests/dataspection-v1.nu` — 13/13 (jobs-missing replaced by `--config` over-cap `read`); `par-jobs-v1.nu` — 27/27.
+- `--config` smoke: over-cap `$x | read` → decline + `retrieve: jobs read <tag> --full`. Overlay has `shape`/`read`, not `value nuon` / `failure fields`.
+- Deviations:
+  - `schema.nu` / `spine.nu` / `meta.nu` export the noun as `main` (Nu forbids `export def` named the same as the file stem). After `use`/`export use *` the command is still `schema` / `spine` / `meta`.
+  - `read` uses `$x | shape` for `bytes` (not `value nuon` directly).
+- Not this landing: `jobs fetch` (N10), `core/capture.nu` (N11 / xq-v1).

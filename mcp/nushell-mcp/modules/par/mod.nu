@@ -5,7 +5,7 @@
 const SELF_DIR = (path self | path dirname)
 
 # `shape` for the one `bytes` definition. Overlay `use *` does not leak into this module.
-use dataspection [shape]
+use core/census.nu [shape]
 
 # --- host facts / knobs -------------------------------------------------------
 
@@ -189,7 +189,7 @@ export def main [
 
 # Query envelope: findings + census. `findings` omitted when over max_inline_bytes.
 # Contract for wrappers. Truncate on bytes, not rows. n is row count (flatten first if you need hit count).
-# `bytes` is dataspection `shape`'s definition when `shape` is in overlay.
+# `bytes` is `shape`'s definition.
 export def "par emit" []: any -> record {
     let findings = $in
     let n = (if ($findings | is-empty) { 0 } else { $findings | length })
@@ -202,14 +202,7 @@ export def "par emit" []: any -> record {
             try { $findings | get elapsed | compact | math max } catch { null }
         } else { null }
     )
-    let s = (try { $findings | shape } catch { null })
-    let bytes = (
-        if $s != null {
-            $s.bytes?
-        } else {
-            try { $findings | to nuon --raw | str length --utf-8-bytes } catch { 0 }
-        }
-    )
+    let bytes = ($findings | shape | get bytes)
     let cap = (par cap)
     let truncated = (if $bytes == null { true } else { $bytes > $cap })
     let envelope = {
