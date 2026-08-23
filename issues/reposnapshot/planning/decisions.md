@@ -13,6 +13,12 @@ deliberate exception being "fixed" by someone who reads it as an oversight.
 Status vocabulary: `settled` · `leaning` (direction stated, not final) · `open` ·
 `superseded`.
 
+## Wire rendering (2026-08-22)
+
+| # | decision | why it is consequential | status | source |
+|---|---|---|---|---|
+| 49 | **A row is a list of ITEMS joined by exactly one space.** Items are values, keys (a key carries its trailing colon), and the structural marks `\|` `[` `]` `,` — every mark is its own item, so no mark abuts a value. A sub-grammar with its own internal syntax (a type expression `int(4)`, the encoded content span) renders itself FIRST and enters as **one** item; its internal spacing is its own business. Header: `gidx: int(4) \| path: string \| content_meta: [ line_mean: double , num_chars: int ] \| content_bytes: int \| content: string`. Record: `0003 \| TODO.md \| [ 103.4146 , 4281 ] \| 4328 \| <span>`. **There is no padding property and must not be one** — padding is what the join does | **It is a simplification, not a decoration.** Deletes the framing quartet (`FieldDelimiter` · `BlockOpen` · `BlockClose` · `BlockDelimiter`) in favour of one join rule, and makes the writer's arithmetic exact by construction: **row bytes = Σ item bytes + (item count − 1) + record_delimiter**, with nothing hidden inside a concatenation (today the block's internal delimiters are buried in one pre-assembled piece). Templates become item *arrays* and stop carrying spacing, so the declaration states the rule once instead of per mark — the property that survives a language port (#2). **The token argument is noise and was not the reason**: measured on a real 4.6 MB payload the spacing costs **+0.046%** against fully-tight, and buys back the one genuine boundary artifact — under tight `\|` the token `]\|` merged the block close with the column separator in **102/102** rows; padded, zero straddles at any depth. **Lexing stays structural** (split on `" \| "`, then `" , "`), never a bare whitespace split: items may contain spaces — content does, and `path` did in **23.5%** of a real corpus (chat-export fixtures). Reinforces #45: with marks as items there is no trailing-mark item to drop | settled 2026-08-22 | `container.spec.jsonc` v0.4 §`shard_container_schema.item_join` + §invariants; this session |
+
 ## Shard packing (2026-08-16)
 
 | # | decision | why it is consequential | status | source |

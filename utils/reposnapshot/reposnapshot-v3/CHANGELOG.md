@@ -1,5 +1,28 @@
 # Changelog 
 
+## 2026-08-22 — psr wire settled: rows are item lists joined by one space (decision #49)
+
+`container.spec.jsonc` → **v0.4**. `item_join: " "` is the whole spacing rule: a
+row is a list of items — values, keys (a key carries its trailing colon), and
+the marks `|` `[` `]` `,` — joined by exactly one space; a sub-grammar
+(`int(4)`, the encoded content span) renders itself first and enters as ONE
+item. Header now reads `gidx: int(4) | path: string | content_meta: [
+line_mean: double , … ] | content_bytes: int | content: string`. The
+`*_template` keys became **item arrays** (`["${name}:", "${record_type}"]`) and
+no longer carry spacing; `${cells}` splices. `record_pattern`s updated for the
+join on both the leader and the `content_meta` cell; the element class
+deliberately still admits spaces so a future string sub-field stays expressible.
+Two invariants added. **No padding property, by design** — padding is what the
+join does, so the framing quartet (`FieldDelimiter · BlockOpen · BlockClose ·
+BlockDelimiter`) leaves `rs.core.container` rather than being renamed, and row
+bytes become `Σ item bytes + (n−1) + terminator`, exact by construction.
+Measured before choosing: the spacing costs +0.046% tokens on a real 4.6 MB
+payload and removes the `]|` merge that tight `|` produced in 102/102 rows.
+Declaration verified sufficient by a throwaway interpreter that renders the
+header from the spec alone (byte identity 175 = 175). **The module is not yet
+realigned** — battery stays 16 · 937 · 1; see roadmap
+§container-spec-realignment, now scoped as five deltas.
+
 ## 2026-08-17 — rs.core.container landed (psr layout, codec, header/row pair)
 
 `rs.core.container.psm1` — export phase 0. `Resolve-Layout(-Header

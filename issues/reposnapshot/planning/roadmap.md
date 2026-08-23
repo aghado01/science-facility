@@ -20,19 +20,47 @@ The psr declaration was restructured and renamed (`schema/psr.header.json` →
 `contracts/container.spec.jsonc`, 2026-08-18), and the change has not reached the
 module that reads it.
 
-1. **`Resolve-Layout` still reads `$decl.columns`**
-   ([rs.core.container.psm1:208](../../../utils/reposnapshot/reposnapshot-v3/rs.core.container.psm1));
-   the spec now nests the column register under `shard_container_schema`, so the
-   lookup yields null and the suite aborts at its first case. Top-level keys are
-   now `format · name · version · description · properties · conventions ·
-   shard_container_schema · invariants`.
-2. **Sweep the rest of the module for the old shape** — `content_meta` sub-field
-   admissibility and the `source_grammar` check read the same declaration.
-3. **Re-run the battery.** Today it is **16 suites · 937 passed · 1 failed**, and
-   the shortfall is exactly `container.tests.ps1`'s 70 asserts — 937 + 70 = the
-   1007 recorded at the container landing, so nothing else regressed with it.
+Scoped 2026-08-22: it is **five deltas, not a lookup rename**, and one of them
+moves the wire. Battery reproduces **16 suites · 937 passed · 1 failed** at
+`87dcb8c` (verified by running it, 2026-08-22); the shortfall is exactly
+`container.tests.ps1`'s 70 asserts, which abort at load —
+[rs.core.container.psm1:220](../../../utils/reposnapshot/reposnapshot-v3/rs.core.container.psm1).
 
-Exit: battery green, count recorded with the commit it was observed at.
+1. **Column register moved** — `$decl.columns` →
+   `$decl.shard_container_schema.properties`. Top-level keys are now `format ·
+   name · version · description · properties · conventions ·
+   shard_container_schema · invariants`.
+2. **`framing` dissolved** — `encoding`/`bom` are top-level `properties`;
+   `record_delimiter`/`column_separator` sit on `shard_container_schema`; the
+   block's enclosure is a per-column `record_val_enclosure` + `val_separator`.
+   Under #49 the quartet `FieldDelimiter · BlockOpen · BlockClose ·
+   BlockDelimiter` **leaves the layout object entirely** rather than being
+   renamed — the marks are items.
+3. **Per-column vocabulary** — `presence` → `required` (bool), `width` →
+   `record_width`, `type` → `record_type`, `fields` → nested `properties`,
+   `$default_on` → per-sub-field `default: true` ordered by `val_rank`.
+4. **Source binding is a `$ref` crosswalk, not a grammar string** — the four-form
+   `source` read by `Resolve-SourceValue` is now `record_value.$ref` /
+   `val.$ref` into the sibling contracts, and `conventions` requires the accessor
+   be derived from the ref and to **fail at load** if the pointer does not
+   resolve. This is new capability, not a rename, and it is the piece with no
+   test behind it: `contracts.tests.ps1` explicitly excludes `container.spec.jsonc`
+   from stage-contract parsing ([:102](../../../utils/reposnapshot/tests/contracts.tests.ps1)),
+   so the spec is presently a document the suite does not read — decision #6's
+   failure mode on #6's own subject.
+5. **The wire changed** (#49) — header cells render `name: type` from item-array
+   templates, rows are item lists joined by one space. `HeaderRowText`,
+   `Measure-Row`'s delimiter arithmetic, and ~20 expected-string asserts in
+   `container.tests.ps1` all move. Blast radius stops there: `Resolve-Layout` has
+   exactly one consumer suite and shards/serialize are empty files.
+
+A ~40-line interpreter prototype confirms the declaration is **sufficient** —
+it renders the header from the spec alone, with the byte identity
+`Σ items + (n−1)` checking exactly (175 = 175). Port that shape, do not
+hardcode the spacing.
+
+Exit: battery green, count recorded with the commit it was observed at; the
+spec parsed and its `$ref` pointers resolved by a test that runs.
 
 ## Track: export-e2e — *the main line; assemble → shards → serialize → manifest*
 
