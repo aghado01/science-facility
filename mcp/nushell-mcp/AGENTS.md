@@ -12,20 +12,22 @@ package-level rules.
   `--config` (plus identity, when the host lands) and nothing else.
   Sets `NU_LIB_DIRS`, `NU_SKILL_DIR`, prepends `deps/cli` to PATH,
   preloads the modules. Order: `nu-skills`, `nu-modules`, `par`,
-  `jobs`, `dataspection` — runtime primitives, then the access
-  discipline.
-- `modules/` — Nu-native modules loaded into the engine (`par`, `jobs`,
-  `dataspection`, `argx`, `nu-skills`, `nu-modules`, …). Contracts live
-  in docstrings. `jobs` imports `dataspection` at module scope (`shape`,
-  `meta stamp`); overlay load order is still `par`, `jobs`, `dataspection`.
+  `jobs`, `dataspection` — runtime services, then the access façade.
+  Overlay preload is not DI into module bodies ([layering-v1](../../issues/nushell-mcp/briefs/layering-v1.md)).
+- `modules/` — Nu-native modules. `modules/core/*.nu` are dependency
+  file units (`census`, `meta`, `value`, `failure`, …); `par`/`jobs`
+  import those, never `dataspection/mod.nu`. `dataspection` is the
+  façade (`read` + `export use` of core). Overlay order is still
+  `par`, `jobs`, `dataspection`.
 - `skills/nushell/` — the reference corpus (`SKILL.md` +
   `references/*.md`) agents read through `nu-skills`.
 - `deps/` — vendored binaries, gitignored except `README.md`:
   `deps/cli` (rg, fd, jq, …) on PATH; `deps/nushell` the pinned engine
   (`.mcp.json` launches it). `brewery/` holds recipes.
 - `tests/` — child `nu -n` suites, one file per brief
-  (`nu -n mcp/nushell-mcp/tests/<brief>.nu`). A test prints a results
-  table; a suite that cannot run must say so, never report green.
+  (`nu -n mcp/nushell-mcp/tests/<brief>.nu`). Layering also requires a
+  `nu --config config.nu` smoke (`read` over cap). A test prints a
+  results table; a suite that cannot run must say so, never report green.
 - `dev/` — module outtakes and inspiration; nothing here is loaded.
 - `host/` — (planned) the thin TypeScript session host.
 

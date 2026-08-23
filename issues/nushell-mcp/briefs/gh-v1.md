@@ -1,8 +1,9 @@
 # `gh` module v1 — workspace-routed GitHub identity
 
 **Status:** filed, not started · **Filed:** 2026-08-22 · **Home:**
-`mcp/nushell-mcp/modules/gh`, Nu-native. **Depends on:** xq-v1 (return
-path); the shape in [notes/identity-routing.md](../notes/identity-routing.md).
+`mcp/nushell-mcp/modules/gh`, Nu-native. **Depends on:** [xq-v1](xq-v1.md) (ordinary terminal `xq`, not
+`process capture`); the shape in
+[notes/identity-routing.md](../notes/identity-routing.md).
 **Prerequisite:** `gh` ≥ 2.40 (multi-account: `auth token --user`) on
 the child's PATH — vendor into `deps/cli` like ripgrep.
 **Not this brief:** a GitHub API client, curated subcommands, `git`
@@ -39,7 +40,7 @@ export def --wrapped main [...args] {
     if ($user | is-empty) { return (xq gh ...$args) }          # no identity here: passthrough
     let tok = (^gh auth token --user $user --hostname github.com | complete)
     if $tok.exit_code != 0 {
-        error make {msg: $"gh: no stored auth for '($user)' on github.com — run: gh auth login"}
+        return {ok: false, error: $"gh: no stored auth for '($user)' on github.com — run: gh auth login"}
     }
     with-env { GH_TOKEN: ($tok.stdout | str trim) } { xq gh ...$args }
 }
@@ -66,16 +67,15 @@ export def --wrapped main [...args] {
 The token exists only inside `with-env` for that one child process.
 It is never a return value, never in `$history`, never in an error
 message, never in a journal `cmd` (the journal records the agent's
-input — `gh pr list` — not the environment). An `error make` on
-missing auth names the *user*, never the token. Test it.
+input — `gh pr list` — not the environment). Missing auth is `{ok: false, error: …}` naming the *user*, never the
+token, never a throw. Test it. Module-scope `use xq *`.
 
 ## Return path
 
-Through `xq`: `complete` + census + payload quarantine via
-`read`'s cap rule, job-aware. Same return-path detection as the rg
-module: stdout that parses as JSON (the agent passed `--json …`) →
-`mode: json`, rows; otherwise `mode: text`. The module adds no
-`--json` itself.
+v1: inject `GH_TOKEN` and invoke **ordinary `xq`**. The result **is**
+the xq envelope. Do not parse JSON or grow an rg-like `mode` field —
+xq does not do that, and gh v1 is identity routing, not a GitHub API
+client. `use xq *` at module scope.
 
 ## `gh identity` — the identity receipt
 

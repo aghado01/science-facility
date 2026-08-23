@@ -25,34 +25,22 @@ amendment, do not fork this file.
 | N6 | landed | `par cap` is the one inline/query cap resolver. `058f887` |
 | N7 | landed | In-hand `read` and `jobs read` share the cap rule. Current retrieve is `jobs read <tag> --full`. `058f887` |
 | N8 | landed | Overlay `use *` is not dependency injection into module bodies. Config.nu composes the agent surface. Witness: `$x \| read` under `--config` → `Command jobs not found` after N5. [layering-v1](../briefs/layering-v1.md) |
-| N9 | **OPEN** | How to cut census from quarantine so `par`/`jobs` never import `dataspection/mod.nu`. [layering-v1](../briefs/layering-v1.md) A vs B. Discussion has proposed **A** with `modules/core/*.nu` units — not ruled. |
-| N10 | **OPEN** | `jobs fetch` (uncapped stored body) vs keeping `--full`. Orthogonal to N9. If adopted, separate pointed change after N9, before xq. |
-| N11 | **OPEN** | `xq` terminal vs unbounded `process capture` in `core/capture.nu` (rg consumes capture, not ordinary `xq`). Amends xq/rg/gh briefs if ruled. |
+| N9 | ruled | Cut A: `modules/core/*.nu` file units; dataspection façade owns `read`; `par`/`jobs` never import `dataspection/mod.nu`. [layering-v1](../briefs/layering-v1.md) |
+| N10 | **OPEN** | `jobs fetch` (uncapped stored body) vs keeping `--full`. After N9 lands, before xq. |
+| N11 | carried | Unbounded `process capture` lives in `core/capture.nu` (xq-v1). Ordinary `xq` is the terminal command; rg consumes capture, not `xq`. [xq-v1](../briefs/xq-v1.md) |
 | N12 | parked | Module prefixing (`nu-` vs bare). [module-prefixing.md](../notes/module-prefixing.md) |
 | N13 | carried | Write conventions (state `.nushell-mcp/`, scratch `artifacts/nushell-mcp/`). [write-conventions-v1](../notes/write-conventions-v1.md) |
 | N14 | carried | Identity routing one shape `{scope, id, source, via}`. [identity-routing.md](../notes/identity-routing.md), [gh-v1](../briefs/gh-v1.md) |
 
-## N9 — layering cut (open)
+## N9 — layering cut (ruled A, 2026-08-22)
 
-**Problem (settled):** `use dataspection [shape]` loads all of `mod.nu`,
-so `par` compiles `read` before `jobs` exists. Child `nu -n` tests do
-not see it.
+`modules/core/` is a loose dir of file units (`census.nu`, `meta.nu`,
+`value.nu`, `failure.nu`, `schema.nu`, `spine.nu`, `views.nu`).
+`dataspection/mod.nu` re-exports the agent-facing commands and owns
+`read`. `par`/`jobs` `use core/census.nu` / `core/meta.nu`.
+`capture.nu` waits for xq-v1 (N11). Layout and nits in
+[layering-v1](../briefs/layering-v1.md). Trail:
+[sol-nushell-mcp-rearchitect-revisions.md](../discussion/sol-nushell-mcp-rearchitect-revisions.md).
 
-**Rule (settled, in the brief):** a module the handle plane imports must
-not import the handle plane.
-
-**Not settled:** A (sibling core, dataspection façade owns `read`) vs B
-(`read` moves onto jobs). Discussion trail:
-
-- [sol-circularity-remediation.md](../discussion/sol-circularity-remediation.md) — A, named `dataspection-core`; terminal vs library; `xq capture`
-- [grok-nushell-mcp-rearchitect.md](../discussion/grok-nushell-mcp-rearchitect.md) — `core/` folder, not `nushell-mcp-core`
-- [sol-nushell-mcp-rearchitect-revisions.md](../discussion/sol-nushell-mcp-rearchitect-revisions.md) — `core/*.nu` file units (`census`, `meta`, `value`, `failure`, …) matching `nu-modules` discovery
-
-**Recommendation on file shape (not a ruling):** do **not** archive
-layering-v1. Amend it in place: freeze A, drop B, cite the `core/*.nu`
-layout, keep fetch as N10. A superseding brief would fork the problem
-statement that is still correct.
-
-Rejected (in the brief, not yet an N-row): circular `use`, env hooks,
-copying NUON, a module named `read`, `nushell-mcp-core` as one bag,
-dropping `jobs read` in favour of only `fetch`.
+B (read on jobs), `dataspection-core`, `nushell-mcp-core`, and nested
+`core/census/mod.nu` are rejected.

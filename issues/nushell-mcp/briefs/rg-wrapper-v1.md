@@ -2,10 +2,10 @@
 
 **Status:** filed, not started · **Filed:** 2026-08-20 · **Home:**
 `mcp/nushell-mcp`, Nu-native module, used only through `evaluate`.
-**Depends on:** [par-jobs-v1](../.archive/par-jobs-v1.md) — this is the **first
-consumer** of its query envelope (shape 4) and of the registry-as-store;
-and [xq-v1](xq-v1.md) — rg is `xq` + JSON-event parse + spine. Build
-`xq` first; this brief's text mode is `xq`'s envelope passed through.
+**Depends on:** [layering-v1](layering-v1.md), [par-jobs-v1](../.archive/par-jobs-v1.md)
+(registry), [xq-v1](xq-v1.md) — **`process capture`**, not ordinary `xq`.
+Rg runs `process capture`, parses JSON events (or falls to text), then
+applies its own spine/envelope/quarantine. Build capture first.
 **Not this brief:** a search engine, rg flag curation, mdnav chunking.
 
 Treat this file as the v1 spec. Amend; do not fork.
@@ -30,7 +30,7 @@ The wrapper does **not** parse rg's CLI. A required-positional
 `-e`, `-f`, and anything before the pattern. Rejected.
 
 ```
-rg [...args]    # --wrapped; argv forwarded to ^rg
+rg [...args]    # --wrapped; argv forwarded via process capture to ^rg
 ```
 
 - **Zero flag curation.** `args` is opaque. Forwarded verbatim.
@@ -53,11 +53,9 @@ rg [...args]    # --wrapped; argv forwarded to ^rg
   not by the wrapper.** `config.nu` prepends `deps/cli/` (vendored
   ripgrep 14.1.1, gitignored, see `deps/README.md`) to `$env.PATH`, so
   a config-loaded child resolves `^rg` deterministically ahead of the
-  host PATH (verified 2026-08-21). The wrapper itself still just calls
-  `^rg` and fails closed — `{ok: false, error: "rg not found on PATH"}`
-  — it never hunts for or bundles a binary. (Host note: the Bash-tool
-  `rg` is a harness function; without `deps/cli` a plain `nu` child
-  saw no rg at all.)
+  host PATH (verified 2026-08-21). The wrapper calls `process capture`
+  (which calls `^rg`) and fails closed with capture's `not found: rg`
+  — it never hunts for or bundles a binary.
 - Ordering of findings is rg's emission order (per-file, line ascending;
   cross-file order is rg's traversal). Not re-sorted. Pass `--sort path`
   yourself when you need run-to-run determinism.
@@ -93,12 +91,11 @@ rg [...args]    # --wrapped; argv forwarded to ^rg
   spine (there are no files to census).
 - **`tag` present iff something was stashed** — same rule as
   `jobs emit`. Over-cap findings *or* over-cap text go through
-  `jobs stash --tag rg:<seq>`; `jobs read rg:<seq>` retrieves the table
-  or the string. Raw rg text never reaches a tool result inline beyond
-  the cap.
-- Truncate on **bytes** only, cap = `max_inline_bytes` from
-  `modules/par/policy.json` (null → this process's `NU_MCP_OUTPUT_LIMIT`).
-  No new knob file.
+  `jobs stash --tag rg:<seq>`; `jobs read rg:<seq> --full` retrieves the
+  table or the string (N10: `jobs fetch`). Raw rg text never reaches a
+  tool result inline beyond the cap.
+- Truncate on **bytes** only. Cap is `par cap`. No new knob file.
+  Do not reopen `policy.json`.
 
 ### `findings` — one row per JSON event
 
@@ -132,7 +129,7 @@ Over-cap findings are **stored, not dropped**: the wrapper pipes the
 full table through `jobs stash --tag rg:<seq>` — a completed-on-arrival
 registry row (`status: completed`, census set, `job_id: null`). One
 retrieval surface for the whole console — `jobs list` shows it,
-`jobs inspect rg:0` gives shape, `jobs read rg:0` returns the table.
+`jobs inspect rg:0` gives shape, `jobs read rg:0 --full` returns the table.
 
 `jobs stash` / `jobs emit` landed in par-jobs-v1 on 2026-08-21 (the
 registry amendment this brief owed is paid). The wrapper uses `stash`
@@ -145,7 +142,7 @@ disk, the filename carries session/agent identity — see par-jobs-v1
 
 Two lawful drill modes, both already paid for:
 
-1. **Slice the stored value** — `jobs read rg:0`, then ordinary Nu
+1. **Slice the stored value** — `jobs read rg:0 --full`, then ordinary Nu
    (`where`, `group-by`, `slice`) on `$history.N`. No re-search.
 2. **Re-run scoped** — rg is fast; a narrower query is often cleaner
    than paging. Under cap it comes back inline.
@@ -158,20 +155,20 @@ pipeline; parsing `^rg` text output when the wrapper exists.
 
 ## Policy
 
-Reads `modules/par/policy.json` (`max_inline_bytes` only). No threads
-knob — rg parallelizes itself; do not shard rg through `par` for speed
-(design-center scribe in par-jobs-v1). For a long sweep over a huge tree
-the lawful shape is `jobs spawn { rg ... } --tag sweep`: non-blocking +
-quarantine, not throughput.
+Cap is `par cap`. No threads knob — rg parallelizes itself; do not
+shard rg through `par` for speed. `use core/capture.nu`,
+`use core/spine.nu` (or `core/census.nu` for `shape`),
+`use jobs ["jobs stash"]`, `use par ["par cap"]` at module scope.
+Inside a job, do **not** stash (same as xq). For a long sweep:
+`jobs spawn { rg ... } --tag sweep`.
 
 ## Tree
 
 ```
-mcp/nushell-mcp/modules/rg/
-  mod.nu              # main (envelope), json event parser
+mcp/nushell-mcp/modules/rg/mod.nu    # --wrapped main; capture + parse + envelope
 mcp/nushell-mcp/skills/nushell/references/search.md
-  rg wrapper contract, drill patterns, ^rg escape, spine doctrine
-config.nu             # use rg *   (preloaded, after par/jobs)
+  rg wrapper contract, drill, ^rg escape, spine; not ordinary xq
+config.nu             # use rg *   (after xq)
 ```
 
 Docstrings on `main` are part of the deliverable.
@@ -193,16 +190,16 @@ the child — the prerequisite is host setup, not module correctness.
   `rg --version` → `mode: text`, one line inline; `-h` is forwarded
   (text mode), not Nushell help
 - text mode, over cap (cap forced low): `text` omitted, `tag: rg:<seq>`,
-  `jobs read` returns the string
+  `jobs read --full` returns the string
 - `-C 1` before or after the pattern: context rows present,
   `kind: context`, `col: null`, interleaved in rg order
 - `-e PATTERN` forwards (wrapper has no positional pattern)
 - over-cap (fixture with many hits, cap forced low): `truncated: true`,
   `spine` sorted hits-desc/file-asc, no `findings`, `tag: rg:0`;
-  registry has `rg:0` completed row; `jobs read rg:0` returns the full
-  table; `jobs inspect rg:0` has no body
-- rg absent from PATH (simulated with an empty `$env.PATH`):
-  `{ok: false, error: "rg not found on PATH"}`, nothing stashed
+  registry has `rg:0` completed row; `jobs read rg:0 --full` returns the
+  full table; `jobs inspect rg:0` has no body
+- rg absent (empty `$env.PATH` or missing binary): capture's
+  `not found: rg`, nothing stashed
 - two over-cap queries: tags `rg:0`, `rg:1`; seq monotonic
 - `args` is the executed argv; `--json` present once — not doubled if
   the caller already passed it
@@ -212,8 +209,8 @@ the child — the prerequisite is host setup, not module correctness.
 ## Exit gate
 
 Three `evaluate`s: broad query over cap → envelope with census + spine,
-no findings; `jobs read rg:0` → full findings table (native truncation +
-`$history` paging apply); scoped re-query under cap → inline findings.
+no findings; `jobs read rg:0 --full` → full findings table; scoped
+re-query under cap → inline findings.
 At no point does raw rg text hit a tool result beyond the cap — in
 text mode the string is inline only under cap, otherwise stashed.
 

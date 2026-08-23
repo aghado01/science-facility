@@ -6,11 +6,11 @@
 (value in, value out). `read` is `--env` and stashes over cap through
 `jobs`. **Supersedes:** [hist-v1](../.archive/hist-v1.md).
 **Depends on:** [par-jobs-v1](../.archive/par-jobs-v1.md) for `read`
-only (`jobs stash`; cap knobs on `$env.NU_PAR`). Other commands:
-nothing in-layer. **Consumed by:** par-jobs amendments (`jobs inspect`
-calls `shape` on the stored payload internally — not `read | shape`),
-xq-v1, rg-wrapper-v1 (`spine`), the session host (calls `shape` for
-informative truncation). **Lineage:** jso-jackson / jso-debug
+only (`jobs stash`; cap via `par cap`). Other commands: `core/*.nu`
+([layering-v1](layering-v1.md)). **Consumed by:** agents via
+`use dataspection *`. `par`/`jobs` consume `core/census.nu` /
+`core/meta.nu`, **not** this `mod.nu`. Session host still calls
+`$x | shape` through the façade. **Lineage:** jso-jackson / jso-debug
 (graveyard) — the controlled-inspection doctrine, re-shaped for a
 runtime where data is already structured.
 **Not this brief:** `$history` indexing (session host), JSON Schema
@@ -364,14 +364,14 @@ disclosure per result.
 ## Tree
 
 ```
-mcp/nushell-mcp/modules/dataspection/
-  mod.nu              # shape, shape each, schema (+diff/check/stats), spine,
-                      # meta, meta stamp, read, preview, page
+mcp/nushell-mcp/modules/core/*.nu     # census, schema, spine, views, meta, value, failure
+mcp/nushell-mcp/modules/dataspection/mod.nu
+  export use core/{census,schema,spine,views,meta}.nu *
+  use jobs ["jobs stash"]; use par ["par cap"]
+  export def --env read
 mcp/nushell-mcp/skills/nushell/references/dataspection.md
-  the two vocabularies, the disclosure ladder, the drill loop, jso lineage
-mcp/nushell-mcp/skills/nushell/references/mcp.md
-  + `$history | shape each` as the history idiom
 config.nu             # use par *; use jobs *; use dataspection *
+                      # do not preload core/*
 ```
 
 Docstrings on every command. par-jobs amendments (step 3) landed
@@ -411,8 +411,9 @@ internally; `jobs read` uses the cap rule; retrieve is `--full`.
   returns `{ok: true, disclosed: false, tag, bytes, retrieve}` with
   `retrieve` matching `jobs read <tag> --full`; `jobs read <tag> --full` returns
   the original value; peek not pop (`$in` / a bound name still holds
-  it). Decline receipt carries `meta.verb == "read"`. Jobs missing →
-  `{ok: false, disclosed: false, error, trace}`
+  it). Decline receipt carries `meta.verb == "read"`. Jobs missing:
+  `use dataspection` fails to load (static import; not `{ok: false}`).
+  `--config` smoke required ([layering-v1](layering-v1.md)).
 - every verb on `null` and on `""`: returns its shape, no throw
 - forced internal failure (e.g. a closure value for `schema`, an
   unserializable value for `shape`): result has `error` (short) and

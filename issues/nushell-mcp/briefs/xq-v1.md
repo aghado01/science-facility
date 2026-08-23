@@ -2,14 +2,11 @@
 
 **Status:** filed, not started · **Filed:** 2026-08-21 · **Home:**
 `mcp/nushell-mcp/modules/xq`, Nu-native, used only through `evaluate`.
-**Depends on:** [layering-v1](layering-v1.md) (cut before this lands;
-`mod.nu` must `use jobs *` / `use par *` at module scope),
-[par-jobs-v1](../.archive/par-jobs-v1.md) (`jobs stash`)
-and [dataspection-v1](dataspection-v1.md) — the cap rule is `read`'s,
-not a copy; `xq` applies it, never re-implements it. **Consumed by:** [rg-wrapper-v1](rg-wrapper-v1.md) — rg is
-`xq` + JSON-event parse + spine; build this first.
-**Not this brief:** per-tool wrappers (fd, jq, jj, delta), a shell, a
-job queue, sandboxing.
+**Depends on:** [layering-v1](layering-v1.md) (N9 landed in code first),
+[par-jobs-v1](../.archive/par-jobs-v1.md) (`jobs stash`),
+[dataspection-v1](dataspection-v1.md). **Consumed by:** [rg-wrapper-v1](rg-wrapper-v1.md)
+— rg consumes `process capture`, not ordinary `xq`. **Not this brief:**
+per-tool wrappers (fd, jq, jj, delta), a shell, a job queue, sandboxing.
 
 Treat this file as the v1 spec. Amend; do not fork.
 
@@ -21,37 +18,61 @@ Treat this file as the v1 spec. Amend; do not fork.
 - `^cmd | complete` already gives `{stdout, stderr, exit_code}` — but
   no census, no cap, no quarantine, no elapsed, and every agent
   re-derives the discipline ad hoc (or forgets it).
-- One primitive, then consumers. The rg brief's "text mode" is `xq`
-  trying to get out.
+- One capture primitive, then a terminal command, then consumers.
+  Rg needs the streams **before** xq withholds them; it must not call
+  ordinary `xq`.
 
-## Command
+## Commands
 
-Module `xq`, `export def --wrapped main [...args]`.
+Two surfaces. `process capture` is the unbounded unit (layering split
+condition 2). Ordinary `xq` is the agent-facing terminal command.
+
+### `process capture` — `core/capture.nu`
 
 ```
-xq <cmd> [...args]          # --wrapped; argv forwarded verbatim to ^cmd
-$in | xq <cmd> [...args]    # pipeline input becomes the child's stdin
+export def --wrapped "process capture" [...args]
+process capture <cmd> [...args]
+$in | process capture <cmd> [...args]
 ```
 
-- **Zero curation.** `args[0]` is the command, the rest is opaque. No
-  wrapper flags in v1 — with `--wrapped`, a wrapper flag after the
-  command name would be ambiguous with the child's flags. Everything
-  the wrapper needs it derives (tag from command name + seq, cap from
-  policy, job context from `job id`).
-- Runs `^($args.0) ...($args | skip 1) | complete`, streams kept
-  separate. `o+e>|` interleaving is not offered; if you need ordering
-  across streams, that is a consumer concern.
-- Missing binary → `{ok: false, error: "not found: <cmd>", ...}` with
-  `exit_code: null`. Fail closed; never search for the binary (PATH is
-  `config.nu` layout — `deps/cli`).
-- **Inside a job** (`(job id) != 0`, i.e. `jobs spawn { xq ... }`): the
-  job itself is the quarantine, and job threads cannot write
-  `$env.JOBS`. `xq` therefore returns **full streams inline, never
-  stashes**, `truncated: false`. The job's receipt/`read` discipline
-  applies to the whole envelope. Verified: `job id` is `0` on the main
-  thread, nonzero in a spawned job.
-- The contract is **documented, not encoded**: `help xq`, reference
-  corpus, `nu-modules` inspection.
+- Named export, **not** `main`, so `process capture cargo` does not
+  become a child named `capture`. `--wrapped`; argv forwarded.
+- Returns `{stdout, stderr, exit_code, elapsed}` always in full.
+  Missing binary: `try/catch` around `^cmd` (literal `^cmd | complete`
+  **throws**). Fail-as-data `{ok: false, error: "not found: <cmd>",
+  exit_code: null, …}` with the closed column set filled (zeros /
+  empty streams / `elapsed: 0sec` / `truncated` absent or false).
+- Empty args → `{ok: false, error: …}`, no index panic.
+- Pipeline `$in`: attach stdin **only** when `$in` is not `nothing`.
+  A bare `process capture rg pattern` must not hang the child on stdin.
+  Verified: `'hello' | nu -n --stdin -c '$in'` echoes; without
+  `--stdin`, `$in` is empty.
+- No cap, no stash, no `par`/`jobs`. xq and rg both `use core/capture.nu`.
+
+### `xq` — `modules/xq/mod.nu`
+
+```
+xq <cmd> [...args]          # --wrapped main; argv forwarded to the child
+$in | xq <cmd> [...args]
+```
+
+- `use core/capture.nu`; `use jobs ["jobs stash"]`; `use par ["par cap"]`.
+- Runs `process capture`, then census + cap + quarantine on the
+  streams. Cap is **`stdout_bytes + stderr_bytes` vs `par cap`**, not
+  `shape.bytes` of the envelope (same knob, different measure — say
+  so; do not call `read`).
+- Zero curation on `main`. Empty args: fail-as-data, not `args[0]` throw.
+- **Inside a job** (`(job id) != 0`): capture is already full; **do
+  not stash** (job threads cannot write `$env.JOBS`). Envelope has
+  full streams, `truncated: false`, no `tag`. The job row is the
+  quarantine.
+- Tag for a stash: `xq:<cmd>:<seq>` with `seq` = `(jobs list | length)`
+  (append-only, matches next jobs seq). Do not call private
+  `jobs-next-seq`.
+- Stamp the envelope `meta.verb: xq`.
+- Documented, not encoded: `help xq`; skills say `xq`, not
+  `process capture` (flood hatch, same class as `jobs fetch` /
+  `^cmd | complete`).
 
 ## Envelope (the only return shape)
 
@@ -59,7 +80,7 @@ $in | xq <cmd> [...args]    # pipeline input becomes the child's stdin
 {ok: bool, cmd: string, args: list<string>, exit_code: int?,
  elapsed: duration, stdout_bytes: int, stderr_bytes: int,
  truncated: bool, error?: string, tag?: string,
- stdout?: string, stderr?: string}
+ stdout?: string, stderr?: string, meta}
 ```
 
 - `ok` = `exit_code == 0`. Nothing else. Tools with meaningful non-zero
@@ -69,8 +90,7 @@ $in | xq <cmd> [...args]    # pipeline input becomes the child's stdin
 - `stdout_bytes` / `stderr_bytes` = UTF-8 byte length of each stream.
   `elapsed` = wall time around the child.
 - **Truncate on total bytes**: `stdout_bytes + stderr_bytes` vs
-  `max_inline_bytes` (policy; null → `NU_MCP_OUTPUT_LIMIT`). One rule,
-  not per-stream.
+  `par cap`. One rule, not per-stream. Not `shape.bytes`.
 - `truncated == false` → `stdout` and `stderr` present (possibly empty
   strings). `truncated == true` → both omitted, `tag` present, and the
   record `{stdout, stderr}` is stashed via
@@ -94,7 +114,8 @@ Paging is ordinary Nu on `$history`. For a long-running child, prefer
 row *is* the quarantine.
 
 Unlawful: `| head`/`| first N` on the live child (THE RULE); re-running
-to page; a consumer re-implementing cap/stash instead of calling `xq`.
+to page; a consumer calling ordinary `xq` when it needs the streams
+(rg); a consumer re-implementing capture instead of `process capture`.
 
 ## Policy
 
@@ -105,17 +126,14 @@ spawned; foreground `xq` blocks `evaluate` like any external does).
 ## Tree
 
 ```
-mcp/nushell-mcp/modules/xq/
-  mod.nu              # main (--wrapped), envelope, stash-or-inline
+mcp/nushell-mcp/modules/core/capture.nu   # process capture (--wrapped)
+mcp/nushell-mcp/modules/xq/mod.nu         # use capture + jobs stash + par cap; --wrapped main
 mcp/nushell-mcp/skills/nushell/references/jobs.md
-  + `xq` section: envelope, in-job behavior, drill idioms
-config.nu             # use xq *   (after par/jobs)
+  + `xq` section: envelope, capture vs terminal, in-job, drill
+config.nu             # use xq *   (after dataspection; do not preload capture)
 ```
 
-Docstring on `main` is part of the deliverable. rg-wrapper-v1's
-implementation calls `xq` internally; amend that brief's Tree/Command
-when this lands (its text mode collapses into "xq's envelope plus JSON
-parse when stdout is events").
+Docstring on `main` and on `process capture` are part of the deliverable.
 
 ## Tests (child `nu -n`, use a portable child: `nu -n -c ...`)
 
@@ -125,8 +143,8 @@ parse when stdout is events").
   inline, no `error` column
 - not found: `ok: false`, `exit_code: null`, `error` starts
   `not found:`, nothing stashed
-- stdin passthrough: `"abc" | xq nu -n -c 'print $in'`-style child
-  echoes input
+- stdin passthrough: `"abc" | xq nu -n --stdin -c '$in'` echoes input;
+  bare `xq …` does not attach stdin (`$in` is `nothing`)
 - over cap (cap forced low, child prints a large block): `truncated:
   true`, no streams, `tag: xq:nu:0`, `jobs read --full` returns `{stdout,
   stderr}` with the full text; registry row `completed`, `job_id: null`
@@ -140,11 +158,13 @@ parse when stdout is events").
 ## Exit gate
 
 Two `evaluate`s: `xq nu -n -c "1..5000 | to text"` → envelope with
-census, `truncated: true`, `tag`, no text; `jobs read <tag> --full` → the
-record. Then `jobs spawn { xq nu -n -c "..." } --tag bg` → receipt;
-`jobs read bg` → full envelope inline (in-job `xq` never stashes, so
-under the jobs-read cap or `--full`). No raw child output ever hits a
-tool result over the cap.
+census, `truncated: true`, `tag`, no text; `jobs read <tag> --full`
+(or `jobs fetch` if N10 has landed) → the record. Then
+`jobs spawn { xq nu -n -c "..." } --tag bg` → receipt;
+`jobs read bg --full` → full envelope. No raw child output over the cap.
+
+Also: `process capture` of a missing binary is fail-as-data, not a
+throw. `rg` must not appear in xq's tests as a caller of ordinary `xq`.
 
 ## Non-goals (v1)
 

@@ -3,6 +3,11 @@
 Newest first. Point at commits and briefs. Counts are from the commit
 they were observed at, not standing claims.
 
+- **2026-08-22 — N9 ruled A** (docs, not code). `layering-v1` frozen:
+  `modules/core/*.nu` file units, dataspection façade. B / `dataspection-core`
+  / `nushell-mcp-core` rejected. N11 carried into xq-v1 (`process capture`).
+  N10 (`jobs fetch`) still open.
+
 - **2026-08-22 — layering-v1 filed (not landed)** `72e0b23`. Spec for
   the census/quarantine cut after `$x | read` broke under `--config`.
   Decision still open (N9). Blocks xq.

@@ -31,7 +31,7 @@ index is exactly the ornament to avoid.
 | Term | Sense | Where |
 |---|---|---|
 | `index` | position in an input sequence, 0-based | `par` rows, dataspection's `shape each` |
-| `bytes` | NUON-serialized UTF-8 length, computed once | dataspection's `shape`; everything else calls it |
+| `bytes` | NUON-serialized UTF-8 length, computed once | agent-facing: `shape`. Internal measurement: `value nuon` in `core/value.nu`. `par`/`jobs` call `shape`, not `value nuon` |
 | `ok` | did this thing succeed — **universal on every record** | layer-wide (AGENTS.md 4a) |
 | `error` / `trace` | short first line / full rendered error, on `ok: false` | layer-wide |
 | `tag` | the name of a stored or handled thing | `jobs` registry, `stamp`, stash keys |

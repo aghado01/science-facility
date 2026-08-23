@@ -1,15 +1,17 @@
 # Layering v1 — census primitives vs handle-plane quarantine
 
-**Status:** filed, decision open · **Filed:** 2026-08-22 · **Home:**
-this brief (spec); implementation path depends on the decision below.
-**Depends on:** [dataspection-v1](dataspection-v1.md),
+**Status:** ruled A · **Filed:** 2026-08-22 · **Ruled:** 2026-08-22 ·
+**Home:** `mcp/nushell-mcp/modules/core/*.nu` (units) +
+`modules/dataspection/mod.nu` (façade). **Depends on:**
+[dataspection-v1](dataspection-v1.md),
 [par-jobs-v1](../.archive/par-jobs-v1.md) (2026-08-22 amendment).
-**Blocks:** [xq-v1](xq-v1.md) and every later wrapper that `use`s jobs
-from its own `mod.nu`. **Not this brief:** xq itself, session host,
-renaming portable verbs, a verb dispatcher / vocabulary object.
+**Blocks:** [xq-v1](xq-v1.md). **Not this brief:** implementing xq/rg/gh;
+session host; `jobs fetch` ([N10](../planning/decisions.md)); a verb
+dispatcher. **Trail:**
+[sol-circularity-remediation.md](../discussion/sol-circularity-remediation.md),
+[sol-nushell-mcp-rearchitect-revisions.md](../discussion/sol-nushell-mcp-rearchitect-revisions.md).
 
-Treat this file as the v1 spec for the cut. Amend; do not fork. Pick
-**A** or **B** in place before landing code.
+Treat this file as the v1 spec. Amend; do not fork.
 
 ## Problem
 
@@ -64,148 +66,193 @@ classes**:
 module. The knot is packaging: the handle plane was told to import
 census, and census owned a client of the handle plane.
 
-`jobs read --full` (uncapped retrieve) is a **different** problem —
-one verb meaning two things — and is orthogonal. See *Retrieve* below.
+Agent-facing custom commands are **terminal composition surfaces, not
+libraries**. Split a module when (1) a lower layer needs only part of
+it, or (2) a downstream wrapper needs the data before disclosure
+policy runs. (1) is this cut. (2) is `process capture` on xq-v1 — not
+this landing.
 
-Nushell facts this depends on (verified 2026-08-22, nu 0.114.1):
+Nushell facts (verified 2026-08-22, nu 0.114.1):
 
-- Multi-word commands (`jobs stash`, `par cap`, `meta stamp`) resolve
-  from the **defining module's** scope, not the caller's overlay.
+- Multi-word commands resolve from the **defining module's** scope.
 - There is no command named `jobs` (no `main`); a bare `jobs stash`
   without `use jobs` becomes an external `jobs`.
 - `use module [cmd]` still loads `mod.nu` in full.
-- Relative `use` is cwd-first, then `NU_LIB_DIRS`. Handle-plane
-  imports of a sibling should be a `NU_LIB_DIRS` name, not `../`.
+- Relative `use` is cwd-first, then `NU_LIB_DIRS`. Sibling imports
+  are `NU_LIB_DIRS` names (`core/census.nu`), not `../`.
+- `nu-modules` treats only **immediate** children of `NU_LIB_DIRS`
+  with `mod.nu` as `kind: module`. A nested `core/census/mod.nu` would
+  list as a stray file. Loose `.nu` files under a dir with no `mod.nu`
+  list as `core/census.nu` (`kind: file`) — the formats/crypto pattern.
 
 ## Rule
 
 > A module the handle plane imports must not import the handle plane.
 
-Equivalently: **in-hand primitives with no jobs/par dependency are
-shareable; anything that writes `$env.JOBS` is handle-plane work.**
-`read` belongs with `stash`, not with `shape`. That is the less
-special-case statement. Carving `read` out as a one-off file while
-leaving the rest named `dataspection` is the same DAG with a weaker
-identity.
+In-hand primitives with no jobs/par dependency are shareable; anything
+that writes `$env.JOBS` is handle-plane work. Overlay preload is the
+agent surface, not dependency injection into definitions.
 
-## Proposed solutions
+## Cut — A (ruled)
 
-Both obey the rule. Pick one. Do not mix.
+Sibling **file units** under `modules/core/` (no `core/mod.nu`, no
+`dataspection-core`, no `nushell-mcp-core`). `par` and `jobs` import
+those files, never `dataspection/mod.nu`. `dataspection` is the
+jobs-aware façade agents already `use`.
 
-### A — sibling primitives, dataspection as facade (recommended)
-
-A first-class `NU_LIB_DIRS` module holds the shared in-hand
-implementations. `par` and `jobs` import **that**, never
-`dataspection/mod.nu`. `dataspection` becomes the jobs-aware facade
-agents already `use`:
+### Tree
 
 ```
-<primitives>     shape, shape each, meta, meta stamp,
-                 preview, page, schema, spine
-    ↑        ↑           ↑
-   par      jobs     dataspection/mod.nu
-                           │
-                           └── use jobs * ; export def --env read
+mcp/nushell-mcp/modules/core/     # no mod.nu
+  failure.nu     # failure fields — normalize a caught Nu error
+  value.nu       # value kind, value columns, value nuon
+  census.nu      # shape, shape each          ← par, jobs
+  schema.nu      # schema, schema diff/check/stats
+  spine.nu       # spine                      ← rg later
+  views.nu       # preview, page
+  meta.nu        # meta, meta stamp           ← jobs
+  capture.nu     # later, xq-v1: process capture
+dataspection/mod.nu              # export use core/{census,schema,spine,views,meta}.nu *
+                                 # use jobs ["jobs stash"]; use par ["par cap"]
+                                 # export def --env read
 ```
 
-Overlay load order unchanged:
+`capture.nu` is **not** this landing. It lands with xq-v1.
+
+### Units
+
+**`failure.nu`** — `failure fields <error>` → `{error, trace}`. Does
+not throw. Replaces duplicated `catch-fields`. Optional later for
+`jobs-short`; not required to close the cycle.
+
+**`value.nu`** — `value kind`, `value columns`, `value nuon`.
+`value nuon` returns `{ok: true, bytes, nuon}` or `{ok: false, bytes:
+null, nuon: "", error, trace}`. This is the internal source of the
+one `bytes` measurement. **`shape` remains the agent-facing census
+contract.** `par` and `jobs` call `shape`, never `value nuon`.
+
+**`census.nu`** — `shape`, `shape each`. Imports `value` and `failure`
+only. This is what `par` and `jobs` consume.
+
+**`schema.nu`** — the whole schema family in one file. Do not split
+`schema diff` out (would export traversal internals).
+
+**`spine.nu`** — `spine` only. Own file because rg needs it without
+schema or views.
+
+**`views.nu`** — `preview`, `page` plus clipping helpers. One unit
+(bounded view of a value in hand). Do not split into `preview.nu` /
+`page.nu` for v1.
+
+**`meta.nu`** — `meta`, `meta stamp`. Metadata is still data; the file
+is not a new practice. `jobs` imports `"meta stamp"` only.
+
+Cross-file helpers **must** be those exported, qualified commands
+(`value kind`, `failure fields`). The façade does **not** re-export
+`value.*` or `failure fields`. They will appear in `nu-modules list`;
+document as dependency units, do not hide them, do not put them on
+`use dataspection *`.
+
+### Who imports what
 
 ```
-use par *            # use <primitives> [shape]
-use jobs *           # use <primitives> [shape "meta stamp"]
-use dataspection *   # export use <primitives> *; use jobs *; read
+failure
+   ▲
+ value
+   ▲
+   ├──── census  ← par, jobs
+   ├──── schema
+   ├──── spine   ← rg (later)
+   ├──── views
+   └──── meta    ← jobs
+
+dataspection façade
+   ├── export use census/schema/spine/views/meta
+   ├── use par ["par cap"]
+   ├── use jobs ["jobs stash"]
+   └── owns read
 ```
 
-`use dataspection *` first still works: facade → jobs → primitives,
-never back into `read`'s file from `par`.
+`export use core/census.nu *` already puts `shape` in the façade
+scope; do not also `use core/census.nu [shape]`.
 
-Agent surface unchanged (`shape`, `read`, `meta stamp` still arrive
-via `use dataspection *`). Nushell only imports **exports**, so the
-primitive module must contain schema/page/preview if they share
-private helpers with `shape` — not only the two commands jobs calls.
+### Overlay (`config.nu`)
 
-**Name.** Not a verb (`inspect`, `read`, `probe` — already rejected as
-module names). Not a coined third practice if `dataspection` remains
-the agent-facing word. Fill the directory name in this brief when
-landing; the overlay word stays `dataspection`.
-
-### B — invert: dataspection *is* the primitive module; `read` moves to jobs
-
-No third directory. Strip `read` from dataspection. Dataspection is
-then the shared in-hand module (`par`/`jobs`/`xq` may import it).
-Quarantine lives on the handle plane: `stash`, addressed `jobs read`,
-uncapped retrieve, and in-hand `read` as a flat export of `jobs`.
+Unchanged agent surface. Do **not** `use core/*` here.
 
 ```
-dataspection     # no jobs dependency
-    ↑        ↑
-   par      jobs     # jobs exports `read` and `jobs read`
+use nu-skills *
+use nu-modules *
+use par *
+use jobs *
+use dataspection *
 ```
 
-Smaller graph. Cost: `use jobs *` exports a flat `read`, which is
-surprising next to `jobs read`, and the disclosure ladder is no
-longer one `use dataspection *`. Honest if we say out loud that
-`read` is quarantine, not census.
+Agents keep `use dataspection *` then `$x | shape` / `preview` / `read`.
 
-### Retrieve (orthogonal; do with A or B)
+Once the façade statically imports `jobs stash`, “jobs missing” is a
+**module-construction failure** (throw / cannot `use dataspection`),
+not `{ok: false}`. Drop the `scope commands` guard and the dataspection
+jobs-missing child test. Drop NUON fallbacks in `par` and `jobs`.
 
-`--full` makes portable `read` mean two things (cap rule vs never
-decline). A jobs-only verb for the stored body keeps `read` pure:
+### Failure semantics
 
-| Verb | Means | Cap |
-|---|---|---|
-| `jobs inspect` | describe, no body | always fits |
-| `jobs read` | portable disclose | yes; decline names retrieve |
-| `jobs fetch` | the stored payload | **no** |
+Unchanged at the exported-command boundary: expected failure is
+`ok: false` + `error` / `trace`; throws are parse/load/unresolved
+definition/engine invariants. Private helpers may throw internally if
+the export catches and translates.
 
-In-hand `read` over cap → `jobs stash`; `retrieve: "jobs fetch <tag>"`.
-`jobs fetch` is today's `--full`. xq drill uses `fetch`. This does
-**not** break the cycle and does **not** replace `jobs read`.
+## Retrieve — not this landing (N10)
 
-## Rejected
+`--full` makes `read` mean two things. `jobs fetch` (uncapped stored
+body) is a separate pointed change after this cut, before xq. This
+landing keeps `retrieve: "jobs read <tag> --full"`. Do not drop
+`jobs read`.
 
-- **Circular `use dataspection` ↔ `use jobs` on `mod.nu`.** `par`
-  already loads `mod.nu` first.
-- **Env / closure hook** (`$env.NU_READ_STASH`). Hidden second protocol.
-- **Copy NUON / `meta` inside jobs.** Two `bytes` definitions; the
-  amendment exists to prevent that.
-- **A module named `read`.** Verb as package name; same DAG as A with
-  a worse overlay word.
-- **Jobs-only disclose named `fetch`, dropping `jobs read`.** Drops
-  the portable verb on addressed payloads.
-- **In-hand `read` that does not stash.** Decline would lose the body
-  (silent omission). The `stash` dependency is correct; it must not
-  sit in a file `par` loads.
-- **A verb registry / dispatcher in the primitive module.** Meanings
-  stay in vocabulary.md and docstrings.
+## Tests
 
-## Tests (either decision)
-
-Child `nu -n` suites are not sufficient. Add a smoke that uses the
-MCP launch path:
+Child `nu -n` suites are not sufficient.
 
 ```
 nu --config mcp/nushell-mcp/config.nu -c '<over-cap value> | read'
 ```
 
-Must return a decline receipt with a pasteable `retrieve`, not
-`Command jobs not found`. Also: `jobs inspect` bytes still equal
-`$payload | shape`; receipts still carry `meta`; `par cap` unchanged.
+Must return a decline receipt with pasteable `retrieve`, not
+`Command jobs not found`. Also: `jobs inspect` bytes equal
+`$payload | shape`; receipts still carry `meta`; `par cap` unchanged;
+`use dataspection *` without jobs **fails to load**.
 
-xq (and rg, gh) `mod.nu` files `use jobs *` and `use par *` at
-**module** scope regardless of A/B. Overlay leak is not a plan.
+xq/rg/gh `mod.nu` files `use` jobs/par/core units they call, at
+**module** scope. Overlay leak is not a plan.
 
 ## Landing
 
-Same change as every other landing: implementation, `help` docstrings,
-`references/dataspection.md` + `jobs.md`, adapter skills, this brief's
-follow-up, vocabulary.md if `fetch` lands. Roadmap sequence: this cut
-**before** xq.
+Implementation of `core/*.nu` (except `capture.nu`) + façade `read` +
+static imports in `par`/`jobs`/`dataspection`. Docstrings, 
+`references/dataspection.md` + `jobs.md`, adapter skills, this
+follow-up. Sequence: this cut, then N10 (`jobs fetch`), then xq-v1
+(with `core/capture.nu`).
+
+## Rejected
+
+- **B** — `read` moves onto jobs as a flat export. Smaller graph;
+  surprising overlay; disclosure ladder no longer one `use dataspection *`.
+- **Circular `use`** on `dataspection/mod.nu`. `par` already loads it first.
+- **Env / closure hook** for stash.
+- **Copy NUON / `meta` inside jobs.**
+- **A module named `read`.**
+- **`dataspection-core` as the import name.** Handle plane would still
+  `use` a dataspection-branded library.
+- **`nushell-mcp-core` as one bag.** Collides with the package; next
+  extract (`capture`) would stuff or lie.
+- **Nested `core/census/mod.nu`.** Breaks `nu-modules` discovery.
+- **Jobs-only `fetch`, dropping `jobs read`.**
+- **In-hand `read` that does not stash.**
+- **A verb registry / dispatcher.**
+- **`par`/`jobs` calling `value nuon` instead of `shape`.**
 
 ---
 
 ## Follow-up report
 
-_Chip or implementer: decision (A/B), primitive-module name if A,
-whether `fetch` landed, tests run (include the `--config` smoke),
-deviations._
+_Chip or implementer: outcome, `--config` smoke, child suites, deviations._
