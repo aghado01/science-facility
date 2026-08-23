@@ -1,6 +1,6 @@
 # `rg` wrapper v1 — disciplined search returns in nushell-mcp
 
-**Status:** filed, not started · **Filed:** 2026-08-20 · **Home:**
+**Status:** landed · **Filed:** 2026-08-20 · **Landed:** 2026-08-22 · **Home:**
 `mcp/nushell-mcp`, Nu-native module, used only through `evaluate`.
 **Depends on:** [layering-v1](layering-v1.md), [par-jobs-v1](../.archive/par-jobs-v1.md)
 (registry), [xq-v1](xq-v1.md) — **`process capture`**, not ordinary `xq`.
@@ -235,4 +235,16 @@ text mode the string is inline only under cap, otherwise stashed.
 
 ## Follow-up report
 
-_Chip or implementer: append outcome, tests run, deviations from this spec._
+- Landed 2026-08-22. `modules/rg/mod.nu` (`--env --wrapped main`); `config.nu`
+  `use rg *` after xq. Corpus: `references/search.md`. Adapters: Claude/Grok.
+- Child tests: `nu -n mcp/nushell-mcp/tests/rg-v1.nu` — 13/13 (no match, unknown
+  flag, small json, json-once, text version/list, `-C` context, `-e`, over-cap
+  spine, text over-cap, monotonic tags, rg absent, `help rg`, in-job no stash).
+  Suite prepends `deps/cli` so `nu -n` (no config) still finds vendored rg.
+- Deviations:
+  - Spine rename is `rename --column {key: "file", n: "hits"}`. Positional
+    `rename key file` retitles by column order, not by name.
+  - JSON parse requires every line to be a record with `type` (injected
+    `--json` on `--version`/`-l` yields strings).
+  - Empty findings are `[]`, not a typed empty table.
+- Not this brief: gh, structured `-l`/`--count` adapters.

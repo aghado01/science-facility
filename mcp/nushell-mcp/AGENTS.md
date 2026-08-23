@@ -12,13 +12,13 @@ package-level rules.
   `--config` (plus identity, when the host lands) and nothing else.
   Sets `NU_LIB_DIRS`, `NU_SKILL_DIR`, prepends `deps/cli` to PATH,
   preloads the modules. Order: `nu-skills`, `nu-modules`, `par`,
-  `jobs`, `dataspection`, `xq` — runtime services, access façade, then externals.
+  `jobs`, `dataspection`, `xq`, `rg` — runtime services, access façade, then externals.
   Overlay preload is not DI into module bodies ([layering-v1](../../issues/nushell-mcp/briefs/layering-v1.md)).
 - `modules/` — Nu-native modules. `modules/core/*.nu` are dependency
   file units (`census`, `meta`, `value`, `failure`, …); `par`/`jobs`
   import those, never `dataspection/mod.nu`. `dataspection` is the
   façade (`read` + `export use` of core). Overlay order is still
-  `par`, `jobs`, `dataspection`.
+  `par`, `jobs`, `dataspection`, then `xq`, `rg`.
 - `skills/nushell/` — the reference corpus (`SKILL.md` +
   `references/*.md`) agents read through `nu-skills`.
 - `deps/` — vendored binaries, gitignored except `README.md`:

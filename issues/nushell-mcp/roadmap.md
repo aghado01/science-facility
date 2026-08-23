@@ -137,9 +137,8 @@ context window as the scarcest resource in the loop:
    2026-08-22. `process capture` in `core/capture.nu` (unbounded);
    ordinary `xq` is the terminal command (census, `par cap`, stash).
 5. **`rg` module v1** — [briefs/rg-wrapper-v1.md](briefs/rg-wrapper-v1.md)
-   · filed, not started; depends on 4. Consumes `process capture` +
-   `spine`, not ordinary `xq`. (The module; ripgrep itself is in
-   `deps/cli`.)
+   · **landed** 2026-08-22. Consumes `process capture` + `spine`, not
+   ordinary `xq`. (The module; ripgrep itself is in `deps/cli`.)
 6. **Query tools on the envelope** — mdnav_v2 chunk shards, `nu-skills
    search` fan-out. First real parallelism consumers. Align the chunk
    shape with mdnav_v2's brief rather than inventing twice.
@@ -199,6 +198,6 @@ here. Term senses — whose word is whose — are in
 | [hist-v1](.archive/hist-v1.md) | superseded → dataspection-v1 (primitives) + session-host-v1 (index) |
 | [session-host-v1](briefs/session-host-v1.md) | filed, not started; parallel track |
 | [xq-v1](briefs/xq-v1.md) | landed 2026-08-22 |
-| [rg-wrapper-v1](briefs/rg-wrapper-v1.md) | filed, not started; depends on xq-v1 capture, not ordinary `xq` |
+| [rg-wrapper-v1](briefs/rg-wrapper-v1.md) | landed 2026-08-22; consumes xq-v1 capture, not ordinary `xq` |
 | [write-conventions-v1](notes/write-conventions-v1.md) | filed; governs every write (state vs scratch, locality, chronology, precedence) |
 | [gh-v1](briefs/gh-v1.md) | filed, not started; depends on xq-v1; needs `gh` ≥ 2.40 in `deps/cli` |

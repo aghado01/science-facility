@@ -27,7 +27,7 @@ amendment, do not fork this file.
 | N8 | landed | Overlay `use *` is not dependency injection into module bodies. Config.nu composes the agent surface. Witness: `$x \| read` under `--config` → `Command jobs not found` after N5. [layering-v1](../briefs/layering-v1.md) |
 | N9 | landed | Cut A: `modules/core/*.nu` file units; dataspection façade owns `read`; `par`/`jobs` never import `dataspection/mod.nu`. [layering-v1](../briefs/layering-v1.md) |
 | N10 | landed | `jobs fetch` is the uncapped stored body. `jobs read` no longer has `--full`. Retrieve strings name `jobs fetch <tag>`. |
-| N11 | landed | Unbounded `process capture` lives in `core/capture.nu`. Ordinary `xq` is the terminal command; rg consumes capture, not `xq`. [xq-v1](../briefs/xq-v1.md) |
+| N11 | landed | Unbounded `process capture` lives in `core/capture.nu`. Ordinary `xq` is the terminal command; rg consumes capture, not `xq`. [xq-v1](../briefs/xq-v1.md), [rg-wrapper-v1](../briefs/rg-wrapper-v1.md) landed 2026-08-22 |
 | N12 | parked | Module prefixing (`nu-` vs bare). [module-prefixing.md](../notes/module-prefixing.md) |
 | N13 | carried | Write conventions (state `.nushell-mcp/`, scratch `artifacts/nushell-mcp/`). [write-conventions-v1](../notes/write-conventions-v1.md) |
 | N14 | carried | Identity routing one shape `{scope, id, source, via}`. [identity-routing.md](../notes/identity-routing.md), [gh-v1](../briefs/gh-v1.md) |

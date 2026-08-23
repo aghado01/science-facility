@@ -3,6 +3,11 @@
 Newest first. Point at commits and briefs. Counts are from the commit
 they were observed at, not standing claims.
 
+- **2026-08-22 — rg wrapper v1.** `modules/rg/mod.nu` consumes `process capture`,
+  injects `--json` once, JSON-event findings / text on the return path, spine
+  over cap, `jobs stash` as `rg:<seq>`. In-job never stashes. Child tests
+  rg-v1 13/13. Corpus `references/search.md`.
+
 - **2026-08-22 — xq v1 + `process capture`.** `core/capture.nu` unbounded;
   `xq` stamps, caps on stream bytes vs `par cap`, stashes `{stdout, stderr}`.
   In-job never stashes. Child tests xq-v1 8/8. N11 landed.

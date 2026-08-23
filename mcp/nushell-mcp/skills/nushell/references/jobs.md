@@ -4,7 +4,7 @@ Agent console **is** this REPL. Write pipelines; do not generate strings to eval
 
 Design center: interactive fan-out (and a **single** `jobs spawn` at parallelism 1). Non-blocking + payload quarantine is the product; parallelism is a feature on top. `rg` finds *where* (do not shard it through `par` for speed). `par` judges *what*.
 
-Preloaded (`use par *; use jobs *; use dataspection *; use xq *` in `config.nu`). `par cap` is the cap resolver. MATLAB / vscodepilot **names** (`parfor`, `parfeval`, `getJobResults`, …) are a corpus map only — they are not exported.
+Preloaded (`use par *; use jobs *; use dataspection *; use xq *; use rg *` in `config.nu`). `par cap` is the cap resolver. MATLAB / vscodepilot **names** (`parfor`, `parfeval`, `getJobResults`, …) are a corpus map only — they are not exported. Search contract: `references/search.md`.
 
 ## Native vs this layer
 
