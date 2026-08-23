@@ -56,6 +56,39 @@ Node rollups follow their source group (`SubtreeBytes` with `size`;
 The RS profile enables `identity + size + timestamps`; `fsattrs` is off until a
 membrane test wants it. A standalone caller enables what it likes.
 
+## Rollups are a separate question, and the answer is *not* "drop them"
+
+`crawler.out.node` carries `SubtreeDirCount` · `SubtreeFileCount` ·
+`SubtreeBytes`. Nothing reads them, and `membrane.out.node` severs them
+(`[NodePath, AbsolutePath, NodeDepth, Files, CompiledState]`). It is tempting to
+file them with `CreationUtc`/`FsAttributes` as unclaimed. **They are a different
+kind of thing** (#52): those are *measurements*, these are *aggregations*.
+
+An aggregation is a function of `(atoms, predicate)`, so the crawl rollup is the
+whole-walk answer — the `GROUP BY` with no `WHERE` — and it is *correct*, not
+stale. What a payload reader would eventually want is the same function over the
+surviving set. Two answers, one definition, two call sites; the sin would be a
+second *implementation*, which is #5's pathology in aggregate form.
+
+So the disposition is:
+
+- **Keep them**, and **label the scope in the contract** — "every file walked,
+  including those the membrane will reject". An unlabelled aggregate is the only
+  real hazard here, because it invites use as a post-filter number.
+- **Membrane severing them is correct**, not an oversight: a post-membrane node
+  carrying a pre-membrane total is exactly the misuse the label guards against.
+- **The rollup wants to be a callable, not a stamp** — one definition the
+  crawler invokes over the walk and a diagnostic or manifest could invoke over
+  any predicate, in the shape `Format-Row → Measure-Row / Build-Row` already
+  uses (#39).
+- **The atom is what must survive**, and today it does not: `SizeBytes` is
+  excluded at assemble, so a post-filter subtree rollup is currently
+  *impossible* — not merely unwritten. Nothing wants one today (the manifest's
+  `TocTree` is per-row and carries no directory aggregates), so this is a
+  recorded consequence rather than a requirement. If one is ever wanted,
+  `SizeBytes` moves to the `carried` tier (#50) and the answer is a second call
+  site, not a new loop.
+
 ## The bill — this is the part that is not free
 
 Making the crawler's output shape configurable makes the **contract graph
@@ -114,7 +147,14 @@ put two moving pieces under one gate.
 - Whether `fsattrs` should ship **on** with a membrane reparse-point test built
   at the same time, which would retire the "no reader" question outright rather
   than deferring it.
+- Whether the subtree rollups are their own group (`rollups`) or ride `size` /
+  `identity`. They are derived, not measured, so a profile that omits `size`
+  cannot offer `SubtreeBytes` at all — the group graph has a dependency edge the
+  others do not.
 - Whether `skipped` records carry the same groups as `file` (they carry a
-  subset today: `Path` · `Reason` · `Error`).
+  subset today: `Path` · `Reason` · `Error` — note `membrane.out.skipped` and
+  `ingest.out.skipped` *do* carry `SizeBytes` and `Extension`, so the atoms of
+  the discarded set survive even though the crawler's own skip records are
+  thinner).
 - Whether the standalone caller wants the node graph at all, or only the flat
   file list.
