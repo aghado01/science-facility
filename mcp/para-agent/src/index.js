@@ -11,9 +11,7 @@
  * Backend is any tmux-compatible multiplexer: psmux on Windows, tmux elsewhere.
  */
 
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { z } from "zod";
+import { McpServer, StdioServerTransport, z } from "./deps.js";
 
 import os from "node:os";
 import path from "node:path";

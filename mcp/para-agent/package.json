@@ -18,5 +18,5 @@
     "node": ">=20"
   },
   "license": "MIT",
-  "comment": "Manifest only. Node reads `type` and `main` by walking up from each source file, so this must sit at the package root and cannot live in brewery. Dependency pins and the lockfile are the rehydration recipe and live in brewery/node/; deps/node_modules is where they deploy."
+  "comment": "Manifest only. Node reads `type` and `main` by walking up from each source file, so this must sit at the package root and cannot live in brewery. Dependency pins and the lockfile live in brewery/node/; deps/node_modules is where they deploy and are executed directly without root junctions."
 }

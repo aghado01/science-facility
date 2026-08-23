@@ -70,7 +70,7 @@ which recipe produced it.
 
 | Shelf | Recipe | Payload | State |
 |---|---|---|---|
-| node | `brewery/node/` — `package.json`, `package-lock.json` | `deps/node_modules` + root junction | pins present, **restore script not written** |
+| node | `brewery/node/` — `package.json`, `package-lock.json`, `restore-node.ps1` | `deps/node_modules` | **complete** |
 | nu | — | `deps/bin/nu/` | **no recipe** — hand-deposited |
 | mux | — | `deps/bin/mux/` | **no recipe** — hand-deposited |
 
@@ -82,18 +82,17 @@ the package root as `package.json`, because Node reads `type` and `main` by walk
 source file and never reaches this directory. The two files are different jobs with the same name;
 keep dependency edits here and manifest edits there.
 
-A restore recipe must do four things, the last of which has no codex-scientiae counterpart:
+`restore-node.ps1` executes the node recipe:
 
 1. Stage copies of `package.json` and `package-lock.json` into the install prefix — `npm ci`
    requires its manifest and lock beside the target. Those copies are ignored; edit only the
    canonical ones here.
-2. `npm ci` into the prefix, so routine restoration never rewrites the canonical lock. Point npm's
-   download cache at `build/node/npm-cache/`.
+2. `npm ci` into the prefix, with npm's download cache pointed at `build/node/npm-cache/` so routine
+   restoration never rewrites the canonical lock.
 3. Verify the staged lock has not drifted from the canonical lock, and fail if it has.
-4. **Link `node_modules` at the package root to the payload.** Node resolves bare specifiers by
-   walking up from the importing file looking for a `node_modules` directory, and it will not look
-   inside `deps/`. A directory junction at the package root is what makes the deployed payload
-   reachable, and it is the one step a fresh clone cannot derive from the files alone.
+
+Third-party dependencies are resolved directly from `deps/node_modules` via `src/deps.js` without
+requiring root junctions.
 
 To move dependency versions deliberately: edit `package.json` here, regenerate the lock with npm,
 review the lock diff, then run the restore recipe.
@@ -112,16 +111,11 @@ that predate the rule, kept honest by writing down the pin so it is not lost wit
 Until `restore-nu.ps1` and `restore-mux.ps1` exist, the working-tree copies are the only ones —
 do not delete them.
 
-node is not in this table: its pins are present and complete, and only the restore script is
-missing. Its payload is reproducible from `package-lock.json` today by hand.
-
 ## Not yet built
 
 The conventions above describe the shape the tree already has. What is missing is machinery, not
 layout:
 
-- **No restore script for any shelf.** node has complete pins and no script; nu and mux have
-  neither.
-- **The root `node_modules` junction is made by hand.** It belongs in the node recipe as step 4.
-  A clone without it fails on the first import with `ERR_MODULE_NOT_FOUND`.
+- **No restore script for nu and mux.** node has complete pins and a working restore script; nu and
+  mux have neither.
 - **`build/` is empty** — nothing routes there until a recipe exists to route.

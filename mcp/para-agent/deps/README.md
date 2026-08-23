@@ -33,32 +33,15 @@ that something was in the wrong directory.
 
 | Path | Contents | Recipe |
 |---|---|---|
-| `deps/node_modules/` | the locked dependency graph | `brewery/node/` — pins present, restore script pending |
+| `deps/node_modules/` | the locked dependency graph | `brewery/node/` — complete (`restore-node.ps1`) |
 | `deps/bin/nu/` | nushell `0.114.1` and its plugins | none — hand-deposited |
 | `deps/bin/mux/` | `tmux 3.3.7` | none — hand-deposited |
 
-## The node_modules junction
+## Direct consumption
 
-Node resolves bare specifiers — `@modelcontextprotocol/sdk`, `ajv`, `zod` — by walking up from the
-importing file looking for a `node_modules` directory. It never looks inside `deps/`. So the
-payload here is reached through a directory junction at the package root pointing at
-`deps/node_modules`.
+Node packages are resolved directly from `deps/node_modules` via `src/deps.js` (`createRequire`). No root junction is required or created.
 
-That junction is the one part of a working tree that cannot be derived from tracked files. It
-belongs in the node restore recipe; until that exists it is created by hand, and a fresh clone
-that skips it fails with `ERR_MODULE_NOT_FOUND` on the first import. It is also easy to lose — an
-`npm install` run anywhere in the package can remove it, leaving the payload intact and
-unreachable. That is not hypothetical; it happened on 2026-08-19 and took the whole suite red.
-
-To create or restore it, from the package root:
-
-```powershell
-New-Item -ItemType Junction -Path node_modules -Target (Resolve-Path deps\node_modules)
-```
-
-A junction rather than a symlink, because it needs no elevation on Windows. `git` ignores it via
-`node_modules/**`, and `ERR_MODULE_NOT_FOUND` on a package that is plainly present in
-`deps/node_modules` is the symptom that it is missing.
+`brewery/node/restore-node.ps1` materializes this shelf from the pinned recipe. Run it after a clean clone if `deps/node_modules` is absent.
 
 **A plugin is not a dependency.** A vendored MCP — `nushell_mcp`, possibly `mdnav_v2` later — is a
 plugin: a thing with its own identity, lifecycle and registration, which happens in practice to be

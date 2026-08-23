@@ -16,8 +16,8 @@ import { memoryTransportPair } from "./support/memory-transport.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const packageRoot = path.resolve(here, "../../para-agent");
-const packageRequire = createRequire(path.join(packageRoot, "package.json"));
-const { Client } = await import(pathToFileURL(packageRequire.resolve("@modelcontextprotocol/sdk/client/index.js")).href);
+const depsRequire = createRequire(path.join(packageRoot, "deps", "node_modules", "index.js"));
+const { Client } = await import(pathToFileURL(depsRequire.resolve("@modelcontextprotocol/sdk/client/index.js")).href);
 
 function parsedResult(result) {
   assert.ok(Array.isArray(result.content));

@@ -10,9 +10,9 @@ import { memoryTransportPair } from "./support/memory-transport.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const skillRoot = path.resolve(here, "../skills/primary");
-const packageRequire = createRequire(path.join(skillRoot, "../../package.json"));
-const Ajv = packageRequire("ajv");
-const { Client } = await import(pathToFileURL(packageRequire.resolve("@modelcontextprotocol/sdk/client/index.js")).href);
+const depsRequire = createRequire(path.join(skillRoot, "../../deps/node_modules/index.js"));
+const Ajv = depsRequire("ajv");
+const { Client } = await import(pathToFileURL(depsRequire.resolve("@modelcontextprotocol/sdk/client/index.js")).href);
 const expected = new Map([
   ["references/execution.md", ["delegate", "run", "send", "wait", "read"]],
   ["references/scrutiny.md", [
