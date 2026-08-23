@@ -1,8 +1,8 @@
 # Composition hardening — remaining cuts
 
-**Spec:** [composition-v1](issues/nushell-mcp/briefs/composition-v1.md) (canonical).
-**Diagnosis:** [sol-engine-fixes.md](issues/nushell-mcp/discussion/sol-engine-fixes.md).
-**Review:** [gemini-engine-fixes-plan-review.md](issues/nushell-mcp/discussion/gemini-engine-fixes-plan-review.md) — sequence confirmed; footguns below are constraints, not optional notes.
+**Spec:** [composition-v1](../briefs/composition-v1.md) (canonical).
+**Diagnosis:** [sol-engine-fixes.md](sol-engine-fixes.md).
+**Review:** [gemini-engine-fixes-plan-review.md](gemini-engine-fixes-plan-review.md) — sequence confirmed; footguns below are constraints, not optional notes.
 **Authority when they disagree:** the brief’s three-cut rollout and the pointed commit titles, not the report’s bundling of `execution.nu` into the first implementation commit.
 
 ## Product invariant — failure is data, disclosure stays optional

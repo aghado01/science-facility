@@ -93,7 +93,7 @@ Query / search consumers return **findings + metadata**, not a receipt table of 
 {ok, n, n_ok, n_err, elapsed, bytes, truncated, findings?}
 ```
 
-`findings` present iff `truncated == false`. Cap is `par cap` (`max_inline_bytes`, JSON `null` → this process's `NU_MCP_OUTPUT_LIMIT`, else 20000).
+On the success path, `findings` is present iff `truncated == false`. A foreground `par` worker over cap is `ok: false`, `truncated: false`, no `findings` and no `tag` — gate on `ok` before reading `findings`. Cap is `par cap` (`max_inline_bytes`, JSON `null` → this process's `NU_MCP_OUTPUT_LIMIT`, else 20000).
 
 ## Policy
 

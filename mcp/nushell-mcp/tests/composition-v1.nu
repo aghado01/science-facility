@@ -1,8 +1,10 @@
 # Child `nu -n` tests for composition-v1 (outcome cut). Run:
 #   nu -n mcp/nushell-mcp/tests/composition-v1.nu
 
-const MODULES_DIR = (path self | path dirname | path dirname | path join modules)
-const CLI = (path self | path dirname | path dirname | path join deps cli)
+const PKG = (path self | path dirname | path dirname)
+const MODULES_DIR = ($PKG | path join modules)
+const CLI = ($PKG | path join deps cli)
+const WORKSPACE = ($PKG | path dirname | path dirname)
 const NU_LIB_DIRS = [$MODULES_DIR]
 const JOBS_MBOX = 0x4A4F4253
 
@@ -67,6 +69,12 @@ $env.NU_PAR = (
         par budget 1 --cores $env.NU_PAR.cores --reserved-cores $env.NU_PAR.reserved_cores | get ceiling
     )
 )
+
+let SCRATCH = (
+    $WORKSPACE
+    | path join "artifacts" "nushell-mcp" "test-runs" $"(date now | format date '%Y%m%d_%H%M%S')_composition-v1"
+)
+mkdir $SCRATCH
 
 let results = [
     (t "outcome record success" {
@@ -314,7 +322,7 @@ let results = [
     })
     (t "binary stdout over cap stashed byte-for-byte" {
         let exe = $nu.current-exe
-        let dir = ($nu.temp-dir | path join $"comp-bin-($nu.pid)")
+        let dir = ($SCRATCH | path join "bin")
         mkdir $dir
         mut acc = 0x[]
         for _ in 1..200 { $acc = ($acc ++ 0x[ff]) }
@@ -328,18 +336,16 @@ let results = [
         assert-true ($r.tag != null) "tag"
         let body = (jobs fetch $r.tag)
         assert-eq $body.stdout $acc "byte-for-byte"
-        try { rm -r $dir } catch { }
     })
     (t "rg byte-backed line is unsupported encoding" {
         if (which rg | is-empty) {
             error make {msg: "rg not on PATH"}
         }
-        let dir = ($nu.temp-dir | path join $"comp-rg-($nu.pid)")
+        let dir = ($SCRATCH | path join "rg")
         mkdir $dir
         let f = ($dir | path join "a.txt")
         0x[6e 65 65 64 6c 65 ff 0a] | save --raw $f
         let r = (rg needle $f)
-        try { rm -r $dir } catch { }
         assert-eq $r.ok false "ok"
         assert-true (($r.error | default "") | str contains "encoding") "encoding"
         assert-true ("findings" not-in ($r | columns)) "no findings"
@@ -362,6 +368,7 @@ let results = [
 ]
 
 reset-jobs
+try { rm -r $SCRATCH } catch { }
 
 let failed = ($results | where ok == false)
 let summary = {

@@ -14,14 +14,14 @@ applies its own spine/envelope/quarantine. Build capture first.
 
 Treat this file as the v1 spec. Amend; do not fork.
 
-> **Composition amendment:** [composition-v1](composition-v1.md) is
-> normative for the pending hardening cuts. It supersedes this landed
-> report where v1 predicts `rg:<seq>`, publishes a tag before storage
-> is confirmed, treats `job id` as the complete payload-owner test,
-> accepts failed quarantine as a successful wrapper outcome, assumes a
-> string capture stream, or turns ripgrep `path.bytes` / `lines.bytes`
-> into empty text. The follow-up report below remains evidence of the
-> landed 2026-08-22 code, not evidence that the amendment has landed.
+> **Composition amendment:** [composition-v1](composition-v1.md) **landed
+> 2026-08-23**. It supersedes the 2026-08-22 v1 report where the wrapper
+> predicted `rg:<seq>`, published a tag before storage was confirmed,
+> treated `job id` as the complete payload-owner test, accepted failed
+> quarantine as a successful outcome, assumed a string capture stream, or
+> turned ripgrep `path.bytes` / `lines.bytes` into empty text. The
+> 2026-08-22 follow-up below is evidence of that earlier landing, not of
+> the hardening.
 
 ## Problem
 
@@ -261,3 +261,7 @@ text mode the string is inline only under cap, otherwise stashed.
     `--json` on `--version`/`-l` yields strings).
   - Empty findings are `[]`, not a typed empty table.
 - Not this brief: gh, structured `-l`/`--count` adapters.
+- **2026-08-23 — composition hardening.** Registry-allocated `rg:*` tags,
+  three-context quarantine, unsupported-encoding on `path.bytes`/`lines.bytes`,
+  capture `trace` on miss. Evidence: [composition-v1 follow-up](composition-v1.md).
+  rg-v1 13/13.

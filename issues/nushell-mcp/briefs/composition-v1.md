@@ -7,7 +7,7 @@
 [dataspection-v1](../.archive/briefs/dataspection-v1.md),
 [layering-v1](../.archive/briefs/layering-v1.md),
 [xq-v1](xq-v1.md), and [rg-wrapper-v1](rg-wrapper-v1.md).
-**Blocks:** [gh-v1](gh-v1.md) and the first parallel query-envelope
+**Unblocks:** [gh-v1](gh-v1.md) and the first parallel query-envelope
 consumers in the [roadmap](../roadmap.md).
 **Not this brief:** host-side result interpretation, a second registry,
 timeouts, binary rg finding support, or changes to the MCP transport.

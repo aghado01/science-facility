@@ -1,10 +1,12 @@
 # Child `nu -n` tests for rg wrapper v1. Run:
 #   nu -n mcp/nushell-mcp/tests/rg-v1.nu
 
-const MODULES_DIR = (path self | path dirname | path dirname | path join modules)
+const PKG = (path self | path dirname | path dirname)
+const MODULES_DIR = ($PKG | path join modules)
 const NU_LIB_DIRS = [$MODULES_DIR]
 const JOBS_MBOX = 0x4A4F4253
-const CLI = (path self | path dirname | path dirname | path join deps cli)
+const CLI = ($PKG | path join deps cli)
+const WORKSPACE = ($PKG | path dirname | path dirname)
 
 if ($CLI | path exists) {
     let path = (
@@ -63,7 +65,10 @@ if (which rg | is-empty) {
     return
 }
 
-let FIX = ($nu.temp-dir | path join $"rg-v1-($nu.pid)")
+let FIX = (
+    $WORKSPACE
+    | path join "artifacts" "nushell-mcp" "test-runs" $"(date now | format date '%Y%m%d_%H%M%S')_rg-v1"
+)
 mkdir $FIX
 "needle aaa needle\nplain line\nbbb needle\n" | save --force ($FIX | path join "a.txt")
 "needle ccc\n" | save --force ($FIX | path join "b.txt")

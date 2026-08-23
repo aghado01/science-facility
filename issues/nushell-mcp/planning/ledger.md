@@ -3,6 +3,11 @@
 Newest first. Point at commits and briefs. Counts are from the commit
 they were observed at, not standing claims.
 
+- **2026-08-23 — composition landing hygiene.** Test scratch under
+  `artifacts/nushell-mcp/test-runs/` (gitignore; not OS temp, not a hidden
+  dir rg would skip). Brief amendment blocks recast as landed; `jobs.md`
+  envelope gated on `ok`.
+
 - **2026-08-23 — xq/rg keep capture `trace`.** Spawn-failure envelopes forward
   `process capture`'s trace. xq-v1 8/8, rg-v1 13/13.
 

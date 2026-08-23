@@ -13,14 +13,13 @@ per-tool wrappers (fd, jq, jj, delta), a shell, a job queue, sandboxing.
 
 Treat this file as the v1 spec. Amend; do not fork.
 
-> **Composition amendment:** [composition-v1](composition-v1.md) is
-> normative for the pending hardening cuts. It supersedes this landed
-> report where v1 omits `ok: true` from successful capture, treats all
-> capture failures as `not found`, assumes string-only streams, defines
-> terminal `xq.ok` only from `exit_code`, predicts tags from registry
-> length, or treats `job id` as the complete payload-owner test. The
-> follow-up report below remains evidence of the landed 2026-08-22 code,
-> not evidence that the amendment has landed.
+> **Composition amendment:** [composition-v1](composition-v1.md) **landed
+> 2026-08-23**. It supersedes the 2026-08-22 v1 report where capture omitted
+> `ok: true` on success, treated all capture failures as `not found`,
+> assumed string-only streams, defined terminal `xq.ok` only from
+> `exit_code`, predicted tags from registry length, or treated `job id` as
+> the complete payload-owner test. The 2026-08-22 follow-up below is
+> evidence of that earlier landing, not of the hardening.
 
 ## Problem
 
@@ -200,3 +199,6 @@ throw. `rg` must not appear in xq's tests as a caller of ordinary `xq`.
   - Tag stem is `path basename` minus `.exe` (envelope `cmd` remains argv[0], which may be an absolute path).
   - `elapsed > 0` not asserted; type is duration (Windows may report `0sec`).
 - Not this brief: rg, gh, `jobs fetch` (already N10).
+- **2026-08-23 — composition hardening.** Capture `ok`, registry-allocated
+  tags, three-context quarantine, `stream bytes`, capture `trace` on miss.
+  Evidence: [composition-v1 follow-up](composition-v1.md). xq-v1 8/8.

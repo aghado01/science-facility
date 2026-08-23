@@ -7,7 +7,8 @@
 [composition-v1](composition-v1.md); the shape in
 [notes/identity-routing.md](../notes/identity-routing.md).
 **Prerequisite:** `gh` ≥ 2.40 (multi-account: `auth token --user`) on
-the child's PATH — vendor into `deps/cli` like ripgrep.
+the child's PATH — vendor **current** gh into `deps/cli` like ripgrep
+(API floor 2.40; ambient observed ~2.98).
 **Not this brief:** a GitHub API client, curated subcommands, `git`
 itself (git already honors `includeIf` natively).
 

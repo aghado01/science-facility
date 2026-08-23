@@ -22,13 +22,13 @@ Viewed mod.nu:1-61
 Viewed dataspection-v1.nu:1-100
 Viewed dataspection-v1.nu:200-287
 
-An audit of the design robustness, semantic correctness, layering, and implementation footguns in [grok-engine-fixes-plan.md](file:///d:/aghado01/science-facility/issues/nushell-mcp/discussion/grok-engine-fixes-plan.md) follows.
+An audit of the design robustness, semantic correctness, layering, and implementation footguns in [grok-engine-fixes-plan.md](grok-engine-fixes-plan.md) follows.
 
 ---
 
 ### Executive Verdict
 
-**The plan is sound, robust, and properly scoped.** It faithfully operationalizes [composition-v1.md](file:///d:/aghado01/science-facility/issues/nushell-mcp/briefs/composition-v1.md) and addresses the root causes diagnosed in [sol-engine-fixes.md](file:///d:/aghado01/science-facility/issues/nushell-mcp/discussion/sol-engine-fixes.md). 
+**The plan is sound, robust, and properly scoped.** It faithfully operationalizes [composition-v1.md](../briefs/composition-v1.md) and addresses the root causes diagnosed in [sol-engine-fixes.md](sol-engine-fixes.md). 
 
 The 3-cut sequence cleanly decouples outcome projection, execution context/quarantine authority, and binary stream sizing into incremental, testable units without creating circular dependencies.
 

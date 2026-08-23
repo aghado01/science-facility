@@ -21,6 +21,7 @@
 **/.snapshot/** 
 **/.para-agent/**
 **/.nushell-mcp/**
+artifacts/nushell-mcp/
 
 **__/pycache__/**
 **/.pytest_cache/**
