@@ -60,7 +60,13 @@ it renders the header from the spec alone, with the byte identity
 hardcode the spacing.
 
 Exit: battery green, count recorded with the commit it was observed at; the
-spec parsed and its `$ref` pointers resolved by a test that runs.
+spec parsed, its `$ref` pointers resolved, and **its own `record_pattern`s run
+against rows rendered from its own templates**, across every on/off
+configuration — by a test that runs. That round-trip is not ceremony: it caught
+two live defects on 2026-08-22 (a leader bound of `{2,3}` that rejected the
+required-only layout, inherited from the pre-restructure spec; and an
+unspecified resolution order that yields `^[0-9]{digits(EntryCount)}$` for
+gidx). Both were invisible to inspection and immediate under execution.
 
 ## Track: export-e2e — *the main line; assemble → shards → serialize → manifest*
 

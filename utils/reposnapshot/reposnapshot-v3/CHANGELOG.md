@@ -1,5 +1,35 @@
 # Changelog 
 
+## 2026-08-22 — container.spec.jsonc v0.5: interpreter contract amended, two bugs caught by running it
+
+Audit pass over the whole declaration, driven by rendering rows from the spec
+and running its own `record_pattern`s against them. Wire unchanged from v0.4;
+what changed is what an interpreter must do, so an interpreter written against
+v0.4 would be wrong — hence the bump.
+
+- **Leader `record_pattern` bound was wrong**: `{2,3}` → **`{1,3}`**. Cells
+  before `content_bytes` are path (required) + gidx and content_meta (optional),
+  so the required-only layout has 1, not 2 — the pattern silently rejected the
+  minimum legal row. **Pre-existing**, inherited from the pre-restructure spec.
+- **Scope rule stated**: a `*_template` / `*_pattern` is evaluated in the scope
+  of the thing it renders or validates, never the object it is written on, and
+  `${prop}` **ascends** to `shard_container_schema` when not found locally. Both
+  directions were unspecified and both occur — the header templates live on the
+  schema but resolve against a column; `content_meta.record_pattern` lives on a
+  column and reaches up for `${item_join}`.
+- **Resolution order stated**: computed forms resolve **before** interpolation.
+  Interpolating first yields `^[0-9]{digits(EntryCount)}$` for gidx, which
+  matches nothing — caught by making that exact mistake in the prototype.
+- **`empty_marker` corrected**: under the join an empty value is a zero-length
+  *item*, surfacing as a doubled space rather than as nothing — the defect is
+  observable on the wire, where a tight separator would have hidden it as `||`.
+- `item_join` added to the UNPREFIXED tier roster; `${cells}` documented as the
+  second computed form.
+
+Verified: spec parses; header renders from the declaration alone with byte
+identity `Σ items + (n−1)` = 175 = 175; every column `record_pattern` resolves
+and matches its rendered value across all four on/off configurations.
+
 ## 2026-08-22 — psr wire settled: rows are item lists joined by one space (decision #49)
 
 `container.spec.jsonc` → **v0.4**. `item_join: " "` is the whole spacing rule: a
