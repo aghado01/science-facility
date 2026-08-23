@@ -6,7 +6,8 @@ use core/census.nu [shape]
 use core/spine.nu *
 use core/meta.nu ["meta stamp"]
 use core/failure.nu ["failure fields"]
-use jobs ["jobs stash" "jobs list"]
+use core/execution.nu ["execution context"]
+use jobs ["jobs stash"]
 use par ["par cap"]
 
 def utf8-bytes [s]: nothing -> int {
@@ -96,7 +97,9 @@ def rg-fail [args: list, error: string, elapsed] {
 # on the return path: JSON events → `json`, anything else → `text`. Envelope:
 # `{ok, mode, n, n_files, elapsed, bytes, truncated, args, error?, tag?, findings?, spine?, text?}`.
 # json: `findings` under cap, `spine`+stash over cap. text: `text` under cap, omit+stash over.
-# Cap is `par cap`. Inside a job, never stash. `help rg` is this contract; `^rg` is the escape.
+# Cap is `par cap`. Inside a job, never stash. Foreground `par` worker over cap: `ok: false`,
+# no tag, `truncated: false`. Tag is allocated by `jobs stash --prefix rg` after storage.
+# `help rg` is this contract; `^rg` is the escape.
 export def --env --wrapped main [...args] {
     let forwarded = (if (rg-has-json $args) { $args } else { ["--json"] ++ $args })
     let piped = ($in | describe) != "nothing"
@@ -125,10 +128,10 @@ export def --env --wrapped main [...args] {
         return (rg-fail $forwarded (if $err == "" { $"rg exit ($code)" } else { $err }) $elapsed_wall)
     }
     let parsed = (rg-parse $stdout)
-    let in_job = ((job id) != 0)
+    let ctx = (execution context)
     if $parsed.mode == "text" {
         let bytes = (utf8-bytes $stdout)
-        let over = (not $in_job) and ($bytes > (par cap))
+        let over = ($bytes > (par cap))
         mut rec = {
             ok: true
             mode: "text"
@@ -136,23 +139,27 @@ export def --env --wrapped main [...args] {
             n_files: 0
             elapsed: $elapsed_wall
             bytes: $bytes
-            truncated: $over
+            truncated: false
             args: $forwarded
         }
-        if $over {
-            let tag = $"rg:(jobs list | length)"
-            let st = ($stdout | jobs stash --tag $tag)
-            $rec = ($rec | insert tag $tag)
-            if ($st.ok? == false) { $rec = ($rec | insert error ($st.error? | default "stash failed")) }
-        } else {
+        if $ctx.in_job or (not $over) {
             $rec = ($rec | insert text $stdout)
+        } else if not $ctx.owns_registry {
+            $rec = ($rec | upsert ok false | insert error "over cap in a par worker; wrap the batch in jobs spawn")
+        } else {
+            let st = ($stdout | jobs stash --prefix "rg")
+            if ($st.ok? == false) {
+                $rec = ($rec | upsert ok false | insert error ($st.error? | default "stash failed"))
+            } else {
+                $rec = ($rec | upsert truncated true | insert tag $st.tag)
+            }
         }
         return ($rec | meta stamp --verb rg)
     }
     let findings = $parsed.findings
     let elapsed = (if $parsed.elapsed != null { $parsed.elapsed } else { $elapsed_wall })
     let bytes = ($findings | shape | get bytes)
-    let over = (not $in_job) and ($bytes != null and $bytes > (par cap))
+    let over = ($bytes != null and $bytes > (par cap))
     mut rec = {
         ok: true
         mode: "json"
@@ -160,20 +167,24 @@ export def --env --wrapped main [...args] {
         n_files: $parsed.n_files
         elapsed: $elapsed
         bytes: ($bytes | default 0)
-        truncated: $over
+        truncated: false
         args: $forwarded
     }
-    if $over {
-        let tag = $"rg:(jobs list | length)"
-        let st = ($findings | jobs stash --tag $tag)
-        # Positional `rename` retitles by column order, not by name.
+    if $ctx.in_job or (not $over) {
+        $rec = ($rec | insert findings $findings)
+    } else if not $ctx.owns_registry {
+        $rec = ($rec | upsert ok false | insert error "over cap in a par worker; wrap the batch in jobs spawn")
+    } else {
+        let st = ($findings | jobs stash --prefix "rg")
         let sp = (
             $findings | spine file | rename --column {key: "file", n: "hits"}
         )
-        $rec = ($rec | insert spine $sp | insert tag $tag)
-        if ($st.ok? == false) { $rec = ($rec | insert error ($st.error? | default "stash failed")) }
-    } else {
-        $rec = ($rec | insert findings $findings)
+        $rec = ($rec | insert spine $sp)
+        if ($st.ok? == false) {
+            $rec = ($rec | upsert ok false | insert error ($st.error? | default "stash failed"))
+        } else {
+            $rec = ($rec | upsert truncated true | insert tag $st.tag)
+        }
     }
     $rec | meta stamp --verb rg
 }

@@ -338,7 +338,9 @@ let results = [
         let dup = ([9] | jobs stash --tag s)
         assert-eq $dup.error "duplicate tag" "duplicate refused"
         let auto = ("x" | jobs stash)
-        assert-eq $auto.tag "stash:1" "auto tag uses seq"
+        assert-true ($auto.tag | str starts-with "stash:") "stash prefix"
+        assert-true ($auto.tag != "s") "not the tagged row"
+        assert-eq (jobs fetch $auto.tag) "x" "auto fetchable"
     })
     (t "jobs emit quarantines over cap" {
         let rows = (1..40 | par {|i| $i })

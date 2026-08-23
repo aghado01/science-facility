@@ -10,6 +10,7 @@ export use core/views.nu *
 export use core/meta.nu *
 
 use core/failure.nu ["failure fields"]
+use core/execution.nu ["execution context"]
 use jobs ["jobs stash"]
 use par ["par cap"]
 
@@ -31,19 +32,31 @@ export def --env read []: any -> any {
         if $bytes <= $cap {
             return $x
         }
+        let ctx = (execution context)
+        if $ctx.in_job {
+            return $x
+        }
+        if not $ctx.owns_registry {
+            return ({
+                ok: false
+                disclosed: false
+                bytes: $bytes
+                error: "over cap in a par worker; wrap the batch in jobs spawn"
+            } | meta stamp --verb read)
+        }
         let stashed = (try { $x | jobs stash } catch {|e|
             let f = (failure fields $e)
             {ok: false, error: $f.error, trace: $f.trace}
         })
         if ($stashed.ok? == false) {
-            return ($stashed | default {} | merge {
+            mut fail = {
                 ok: false
                 disclosed: false
-                tag: ($stashed.tag? | default null)
                 bytes: $bytes
                 error: ($stashed.error? | default "stash failed")
                 trace: ($stashed.trace? | default ($stashed.error? | default "stash failed"))
-            } | meta stamp --verb read)
+            }
+            return ($fail | meta stamp --verb read)
         }
         let tag = $stashed.tag
         {

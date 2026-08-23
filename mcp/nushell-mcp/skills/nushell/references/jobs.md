@@ -54,8 +54,8 @@ Row shape, input order:
 | `jobs cancel <id>` | `{ok, job_id, cancelled, error?, meta}` — missing/non-running is `ok: false` |
 | `jobs status` | knobs, cores, ceiling, inflight, policy, `meta` |
 | `jobs policy --max-workers N …` | mutate session knobs; still clamped |
-| `$v \| jobs stash [--tag t]` | store any value as a completed-on-arrival row (`job_id: null`); receipt back, `read` later |
-| `$findings \| jobs emit [--tag t]` | `par emit` + stash when truncated; envelope gains `tag` only if stored |
+| `$v \| jobs stash [--tag t \| --prefix p]` | store any value as a completed-on-arrival row (`job_id: null`); `--tag` is exact (duplicate → `ok: false`); `--prefix` allocates `$prefix:<n>` (smallest free n). Default namespace `stash`. Receipt tag is the stored name |
+| `$findings \| jobs emit [--tag t \| --prefix p]` | `par emit` + stash when truncated; envelope gains `tag` only if storage succeeded. Inside a job: findings stay inline. Foreground `par` worker over cap: `ok: false`, no tag |
 
 Receipt (no `output` column). Single-record returns (`spawn` / `stash` / `inspect` / `status` / `cancel`) carry `meta` via `meta stamp`. `list` / `collect` are tables and stay bare.
 
@@ -74,7 +74,9 @@ Receipt (no `output` column). Single-record returns (`spawn` / `stash` / `inspec
 - `jobs spawn` uses ceiling only (each job = 1 inflight). `par` grades by item count.
 - Census (`bytes`/`type`/`length`) is dataspection `shape` (NUON UTF-8 length), filled at drain. `jobs inspect` recomputes via `shape`; it is not `jobs read | shape`.
 - `list`/`collect` drain the mailbox **first**, then mark vanished (`error: "vanished"`) if absent from native `job list` with no pending message.
-- `cancel` stamps the row; a killed job never hits the wrapper `catch`.
+- `cancel` stamps the row; a killed job never hits the wrapper `catch`. Missing/non-running/non-owner cancel is `{ok: false, cancelled: false, error}`.
+- Only the foreground registry owner mutates `$env.JOBS`. `jobs spawn` / `stash` / `cancel` / `policy` fail as data (`not registry owner`) from a job or `par` worker. Harvest does not run off the owner (workers must not `job recv` the mailbox).
+- Over-cap quarantine: foreground owner stashes and returns the confirmed tag; a background job (including `par` inside it) returns the full value on the job row; a foreground `par` worker returns `ok: false`, `truncated: false`, no tag — wrap the batch in `jobs spawn`.
 
 ## Result hygiene
 
@@ -118,7 +120,7 @@ Registry and `$history` die with the MCP child. When a store appears later: iden
 
 ## `xq` — execute and quarantine
 
-`xq <cmd> [...args]` (`--wrapped`). Runs `process capture`, then stream census vs `par cap`. Under cap, `stdout`/`stderr` inline. Over cap, stash `{stdout, stderr}` as `xq:<cmd>:<seq>` and return census + `tag` (no streams). `ok` is `exit_code == 0`. Child non-zero is `ok: false` with streams, no `error`. Missing binary: `error` starts `not found:`, `exit_code: null`.
+`xq <cmd> [...args]` (`--wrapped`). Runs `process capture`, then stream census vs `par cap`. Under cap, `stdout`/`stderr` inline. Over cap, stash `{stdout, stderr}` with `--prefix xq:<stem>` and return census + the **confirmed** `tag` (no streams). `ok` is `exit_code == 0` and any required stash succeeded. Child non-zero is `ok: false` with streams, no `error`. Missing binary: `error` starts `not found:`, `exit_code: null`.
 
 `process capture` (`core/capture.nu`) is unbounded full streams — for wrappers (rg), not the agent default. Skills say `xq`.
 

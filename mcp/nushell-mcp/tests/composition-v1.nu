@@ -216,6 +216,82 @@ let results = [
         assert-eq $r.status "completed" "completed-on-arrival"
         assert-eq (jobs fetch sfail) {ok: false, error: "x"} "payload intact"
     })
+    (t "prefix skips pre-seeded tags" {
+        let _ = ("seed" | jobs stash --tag "rg:0")
+        let r = ("payload" | jobs stash --prefix "rg")
+        assert-eq $r.ok true "stash ok"
+        assert-eq $r.tag "rg:1" "skipped 0"
+        assert-eq (jobs fetch "rg:0") "seed" "seed intact"
+        assert-eq (jobs fetch "rg:1") "payload" "new payload"
+    })
+    (t "prefix fills holes" {
+        let _ = ("hole" | jobs stash --tag "rg:2")
+        let r = ("p" | jobs stash --prefix "rg")
+        assert-eq $r.tag "rg:0" "smallest free"
+        assert-eq (jobs fetch "rg:2") "hole" "hole intact"
+        assert-eq (jobs fetch "rg:0") "p" "allocated 0"
+    })
+    (t "tag and prefix mutually exclusive" {
+        let r = ("x" | jobs stash --tag t --prefix "stash")
+        assert-eq $r.ok false "ok"
+        assert-true (($r.error | default "") | str contains "exclusive") "error"
+        assert-eq (jobs list | length) 0 "nothing stored"
+    })
+    (t "foreground par xq over cap no phantom tag" {
+        let exe = $nu.current-exe
+        $env.NU_PAR = ($env.NU_PAR | upsert max_inline_bytes 50)
+        let rows = ([1 2] | par {|_| xq $exe -n -c "1..2000 | to text" })
+        $env.NU_PAR = ($env.NU_PAR | upsert max_inline_bytes null)
+        assert-eq ($rows | length) 2 "both rows"
+        assert-eq ($rows | get ok) [false false] "lifted"
+        assert-eq ($rows | get 0.value.ok) false "xq ok"
+        assert-eq ($rows | get 0.value.truncated) false "not truncated"
+        assert-true ("tag" not-in ($rows | get 0.value | columns)) "no tag"
+        assert-true ("stdout" not-in ($rows | get 0.value | columns)) "no dump"
+        assert-eq (jobs list | length) 0 "no phantom stash"
+    })
+    (t "jobs spawn par xq over cap one row" {
+        let exe = $nu.current-exe
+        $env.NU_PAR = ($env.NU_PAR | upsert max_inline_bytes 50)
+        let _ = (jobs spawn {
+            [1 2] | par {|_| xq $exe -n -c "1..2000 | to text" }
+        } --tag bg)
+        let _ = (jobs collect --timeout 5sec)
+        $env.NU_PAR = ($env.NU_PAR | upsert max_inline_bytes null)
+        assert-eq (jobs list | length) 1 "exactly one row"
+        assert-eq (jobs list | get 0.tag) "bg" "job tag"
+        let table = (jobs fetch bg)
+        assert-eq ($table | length) 2 "both children"
+        assert-true (($table | get 0.value.stdout | str length) > 50) "full stdout"
+        assert-true ("tag" not-in ($table | get 0.value | columns)) "no nested tag"
+    })
+    (t "jobs emit inside job no nested stash" {
+        $env.NU_PAR = ($env.NU_PAR | upsert max_inline_bytes 50)
+        let _ = (jobs spawn {
+            1..40 | par {|i| $i } | jobs emit
+        } --tag bg)
+        let _ = (jobs collect --timeout 5sec)
+        $env.NU_PAR = ($env.NU_PAR | upsert max_inline_bytes null)
+        assert-eq (jobs list | length) 1 "one row"
+        let envl = (jobs fetch bg)
+        assert-eq $envl.truncated false "not truncated"
+        assert-true ("findings" in ($envl | columns)) "findings inline"
+        assert-true ("tag" not-in ($envl | columns)) "no emit tag"
+    })
+    (t "worker stash spawn cancel fail as data" {
+        let rows = ([1] | par {|_| "x" | jobs stash --tag w })
+        assert-eq ($rows | get 0.ok) false "stash lifted"
+        assert-eq ($rows | get 0.value.ok) false "stash ok"
+        assert-eq ($rows | get 0.value.error) "not registry owner" "stash error"
+        assert-eq (jobs list | length) 0 "no row"
+        let sp = ([1] | par {|_| jobs spawn { 1 } --tag inner })
+        assert-eq ($sp | get 0.value.ok) false "spawn ok"
+        assert-eq ($sp | get 0.value.error) "not registry owner" "spawn error"
+        let k = ([1] | par {|_| jobs cancel 1 })
+        assert-eq ($k | get 0.value.ok) false "cancel ok"
+        assert-eq ($k | get 0.value.cancelled) false "not cancelled"
+        assert-eq ($k | get 0.value.error) "not registry owner" "cancel error"
+    })
 ]
 
 reset-jobs

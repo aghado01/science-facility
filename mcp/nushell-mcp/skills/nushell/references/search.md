@@ -24,7 +24,7 @@ Injects `--json` once if absent. No other flag rewrite. Mode is decided on the *
 - `bytes`: NUON of the findings table (json) or UTF-8 of stdout (text), vs `par cap`.
 - json: `findings` iff not truncated; `spine` iff truncated. Never both.
 - text: `text` iff not truncated; no spine.
-- `tag` iff stashed (`rg:<seq>`). `jobs fetch <tag>` returns the table or the string.
+- `tag` iff stashed (registry-allocated `rg:<n>` on the envelope). `jobs fetch` that tag; do not predict the suffix.
 
 Findings rows: `{file, line, col?, kind: match|context, match}`. Context has `col: null`. Emission order, not re-sorted.
 

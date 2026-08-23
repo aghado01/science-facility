@@ -7,6 +7,7 @@ const SELF_DIR = (path self | path dirname)
 # `shape` for the one `bytes` definition. Overlay `use *` does not leak into this module.
 use core/census.nu [shape]
 use core/outcome.nu ["outcome project"]
+use core/execution.nu ["execution context" "execution worker-env"]
 
 # --- host facts / knobs -------------------------------------------------------
 
@@ -169,6 +170,7 @@ export def main [
         }
     )
     if $b.warning != null { print -e $b.warning }
+    let in_job = (execution context).in_job
     let work = {|row|
         let t0 = (date now)
         let r = (try {
@@ -187,10 +189,13 @@ export def main [
             elapsed: ((date now) - $t0)
         }
     }
-    if $no_keep_order {
-        $items | par-each --threads $b.grant $work
-    } else {
-        $items | par-each --threads $b.grant --keep-order $work
+    let we = (if $in_job { execution worker-env --in-job } else { execution worker-env })
+    with-env $we {
+        if $no_keep_order {
+            $items | par-each --threads $b.grant $work
+        } else {
+            $items | par-each --threads $b.grant --keep-order $work
+        }
     }
 }
 

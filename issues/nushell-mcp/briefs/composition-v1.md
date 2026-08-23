@@ -1,6 +1,6 @@
 # composition v1 — outcomes and payload ownership
 
-**Status:** outcome cut landed 2026-08-23; ownership and stream pending · **Filed:** 2026-08-23 · **Home:**
+**Status:** outcome and ownership cuts landed 2026-08-23; stream pending · **Filed:** 2026-08-23 · **Home:**
 `mcp/nushell-mcp/modules/core`, Nu-native dependency units consumed by
 `par`, `jobs`, `dataspection`, `xq`, and `rg`.
 **Amends:** [par-jobs-v1](../.archive/briefs/par-jobs-v1.md),
@@ -292,6 +292,12 @@ acceptance case for `exit.ok: true` plus returned `data.ok: false`.
 
 ## Follow-up report
 
+- **2026-08-23 — ownership cut.** `modules/core/execution.nu`. `par` wraps
+  `par-each` in `with-env` (`NU_EXEC_WORKER` / `NU_EXEC_IN_JOB`). `jobs`
+  harvest/drain refuse off-owner; `stash --prefix` allocates `$prefix:<n>`
+  against existing tags. `xq`, `rg`, `read`, `jobs emit` follow the three-context
+  table. Child tests: composition-v1 27/27 plus regressions. N17 landed.
+  Stream cut remains.
 - **2026-08-23 — outcome cut.** `modules/core/outcome.nu` (`outcome project`:
   record / outcome table-or-list, no recursion). `par` lifts returned
   `{ok: false}` and outcome tables onto the row while retaining `value`

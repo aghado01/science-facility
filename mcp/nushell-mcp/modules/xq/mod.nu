@@ -3,7 +3,8 @@
 
 use core/capture.nu ["process capture"]
 use core/meta.nu ["meta stamp"]
-use jobs ["jobs stash" "jobs list"]
+use core/execution.nu ["execution context"]
+use jobs ["jobs stash"]
 use par ["par cap"]
 
 def utf8-bytes [s]: nothing -> int {
@@ -30,8 +31,11 @@ def xq-fail [cmd: string, args: list, error: string, elapsed] {
     } | meta stamp --verb xq
 }
 
-# Execute an external. Under cap, streams inline. Over cap, stash `{stdout, stderr}`
-# and return census + `tag`. Inside a job, never stash. `--wrapped`; argv forwarded.
+# Execute an external. Under cap, streams inline. Over cap in the foreground, stash
+# `{stdout, stderr}` via `jobs stash --prefix` and return census + confirmed `tag`.
+# Inside a job, never stash (job row is the quarantine). Foreground `par` worker over
+# cap: `ok: false`, no tag, `truncated: false` — wrap the batch in `jobs spawn`.
+# `--wrapped`; argv forwarded.
 export def --env --wrapped main [...args] {
     if ($args | is-empty) {
         return (xq-fail "" [] "xq: empty argv" 0sec)
@@ -60,8 +64,8 @@ export def --env --wrapped main [...args] {
     let err_b = (utf8-bytes $stderr)
     let elapsed = ($capd.elapsed? | default 0sec)
     let code = $capd.exit_code
-    let in_job = ((job id) != 0)
-    let over = (not $in_job) and (($out_b + $err_b) > (par cap))
+    let ctx = (execution context)
+    let over = (($out_b + $err_b) > (par cap))
     mut rec = {
         ok: ($code == 0)
         cmd: $cmd
@@ -70,19 +74,19 @@ export def --env --wrapped main [...args] {
         elapsed: $elapsed
         stdout_bytes: $out_b
         stderr_bytes: $err_b
-        truncated: $over
+        truncated: false
     }
-    if $over {
-        let seq = (jobs list | length)
-        let tag = $"xq:(xq-stem $cmd):($seq)"
-        let st = ({stdout: $stdout, stderr: $stderr} | jobs stash --tag $tag)
-        if ($st.ok? == false) {
-            $rec = ($rec | insert error ($st.error? | default "stash failed") | insert tag $tag)
-        } else {
-            $rec = ($rec | insert tag $tag)
-        }
-    } else {
+    if $ctx.in_job or (not $over) {
         $rec = ($rec | insert stdout $stdout | insert stderr $stderr)
+    } else if not $ctx.owns_registry {
+        $rec = ($rec | upsert ok false | insert error "over cap in a par worker; wrap the batch in jobs spawn")
+    } else {
+        let st = ({stdout: $stdout, stderr: $stderr} | jobs stash --prefix $"xq:(xq-stem $cmd)")
+        if ($st.ok? == false) {
+            $rec = ($rec | upsert ok false | insert error ($st.error? | default "stash failed"))
+        } else {
+            $rec = ($rec | upsert truncated true | insert tag $st.tag)
+        }
     }
     $rec | meta stamp --verb xq
 }

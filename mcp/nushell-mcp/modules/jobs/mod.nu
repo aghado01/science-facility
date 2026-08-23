@@ -15,6 +15,7 @@ export-env {
 use core/census.nu [shape]
 use core/meta.nu ["meta stamp"]
 use core/outcome.nu ["outcome project"]
+use core/execution.nu ["execution context"]
 use par ["par cap" "par budget" "par emit"]
 
 # --- pure helpers -------------------------------------------------------------
@@ -100,6 +101,40 @@ def jobs-require-par [] {
     }
 }
 
+def jobs-owns []: nothing -> bool {
+    (execution context).owns_registry
+}
+
+def jobs-tags []: nothing -> list {
+    if ($env.JOBS? == null) or ($env.JOBS | is-empty) { [] } else {
+        $env.JOBS | each {|r| $r.tag }
+    }
+}
+
+def jobs-alloc-tag [prefix: string]: nothing -> string {
+    let existing = (jobs-tags)
+    mut n = 0
+    mut c = $"($prefix):($n)"
+    while ($c in $existing) {
+        $n = $n + 1
+        $c = $"($prefix):($n)"
+    }
+    $c
+}
+
+def jobs-owner-fail [
+    rec
+    verb: string
+    --tag: any
+] {
+    let rec = ($rec | upsert ok false | upsert error "not registry owner")
+    if $tag != null {
+        jobs-stamp-receipt $rec $verb --tag $tag
+    } else {
+        jobs-stamp-receipt $rec $verb
+    }
+}
+
 # --- env-mutating harvest -----------------------------------------------------
 
 def --env jobs-apply [msg: record] {
@@ -143,6 +178,7 @@ def --env jobs-apply [msg: record] {
 }
 
 def --env jobs-drain [] {
+    if not (jobs-owns) { return }
     loop {
         let msg = (try { job recv --tag $JOBS_MBOX --timeout 0sec } catch { null })
         if $msg == null { break }
@@ -175,6 +211,7 @@ def --env jobs-reconcile [ids: list<int>] {
 # is truly gone. Snapshotting AFTER the drain leaves a window where a job that sent and
 # exited between the two is falsely marked vanished and its message is later dropped.
 def --env jobs-harvest [timeout: duration = 0sec] {
+    if not (jobs-owns) { return }
     jobs-drain
     if $timeout > 0sec {
         let deadline = ((date now) + $timeout)
@@ -234,6 +271,9 @@ export def --env "jobs spawn" [
     --tag: string                           # Unique session tag (lookup key; also native --description)
 ] {
     jobs-require-par
+    if not (jobs-owns) {
+        return (jobs-owner-fail {} "jobs.spawn" --tag $tag)
+    }
     jobs-harvest 0sec
     if ($env.JOBS? != null) and (not ($env.JOBS | is-empty)) {
         if not ($env.JOBS | where tag == $tag | is-empty) {
@@ -396,17 +436,29 @@ export def --env "jobs fetch" [
 # Store a value in the registry as a completed-on-arrival row (no native job; `job_id: null`).
 # Returns the receipt. The value is then `inspect`/`read`-able like any job payload.
 # This is the quarantine primitive for query wrappers; `jobs emit` is built on it.
+# `--tag` is exact (duplicate → ok: false). `--prefix` asks the registry to allocate
+# `$prefix:<n>` with the smallest free n. Default generated namespace is `stash`.
+# `--tag` and `--prefix` are mutually exclusive. Tag is returned only after storage.
 export def --env "jobs stash" [
-    --tag: string                           # Unique session tag; default `stash:<seq>`
+    --tag: string                           # Exact unique session tag
+    --prefix: string                        # Generated namespace; actual tag on the receipt
 ]: any -> record {
     let payload = $in
+    if not (jobs-owns) {
+        return (jobs-owner-fail {disclosed: false} "jobs.stash")
+    }
+    if $tag != null and $prefix != null {
+        return (jobs-stamp-receipt {ok: false, error: "tag and prefix are mutually exclusive"} "jobs.stash")
+    }
     jobs-harvest 0sec
     let seq = (jobs-next-seq)
-    let tag = (if $tag != null { $tag } else { $"stash:($seq)" })
-    if ($env.JOBS? != null) and (not ($env.JOBS | is-empty)) {
-        if not ($env.JOBS | where tag == $tag | is-empty) {
-            return (jobs-stamp-receipt {ok: false, error: "duplicate tag", tag: $tag} "jobs.stash" --tag $tag)
+    let tag = (
+        if $tag != null { $tag } else {
+            jobs-alloc-tag (if $prefix != null { $prefix } else { "stash" })
         }
+    )
+    if ($tag in (jobs-tags)) {
+        return (jobs-stamp-receipt {ok: false, error: "duplicate tag", tag: $tag} "jobs.stash" --tag $tag)
     }
     let now = (date now)
     let census = (jobs-census $payload)
@@ -430,21 +482,47 @@ export def --env "jobs stash" [
 }
 
 # Query envelope with quarantine: `par emit`, plus — when truncated — the full findings
-# table is stashed under `tag` so `jobs fetch <tag>` retrieves it. Envelope gains `tag`
-# only when something was stored. Foreground `par emit` alone is lossy over cap.
+# table is stashed so `jobs fetch <tag>` retrieves it. Envelope gains `tag` only when
+# storage succeeded. Inside a job: findings stay inline, no nested stash. Foreground
+# worker over cap: ok: false, truncated: false, no tag — wrap in `jobs spawn`.
 export def --env "jobs emit" [
-    --tag: string                           # Registry tag for the stored findings; default `emit:<seq>`
+    --tag: string                           # Exact registry tag for the stored findings
+    --prefix: string                        # Generated namespace; default `emit`
 ]: any -> record {
     jobs-require-par
     let findings = $in
+    let ctx = (execution context)
     let envelope = ($findings | par emit)
-    if not $envelope.truncated { return $envelope }
-    let tag = (if $tag != null { $tag } else { $"emit:(jobs-next-seq)" })
-    let receipt = ($findings | jobs stash --tag $tag)
-    if ($receipt.ok? == false) and ($receipt.error? == "duplicate tag") {
-        return ($envelope | insert error "duplicate tag" | insert tag $tag)
+    if $ctx.in_job {
+        mut rec = ($envelope | upsert truncated false)
+        if "findings" not-in ($rec | columns) {
+            $rec = ($rec | insert findings $findings)
+        }
+        return $rec
     }
-    $envelope | insert tag $tag
+    if not $envelope.truncated { return $envelope }
+    if not $ctx.owns_registry {
+        mut rec = ($envelope | upsert ok false | upsert truncated false)
+        $rec = ($rec | upsert error "over cap in a par worker; wrap the batch in jobs spawn")
+        if "findings" in ($rec | columns) {
+            $rec = ($rec | reject findings)
+        }
+        return $rec
+    }
+    if $tag != null and $prefix != null {
+        return ($envelope | upsert ok false | insert error "tag and prefix are mutually exclusive")
+    }
+    let receipt = (
+        if $tag != null {
+            $findings | jobs stash --tag $tag
+        } else {
+            $findings | jobs stash --prefix (if $prefix != null { $prefix } else { "emit" })
+        }
+    )
+    if ($receipt.ok? == false) {
+        return ($envelope | upsert ok false | insert error ($receipt.error? | default "stash failed"))
+    }
+    $envelope | insert tag $receipt.tag
 }
 
 # Kill a running job and stamp the row. A killed job never sends; collect must not wait on it.
@@ -453,6 +531,9 @@ export def --env "jobs emit" [
 export def --env "jobs cancel" [
     id: int                                 # Native job_id
 ]: nothing -> record {
+    if not (jobs-owns) {
+        return (jobs-owner-fail {cancelled: false, job_id: $id} "jobs.cancel")
+    }
     jobs-harvest 0sec
     let hit = (jobs-find $id)
     if ($hit | is-empty) {
@@ -510,6 +591,9 @@ export def --env "jobs policy" [
     --max-inline-bytes: any                 # Query envelope cap; null in JSON → NU_MCP_OUTPUT_LIMIT
 ]: nothing -> record {
     jobs-require-par
+    if not (jobs-owns) {
+        return (jobs-owner-fail {} "jobs.policy")
+    }
     mut p = $env.NU_PAR
     if $max_workers != null {
         $p = ($p | upsert max_workers $max_workers)

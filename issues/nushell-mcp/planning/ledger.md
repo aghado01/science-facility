@@ -3,6 +3,13 @@
 Newest first. Point at commits and briefs. Counts are from the commit
 they were observed at, not standing claims.
 
+- **2026-08-23 — composition ownership cut.** `core/execution.nu`; `par` marks
+  workers via `with-env`; `jobs stash --prefix` allocates against existing tags;
+  harvest/drain are owner-only. `xq`/`rg`/`read`/`emit` use the three-context
+  table (owner stash, in-job inline, foreground worker fail-closed). Child tests:
+  composition-v1 27/27, par-jobs-v1 29/29, dataspection-v1 13/13, xq-v1 8/8,
+  rg-v1 13/13. N17 landed.
+
 - **2026-08-23 — composition outcome cut.** `core/outcome.nu`; `par` lifts
   returned `{ok: false}` while retaining `value`; `jobs spawn` harvest keeps
   `status: completed` with `ok: false` and a fetchable payload; `jobs cancel`

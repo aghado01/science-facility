@@ -16,7 +16,7 @@ package-level rules.
   Overlay preload is not DI into module bodies
   ([layering-v1](../../issues/nushell-mcp/.archive/briefs/layering-v1.md)).
 - `modules/` — Nu-native modules. `modules/core/*.nu` are dependency
-  file units (`census`, `meta`, `value`, `failure`, `outcome`, …); `par`/`jobs`
+  file units (`census`, `meta`, `value`, `failure`, `outcome`, `execution`, …); `par`/`jobs`
   import those, never `dataspection/mod.nu`. `dataspection` is the
   façade (`read` + `export use` of core). Overlay order is still
   `par`, `jobs`, `dataspection`, then `xq`, `rg`.
@@ -87,9 +87,9 @@ them in the decisions file.
    allocated by `jobs` in the foreground mutation that stores the
    payload. A caller publishes `tag` only after storage succeeds; a
    background job or parallel worker never claims that a local
-   `$env.JOBS` mutation persisted. Context behavior and the pending
-   hardening cuts are specified in
+   `$env.JOBS` mutation persisted. Context behavior is specified in
    [composition-v1](../../issues/nushell-mcp/briefs/composition-v1.md).
+   Stream measurement is the remaining composition cut.
 5. **Never cap a live pipeline** (`first N`, `head`) — slice `$history`
    or `jobs fetch` afterward. This is the MCP's own rule; the modules
    exist to make obeying it easy.
