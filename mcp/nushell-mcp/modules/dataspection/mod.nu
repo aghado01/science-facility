@@ -13,7 +13,7 @@ use core/failure.nu ["failure fields"]
 use jobs ["jobs stash"]
 use par ["par cap"]
 
-# Disclose the body. Under cap → the value. Over cap → stash via `jobs stash` and a receipt naming `jobs read <tag> --full`. `--env`. The only verb that may decline.
+# Disclose the body. Under cap → the value. Over cap → stash via `jobs stash` and a receipt naming `jobs fetch <tag>`. `--env`. The only verb that may decline.
 export def --env read []: any -> any {
     try {
         let x = $in
@@ -43,7 +43,7 @@ export def --env read []: any -> any {
             disclosed: false
             tag: $tag
             bytes: $bytes
-            retrieve: $"jobs read ($tag) --full"
+            retrieve: $"jobs fetch ($tag)"
         } | meta stamp --verb read
     } catch {|e|
         let f = (failure fields $e)

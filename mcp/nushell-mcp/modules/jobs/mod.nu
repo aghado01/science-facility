@@ -188,7 +188,7 @@ def --env jobs-require-row [key] {
 # --- exports ------------------------------------------------------------------
 
 # Spawn a background job. Returns a running receipt, or `{ok: false, error: "budget", budget}` at cap.
-# Duplicate `tag` is refused. Payload is quarantined in `$env.JOBS` until `jobs read`.
+# Duplicate `tag` is refused. Payload is quarantined in `$env.JOBS` until `jobs read` / `jobs fetch`.
 export def --env "jobs spawn" [
     work: closure                           # Work to run in a background job (`{ ... }`)
     --tag: string                           # Unique session tag (lookup key; also native --description)
@@ -295,20 +295,15 @@ export def --env "jobs inspect" [
 }
 
 # Portable `read` of one stored payload. Peek, not pop — repeatable. One id only.
-# Under cap → body. Over cap → decline naming `jobs read <tag> --full`. `--full` always returns the body.
-# Still running → error. Does not re-stash.
+# Under cap → body. Over cap → decline naming `jobs fetch <tag>`. Still running → error. Does not re-stash.
 export def --env "jobs read" [
     key: any                                # job_id (int) or tag (string)
-    --full                                  # Always return the stored body (retrieve path; compose `| page`)
 ]: nothing -> any {
     let row = (jobs-require-row $key)
     if $row.status == "running" {
         error make {msg: $"jobs: '($key)' still running"}
     }
     let payload = $row.output
-    if $full {
-        return $payload
-    }
     let census = (jobs-census $payload)
     let bytes = $census.bytes
     let cap = (par cap)
@@ -320,8 +315,20 @@ export def --env "jobs read" [
         disclosed: false
         tag: $row.tag
         bytes: $bytes
-        retrieve: $"jobs read ($row.tag) --full"
+        retrieve: $"jobs fetch ($row.tag)"
     } "jobs.read" --tag $row.tag
+}
+
+# Uncapped retrieve of one stored payload. Peek, not pop. Still running → error.
+# The retrieve named by a declining `read`. Compose: `jobs fetch t | page`.
+export def --env "jobs fetch" [
+    key: any                                # job_id (int) or tag (string)
+]: nothing -> any {
+    let row = (jobs-require-row $key)
+    if $row.status == "running" {
+        error make {msg: $"jobs: '($key)' still running"}
+    }
+    $row.output
 }
 
 # Store a value in the registry as a completed-on-arrival row (no native job; `job_id: null`).
@@ -361,7 +368,7 @@ export def --env "jobs stash" [
 }
 
 # Query envelope with quarantine: `par emit`, plus — when truncated — the full findings
-# table is stashed under `tag` so `jobs read <tag> --full` retrieves it. Envelope gains `tag`
+# table is stashed under `tag` so `jobs fetch <tag>` retrieves it. Envelope gains `tag`
 # only when something was stored. Foreground `par emit` alone is lossy over cap.
 export def --env "jobs emit" [
     --tag: string                           # Registry tag for the stored findings; default `emit:<seq>`

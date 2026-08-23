@@ -342,7 +342,7 @@ let results = [
         assert-eq $e.truncated true "truncated"
         assert-true ("findings" not-in ($e | columns)) "no findings inline"
         assert-eq $e.tag "q" "tag on envelope"
-        assert-eq (jobs read q --full) $rows "full findings retrievable"
+        assert-eq (jobs fetch q) $rows "full findings retrievable"
         assert-eq (jobs list | get 0.status) "completed" "registry row"
         let small = ([{a: 1}] | jobs emit --tag small)
         assert-eq $small.truncated false "under cap"
@@ -382,16 +382,16 @@ let results = [
         assert-true ("disclosed" not-in ($i | columns)) "inspect is not a decline"
         assert-eq $i.meta.verb "jobs.inspect" "inspect stamped"
         assert-true ($i.bytes > 20) "bytes over cap"
-        let s = (jobs read big --full | shape)
+        let s = (jobs fetch big | shape)
         assert-eq $i.bytes $s.bytes "inspect bytes from shape"
         assert-eq $i.type $s.type "inspect type from shape"
         let d = (jobs read big)
         assert-eq $d.ok true "decline ok"
         assert-eq $d.disclosed false "not disclosed"
-        assert-eq $d.retrieve "jobs read big --full" "retrieve"
+        assert-eq $d.retrieve "jobs fetch big" "retrieve"
         assert-eq $d.tag "big" "tag"
         assert-eq $d.meta.verb "jobs.read" "read stamped"
-        assert-eq (jobs read big --full) $v "full body"
+        assert-eq (jobs fetch big) $v "full body"
         assert-eq (jobs list | length) 1 "did not re-stash"
         $env.NU_PAR = ($env.NU_PAR | upsert max_inline_bytes null)
     })

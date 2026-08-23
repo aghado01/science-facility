@@ -28,7 +28,7 @@ Nouns produce a data object. Verbs are **portable** (one meaning wherever they a
 ```
 $x | schema | preview
 $x | spine file | page 2
-jobs read sq --full | shape   # compose after a lawful disclose, not an identity
+jobs fetch sq | shape         # compose after a lawful disclose, not an identity
 ```
 
 `jobs inspect` is **not** `jobs read | shape`. Inspect discloses nothing; jobs keeps its own receipt and calls `shape` on the stored payload internally.
@@ -38,7 +38,7 @@ jobs read sq --full | shape   # compose after a lawful disclose, not an identity
 | Verb | Discloses | Always fits? |
 |---|---|---|
 | `shape` | nothing — census | yes |
-| `read` | the whole body | only under cap; else a receipt naming `jobs read <tag> --full` |
+| `read` | the whole body | only under cap; else a receipt naming `jobs fetch <tag>` |
 | `preview` | whole structure, leaves clipped | yes, per leaf |
 | `page` | one slice | yes, per slice |
 
@@ -70,7 +70,7 @@ Never `each {|i| ... | page $i}` in one evaluate. `$history | shape each` is the
 
 **`preview [--chars 200] [--items 5] [--mode head|tail|sandwich]`** — strings `… [+N chars]`, lists `[+K more]`, records keep every key. Idempotent.
 
-**`read`** (`--env`) — under cap, the value; over cap, `jobs stash` and `{ok: true, disclosed: false, tag, bytes, retrieve, meta.verb: "read"}`. `retrieve` is `jobs read <tag> --full`. Cap is `par cap`. Peek, not pop. Façade statically `use`s `jobs stash`; a session without jobs cannot load `dataspection`. `jobs read` is the same cap rule for an addressed payload (`--full` always returns the stored body).
+**`read`** (`--env`) — under cap, the value; over cap, `jobs stash` and `{ok: true, disclosed: false, tag, bytes, retrieve, meta.verb: "read"}`. `retrieve` is `jobs fetch <tag>`. Cap is `par cap`. Peek, not pop. Façade statically `use`s `jobs stash`; a session without jobs cannot load `dataspection`. `jobs read` is the same cap rule for an addressed payload; `jobs fetch` always returns the stored body.
 
 Census/schema/spine/views/meta live in `modules/core/*.nu`; this module re-exports them. `value.*` / `failure fields` are not on `use dataspection *`.
 

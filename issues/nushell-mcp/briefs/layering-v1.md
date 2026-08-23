@@ -6,8 +6,7 @@
 [dataspection-v1](dataspection-v1.md),
 [par-jobs-v1](../.archive/par-jobs-v1.md) (2026-08-22 amendment).
 **Blocks:** [xq-v1](xq-v1.md). **Not this brief:** implementing xq/rg/gh;
-session host; `jobs fetch` ([N10](../planning/decisions.md)); a verb
-dispatcher. **Trail:**
+session host; a verb dispatcher. `jobs fetch` is N10 (landed after this cut). **Trail:**
 [sol-circularity-remediation.md](../discussion/sol-circularity-remediation.md),
 [sol-nushell-mcp-rearchitect-revisions.md](../discussion/sol-nushell-mcp-rearchitect-revisions.md).
 
@@ -202,12 +201,11 @@ Unchanged at the exported-command boundary: expected failure is
 definition/engine invariants. Private helpers may throw internally if
 the export catches and translates.
 
-## Retrieve — not this landing (N10)
+## Retrieve — N10 (landed after this cut)
 
-`--full` makes `read` mean two things. `jobs fetch` (uncapped stored
-body) is a separate pointed change after this cut, before xq. This
-landing keeps `retrieve: "jobs read <tag> --full"`. Do not drop
-`jobs read`.
+`--full` made `read` mean two things. `jobs fetch` is the uncapped
+stored body. `jobs read` has no `--full`. Decline `retrieve` is
+`jobs fetch <tag>`. Do not drop `jobs read`.
 
 ## Tests
 

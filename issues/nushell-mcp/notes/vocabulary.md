@@ -37,7 +37,8 @@ index is exactly the ornament to avoid.
 | `tag` | the name of a stored or handled thing | `jobs` registry, `stamp`, stash keys |
 | `verb` | the producing command, dotted (`jobs.spawn`, `par.emit`, `xq`) | `meta.verb` |
 | `inspect` | **portable verb** — describe without disclosing | `jobs inspect`, `nu-modules inspect`; on a value in hand: `shape` |
-| `read` | **portable verb** — disclose the body; the one cap rule (inline if it fits, else a receipt naming the retrieval) | `jobs read`, `$x \| read`; over-cap retrieve is `jobs read <tag> --full` |
+| `read` | **portable verb** — disclose the body; the one cap rule (inline if it fits, else a receipt naming the retrieval) | `jobs read`, `$x \| read`; over-cap retrieve is `jobs fetch <tag>` |
+| `fetch` | uncapped retrieve of a stored payload | `jobs fetch` — not portable `read`; compose `jobs fetch t \| page` |
 | `preview` / `page` | **portable verbs** — bounded disclosure: leaves clipped / one slice | dataspection |
 | `stamp` | **portable verb** — write this metadata onto it; always qualified by its object | `meta stamp` (dataspection) |
 | `meta` | the provenance stamped onto a record — a **noun**, like `shape`. Not nushell's `metadata` builtin (pipeline `{span}`, stripped on storage) | dataspection |

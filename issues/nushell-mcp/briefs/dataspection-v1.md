@@ -100,7 +100,7 @@ Because they compose, a produced object is just another object:
 $x | schema | preview            # the schema is large — clip it
 $x | spine file | page 2         # the spine is long — slice it
 $x | schema | shape              # how big is this schema, actually
-jobs read sq --full | shape      # disclose, then census the body
+jobs fetch sq | shape            # disclose, then census the body
 ```
 
 That last line is **compose after a lawful disclose**, not an
@@ -129,7 +129,7 @@ stops being prose and becomes enforceable:
 | Verb | Discloses | Always fits? |
 |---|---|---|
 | `inspect` / `shape` | nothing — census only | yes, by construction |
-| `read` | the whole body | **only if under cap** — otherwise a receipt naming `jobs read <tag> --full` |
+| `read` | the whole body | **only if under cap** — otherwise a receipt naming `jobs fetch <tag>` |
 | `preview` | whole structure, leaves clipped | yes, bounded per leaf |
 | `page` | one slice | yes, bounded per slice |
 
@@ -285,9 +285,9 @@ decline. Declining is not failure (`ok: true`).
 - **Under cap** → the value itself. Not wrapped, not stamped.
 - **Over cap** → `jobs stash` (default tag `stash:<seq>`); the
   receipt copies `tag` and `bytes`, and `retrieve` is the pasteable
-  command `"jobs read <tag> --full"` — never a bare "too big". Bounded
+  command `"jobs fetch <tag>"` — never a bare "too big". Bounded
   verbs stay the ladder on a value in hand (`$x | preview`,
-  `jobs read t --full | page`); they are not the decline's `retrieve`.
+  `jobs fetch t | page`); they are not the decline's `retrieve`.
 - **Jobs missing** (overlay has no `jobs stash`) →
   `{ok: false, disclosed: false, error, trace}`. Misconfigured
   session, not a production path; `config.nu` always loads jobs
@@ -297,7 +297,7 @@ decline. Declining is not failure (`ok: true`).
   still holds the value after a decline.
 - This is the one cap rule for in-hand disclose. `xq` and rg apply
   *this*. `jobs read` uses the same cap for terminal disclose of an
-  addressed payload; `--full` returns the stored body. `jobs inspect`
+  addressed payload; `jobs fetch` returns the stored body. `jobs inspect`
   never routes through `read`.
 
 ### `meta` — the provenance on a record
@@ -376,7 +376,7 @@ config.nu             # use par *; use jobs *; use dataspection *
 
 Docstrings on every command. par-jobs amendments (step 3) landed
 2026-08-22: `jobs-census` / `par emit` call `$payload | shape`
-internally; `jobs read` uses the cap rule; retrieve is `--full`.
+internally; `jobs read` uses the cap rule; retrieve is `jobs fetch`.
 
 ## Tests (child `nu -n`)
 
@@ -409,7 +409,7 @@ internally; `jobs read` uses the cap rule; retrieve is `--full`.
 - `read`: suite loads `par`, `jobs`, then `dataspection`. Under cap
   returns the value. Over cap (force a low `$env.NU_PAR.max_inline_bytes`)
   returns `{ok: true, disclosed: false, tag, bytes, retrieve}` with
-  `retrieve` matching `jobs read <tag> --full`; `jobs read <tag> --full` returns
+  `retrieve` matching `jobs fetch <tag>`; `jobs fetch <tag>` returns
   the original value; peek not pop (`$in` / a bound name still holds
   it). Decline receipt carries `meta.verb == "read"`. Jobs missing:
   `use dataspection` fails to load (static import; not `{ok: false}`).
@@ -428,7 +428,7 @@ table whose `index` matches the reported `history_index` values;
 coverage; `$history.N | preview` → the record, clipped, under the
 output limit; `$history.N | get <path> | page 2 --size 20` → header +
 20 items. Each is one receipt or one bounded body; nothing floods.
-Over-cap `read` of a large string → decline receipt; `jobs read <tag> --full`
+Over-cap `read` of a large string → decline receipt; `jobs fetch <tag>`
 returns the string.
 
 ## Non-goals (v1)

@@ -94,8 +94,8 @@ $in | xq <cmd> [...args]
 - `truncated == false` → `stdout` and `stderr` present (possibly empty
   strings). `truncated == true` → both omitted, `tag` present, and the
   record `{stdout, stderr}` is stashed via
-  `jobs stash --tag xq:<cmd>:<seq>` (e.g. `xq:cargo:3`). `jobs read
-  <tag> --full` returns that record (over cap by construction);
+  `jobs stash --tag xq:<cmd>:<seq>` (e.g. `xq:cargo:3`). `jobs fetch
+  <tag>` returns that record (over cap by construction);
   slice `.stdout | lines` from `$history`, or compose `| page`.
 - `tag` present **iff** something was stashed — same rule as `jobs emit`.
 - `error` present only for wrapper-level failures (not found, spawn
@@ -106,9 +106,9 @@ $in | xq <cmd> [...args]
 
 Registry only (`jobs stash`) — one queryable store, no `$env.XQ_LAST`.
 `jobs list` shows `xq:*` rows next to jobs; `jobs inspect` gives census;
-`jobs read xq:cargo:3 --full` returns `{stdout, stderr}`.
+`jobs fetch xq:cargo:3` returns `{stdout, stderr}`.
 
-Drill: `(jobs read xq:cargo:3 --full).stderr | lines | where $it =~ '^error'`.
+Drill: `(jobs fetch xq:cargo:3).stderr | lines | where $it =~ '^error'`.
 Paging is ordinary Nu on `$history`. For a long-running child, prefer
 `jobs spawn { xq cargo build } --tag build` — non-blocking, and the job
 row *is* the quarantine.
@@ -146,11 +146,11 @@ Docstring on `main` and on `process capture` are part of the deliverable.
 - stdin passthrough: `"abc" | xq nu -n --stdin -c '$in'` echoes input;
   bare `xq …` does not attach stdin (`$in` is `nothing`)
 - over cap (cap forced low, child prints a large block): `truncated:
-  true`, no streams, `tag: xq:nu:0`, `jobs read --full` returns `{stdout,
+  true`, no streams, `tag: xq:nu:0`, `jobs fetch` returns `{stdout,
   stderr}` with the full text; registry row `completed`, `job_id: null`
 - two over-cap runs: seq monotonic in tags
 - inside a job: `jobs spawn { xq nu -n -c <big print> }`, `collect`,
-  `jobs read --full` → envelope has full `stdout`, `truncated: false`,
+  `jobs fetch` → envelope has full `stdout`, `truncated: false`,
   no `tag`; registry has exactly one row (the job), no `xq:*` row
 - `args` echo excludes `cmd`; `cmd` == first token
 - elapsed is a duration > 0
@@ -158,10 +158,9 @@ Docstring on `main` and on `process capture` are part of the deliverable.
 ## Exit gate
 
 Two `evaluate`s: `xq nu -n -c "1..5000 | to text"` → envelope with
-census, `truncated: true`, `tag`, no text; `jobs read <tag> --full`
-(or `jobs fetch` if N10 has landed) → the record. Then
-`jobs spawn { xq nu -n -c "..." } --tag bg` → receipt;
-`jobs read bg --full` → full envelope. No raw child output over the cap.
+census, `truncated: true`, `tag`, no text; `jobs fetch <tag>` → the
+record. Then `jobs spawn { xq nu -n -c "..." } --tag bg` → receipt;
+`jobs fetch bg` → full envelope. No raw child output over the cap.
 
 Also: `process capture` of a missing binary is fail-as-data, not a
 throw. `rg` must not appear in xq's tests as a caller of ordinary `xq`.

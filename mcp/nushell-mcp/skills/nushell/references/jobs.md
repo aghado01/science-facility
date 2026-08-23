@@ -11,7 +11,7 @@ Two modules, preloaded (`use par *; use jobs *; use dataspection *` in `config.n
 | Native | Hostile bit | Use instead |
 |---|---|---|
 | `par-each --threads N` | honor-system; completion order is not identity | `par` (budgeted grant, closed row shape, default `--keep-order`) |
-| `job spawn` / `job send` / `job recv` | recv takes no id; tags are ints; main thread is `0` | `jobs spawn` / `list` / `collect` / `inspect` / `read` |
+| `job spawn` / `job send` / `job recv` | recv takes no id; tags are ints; main thread is `0` | `jobs spawn` / `list` / `collect` / `inspect` / `read` / `fetch` |
 | `job kill` | no registry stamp | `jobs cancel` (stamps `cancelled` + `finished`) |
 
 Native `par-each --threads` bypasses policy. Do not monkey-patch the builtin. Do not `job send`/`recv` the module mailbox (`0x4A4F4253`).
@@ -38,7 +38,7 @@ Row shape, input order:
 
 `par budget <items> [--threads] [--cores] …` is pure (testable). Returns `{grant, ceiling, cores, graded, clamped, warning}`. `par cap` is the one inline/query cap resolver.
 
-`par emit` wraps a findings table in the query envelope (below). Built for wrappers. Over cap it omits `findings` and stores nothing — in the foreground prefer `jobs emit`, which stashes the full table under a tag you can `jobs read --full`. Cap is `par cap`.
+`par emit` wraps a findings table in the query envelope (below). Built for wrappers. Over cap it omits `findings` and stores nothing — in the foreground prefer `jobs emit`, which stashes the full table under a tag you can `jobs fetch`. Cap is `par cap`.
 
 ## `jobs` — handle plane (receipts until one `read`)
 
@@ -48,7 +48,8 @@ Row shape, input order:
 | `jobs list` | all receipts, **seq** order. No payloads |
 | `jobs collect [--timeout 5sec]` | finished receipts only (`completed\|failed\|cancelled`), seq order |
 | `jobs inspect <id\|tag>` | jobs receipt + payload census from `shape` internally; never body |
-| `jobs read <id\|tag> [--full]` | portable `read`: body if under cap; else decline naming `jobs read <tag> --full` |
+| `jobs read <id\|tag>` | portable `read`: body if under cap; else decline naming `jobs fetch <tag>` |
+| `jobs fetch <id\|tag>` | uncapped stored body (retrieve path; compose `\| page`) |
 | `jobs cancel <id>` | `{job_id, cancelled, meta}` |
 | `jobs status` | knobs, cores, ceiling, inflight, policy, `meta` |
 | `jobs policy --max-workers N …` | mutate session knobs; still clamped |
@@ -74,13 +75,13 @@ Receipt (no `output` column). Single-record returns (`spawn` / `stash` / `inspec
 
 ## Result hygiene
 
-One tool result never contains more than **one** payload. `collect`/`list`/`inspect` are receipts. Bare `jobs read` discloses only under cap; over cap compose `jobs read t --full | page` (or `| preview` / `| shape`). Do not loop `read` over tags in one `evaluate`.
+One tool result never contains more than **one** payload. `collect`/`list`/`inspect` are receipts. Bare `jobs read` discloses only under cap; over cap compose `jobs fetch t | page` (or `| preview` / `| shape`). Do not loop `read`/`fetch` over tags in one `evaluate`.
 
 Query / search consumers return **findings + metadata**, not a receipt table of workers:
 
 1. Foreground: `$data | par {|row| query $row }` — the row table **is** findings.
 2. Flatten hits inside `value` **by `index`**, then in-list order. Not completion order.
-3. One background job: `jobs spawn { $data | par {|row| query $row} }` then `jobs inspect` / `jobs read` **once** ( `--full` if over cap).
+3. One background job: `jobs spawn { $data | par {|row| query $row} }` then `jobs inspect` / `jobs read` **once** (`jobs fetch` if over cap).
 4. Envelope (`par emit` / wrapper contract):
 
 ```
@@ -107,7 +108,7 @@ Registry and `$history` die with the MCP child. When a store appears later: iden
 |---|---|
 | `parfor` / `parforeach` | `par` |
 | `parfeval` / `startParallelJob` | `jobs spawn --tag` |
-| `fetchOutputs` / `getJobResults` | `jobs collect` (receipts) then `jobs read` (one body; `--full` if over cap) |
+| `fetchOutputs` / `getJobResults` | `jobs collect` (receipts) then `jobs read` (one body; `jobs fetch` if over cap) |
 | `cancel` / `job kill` | `jobs cancel` |
 | `parwhile` / `paruntil` / FileHash batches | not v1 |
 | `gcp` / batch / `%TEMP%` jsonl | not v1 |

@@ -54,10 +54,10 @@ them in the decisions file.
 4. **Receipts before bodies.** One tool result carries at most one
    payload. Anything withheld names the call that retrieves it.
    `read` is the only verb that may decline, and when it declines it
-   names the retrieval (`jobs read <tag> --full`) — the disclosure ladder is
+   names the retrieval (`jobs fetch <tag>`) — the disclosure ladder is
    `shape` (always fits) → `read` (if it fits) → `preview`/`page`
    (bounded). Over-cap in-hand `read` stashes through `jobs stash`; it is
-   `--env`. `jobs read` is the same cap for an addressed payload; `--full`
+   `--env`. `jobs read` is the same cap for an addressed payload; `jobs fetch`
    is the path that returns the stored body. Other dataspection commands
    stay pure. Cap is `par cap`.
 4b. **Portable verbs.** A verb means one thing wherever it appears,
@@ -76,7 +76,7 @@ them in the decisions file.
    legible only through its own `ok: false`. `shape each` lifts `ok`
    so `$history | shape each | where ok == false` finds them.
 5. **Never cap a live pipeline** (`first N`, `head`) — slice `$history`
-   or `jobs read --full` afterward. This is the MCP's own rule; the modules
+   or `jobs fetch` afterward. This is the MCP's own rule; the modules
    exist to make obeying it easy.
 6. **Writes follow** `issues/nushell-mcp/notes/write-conventions-v1.md`:
    state under `.nushell-mcp/`, scratch under `artifacts/nushell-mcp/`,

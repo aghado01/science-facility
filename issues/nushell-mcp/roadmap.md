@@ -132,10 +132,9 @@ context window as the scarcest resource in the loop:
 3b. **layering v1** — [briefs/layering-v1.md](briefs/layering-v1.md)
    · **landed** 2026-08-22 (A). `modules/core/*.nu` file units;
    dataspection façade owns `read`; `par`/`jobs` never import
-   `dataspection/mod.nu`. Then N10 (`jobs fetch`, optional pointed
-   change) before 4.
+   `dataspection/mod.nu`. N10 (`jobs fetch`) after this, before 4.
 4. **`xq` v1** — [briefs/xq-v1.md](briefs/xq-v1.md) · filed; depends
-   on 3b (+ N10 if fetch lands first). `process capture` in
+   on 3b and N10. `process capture` in
    `core/capture.nu` (unbounded); ordinary `xq` is the terminal
    command (census, `par cap`, stash).
 5. **`rg` module v1** — [briefs/rg-wrapper-v1.md](briefs/rg-wrapper-v1.md)

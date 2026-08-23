@@ -3,6 +3,10 @@
 Newest first. Point at commits and briefs. Counts are from the commit
 they were observed at, not standing claims.
 
+- **2026-08-22 — N10 `jobs fetch`.** Uncapped retrieve; `jobs read` drops
+  `--full`. Decline `retrieve` is `jobs fetch <tag>`. Child tests:
+  par-jobs-v1 27/27, dataspection-v1 13/13 (including `--config` smoke).
+
 - **2026-08-22 — layering A landed** (`modules/core/*.nu`, dataspection
   façade). `--config` over-cap `read` declines; overlay has `shape`/`read`
   not `value nuon`. Child tests: dataspection-v1 13/13, par-jobs-v1 27/27.

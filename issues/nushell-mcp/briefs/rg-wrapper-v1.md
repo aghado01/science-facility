@@ -91,8 +91,8 @@ rg [...args]    # --wrapped; argv forwarded via process capture to ^rg
   spine (there are no files to census).
 - **`tag` present iff something was stashed** — same rule as
   `jobs emit`. Over-cap findings *or* over-cap text go through
-  `jobs stash --tag rg:<seq>`; `jobs read rg:<seq> --full` retrieves the
-  table or the string (N10: `jobs fetch`). Raw rg text never reaches a
+  `jobs stash --tag rg:<seq>`; `jobs fetch rg:<seq>` retrieves the
+  table or the string. Raw rg text never reaches a
   tool result inline beyond the cap.
 - Truncate on **bytes** only. Cap is `par cap`. No new knob file.
   Do not reopen `policy.json`.
@@ -129,7 +129,7 @@ Over-cap findings are **stored, not dropped**: the wrapper pipes the
 full table through `jobs stash --tag rg:<seq>` — a completed-on-arrival
 registry row (`status: completed`, census set, `job_id: null`). One
 retrieval surface for the whole console — `jobs list` shows it,
-`jobs inspect rg:0` gives shape, `jobs read rg:0 --full` returns the table.
+`jobs inspect rg:0` gives shape, `jobs fetch rg:0` returns the table.
 
 `jobs stash` / `jobs emit` landed in par-jobs-v1 on 2026-08-21 (the
 registry amendment this brief owed is paid). The wrapper uses `stash`
@@ -142,7 +142,7 @@ disk, the filename carries session/agent identity — see par-jobs-v1
 
 Two lawful drill modes, both already paid for:
 
-1. **Slice the stored value** — `jobs read rg:0 --full`, then ordinary Nu
+1. **Slice the stored value** — `jobs fetch rg:0`, then ordinary Nu
    (`where`, `group-by`, `slice`) on `$history.N`. No re-search.
 2. **Re-run scoped** — rg is fast; a narrower query is often cleaner
    than paging. Under cap it comes back inline.
@@ -190,13 +190,13 @@ the child — the prerequisite is host setup, not module correctness.
   `rg --version` → `mode: text`, one line inline; `-h` is forwarded
   (text mode), not Nushell help
 - text mode, over cap (cap forced low): `text` omitted, `tag: rg:<seq>`,
-  `jobs read --full` returns the string
+  `jobs fetch` returns the string
 - `-C 1` before or after the pattern: context rows present,
   `kind: context`, `col: null`, interleaved in rg order
 - `-e PATTERN` forwards (wrapper has no positional pattern)
 - over-cap (fixture with many hits, cap forced low): `truncated: true`,
   `spine` sorted hits-desc/file-asc, no `findings`, `tag: rg:0`;
-  registry has `rg:0` completed row; `jobs read rg:0 --full` returns the
+  registry has `rg:0` completed row; `jobs fetch rg:0` returns the
   full table; `jobs inspect rg:0` has no body
 - rg absent (empty `$env.PATH` or missing binary): capture's
   `not found: rg`, nothing stashed
@@ -209,7 +209,7 @@ the child — the prerequisite is host setup, not module correctness.
 ## Exit gate
 
 Three `evaluate`s: broad query over cap → envelope with census + spine,
-no findings; `jobs read rg:0 --full` → full findings table; scoped
+no findings; `jobs fetch rg:0` → full findings table; scoped
 re-query under cap → inline findings.
 At no point does raw rg text hit a tool result beyond the cap — in
 text mode the string is inline only under cap, otherwise stashed.
