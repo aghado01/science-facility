@@ -42,7 +42,9 @@
         "LastWriteUtc": { "from": "ingest.out.bag" },
         "Content":      { "from": "ingest.out.bag", "note": "may be absent/empty only under KeepContentless" }
       },
-      "exclude": [ "AbsolutePath", "SizeBytes", "Extension", "CreationUtc", "FsAttributes", "_ChainHalt" ],
+      "carried": [ "Extension" ],
+      "exclude": [ "AbsolutePath", "SizeBytes", "CreationUtc", "FsAttributes", "_ChainHalt" ],
+      "$tiers": "FOUR dispositions, not three (2026-08-23). core = guaranteed on every entry, not counted in Elements. carried = survives onto the entry for DOWNSTREAM STAGES, not counted in Elements, never a wire column unless container.spec.jsonc names one — the slot a crawl-derived fact needs when it is neither payload material nor an enrichment. exclude = stripped from the bag. elements = everything else (the open enrichment model). Before the carried tier existed, keeping a fact available downstream meant making it look like an enrichment, so facts with a real late consumer were excluded and re-derived instead — `Extension` was computed at crawl, carried three stages, destroyed here, and re-derived by shards for ByFileType grouping. Two derivations that must agree is a defect class; one carried field is not.",
       "elements": { "type": "open", "note": "every other bag field, arrival order preserved (Encoding, ContentMeta, Processing, …); ReadError is an element only under KeepContentless" }
     },
     "diagnostics": {

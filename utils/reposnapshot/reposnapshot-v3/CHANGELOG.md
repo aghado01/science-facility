@@ -1,5 +1,33 @@
 # Changelog 
 
+## 2026-08-23 — assemble gains a `carried` tier; shards read-ahead fixes
+
+**`out.entry` has four tiers, not three** (#50): `core` · **`carried`** ·
+`exclude` · `elements`. Carried = on the entry for downstream stages, **not**
+counted in `Header.Elements`, never a wire column unless `container.spec.jsonc`
+names one. `Extension` moves `exclude` → `carried`: it was stamped at crawl,
+carried intact through membrane and ingest, destroyed here, then re-derived by
+shards from `RelativePath` for `ByFileType` — two derivations of one fact that
+must agree, and they diverge on a trailing-dot leaf. `rs.core.assemble` reads
+the new key and skips carried names when counting Elements; `assemble.tests`
+gains 5 asserts (carried kept, value verbatim, uncounted, module set = contract
+set, tiers disjoint). `contracts.tests`' resolver learned that a register may be
+a **name list** (`carried`/`exclude`) as well as a field register, so
+`shards.in.entry.Extension { from: assemble.out.entry.carried }` resolves.
+
+**Shards contract corrections found by the read-ahead**, all pre-code:
+`group.LowerBound` re-anchored at the **ceiling** and given the count cap —
+a quota-anchored bound can exceed the achievable count, so `ShardCount ≥
+LowerBound` would have failed on a correct optimal plan (header 100, quota 1000,
+tol 500, rows [700,700,500] → LB 3, achievable 2) — mass conservation scoped to
+non-oversized shards on **both** sides (unscoped it reads −3900 against a true
+100 as soon as one oversized shard exists); `OvershootBytes` no longer claims to
+be both `max(0, Deviation)` and `0 for Oversized`; `Key` width derived from
+`ShardCount` with a floor of 3 instead of a hardcoded `D3`; `plan` echoes
+`ShardStem` (serialize needs it and had no route to it) and `MaxFilesPerShard`.
+
+Battery **17 · 1054 · 0**.
+
 ## 2026-08-22 — rs.core.container realigned: the module is the declaration's interpreter
 
 `Resolve-Layout` reads the restructured spec: register from

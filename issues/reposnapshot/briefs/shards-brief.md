@@ -53,15 +53,22 @@ key) and the container layout module (`rs.core.container`) for `Measure-Row`.
 Every byte of a shard file is under our control and every input is in memory
 at plan time, so a row's serialized size is a **pure function**, not an estimate:
 
-```
-row = [address fields ·] path · D · [attr_block · D] · length_str · D · content_span · NL
+A row is an **item list joined by one space** (ledger #49) — items being values,
+keys, and the marks `|` `[` `]` `,`:
 
-Measure-Row(entry, header) =
-    Σ fixed-width address fields + |D|·k
-  + utf8(path) + |D| + [utf8(attr_block) + |D|]
-  + digits_fixed(spanBytes) + |D| + spanBytes + |NL|
-  where spanBytes = utf8(codec(Content))
 ```
+items = [gidx] | path | [ meta , meta , … ] | content_bytes | content_span
+        ← Format-Row returns these, through content_bytes →
+
+Measure-Row(Layout, Entry) = Σ utf8(item) + (itemCount − 1) + |NL|
+  where the content span enters as ONE item of width utf8(codec(Content)),
+  counted by Measure-ContentSpan without allocating
+```
+
+Nothing is hidden inside a concatenation, so the size vector is exact before a
+byte is written. *(Restated 2026-08-23: this section carried the pre-#49
+delimiter formula — `path · D · [attr_block · D] · …` with `D` a padded
+delimiter — which contradicted the item-model bullet below it.)*
 
 - **Row bytes are packing-invariant.** Every field is either content-derived
   (known at measure time — path, attributes, length, content) or
@@ -91,9 +98,9 @@ Measure-Row(entry, header) =
   written. See `shard-container-brief` §The item model.
 - Shard file size = `headerBytes` + Σ `rowBytes`. Plan = file, by construction.
 
-**One grammar site, three callers.** `Format-Row → pieces` in
-`rs.core.container`; `Measure-Row` sums piece lengths (shards, plan time);
-`Build-Row` concatenates to bytes and returns the offset receipt (serialize writes,
+**One grammar site, three callers.** `Format-Row → items` in
+`rs.core.container`; `Measure-Row` sums item lengths plus the joins (shards, plan
+time); `Build-Row` joins to bytes and returns the offset receipt (serialize writes,
 write time). **Offsets remain the writer's receipt** — nobody derives an offset
 from `Measure-Row`; serialize never reports back into the plan.
 
@@ -104,9 +111,14 @@ is not needed for packing.
 
 ## Contract
 
-`shards.in`: `assemble.out.result` — `Header` (`EntryCount`, `Elements` → the
-resolved header schema, so field presence and widths are known) and `Entries`
-(references; canonical ingested order in). Params: the knob roster below.
+`shards.in`: `assemble.out.result.Entries` (references; canonical ingested order
+in) plus `container.out.layout` — the layout object **whole**, resolved before
+this stage. Shards reads `HeaderBytes`, `IdxWidth` and passes the rest to
+`Measure-Row` uninterpreted. Per entry it reads `RelativePath` and `Content`
+(core) and `Extension` (**carried** tier — the `ByFileType` grouping key, read
+never re-derived). Params: the knob roster below. *(Corrected 2026-08-23: this
+said shards reads `Header.EntryCount/Elements` to resolve field presence and
+widths — the container does that now and hands over the resolved layout.)*
 
 `shards.out` — the **ShardPlan**:
 
@@ -154,7 +166,8 @@ the residue. Layout (`HeaderBytes`, `IdxWidth`, `Columns`) is an input from
 | `AllowOversizedShards` | — | — | **retire** (leaning, ledger #42): overflow is policy, not a switch. A fail-fast diagnostic gate, if ever wanted, is not a packing knob |
 | `Strategy` (`Auto`/`ContentBased`/`FileLevel`/`FixedSize`) | — | — | **drop** — dead wrappers |
 | `ShardPrefix` / `Stem` | `ShardStem` | string · from RunContext/Root | keep, rename |
-| `ExcludeAttributes` / `ExcludeShardBlocks`, `Format`, `Compress` | — | — | **relocate to serialize** — emission knobs |
+| `ExcludeAttributes` / `ExcludeShardBlocks`, `Format` | — | — | **relocate to the LAYOUT** — they are column knobs, resolved by `Resolve-Layout` *before* this stage. **Corrected 2026-08-23** (they said "relocate to serialize"): a column knob applied at serialize means shards measured rows the writer does not write, so `PlannedSizeBytes ≠ ByteLength` and plan-=-file dissolves. Which columns are on is settled before anything is measured, by construction |
+| `Compress` | — | — | **serialize's, and not inline** — compression after the file is closed, never during the write; inline would break plan = file for the same reason |
 
 Working defaults are values from the discussion, not final config-surface calls.
 
@@ -242,13 +255,34 @@ both shapes.
    before: `Flat` one bucket; `ByFileType` = `Extension.ToLower()` /
    `'.noext'`; `ByRootDirectory` = first path segment, `'.root'` first); sort
    within group by `GroupSort` → **nominal order**. `EntryCount` known.
+   `Extension` is **read from the entry's carried tier**, not re-derived from
+   `RelativePath` — the crawler stamped it with `[Path]::GetExtension` and it
+   rides forward for exactly this consumer. Re-deriving would be two
+   derivations of one fact that must agree, and they diverge on a trailing-dot
+   leaf; one carried field removes the class.
 2. **Fix schema.** Resolve header schema; `headerBytes`; widths for
    fixed-width fields (`IdxWidth = digits(EntryCount)`).
 3. **Measure.** `rowBytes = Measure-Row(entry, header)` for every record, once.
    Per-group size vector, `Σ_g`. Diagnostics: distribution, max, count near/over
    quota.
 4. **Classify.** Oversized per §Policy → pinned singleton bins, removed from the
-   packable set. `LB_g = ⌈Σ_packable / (quota − headerBytes)⌉ + |oversized_g|`.
+   packable set.
+
+   ```
+   LB_g = max( ⌈Σ_packable / (ceiling − headerBytes)⌉,
+               ⌈packableCount / MaxFilesPerShard⌉ ) + |oversized_g|
+   ```
+
+   **Anchored at the CEILING, not quota** (corrected 2026-08-23). Clause 1
+   admits shards up to `quota + tolerance`, so a quota-anchored bound can
+   exceed what the packer can achieve — and then the exit gate
+   `ShardCount ≥ LowerBound` fails on a *correct, optimal* plan and `Gap` goes
+   negative. Worked case: header 100, quota 1000, tolerance 500, rows
+   `[700, 700, 500]` → quota-anchored `LB = 3`, achievable `k = 2`.
+   **The count cap is in the bound too**: it is a second capacity dimension, so
+   omitting it makes a count-capped group report a large spurious `Gap` and
+   sends stage 6b chasing an unreachable floor. Both corrections degenerate to
+   the original formula when `Tolerance == 0` and the cap does not bind.
 5. **Strict baseline** (always, per group). Greedy contiguous over nominal
    order, capacity `quota − headerBytes` and `MaxFilesPerShard` → `k₀_g`. It is
    provably optimal for contiguous partitions at quota, and reproduces LTS's
@@ -292,20 +326,31 @@ both shapes.
    first record, then **move the group's minimum-fill bin to the tail** (ties →
    later nominal position) — so runts are always group tails; no threshold
    needed. Restore nominal sort within each bin. Concatenate groups in group
-   order → shard `Ordinal`, `Key = "s{0:D3}"` (+ `_<cleanGroup>` when grouped
-   and not `.root`; width fixed before any name is written), and global `idx`
-   `0..N−1` in final reading order (`IdxMap`). Oversized shards stay where
-   nominal order puts them.
+   order → shard `Ordinal`, `Key = 's' + Ordinal` zero-padded to
+   `max(3, digits(ShardCount))` (+ `_<cleanGroup>` when grouped and not
+   `.root`), and global `idx` `0..N−1` in final reading order (`IdxMap`).
+   Oversized shards stay where nominal order puts them. *(Corrected
+   2026-08-23: the literal was `"s{0:D3}"`, hardcoding width 3 next to the rule
+   "width fixed before any name is written" — the same defect class as a
+   plain-integer gidx, latent past 999 shards. `ShardCount` is settled by this
+   stage, so the width is derivable here; the floor of 3 keeps `s001` on
+   ordinary runs.)*
 8. **Plan.** Emit `plan / groups[] / shards[] / idxmap` per §Contract, with the
-   diagnostics. Membership and predicted sizes are planned here; **offsets are
-   not** — serialize measures them.
+   diagnostics, and echo the resolved knobs — including `MaxFilesPerShard`
+   (a reader cannot check `Gap` without it) and **`ShardStem`**, which enters
+   as a shards param but is needed by serialize to build
+   `<ShardStem>_<Key>.txt`; before this it had no route across the boundary.
+   Membership and predicted sizes are planned here; **offsets are not** —
+   serialize measures them.
 
 *(Stage 9, serialize, is downstream: writes header + rows, measures offsets,
 builds the tree from measured values.)*
 
 Testability falls out: the packer is `(sizes[], headerBytes, quota, tolerance,
-orderStrict, maxFiles) → assignment` — exercised on synthetic size vectors with
-no repo, no ingestion, no fixtures.
+orderStrict, packObjective, maxFiles) → assignment` — exercised on synthetic
+size vectors with no repo, no ingestion, no fixtures. *(`packObjective` added
+2026-08-23: the signature predated #48, and the comparison harness exists
+precisely to vary that axis — it cannot be a closed-over constant.)*
 
 ## Calibration on real shapes (for the reader of this brief)
 
@@ -340,9 +385,16 @@ serialization; the doubled header row of the 0422 sample (an old LTS bug).
   `MaxOvershootBytes == 0`. `TotalOvershootBytes` is the overshoot-facing
   aggregate (clause 3, harness), not a bound.
 - **Deviation is consistent**: per shard `OvershootBytes − SlackBytes ==
-  DeviationBytes`; `Class` agrees with the deviation bands; per group
-  `TotalSlackBytes − TotalOvershootBytes == k·quota − Σ PlannedSizeBytes` over
-  non-oversized shards (mass conservation, checked).
+  DeviationBytes` — **every shard, Oversized included**. An oversized shard's
+  excess is atomicity rather than tolerance, and that is expressed by excluding
+  it from the *aggregates*, never by zeroing its own number (the contract said
+  both "derived `max(0, Deviation)`" and "0 for Oversized", which cannot both
+  hold — corrected 2026-08-23). `Class` agrees with the deviation bands.
+  Mass conservation, per group, **both sides scoped to non-oversized shards**:
+  `TotalSlackBytes − TotalOvershootBytes == n_nonOversized·quota −
+  Σ_nonOversized PlannedSizeBytes`. Scoping only one side breaks the instant an
+  oversized shard exists (1 normal at 900 + 1 oversized at 5000, quota 1000:
+  left side 100, unscoped right side −3900).
 - **Never worse than strict**: per group, `ShardCount ≤ k₀_g`; and
   `ShardCount ≥ LowerBound` with `Gap` reported.
 - **Tail rule**: within a group, the minimum-fill non-oversized bin is last.
@@ -407,8 +459,8 @@ serialization; the doubled header row of the 0422 sample (an old LTS bug).
   the tail's records — FFD's natural residue vs. an explicit backward pass.
   Contiguous is settled (adjacent merge, latest-first).
 - Whether a fail-fast switch for oversized survives as a diagnostic gate.
-- Whether the plan holds entry *references* (assumed) or copies.
-- **Propagation owed to shard-container-brief**: LF-only termination, no
-  trailing `|`; UTF-8 no BOM; fixed-width rule for ordinal/address fields;
-  header schema as the superset with rows as its shadow; which address columns
-  v3 carries (`idx` optional).
+- ~~Whether the plan holds entry *references* or copies~~ — **answered** by
+  `shards.contract.json`: references (indices) into
+  `assemble.out.result.Entries`. The plan never copies content.
+- ~~Propagation owed to shard-container-brief~~ — **done** 2026-08-23; that
+  brief now carries §The item model, the settled #45, and the fixed-width rule.

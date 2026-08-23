@@ -86,8 +86,19 @@ function Resolve-OutShape ([hashtable]$Contracts, [string]$Ref)
     $key = $parts[2]
     if ($parts.Count -eq 4)
     {
-        if ($shape -isnot [System.Collections.IDictionary] -or -not $shape.ContainsKey($parts[3]) -or $shape[$parts[3]] -isnot [System.Collections.IDictionary]) { return @{ Why = "'$Ref' register does not exist under $($parts[0]).out.$($parts[2])" } }
-        $shape = $shape[$parts[3]]
+        if ($shape -isnot [System.Collections.IDictionary] -or -not $shape.ContainsKey($parts[3])) { return @{ Why = "'$Ref' register does not exist under $($parts[0]).out.$($parts[2])" } }
+        $reg = $shape[$parts[3]]
+        # A register is either a FIELD REGISTER (name → descriptor) or a NAME
+        # LIST (assemble's carried / exclude tiers — names only, no per-field
+        # notes). Normalize the list form so membership resolves the same way.
+        if ($reg -is [System.Collections.IDictionary]) { $shape = $reg }
+        elseif ($reg -is [System.Collections.IEnumerable] -and $reg -isnot [string])
+        {
+            $norm = @{}
+            foreach ($n in $reg) { $norm[[string]$n] = @{ type = 'name-list entry' } }
+            $shape = $norm
+        }
+        else { return @{ Why = "'$Ref' register does not exist under $($parts[0]).out.$($parts[2])" } }
         $key = "$($parts[2]).$($parts[3])"
     }
     return @{ Stage = $parts[0]; ShapeKey = $key; Shape = $shape }

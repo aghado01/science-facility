@@ -110,10 +110,18 @@ $ir = Invoke-Assemble -DispatchOutput $unitEnvelope
 Assert-True (@($ir.Entries).Count -eq 2) '2 entries from 6 results' "got $(@($ir.Entries).Count)"
 Assert-True ($ir.Entries[0].RelativePath -eq 'a.ps1' -and $ir.Entries[1].RelativePath -eq 'sub/b.ps1') `
     'ingested order preserved (canonical store order)'
-foreach ($dropped in @('AbsolutePath', 'SizeBytes', 'Extension', 'CreationUtc', 'FsAttributes', '_ChainHalt', 'ReadError'))
+foreach ($dropped in @('AbsolutePath', 'SizeBytes', 'CreationUtc', 'FsAttributes', '_ChainHalt', 'ReadError'))
 {
     Assert-True ($null -eq $ir.Entries[0].PSObject.Properties[$dropped]) "entry bag excludes $dropped"
 }
+# CARRIED tier (contract out.entry.carried) — on the entry for downstream
+# stages, but NOT an element. Both halves matter: kept, so shards reads
+# Extension for ByFileType instead of re-deriving it from RelativePath (one
+# fact, one derivation); uncounted, so a crawl fact does not masquerade as an
+# enrichment in the coverage declaration.
+Assert-True ($null -ne $ir.Entries[0].PSObject.Properties['Extension']) 'entry bag CARRIES Extension (not excluded, not re-derived downstream)'
+Assert-True ($ir.Entries[0].Extension -eq '.ps1') 'carried Extension is the crawler-stamped value, verbatim' "got '$($ir.Entries[0].Extension)'"
+Assert-True ($null -eq $ir.Header.Elements.PSObject.Properties['Extension']) 'carried is NOT an element — Header.Elements does not count it'
 # The exclusion and core sets are READ from the stage's own contract
 # (contracts/assemble.contract.json out.entry.exclude / out.entry.core), not hardcoded —
 # prove the module's lists equal the contract's (drift in either direction fails).
@@ -125,7 +133,11 @@ Assert-True (($contractExclude -join ',') -eq ($moduleExclude -join ',')) 'assem
 $contractCore = @($contract.out.entry.core.Keys) | Sort-Object
 $moduleCore = @(& (Get-Module rs.core.assemble) { $script:CoreFields }) | Sort-Object
 Assert-True (($contractCore -join ',') -eq ($moduleCore -join ',')) 'assemble core set = contract out.entry.core' "contract: $($contractCore -join ','); module: $($moduleCore -join ',')"
-Assert-True ($null -eq $ir.Header.Elements.PSObject.Properties['Extension'] -and $null -eq $ir.Header.Elements.PSObject.Properties['FsAttributes']) 'excluded fields never reach Header.Elements'
+$contractCarried = @($contract.out.entry.carried) | Sort-Object
+$moduleCarried = @(& (Get-Module rs.core.assemble) { $script:CarriedFields }) | Sort-Object
+Assert-True (($contractCarried -join ',') -eq ($moduleCarried -join ',')) 'assemble carried set = contract out.entry.carried' "contract: $($contractCarried -join ','); module: $($moduleCarried -join ',')"
+Assert-True (@($contractCarried | Where-Object { $_ -in $contractExclude }).Count -eq 0) 'the four tiers are disjoint — nothing is both carried and excluded'
+Assert-True ($null -eq $ir.Header.Elements.PSObject.Properties['FsAttributes']) 'excluded fields never reach Header.Elements'
 foreach ($kept in @('RelativePath', 'NodePath', 'LastWriteUtc', 'Content', 'Encoding', 'ContentMeta'))
 {
     Assert-True ($null -ne $ir.Entries[0].PSObject.Properties[$kept]) "entry bag keeps $kept"

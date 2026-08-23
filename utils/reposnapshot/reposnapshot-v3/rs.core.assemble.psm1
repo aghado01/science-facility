@@ -51,6 +51,14 @@ using namespace System.Collections.Generic
     Stage contract: contracts/assemble.contract.json (in = what is read from the
     envelope and each bag; out = what an entry IS). Read at import:
       out.entry.core    → guaranteed on every entry; not counted in Elements.
+      out.entry.carried → on the entry for DOWNSTREAM STAGES; not counted in
+        Elements; never a wire column unless container.spec.jsonc names one.
+        The slot for a crawl-derived fact that is neither payload material nor
+        an enrichment — `Extension` (shards ByFileType) is the case that
+        forced it. Without this tier the only way to keep such a fact
+        available was to let it masquerade as an enrichment, so it was
+        excluded and re-derived downstream instead — two derivations of one
+        fact, which is a defect class.
       out.entry.exclude → stripped from entry bags.
       anything else     → element (open element model; unlisted = element).
       ReadError — routed to Diagnostics under LeanPayload; retained in the
@@ -104,6 +112,9 @@ $script:Contract = Get-Content -LiteralPath "$PSScriptRoot/contracts/assemble.co
     ConvertFrom-Json -AsHashtable
 $script:CoreFields = @($script:Contract.out.entry.core.Keys)
 $script:ExcludedFields = @($script:Contract.out.entry.exclude)
+# carried — on the entry for downstream stages, but NOT an element: it is a
+# crawl-derived fact with a late consumer, not an enrichment (contract $tiers).
+$script:CarriedFields = @($script:Contract.out.entry.carried)
 
 # =============================================================================
 # PUBLIC — Invoke-Assemble
@@ -233,6 +244,7 @@ function Invoke-Assemble
         foreach ($p in $entry.PSObject.Properties)
         {
             if ($p.Name -in $coreFields) { continue }
+            if ($p.Name -in $script:CarriedFields) { continue }   # carried ≠ element
             if ($elementCounts.Contains($p.Name)) { $elementCounts[$p.Name]++ }
             else { $elementCounts[$p.Name] = 1 }
         }

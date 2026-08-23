@@ -36,6 +36,28 @@ in another language.
 Exit gate: `shards-brief` §Exit gate, plus the comparison harness in the battery
 rather than on the shipping path.
 
+## Track: crawler-profile — *independent; schedule AFTER shards*
+
+Crawler's `CreationUtc` and `FsAttributes` have no reader at any RS stage — they
+are declared as pass-throughs through membrane and ingest and dropped by
+assemble's exclusion list. They are **not** residue: they are free only at crawl
+(one `FileInfo`, one stat — #38 clause 4), and crawler has standalone value, so
+the RS pipeline's disinterest is a profile setting rather than evidence the field
+is wrong. Make what crawler gathers **configurable** by field group
+(`identity` always · `size` · `timestamps` · `fsattrs`), so an unused field is an
+unselected option and the standalone caller is a first-class user rather than a
+fork.
+
+The cost is not in the crawler — it is that a configurable output shape makes
+the **`from` graph conditional**, so `contracts.tests` must distinguish "optional
+field legally absent" from "`from` does not resolve". That is the only item in
+the backlog that changes what the *generic* suite accepts rather than what one
+contract says, which is why it waits for shards: two moving pieces under one gate
+is the avoidable mistake. Nothing in shards depends on it — `ByFileType` needs
+`Extension`, which is in `identity` and always on.
+
+Scoped in [crawler-profile-brief](../briefs/crawler-profile-brief.md).
+
 ## Track: encoding-lookback (6e) — *independent, unblocked*
 
 Filed and unblocked, not started — the one assemble-facing item the emission work

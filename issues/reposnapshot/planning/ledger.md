@@ -7,6 +7,34 @@ never as standing claims, and never hand-copied from prose.
 Rulings live in [decisions.md](decisions.md); what remains lives in
 [roadmap.md](roadmap.md).
 
+- **2026-08-23 — shards read-ahead: five contradictions fixed before any code**,
+  plus the `carried` tier and the crawl-vs-ingest doctrine. Read-ahead over
+  `shards-brief` and the serialize/manifest contracts, checking sequencing rather
+  than prose. Three were **arithmetic**, verified by computation not inspection:
+  `LowerBound` anchored at quota while clause 1 admits the ceiling (so the exit
+  gate `ShardCount ≥ LowerBound` fails on a correct optimal plan and `Gap` goes
+  negative — header 100, quota 1000, tol 500, rows `[700,700,500]`: LB 3,
+  achievable 2), mass conservation scoped on one side only (−3900 against a true
+  100 once an oversized shard exists), and `OvershootBytes` declared as both
+  `max(0, Deviation)` and `0 for Oversized`. One would have **silently broken
+  plan = file**: the knob roster relocated column knobs to serialize, where a
+  column knob means shards measured rows the writer does not write. `LowerBound`
+  also gained the count cap; `Key` width is derived from `ShardCount` (floor 3)
+  instead of a hardcoded `D3`; the plan echoes `ShardStem`, which serialize needs
+  and had no route to; the packer-core signature gained `PackObjective`, absent
+  since #48 though the harness exists to vary exactly that axis. Brief also
+  de-staled: §Planning is exact carried the pre-#49 delimiter formula.
+  **#38 amended to four clauses** — the new one being *free at crawl AND free
+  again at ingest → ingest* (smaller N, fresher value, narrower membrane
+  surface); clause 4 keeps filesystem metadata at crawl because one `FileInfo`
+  is one stat and ingest would pay a fresh one. **#50 minted: the entry bag has a
+  `carried` tier**, and `Extension` moves into it — code, contract, and 5 new
+  asserts. `contracts.tests`' resolver taught that a register may be a name list.
+  Battery at this commit: **17 suites · 1054 passed · 0 failed**.
+  Filed forward: [crawler-profile-brief](../briefs/crawler-profile-brief.md) and
+  its roadmap track — crawler field groups, scheduled *after* shards because it
+  is the only backlog item that changes what the generic contract suite accepts.
+
 - **2026-08-23 — `shard-container-brief` reconciled to the landed wire**, before
   `rs.core.shards` is built against it. It was three generations stale at once:
   the pre-#49 annotation form (`gidx<int:N>`), a declaration path retired on

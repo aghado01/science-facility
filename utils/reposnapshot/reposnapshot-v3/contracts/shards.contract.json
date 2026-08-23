@@ -17,11 +17,13 @@
       "Entries": { "from": "assemble.out.result", "note": "canonical ingested order in; every entry becomes exactly one record (atomicity — never split; ledger #47)" }
     },
     "entry": {
-      "RelativePath": { "from": "assemble.out.entry.core", "note": "grouping key source (root dir / extension) and GroupSort key; idxmap key" },
-      "Content":      { "from": "assemble.out.entry.core", "note": "measured via Measure-Row(layout, entry) — never rendered here; the codec's byte count is a counting fold" }
+      "RelativePath": { "from": "assemble.out.entry.core", "note": "ByRootDirectory grouping key source and GroupSort key; idxmap key" },
+      "Content":      { "from": "assemble.out.entry.core", "note": "measured via Measure-Row(layout, entry) — never rendered here; the codec's byte count is a counting fold" },
+      "Extension":    { "from": "assemble.out.entry.carried", "note": "ByFileType grouping key, lowercased ('.noext' when empty). READ, never re-derived: the crawler stamped it with [Path]::GetExtension and it rides the carried tier for exactly this consumer. Deriving it again from RelativePath here would be two derivations of one fact that must agree — they diverge on a trailing-dot leaf" }
     },
     "layout": {
-      "HeaderBytes": { "from": "container.out.layout", "note": "seeds every shard's PlannedSizeBytes; capacity = quota − HeaderBytes" },
+      "$note": "shards receives the layout OBJECT whole and hands it to Measure-Row; the fields below are the ones shards itself reads. Framing and DoublePrecision are passed through uninterpreted, exactly like Columns.",
+      "HeaderBytes": { "from": "container.out.layout", "note": "seeds every shard's PlannedSizeBytes; capacity = quota − HeaderBytes (or ceiling − HeaderBytes for the lower bound — see group.LowerBound)" },
       "IdxWidth":    { "from": "container.out.layout", "note": "gidx width; assigned values come after packing, width is known before" },
       "Columns":     { "from": "container.out.layout", "note": "what Measure-Row measures per entry (sources, widths); shards passes it through, does not interpret it" }
     }
@@ -42,7 +44,7 @@
       "InBandCount":           { "type": "int",   "note": "single-record shards in (quota, ceiling]" },
       "TotalOvershootBytes":   { "type": "long",  "note": "overshoot-facing: Σ over non-oversized shards of DeviationBytes clamped to max(0, ·) — clause 3 aggregate, harness column, NOT a bound" },
       "MaxOvershootBytes":     { "type": "long",  "note": "tolerance-facing: max over non-oversized shards of DeviationBytes clamped to max(0, ·) — the exit-gate check, MaxOvershootBytes ≤ ShardToleranceBytes" },
-      "TotalSlackBytes":       { "type": "long",  "note": "Σ over non-oversized shards of max(0, −DeviationBytes) — the remainder, wherever the shape left it; mass-conservation check: TotalSlackBytes − TotalOvershootBytes == ShardCount×ShardQuotaBytes − Σ PlannedSizeBytes" },
+      "TotalSlackBytes":       { "type": "long",  "note": "Σ over non-oversized shards of max(0, −DeviationBytes) — the remainder, wherever the shape left it. Mass-conservation check, BOTH SIDES SCOPED TO NON-OVERSIZED SHARDS: TotalSlackBytes − TotalOvershootBytes == n_nonOversized×ShardQuotaBytes − Σ_nonOversized PlannedSizeBytes. Corrected 2026-08-23: the earlier form used ShardCount and the full Σ, which breaks the moment any oversized shard exists — an oversized shard contributes a large negative to the right side and nothing to the left (1 normal at 900 + 1 oversized at 5000, quota 1000: LHS 100, old RHS −3900)" },
       "MaxFillBytes":          { "type": "long",  "note": "largest non-oversized shard's PlannedSizeBytes — what PackObjective=Even minimizes" },
       "MinFillBytes":          { "type": "long",  "note": "smallest non-oversized shard's PlannedSizeBytes" },
       "HeaderOverheadBytes":   { "type": "long",  "note": "ShardCount × HeaderBytes — the entire cost of shard count; what a worse k actually spends" },
@@ -52,6 +54,8 @@
       "PackObjective":         { "type": "string" },
       "ShardQuotaBytes":       { "type": "long" },
       "ShardToleranceBytes":   { "type": "long" },
+      "MaxFilesPerShard":      { "type": "int",  "note": "echoed with the other resolved knobs — it participates in LowerBound, so a reader of the plan cannot check Gap without it" },
+      "ShardStem":             { "type": "string", "note": "echoed because SERIALIZE NEEDS IT: the filename is <ShardStem>_<Key>.txt but ShardStem enters as a shards param and serialize takes only I/O params. Added 2026-08-23 — without it the stem had no route across the stage boundary" },
       "HeaderBytes":           { "from": "container.out.layout", "note": "echoed so the plan is self-describing" },
       "IdxWidth":              { "from": "container.out.layout" }
     },
@@ -60,7 +64,7 @@
       "EntryCount":        { "type": "int" },
       "SumRowBytes":       { "type": "long" },
       "ShardCount":        { "type": "int" },
-      "LowerBound":        { "type": "int",   "note": "⌈Σ packable / (quota − HeaderBytes)⌉ + |oversized| — the packer's floor" },
+      "LowerBound":        { "type": "int",   "note": "max(⌈Σ packable / (CEILING − HeaderBytes)⌉, ⌈packableCount / MaxFilesPerShard⌉) + |oversized| — the packer's floor. TWO corrections, 2026-08-23: (a) the bound is anchored at the CEILING, not quota, because clause 1 admits shards up to quota+tolerance — a quota-anchored bound can exceed the achievable count, making `ShardCount ≥ LowerBound` fail on a correct optimal plan and driving Gap negative (worked example: header 100, quota 1000, tol 500, rows [700,700,500] → quota-anchored LB 3, achievable 2); (b) the count cap is a second capacity dimension, so it belongs in the bound — otherwise a count-capped group reports a large spurious Gap and stage 6b runs futile elimination passes chasing an unreachable floor. Degenerates to the old formula when Tolerance == 0 and the cap does not bind" },
       "Gap":               { "type": "int",   "note": "ShardCount − LowerBound; 0 = provably tight" },
       "OversizedCount":    { "type": "int" },
       "SingletonCount":    { "type": "int" },
@@ -73,14 +77,14 @@
     },
     "shard": {
       "Ordinal":          { "type": "int",    "note": "1-based, global across groups; final reading order" },
-      "Key":              { "type": "string", "note": "sidx as filename fragment: 's{0:D3}' (+ '_<cleanGroup>' when grouped and not .root); width fixed before any name is written; NOT a row column" },
+      "Key":              { "type": "string", "note": "sidx as filename fragment: 's' + Ordinal zero-padded to digits(ShardCount), MINIMUM 3 (+ '_<cleanGroup>' when grouped and not .root); NOT a row column. Corrected 2026-08-23: the literal 's{0:D3}' hardcoded width 3 while the rule beside it said 'width fixed before any name is written' — the same defect class as a plain-integer gidx, latent past 999 shards. ShardCount is known at sequence time, so the width is derivable there; the minimum of 3 keeps the familiar s001 shape on ordinary runs" },
       "GroupKey":         { "type": "string" },
       "Class":            { "type": "Normal|Singleton|InBand|Oversized" },
       "IsOversized":      { "type": "bool",   "note": "Class = Oversized; EntryCount = 1; PlannedSizeBytes > ceiling by policy; declared to the reader by manifest" },
       "PlannedSizeBytes": { "type": "long",   "note": "HeaderBytes + Σ Measure-Row over Entries — equals the written file's byte length exactly (exit gate; serialize asserts it)" },
       "DeviationBytes":   { "type": "long",   "note": "SIGNED, anchored at quota: PlannedSizeBytes − ShardQuotaBytes. The stored fact; OvershootBytes/SlackBytes/Class all derive from it. < 0 underfilled (slack) · 0…tolerance overshoot, in band · > tolerance beyond ceiling, Oversized only" },
-      "OvershootBytes":   { "type": "long",   "note": "derived: max(0, DeviationBytes). 0 for Oversized (their excess is atomicity, not tolerance)" },
-      "SlackBytes":       { "type": "long",   "note": "derived: max(0, −DeviationBytes). Consistency: OvershootBytes − SlackBytes == DeviationBytes" },
+      "OvershootBytes":   { "type": "long",   "note": "derived: max(0, DeviationBytes) — for EVERY shard including Oversized. Corrected 2026-08-23: the earlier note also said '0 for Oversized', which contradicts its own derivation (Deviation 4000 → max(0,4000) = 4000, not 0) and breaks the per-shard consistency gate below. An oversized shard's excess IS atomicity rather than tolerance, and that is expressed by EXCLUDING IT FROM THE AGGREGATES (Total/Max overshoot, MaxFillBytes, lower-bound comparisons) — not by falsifying its own number" },
+      "SlackBytes":       { "type": "long",   "note": "derived: max(0, −DeviationBytes). Consistency, per shard and without exception: OvershootBytes − SlackBytes == DeviationBytes" },
       "EntryCount":       { "type": "int" },
       "Entries":          { "type": "ref[]",  "note": "references (indices) into assemble.out.result.Entries, in shard order (nominal sort restored within the shard)" }
     },
