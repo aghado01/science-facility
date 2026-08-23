@@ -114,6 +114,18 @@ let results = [
     (t "par empty" {
         assert-eq ([] | par {|x| $x}) [] "empty in, empty out"
     })
+    (t "spawn without tag allocates" {
+        let a = (jobs spawn { 7 })
+        assert-eq $a.status "running" "running"
+        assert-true ($a.tag | str starts-with "spawn:") "spawn prefix"
+        let b = (jobs spawn { 8 })
+        assert-true ($b.tag | str starts-with "spawn:") "second prefix"
+        assert-true ($a.tag != $b.tag) "distinct"
+        let c = (jobs collect --timeout 3sec)
+        assert-eq ($c | length) 2 "both"
+        assert-eq (jobs fetch $a.tag) 7 "first payload"
+        assert-eq (jobs fetch $b.tag) 8 "second payload"
+    })
     (t "two jobs first errors" {
         let a = (jobs spawn { error make {msg: "boom"} } --tag err-a)
         let b = (jobs spawn { 7 } --tag err-b)

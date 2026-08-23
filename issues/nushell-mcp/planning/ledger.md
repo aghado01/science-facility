@@ -3,6 +3,10 @@
 Newest first. Point at commits and briefs. Counts are from the commit
 they were observed at, not standing claims.
 
+- **2026-08-23 — tagless jobs spawn allocates `spawn:<n>`.** Omitted `--tag`
+  uses registry allocation; `job spawn --description` never sees null.
+  par-jobs-v1 30/30.
+
 - **2026-08-23 — split inherited PATH before deps/cli.** Windows string PATH
   is split on `char esep` so host dirs stay separate entries. Child test
   dataspection-v1 14/14 (`config PATH splits a Windows string`).

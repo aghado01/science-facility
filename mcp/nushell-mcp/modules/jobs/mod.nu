@@ -262,19 +262,21 @@ def jobs-not-payload [row, verb: string] {
 # --- exports ------------------------------------------------------------------
 
 # Spawn a background job. Returns a running receipt, or `{ok: false, error: "budget", budget}` at cap.
-# Duplicate `tag` is refused. Payload is quarantined in `$env.JOBS` until `jobs read` / `jobs fetch`.
+# `--tag` is exact (duplicate refused). Omitted `--tag` allocates `spawn:<n>` (smallest free).
+# Payload is quarantined in `$env.JOBS` until `jobs read` / `jobs fetch`.
 # Lifecycle `status` is separate from domain `ok`: a returned `{ok: false, ...}` (or outcome
 # table with failures) is `status: completed`, `ok: false`, payload fetchable. A throw or
 # vanish is `status: failed`, `ok: false`, no payload.
 export def --env "jobs spawn" [
     work: closure                           # Work to run in a background job (`{ ... }`)
-    --tag: string                           # Unique session tag (lookup key; also native --description)
+    --tag: string                           # Unique session tag; default allocated `spawn:<n>`
 ] {
     jobs-require-par
     if not (jobs-owns) {
         return (jobs-owner-fail {} "jobs.spawn" --tag $tag)
     }
     jobs-harvest 0sec
+    let tag = (if $tag != null { $tag } else { jobs-alloc-tag "spawn" })
     if ($env.JOBS? != null) and (not ($env.JOBS | is-empty)) {
         if not ($env.JOBS | where tag == $tag | is-empty) {
             return (jobs-stamp-receipt {ok: false, error: "duplicate tag", tag: $tag} "jobs.spawn" --tag $tag)

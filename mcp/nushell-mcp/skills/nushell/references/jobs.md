@@ -45,7 +45,7 @@ Row shape, input order:
 
 | Verb | Returns |
 |---|---|
-| `jobs spawn { ... } --tag <string>` | running receipt, or `{ok: false, error: "budget", budget}` |
+| `jobs spawn { ... } [--tag t]` | running receipt; omitted `--tag` allocates `spawn:<n>`. `{ok: false, error: "budget", budget}` at cap |
 | `jobs list` | all receipts, **seq** order. No payloads |
 | `jobs collect [--timeout 5sec]` | finished receipts only (`completed\|failed\|cancelled`), seq order |
 | `jobs inspect <id\|tag>` | jobs receipt + payload census from `shape` internally; never body |
