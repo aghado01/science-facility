@@ -27,6 +27,7 @@ $in | par {|row| ... } [--threads N] [--no-keep-order]
 - `--threads` is a **request** (MaxWorkers), not a grant. `par budget` resolves it.
 - Default `--keep-order`. Opt out with `--no-keep-order`.
 - Fail-soft: one dead item is a row (`ok: false`); later items still run. No fail-fast.
+- A thrown closure is `ok: false`, `value: null`. A returned declared failure (`{ok: false, ...}` or an outcome table with failed rows) is `ok: false` with the **original value retained** (tag / retrieve / meta stay on `value`). Domain failures do not throw, cancel siblings, or punch holes.
 - Empty input → empty table. `index` is 0-based input position.
 - Large maps: `jobs spawn { $data | par {|row| ...} }` then `inspect`/`read`. v1 does not auto-promote.
 
@@ -50,7 +51,7 @@ Row shape, input order:
 | `jobs inspect <id\|tag>` | jobs receipt + payload census from `shape` internally; never body |
 | `jobs read <id\|tag>` | completed + under cap → body; over cap → decline naming `jobs fetch <quoted-tag>`; missing/running/failed/cancelled/unserializable → `{ok: false}` |
 | `jobs fetch <id\|tag>` | completed → stored body; otherwise stamped `{ok: false}` (compose `\| page`) |
-| `jobs cancel <id>` | `{job_id, cancelled, meta}` |
+| `jobs cancel <id>` | `{ok, job_id, cancelled, error?, meta}` — missing/non-running is `ok: false` |
 | `jobs status` | knobs, cores, ceiling, inflight, policy, `meta` |
 | `jobs policy --max-workers N …` | mutate session knobs; still clamped |
 | `$v \| jobs stash [--tag t]` | store any value as a completed-on-arrival row (`job_id: null`); receipt back, `read` later |
@@ -63,6 +64,8 @@ Receipt (no `output` column). Single-record returns (`spawn` / `stash` / `inspec
 ```
 
 `status`: `pending | running | completed | failed | cancelled`. Budget refusal is **not** a job row.
+
+`status` is execution lifecycle; `ok` is the stored operation outcome. A closure that **returns** `{ok: false, ...}` (or an outcome table with failures) is `status: completed`, `ok: false`, payload fetchable via `jobs read` / `jobs fetch`. A throw or vanish is `status: failed`, `ok: false`, no payload. Completed-on-arrival `jobs stash` reports whether **storage** succeeded and does not reinterpret the stored value.
 
 - Registry: `$env.JOBS`, append-only `seq` 0,1,2,…. Duplicate `tag` → refuse. Dies with the MCP child.
 - Every mutating verb is `def --env` so the write survives the next `evaluate`.

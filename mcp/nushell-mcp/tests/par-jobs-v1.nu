@@ -225,6 +225,7 @@ let results = [
     (t "cancel stamps row" {
         let a = (jobs spawn { sleep 5sec; 1 } --tag can)
         let k = (jobs cancel $a.job_id)
+        assert-eq $k.ok true "cancel ok"
         assert-eq $k.cancelled true "cancelled true"
         assert-eq $k.meta.verb "jobs.cancel" "cancel stamped"
         assert-eq $k.meta.tag "can" "cancel meta tag"
@@ -414,7 +415,14 @@ let results = [
         assert-eq $rr.error "still running" "running error"
         assert-eq (jobs fetch run).error "still running" "fetch running"
         let k = (jobs cancel $a.job_id)
+        assert-eq $k.ok true "cancel ok"
         assert-eq $k.cancelled true "cancelled"
+        let missc = (jobs cancel 999999)
+        assert-eq $missc.ok false "missing cancel ok"
+        assert-eq $missc.cancelled false "missing not cancelled"
+        let already = (jobs cancel $a.job_id)
+        assert-eq $already.ok false "already cancelled ok"
+        assert-eq $already.cancelled false "already not cancelled"
         let fc = (jobs fetch run)
         assert-eq $fc.ok false "fetch cancelled"
         assert-eq $fc.status "cancelled" "cancelled status"

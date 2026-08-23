@@ -6,6 +6,7 @@ const SELF_DIR = (path self | path dirname)
 
 # `shape` for the one `bytes` definition. Overlay `use *` does not leak into this module.
 use core/census.nu [shape]
+use core/outcome.nu ["outcome project"]
 
 # --- host facts / knobs -------------------------------------------------------
 
@@ -145,6 +146,10 @@ export def "par budget" [
 
 # Parallel map. One row per input, input order (opt out with --no-keep-order).
 # Row: {index, ok, item, value, error, elapsed}. Fail-soft: a dead item is a row; the map continues.
+# A thrown closure is `ok: false`, `value: null`. A returned declared failure
+# (`{ok: false, ...}` or an outcome table with failed rows) is `ok: false` with
+# the original value retained (tag / retrieve / meta stay on `value`). A returned
+# failure never throws, never cancels siblings, never punches a hole.
 # --threads is a request (MaxWorkers), not a grant — resolve-budget clamps it.
 # Large maps belong in `jobs spawn { $data | par {|row| ...} }`, then inspect/read.
 # Do not return per-row handles. Native `par-each --threads` bypasses policy; use this.
@@ -167,7 +172,9 @@ export def main [
     let work = {|row|
         let t0 = (date now)
         let r = (try {
-            {ok: true, value: (do $fn $row.item), error: null}
+            let value = (do $fn $row.item)
+            let proj = ($value | outcome project)
+            {ok: $proj.ok, value: $value, error: $proj.error}
         } catch {|e|
             {ok: false, value: null, error: (short-error $e.msg)}
         })

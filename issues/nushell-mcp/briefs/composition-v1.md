@@ -1,6 +1,6 @@
 # composition v1 — outcomes and payload ownership
 
-**Status:** filed, not landed · **Filed:** 2026-08-23 · **Home:**
+**Status:** outcome cut landed 2026-08-23; ownership and stream pending · **Filed:** 2026-08-23 · **Home:**
 `mcp/nushell-mcp/modules/core`, Nu-native dependency units consumed by
 `par`, `jobs`, `dataspection`, `xq`, and `rg`.
 **Amends:** [par-jobs-v1](../.archive/briefs/par-jobs-v1.md),
@@ -289,3 +289,16 @@ acceptance case for `exit.ok: true` plus returned `data.ok: false`.
 - Predictable generated tag suffixes
 - Byte-backed rg finding rows in this cut
 - Turning domain failures back into throws
+
+## Follow-up report
+
+- **2026-08-23 — outcome cut.** `modules/core/outcome.nu` (`outcome project`:
+  record / outcome table-or-list, no recursion). `par` lifts returned
+  `{ok: false}` and outcome tables onto the row while retaining `value`
+  (tag / retrieve / meta). `jobs spawn` packer uses `returned`; harvest
+  is `status: completed` + `ok` from the projection, payload fetchable.
+  Throw/vanish stay `status: failed` with no payload. `jobs stash` does
+  not project stored values. `jobs cancel` is `{ok, cancelled, job_id}`
+  on every path. Child tests: composition-v1 20/20, par-jobs-v1 29/29,
+  dataspection-v1 13/13, xq-v1 8/8, rg-v1 13/13. N16 landed. Ownership
+  and stream cuts remain.

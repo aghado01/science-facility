@@ -16,7 +16,7 @@ package-level rules.
   Overlay preload is not DI into module bodies
   ([layering-v1](../../issues/nushell-mcp/.archive/briefs/layering-v1.md)).
 - `modules/` — Nu-native modules. `modules/core/*.nu` are dependency
-  file units (`census`, `meta`, `value`, `failure`, …); `par`/`jobs`
+  file units (`census`, `meta`, `value`, `failure`, `outcome`, …); `par`/`jobs`
   import those, never `dataspection/mod.nu`. `dataspection` is the
   façade (`read` + `export use` of core). Overlay order is still
   `par`, `jobs`, `dataspection`, then `xq`, `rg`.

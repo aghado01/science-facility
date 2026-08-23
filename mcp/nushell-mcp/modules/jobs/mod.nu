@@ -14,6 +14,7 @@ export-env {
 # Overlay `use *` does not leak into this module's scope. Import cores and par here.
 use core/census.nu [shape]
 use core/meta.nu ["meta stamp"]
+use core/outcome.nu ["outcome project"]
 use par ["par cap" "par budget" "par emit"]
 
 # --- pure helpers -------------------------------------------------------------
@@ -107,18 +108,34 @@ def --env jobs-apply [msg: record] {
         $env.JOBS | each {|row|
             if $row.tag == $msg.tag and $row.status == "running" {
                 let finished = (date now)
-                let payload = $msg.output
-                let census = (jobs-census $payload)
-                $row | merge {
-                    ok: $msg.ok
-                    status: (if $msg.ok { "completed" } else { "failed" })
-                    error: (if $msg.ok { null } else { (jobs-short ($msg.error | default "error")) })
-                    output: $payload
-                    bytes: $census.bytes
-                    type: $census.type
-                    length: $census.length
-                    finished: $finished
-                    elapsed: ($finished - $row.started)
+                let returned = ($msg.returned? | default false)
+                if not $returned {
+                    $row | merge {
+                        ok: false
+                        status: "failed"
+                        error: (jobs-short ($msg.error | default "error"))
+                        output: null
+                        bytes: null
+                        type: null
+                        length: null
+                        finished: $finished
+                        elapsed: ($finished - $row.started)
+                    }
+                } else {
+                    let payload = $msg.output
+                    let proj = ($payload | outcome project)
+                    let census = (jobs-census $payload)
+                    $row | merge {
+                        ok: $proj.ok
+                        status: "completed"
+                        error: (if $proj.ok { null } else { $proj.error })
+                        output: $payload
+                        bytes: $census.bytes
+                        type: $census.type
+                        length: $census.length
+                        finished: $finished
+                        elapsed: ($finished - $row.started)
+                    }
                 }
             } else { $row }
         }
@@ -209,6 +226,9 @@ def jobs-not-payload [row, verb: string] {
 
 # Spawn a background job. Returns a running receipt, or `{ok: false, error: "budget", budget}` at cap.
 # Duplicate `tag` is refused. Payload is quarantined in `$env.JOBS` until `jobs read` / `jobs fetch`.
+# Lifecycle `status` is separate from domain `ok`: a returned `{ok: false, ...}` (or outcome
+# table with failures) is `status: completed`, `ok: false`, payload fetchable. A throw or
+# vanish is `status: failed`, `ok: false`, no payload.
 export def --env "jobs spawn" [
     work: closure                           # Work to run in a background job (`{ ... }`)
     --tag: string                           # Unique session tag (lookup key; also native --description)
@@ -238,9 +258,9 @@ export def --env "jobs spawn" [
     let mbox = $JOBS_MBOX
     let id = (job spawn --description $tag {
         let packed = (try {
-            {tag: $tag, ok: true, output: (do $work), error: null}
+            {tag: $tag, returned: true, output: (do $work), error: null}
         } catch {|e|
-            {tag: $tag, ok: false, output: null, error: $e.msg}
+            {tag: $tag, returned: false, output: null, error: $e.msg}
         })
         $packed | job send 0 --tag $mbox
     })
@@ -428,17 +448,29 @@ export def --env "jobs emit" [
 }
 
 # Kill a running job and stamp the row. A killed job never sends; collect must not wait on it.
+# Missing / non-running is data: `{ok: false, cancelled: false, error, job_id}`. Success is
+# `{ok: true, cancelled: true, job_id}`. Does not throw.
 export def --env "jobs cancel" [
     id: int                                 # Native job_id
 ]: nothing -> record {
     jobs-harvest 0sec
     let hit = (jobs-find $id)
     if ($hit | is-empty) {
-        return (jobs-stamp-receipt {job_id: $id, cancelled: false} "jobs.cancel")
+        return (jobs-stamp-receipt {
+            ok: false
+            cancelled: false
+            job_id: $id
+            error: $"no job matching ($id | to nuon --raw)"
+        } "jobs.cancel")
     }
     let row = ($hit | first)
     if $row.status != "running" {
-        return (jobs-stamp-receipt {job_id: $id, cancelled: false} "jobs.cancel" --tag $row.tag)
+        return (jobs-stamp-receipt {
+            ok: false
+            cancelled: false
+            job_id: $id
+            error: $row.status
+        } "jobs.cancel" --tag $row.tag)
     }
     try { job kill $id } catch { }
     let finished = (date now)
@@ -456,7 +488,11 @@ export def --env "jobs cancel" [
             } else { $r }
         }
     )
-    jobs-stamp-receipt {job_id: $id, cancelled: true} "jobs.cancel" --tag $row.tag --elapsed $elapsed
+    jobs-stamp-receipt {
+        ok: true
+        cancelled: true
+        job_id: $id
+    } "jobs.cancel" --tag $row.tag --elapsed $elapsed
 }
 
 # Knobs, cores, ceiling, inflight, policy. No job rows. Harvests ready so inflight is true.

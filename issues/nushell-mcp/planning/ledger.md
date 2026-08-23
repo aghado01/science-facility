@@ -3,6 +3,12 @@
 Newest first. Point at commits and briefs. Counts are from the commit
 they were observed at, not standing claims.
 
+- **2026-08-23 — composition outcome cut.** `core/outcome.nu`; `par` lifts
+  returned `{ok: false}` while retaining `value`; `jobs spawn` harvest keeps
+  `status: completed` with `ok: false` and a fetchable payload; `jobs cancel`
+  missing/non-running is `{ok: false}`. Child tests: composition-v1 20/20,
+  par-jobs-v1 29/29, dataspection-v1 13/13, xq-v1 8/8, rg-v1 13/13. N16 landed.
+
 - **2026-08-22 — rg wrapper v1.** `modules/rg/mod.nu` consumes `process capture`,
   injects `--json` once, JSON-event findings / text on the return path, spine
   over cap, `jobs stash` as `rg:<seq>`. In-job never stashes. Child tests
