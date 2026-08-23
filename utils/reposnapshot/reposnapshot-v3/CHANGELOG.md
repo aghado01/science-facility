@@ -1,5 +1,43 @@
 # Changelog 
 
+## 2026-08-22 — rs.core.container realigned: the module is the declaration's interpreter
+
+`Resolve-Layout` reads the restructured spec: register from
+`shard_container_schema.properties` in `col_position` order; `required` (bool),
+`record_type`, `record_width`, nested sub-fields in `val_rank` order with
+`default: true` as the default set. Header cells render from the **item-array
+templates** — scope resolves against the column being rendered with ascent to
+the schema, `${cells}` splices, and computed forms resolve *before*
+interpolation. Every column and sub-field binds through `Resolve-RefAccessor`,
+which walks the `$ref` into its target contract and **throws at load** if the
+pointer is dangling; the four accessor shapes (`entry.*`, `plan.GlobalIdx`,
+`codec.bytes`, `codec.text`) are now derived, not declared.
+
+The framing quartet (`FieldDelimiter · BlockOpen · BlockClose ·
+BlockDelimiter`) is **gone**, not renamed — under #49 the marks are items.
+`Framing` now carries `Encoding · Bom · RecordDelimiter · ColumnSeparator
+(one char) · ItemJoin · EmptyMarker`. `Format-Row` returns `Items` (flat, marks
+included, through content_bytes; the separator before content and the span
+itself are `Build-Row`'s, so `Items -join ItemJoin` is exactly the prefix whose
+last byte is `RowMetaEnd`). `Measure-Row` is `Σ item bytes + (n−1) joins +
+terminator`. `FloatPrecision` → `DoublePrecision`; types `float`/`str` →
+`double`/`string`. `container.contract.json` and `serialize.contract.json`
+notes follow.
+
+**New suite `tests/container-spec.tests.ps1` (34)** — the `record_pattern`
+strings had no reader anywhere (decision #6's failure mode on #6's own
+subject). It parses the spec, walks all 11 `$ref`s, checks `col_position` /
+`val_rank` are total, and closes the round trip: rows the module renders
+*through the templates* are validated against the spec's *own patterns*, across
+all four on/off configurations, with the pattern interpolator written
+independently of the module's. Added to `run-all`.
+
+`container.tests.ps1` rewritten for the item model, 70 → **78** asserts (new:
+the `$ref`-derived accessors, enclosure/separator as column properties, the
+resolved width reaching the wire, the `#49` byte identity stated independently
+of the implementation, and no doubled space in a full header). Battery
+**17 · 1049 · 0**.
+
 ## 2026-08-22 — container.spec.jsonc v0.5: interpreter contract amended, two bugs caught by running it
 
 Audit pass over the whole declaration, driven by rendering rows from the spec

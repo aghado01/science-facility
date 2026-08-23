@@ -18,11 +18,11 @@
     "layout": {
       "Format":         { "type": "string",   "note": "'psr'" },
       "Columns":        { "type": "column[]", "note": "resolved columns in WIRE ORDER — required + enabled optional; content last, content_bytes immediately before it (container.spec.jsonc invariants)" },
-      "HeaderRowText":  { "type": "string",   "note": "the header row as written (without terminator): names + type annotations, blocks with sub-fields, joined by the field delimiter" },
-      "HeaderBytes":    { "type": "int",      "note": "utf8(HeaderRowText) + terminator bytes; ONE constant per run, identical in every shard; seeds every shard's size in the plan" },
-      "IdxWidth":       { "type": "int",      "note": "digits(EntryCount) when gidx enabled, else 0" },
-      "Framing":        { "type": "object",   "note": "field delimiter, record terminator, block open/close/delimiter, empty marker, encoding (UTF-8, no BOM) — verbatim from container.spec.jsonc" },
-      "FloatPrecision": { "type": "int",      "note": "4 — one deterministic formatter (invariant culture) for every float column" }
+      "HeaderRowText":   { "type": "string",   "note": "the header row as written (without terminator): `name: type` cells rendered from the declaration's item templates, blocks as a key over a bracketed sub-descriptor list, the whole row joined by item_join (ledger #49)" },
+      "HeaderBytes":     { "type": "int",      "note": "utf8(HeaderRowText) + record_delimiter bytes; ONE constant per run, identical in every shard; seeds every shard's size in the plan" },
+      "IdxWidth":        { "type": "int",      "note": "digits(EntryCount) when gidx enabled, else 0" },
+      "Framing":         { "type": "object",   "note": "the wire constants, verbatim from container.spec.jsonc: Encoding, Bom, RecordDelimiter, ColumnSeparator (ONE character), ItemJoin, EmptyMarker. No field delimiter and no block open/close/delimiter — under #49 the marks are items and spacing is the join" },
+      "DoublePrecision": { "type": "int",      "note": "properties.double_precision (4) — one deterministic formatter (invariant culture) for every double cell" }
     },
     "column": {
       "Name":   { "type": "string", "note": "wire name (snake_case), e.g. content_bytes" },

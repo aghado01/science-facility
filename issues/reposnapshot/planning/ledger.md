@@ -7,6 +7,40 @@ never as standing claims, and never hand-copied from prose.
 Rulings live in [decisions.md](decisions.md); what remains lives in
 [roadmap.md](roadmap.md).
 
+- **2026-08-22 — container realigned onto the declaration; the spec became
+  executable**: `rs.core.container` is now the declaration's interpreter — column
+  register from `shard_container_schema.properties` in `col_position` order,
+  `required`/`record_type`/`record_width`/`val_rank` vocabulary, header cells
+  rendered from the item-array templates with scope ascent and computed forms
+  resolved first, and every column bound by a `$ref` crosswalk that **fails at
+  load** on a dangling pointer. The framing quartet (`FieldDelimiter ·
+  BlockOpen · BlockClose · BlockDelimiter`) left the layout object rather than
+  being renamed — under #49 the marks are items, so `Format-Row` returns a flat
+  item list and row bytes are `Σ items + (n−1) + terminator`. `FloatPrecision`
+  → `DoublePrecision` (the type is `double`; `properties.double_precision`).
+  New suite `tests/container-spec.tests.ps1` (34) is the first reader the
+  `record_pattern`s have ever had: it walks every `$ref`, and validates rows the
+  module rendered **through the templates** against the spec's **own patterns**,
+  across all four on/off configurations — the two sides written independently,
+  so agreement is evidence. That round trip caught both defects it was built
+  for (roadmap-scoped, now fixed): a leader bound of `{2,3}` that rejected the
+  required-only layout, inherited from the pre-restructure spec; and an
+  unspecified resolution order rendering gidx's pattern as
+  `^[0-9]{digits(EntryCount)}$`. Battery at this commit: **17 suites · 1049
+  passed · 0 failed** — verified by running `tests/run-all.ps1`. Arithmetic:
+  937 (the standing green) + 78 (container, realigned and extended from 70) +
+  34 (the new spec suite) = 1049.
+
+- **2026-08-22 — psr wire settled (#49)**: a row is a list of items joined by
+  exactly one space — values, keys carrying their colon, and the marks `|` `[`
+  `]` `,`; a sub-grammar renders itself first and enters as one item.
+  `container.spec.jsonc` v0.4 → v0.5 (`item_join`, templates as item arrays,
+  `${cells}` splice, scope and resolution-order rules stated, `empty_marker`
+  corrected, leader bound `{2,3}` → `{1,3}`). Chosen on declaration and
+  interpreter simplicity, not economy: measured on a real 4.6 MB payload the
+  spacing costs **+0.046%** tokens against fully tight, and removes the `]|`
+  merge tight `|` produced in **102/102** rows. `cd89673`, `3e05f8e`.
+
 - **2026-08-19 — planning canon minted** (this tier): `decisions-ledger.md`
   renamed `decisions.md`, `roadmap.md` and this ledger seeded from the
   consolidation plan's work log, the changelog, and the code arc. The

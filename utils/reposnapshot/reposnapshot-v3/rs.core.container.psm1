@@ -13,14 +13,24 @@ using namespace System.Collections.Generic
 .DESCRIPTION
     Brief: issues/reposnapshot/briefs/shard-container-brief.md. Contract:
     contracts/container.contract.json. Declaration (READ HERE): contracts/container.spec.jsonc
-    — the admissible column superset, framing constants, types, and the
-    wire-name map (`source`, per its source_grammar).
+    — the admissible column superset under `shard_container_schema.properties`,
+    the join rule, types, and the `$ref` crosswalk that binds each column to
+    its in-memory value. This module is the declaration's INTERPRETER: nothing
+    about the wire is hardcoded here that the spec states.
+
+    THE WIRE (spec §item_join, ledger #49): a row is a list of ITEMS joined by
+    exactly one space. Items are values, keys (a key carries its trailing
+    colon), and the marks `|` `[` `]` `,`. A sub-grammar with its own syntax —
+    a type expression `int(4)`, the encoded content span — renders itself first
+    and enters as ONE item. Hence `row bytes = Σ item bytes + (item count − 1)
+    + terminator`, exact by construction with nothing hidden inside a
+    concatenation, and hence there is no padding constant anywhere below.
 
     Export phase 0. `Resolve-Layout` is computed ONCE per run (admiral holds
     it) and consumed three times: shards sums `Measure-Row`; serialize writes
     `Build-Row`; manifest declares `HeaderRowText`. Plan and file cannot
     disagree because they were computed by the same function over the same
-    pieces (`Format-Row`). Offsets are the WRITER's receipt — `Build-Row`
+    items (`Format-Row`). Offsets are the WRITER's receipt — `Build-Row`
     returns them from its cursor; nothing derives an offset from a measure.
 
     Content codec (shard-format-notes §Content codec — SPEC): ONE rule table,
@@ -43,6 +53,7 @@ using namespace System.Collections.Generic
 $script:DeclarationPath = Join-Path $PSScriptRoot 'contracts/container.spec.jsonc'
 $script:Utf8 = [UTF8Encoding]::new($false)
 $script:Invariant = [Globalization.CultureInfo]::InvariantCulture
+$script:ContractCache = @{}   # $ref targets, parsed once per session
 
 # =============================================================================
 # Codec — one rule table, two functions
@@ -130,6 +141,7 @@ function Get-DigitWidth ([long]$N)
 
 function Format-Value ([object]$Value, [string]$Type, [object]$Width, [PSCustomObject]$Layout, [string]$ColumnName)
 {
+    # Types are the declaration's record_type / val_type vocabulary.
     if ($null -eq $Value) { return $Layout.Framing.EmptyMarker }
     switch ($Type)
     {
@@ -143,9 +155,96 @@ function Format-Value ([object]$Value, [string]$Type, [object]$Width, [PSCustomO
             }
             return $s
         }
-        'float' { return ([double]$Value).ToString('F' + $Layout.FloatPrecision, $script:Invariant) }
-        'str'   { return [string]$Value }
-        default { throw "rs.core.container: unknown column type '$Type' for '$ColumnName'." }
+        'double' { return ([double]$Value).ToString('F' + $Layout.DoublePrecision, $script:Invariant) }
+        'string' { return [string]$Value }
+        default  { throw "rs.core.container: unknown type '$Type' for '$ColumnName' — container.spec.jsonc declares int, double, string." }
+    }
+}
+
+# ── Declaration interpreter: scope resolution, template expansion, $ref crosswalk ──
+function Resolve-ScopePath ([object]$Scope, [string]$Path, [string]$Where)
+{
+    # ${a.b} descends. Scope ascent is done by the CALLER, which passes a scope
+    # already chained down from shard_container_schema (spec §conventions SCOPE).
+    $cur = $Scope
+    foreach ($k in ($Path -split '\.'))
+    {
+        $next = Get-Prop $cur $k
+        if ($null -eq $next) { throw "rs.core.container: template reference '`${$Path}' does not resolve at $Where — container.spec.jsonc declares no '$k' in that scope." }
+        $cur = $next
+    }
+    return $cur
+}
+
+function Expand-TemplateItems ([object[]]$Template, [object]$Scope, [string]$Where)
+{
+    # A *_template is an ARRAY of item expressions: each resolves to one item,
+    # or SPLICES when it resolves to a list. Values are inserted VERBATIM. The
+    # renderer joins later — templates never carry their own spacing.
+    $out = [List[string]]::new()
+    foreach ($e in $Template)
+    {
+        $s = [string]$e
+        if ($s -match '^\$\{([^}]+)\}$')
+        {
+            $v = Resolve-ScopePath $Scope $Matches[1] $Where
+            if ($v -is [System.Collections.IEnumerable] -and $v -isnot [string])
+            {
+                foreach ($i in $v) { $out.Add([string]$i) }
+                continue
+            }
+            $out.Add([string]$v)
+            continue
+        }
+        while ($s -match '\$\{([^}]+)\}')
+        {
+            $key = $Matches[1]
+            $s = $s.Replace('${' + $key + '}', [string](Resolve-ScopePath $Scope $key $Where))
+        }
+        $out.Add($s)
+    }
+    return $out.ToArray()
+}
+
+function Resolve-RefAccessor ([string]$Ref, [string]$SpecDir, [string]$Where)
+{
+    # container.spec.jsonc §conventions: a $ref points at the source-of-truth
+    # contract for the in-memory value; the accessor is DERIVED from the
+    # pointer, and an unresolvable pointer is a load-time failure — the
+    # declaration is not allowed to name a value no contract carries.
+    $split = $Ref -split '#', 2
+    if ($split.Count -ne 2) { throw "rs.core.container: '$Ref' at $Where is not a '<file>#/<pointer>' reference." }
+    $file = $split[0]
+    $segs = @(($split[1].TrimStart('/')) -split '/' | Where-Object { $_ -ne '' })
+
+    $target = Join-Path $SpecDir $file
+    if (-not (Test-Path -LiteralPath $target))
+    {
+        # processors/* refs are module-root relative; contract refs sit beside the spec.
+        $target = Join-Path (Split-Path -Parent $SpecDir) $file
+        if (-not (Test-Path -LiteralPath $target)) { throw "rs.core.container: '$Ref' at $Where names a contract that does not exist ($file)." }
+    }
+    if (-not $script:ContractCache.ContainsKey($target))
+    {
+        $script:ContractCache[$target] = Get-Content -LiteralPath $target -Raw | ConvertFrom-Json -AsHashtable
+    }
+    $node = $script:ContractCache[$target]
+    foreach ($s in $segs)
+    {
+        $node = Get-Prop $node $s
+        if ($null -eq $node) { throw "rs.core.container: '$Ref' at $Where does not resolve — $file has no /$($segs -join '/')." }
+    }
+
+    # Derivation table (spec §conventions): assemble → entry.<tail past the
+    # bucket>; shards → plan.<leaf>; container → codec.<leaf>; processors/* →
+    # entry.<tail past 'out'>.
+    switch -Wildcard ($file)
+    {
+        'assemble.contract.json'  { return 'entry.' + (@($segs[3..($segs.Count - 1)]) -join '.') }
+        'shards.contract.json'    { return 'plan.'  + $segs[-1] }
+        'container.contract.json' { return 'codec.' + $segs[-1] }
+        'processors/*'            { return 'entry.' + (@($segs[1..($segs.Count - 1)]) -join '.') }
+        default { throw "rs.core.container: '$Ref' at $Where points at $file, which has no accessor derivation — container.spec.jsonc §conventions lists assemble, shards, container, processors/*." }
     }
 }
 
@@ -169,12 +268,12 @@ function Resolve-Layout
         Optional columns to enable (gidx, content_meta). Required columns
         cannot be disabled; naming one is a no-op; an inadmissible name throws.
     .PARAMETER MetaFields
-        content_meta sub-fields to enable, rendered in declaration order.
-        Default: the declaration's $default_on set. Inadmissible name throws.
+        content_meta sub-fields to enable, rendered in val_rank order.
+        Default: the sub-fields marked `default: true`. Inadmissible name throws.
 
     .OUTPUTS
         [PSCustomObject] layout — Format, Columns[], HeaderRowText, HeaderBytes,
-        IdxWidth, Framing, FloatPrecision (container.contract.json out.layout).
+        IdxWidth, Framing, DoublePrecision (container.contract.json out.layout).
     #>
     [CmdletBinding()]
     param(
@@ -185,103 +284,133 @@ function Resolve-Layout
     )
 
     if (-not (Test-Path -LiteralPath $Declaration)) { throw "Resolve-Layout: declaration not found: $Declaration" }
+    $specDir = Split-Path -Parent (Resolve-Path -LiteralPath $Declaration).Path
     $decl = Get-Content -LiteralPath $Declaration -Raw | ConvertFrom-Json -AsHashtable
     if ($decl.format -ne 'psr') { throw "Resolve-Layout: declaration '$Declaration' is not a psr header declaration (format = '$($decl.format)')." }
+    $schema = $decl.shard_container_schema
+    if ($null -eq $schema) { throw "Resolve-Layout: '$Declaration' declares no shard_container_schema — this module reads spec v0.3+ (top-level: format, properties, conventions, shard_container_schema, invariants)." }
 
     $entryCount = [long](Get-Prop $Header 'EntryCount')
 
-    # ── Framing (verbatim from the declaration) ──────────────────────────
-    $f = $decl.framing
+    # ── Framing: the wire constants, verbatim from the declaration ───────
+    # Under ledger #49 the marks are ITEMS, so there is no field delimiter and
+    # no block open/close/delimiter here — only the separator character, the
+    # join, and the record terminator.
     $framing = [PSCustomObject]@{
-        Encoding         = [string]$f.encoding
-        Bom              = [bool]$f.bom
-        RecordTerminator = [string]$f.record_terminator
-        FieldDelimiter   = [string]$f.field_delimiter
-        BlockOpen        = [string]$f.block.open
-        BlockClose       = [string]$f.block.close
-        BlockDelimiter   = [string]$f.block.field_delimiter
-        EmptyMarker      = [string]$f.empty_marker
+        Encoding        = [string]$decl.properties.encoding
+        Bom             = [bool]$decl.properties.bom
+        RecordDelimiter = [string]$schema.record_delimiter
+        ColumnSeparator = [string]$schema.column_separator
+        ItemJoin        = [string]$schema.item_join
+        EmptyMarker     = [string]$schema.empty_marker
     }
-    $floatPrecision = 4
+    $doublePrecision = [int]$decl.properties.double_precision
 
-    # ── Admissibility ────────────────────────────────────────────────────
-    $declaredNames = @($decl.columns.Keys | Where-Object { $_ -notlike '$*' })
+    # ── Admissibility, in col_position order (the declared wire order) ───
+    $register = $schema.properties
+    $declaredNames = @($register.Keys | Where-Object { $_ -notlike '$*' } | Sort-Object { [int]$register[$_].col_position })
     foreach ($c in $Columns)
     {
         if ($c -notin $declaredNames) { throw "Resolve-Layout: column '$c' is not admissible — container.spec.jsonc declares: $($declaredNames -join ', ')" }
     }
 
-    # ── Columns, in wire (declaration) order ─────────────────────────────
     $cols = [List[object]]::new()
     $idxWidth = 0
     $metaOn = $false
     foreach ($name in $declaredNames)
     {
-        $c = $decl.columns[$name]
-        $on = ([string]$c.presence -eq 'required') -or ($Columns -contains $name)
+        $c = $register[$name]
+        $on = ([bool]$c.required) -or ($Columns -contains $name)
         if (-not $on) { continue }
 
+        # Computed forms resolve BEFORE anything interpolates them (spec §ORDER).
         $width = $null
-        if ($c.ContainsKey('width'))
+        if ($c.ContainsKey('record_width'))
         {
-            $w = [string]$c.width
+            $w = [string]$c.record_width
             if ($w -eq 'digits(EntryCount)') { $width = Get-DigitWidth $entryCount }
             elseif ($w -match '^\d+$')      { $width = [int]$w }
             else { throw "Resolve-Layout: column '$name' declares an unknown width rule '$w'." }
         }
         if ($name -eq 'gidx') { $idxWidth = $width }
 
-        $fields = $null
-        if ([string]$c.type -eq 'block')
+        $fields = $null; $enclosure = $null; $valSeparator = $null
+        if ([string]$c.record_type -eq 'array')
         {
             $metaOn = $true
-            $admissible = @($c.fields.Keys | Where-Object { $_ -notlike '$*' })
-            $wanted = if ($null -eq $MetaFields) { @($c.'$default_on') } else { @($MetaFields) }
+            $enclosure = [PSCustomObject]@{ Start = [string]$c.record_val_enclosure.start; End = [string]$c.record_val_enclosure.end }
+            $valSeparator = [string]$c.val_separator
+            $subReg = $c.properties
+            $admissible = @($subReg.Keys | Where-Object { $_ -notlike '$*' } | Sort-Object { [int]$subReg[$_].val_rank })
+            $wanted = if ($null -eq $MetaFields) { @($admissible | Where-Object { [bool]$subReg[$_]['default'] }) } else { @($MetaFields) }
             foreach ($mf in $wanted)
             {
                 if ($mf -notin $admissible) { throw "Resolve-Layout: content_meta sub-field '$mf' is not admissible — container.spec.jsonc declares: $($admissible -join ', ')" }
             }
             $fl = [List[object]]::new()
-            foreach ($fname in $admissible)   # declaration order, not request order
+            foreach ($fname in $admissible)   # val_rank order, not request order
             {
                 if ($fname -notin $wanted) { continue }
-                $fd = $c.fields[$fname]
-                $fl.Add([PSCustomObject]@{ Name = $fname; Type = [string]$fd.type; Width = $null; Role = 'content'; Source = [string]$fd.source; Fields = $null })
+                $fd = $subReg[$fname]
+                $fl.Add([PSCustomObject]@{
+                    Name   = $fname
+                    Type   = [string]$fd.val_type
+                    Width  = $null
+                    Source = (Resolve-RefAccessor ([string]$fd.val.'$ref') $specDir "content_meta.$fname")
+                    Fields = $null
+                })
             }
             $fields = $fl.ToArray()
         }
 
         $cols.Add([PSCustomObject]@{
-            Name   = $name
-            Type   = [string]$c.type
-            Width  = $width
-            Role   = [string]$c.role
-            Source = [string]$c.source
-            Fields = $fields
+            Name         = $name
+            Type         = [string]$c.record_type
+            Width        = $width
+            Source       = (Resolve-RefAccessor ([string]$c.record_value.'$ref') $specDir "column $name")
+            Fields       = $fields
+            Enclosure    = $enclosure
+            ValSeparator = $valSeparator
         })
     }
 
     # ── Invariants the declaration promises (checked, not assumed) ───────
     $names = @($cols | ForEach-Object Name)
+    if ($names.Count -eq 0) { throw "Resolve-Layout: the declaration resolved to zero columns — container.spec.jsonc marks none required." }
     if ($names[-1] -ne 'content') { throw "Resolve-Layout: 'content' must be the last column (got '$($names[-1])')." }
     if ($names.Count -lt 2 -or $names[-2] -ne 'content_bytes') { throw "Resolve-Layout: 'content_bytes' must immediately precede 'content'." }
 
-    # ── Header row text + bytes ──────────────────────────────────────────
-    $pieces = foreach ($col in $cols)
+    # ── Header row: items from the declared templates, joined once ───────
+    $headerItems = [List[string]]::new()
+    foreach ($col in $cols)
     {
-        if ($col.Type -eq 'block')
+        if ($headerItems.Count -gt 0) { $headerItems.Add($framing.ColumnSeparator) }
+
+        # The templates live on shard_container_schema but resolve against the
+        # COLUMN being rendered (spec §conventions SCOPE); ${item_join} and
+        # friends ascend by being chained in behind it.
+        $scope = @{ name = $col.Name; record_type = $col.Type }
+        if ($null -ne $col.Width) { $scope['record_width'] = $col.Width }
+        if ($col.Type -eq 'array')
         {
-            $sub = @($col.Fields | ForEach-Object { "$($_.Name)<$($_.Type)>" }) -join $framing.BlockDelimiter
-            "$($col.Name):$($framing.BlockOpen)$sub$($framing.BlockClose)"
+            $scope['record_val_enclosure'] = @{ start = $col.Enclosure.Start; end = $col.Enclosure.End }
+            $cells = [List[string]]::new()
+            foreach ($fld in $col.Fields)
+            {
+                if ($cells.Count -gt 0) { $cells.Add($col.ValSeparator) }
+                $cells.Add("$($fld.Name):")
+                $cells.Add($fld.Type)
+            }
+            $scope['cells'] = $cells.ToArray()
+            $tpl = $schema.header_block_template
         }
-        else
-        {
-            $ann = if ($null -ne $col.Width) { "$($col.Type):$($col.Width)" } else { $col.Type }
-            "$($col.Name)<$ann>"
-        }
+        elseif ($null -ne $col.Width) { $tpl = $schema.header_cell_width_template }
+        else                          { $tpl = $schema.header_cell_template }
+
+        foreach ($i in (Expand-TemplateItems $tpl $scope "column $($col.Name)")) { $headerItems.Add($i) }
     }
-    $headerText = @($pieces) -join $framing.FieldDelimiter
-    $headerBytes = $script:Utf8.GetByteCount($headerText) + $script:Utf8.GetByteCount($framing.RecordTerminator)
+    $headerText = @($headerItems) -join $framing.ItemJoin
+    $headerBytes = $script:Utf8.GetByteCount($headerText) + $script:Utf8.GetByteCount($framing.RecordDelimiter)
 
     # ── Presence warning (never decides the layout) ──────────────────────
     if ($metaOn)
@@ -300,13 +429,13 @@ function Resolve-Layout
     }
 
     return [PSCustomObject]@{
-        Format         = 'psr'
-        Columns        = $cols.ToArray()
-        HeaderRowText  = $headerText
-        HeaderBytes    = $headerBytes
-        IdxWidth       = $idxWidth
-        Framing        = $framing
-        FloatPrecision = $floatPrecision
+        Format          = 'psr'
+        Columns         = $cols.ToArray()
+        HeaderRowText   = $headerText
+        HeaderBytes     = $headerBytes
+        IdxWidth        = $idxWidth
+        Framing         = $framing
+        DoublePrecision = $doublePrecision
     }
 }
 
@@ -317,11 +446,16 @@ function Format-Row
 {
     <#
     .SYNOPSIS
-        The one layout function: project the resolved header onto an entry.
-        Returns every column's rendered text EXCEPT content (which is never
-        materialized here), plus the measured content byte width.
+        The one layout function: project the resolved header onto an entry as
+        an ITEM LIST (ledger #49). Content is never materialized here.
+    .DESCRIPTION
+        Items run from the first column up to and INCLUDING content_bytes'
+        value — the separator before content and the content span itself are
+        Build-Row's, so `Items -join ItemJoin` is exactly the row prefix whose
+        last byte is RowMetaEnd. Marks are items: `|` between columns, and
+        `[` … `,` … `]` around and between a block's values.
     .OUTPUTS
-        @{ Pieces = string[] (all columns but content, wire order);
+        @{ Items = string[] (through content_bytes, in wire order);
            ContentBytes = int; Content = the raw content string }
     #>
     [CmdletBinding()]
@@ -334,36 +468,42 @@ function Format-Row
     if ($null -eq $content) { $content = '' }
     $contentBytes = Measure-ContentSpan -Content ([string]$content)
 
-    $pieces = [List[string]]::new()
+    $items = [List[string]]::new()
     foreach ($col in $Layout.Columns)
     {
-        if ($col.Source -eq 'codec.text') { continue }   # content — rendered by Build-Row only
+        if ($col.Source -eq 'codec.text') { continue }   # content — Build-Row's, separator included
+        if ($items.Count -gt 0) { $items.Add($Layout.Framing.ColumnSeparator) }
 
-        if ($col.Type -eq 'block')
+        if ($col.Type -eq 'array')
         {
-            $subs = foreach ($fld in $col.Fields)
+            $items.Add($col.Enclosure.Start)
+            $first = $true
+            foreach ($fld in $col.Fields)
             {
+                if (-not $first) { $items.Add($col.ValSeparator) }
+                $first = $false
                 $v = Resolve-SourceValue -Source $fld.Source -Entry $Entry -GlobalIdx $GlobalIdx -ContentBytes $contentBytes
-                Format-Value $v $fld.Type $null $Layout $fld.Name
+                $items.Add((Format-Value $v $fld.Type $null $Layout $fld.Name))
             }
-            $pieces.Add("$($Layout.Framing.BlockOpen)$(@($subs) -join $Layout.Framing.BlockDelimiter)$($Layout.Framing.BlockClose)")
+            $items.Add($col.Enclosure.End)
             continue
         }
 
         $v = Resolve-SourceValue -Source $col.Source -Entry $Entry -GlobalIdx $GlobalIdx -ContentBytes $contentBytes
-        $pieces.Add((Format-Value $v $col.Type $col.Width $Layout $col.Name))
+        $items.Add((Format-Value $v $col.Type $col.Width $Layout $col.Name))
     }
-    return @{ Pieces = $pieces.ToArray(); ContentBytes = $contentBytes; Content = [string]$content }
+    return @{ Items = $items.ToArray(); ContentBytes = $contentBytes; Content = [string]$content }
 }
 
 function Resolve-SourceValue ([string]$Source, [object]$Entry, [object]$GlobalIdx, [int]$ContentBytes)
 {
-    # container.spec.jsonc source_grammar — exactly four forms.
+    # Accessors are DERIVED by Resolve-RefAccessor from the declaration's $ref
+    # crosswalk; the four shapes below are the whole vocabulary it can emit.
     if ($Source -eq 'plan.GlobalIdx') { return $GlobalIdx }
     if ($Source -eq 'codec.bytes')    { return $ContentBytes }
     if ($Source -eq 'codec.text')     { throw "rs.core.container: codec.text is materialized only by Build-Row." }
     if ($Source -like 'entry.*')      { return Resolve-EntryPath $Entry ($Source.Substring(6) -split '\.') }
-    throw "rs.core.container: unknown source '$Source' — container.spec.jsonc source_grammar allows entry.<path>, plan.GlobalIdx, codec.bytes, codec.text."
+    throw "rs.core.container: unknown accessor '$Source' — the $ref derivation yields entry.<path>, plan.GlobalIdx, codec.bytes, codec.text."
 }
 
 function Measure-Row
@@ -381,12 +521,16 @@ function Measure-Row
     # gidx is fixed-width, so its value is irrelevant to the measure — 0 is a
     # valid stand-in of the same width.
     $f = Format-Row -Layout $Layout -Entry $Entry -GlobalIdx 0
-    $d = $script:Utf8.GetByteCount($Layout.Framing.FieldDelimiter)
+    # Ledger #49: row bytes = Σ item bytes + (item count − 1) joins + terminator.
+    # The full list is Items + the separator before content + content itself,
+    # so there are Items.Count + 2 items and Items.Count + 1 joins.
+    $join = $script:Utf8.GetByteCount($Layout.Framing.ItemJoin)
     $bytes = 0
-    foreach ($p in $f.Pieces) { $bytes += $script:Utf8.GetByteCount($p) }
-    $bytes += $d * $f.Pieces.Count            # one delimiter after every prefix piece (the last precedes content)
+    foreach ($p in $f.Items) { $bytes += $script:Utf8.GetByteCount($p) }
+    $bytes += $script:Utf8.GetByteCount($Layout.Framing.ColumnSeparator)
     $bytes += $f.ContentBytes
-    $bytes += $script:Utf8.GetByteCount($Layout.Framing.RecordTerminator)
+    $bytes += $join * ($f.Items.Count + 1)
+    $bytes += $script:Utf8.GetByteCount($Layout.Framing.RecordDelimiter)
     return $bytes
 }
 
@@ -410,15 +554,15 @@ function Build-Row
     )
     if ($Layout.IdxWidth -gt 0 -and $null -eq $GlobalIdx) { throw "Build-Row: layout has gidx enabled — GlobalIdx is required." }
     $f = Format-Row -Layout $Layout -Entry $Entry -GlobalIdx $GlobalIdx
-    $D = $Layout.Framing.FieldDelimiter
-    $prefix = @($f.Pieces) -join $D
+    $J = $Layout.Framing.ItemJoin
+    $prefix = @($f.Items) -join $J                       # … | content_bytes
     $encoded = ConvertTo-ContentSpan -Content $f.Content
-    $text = $prefix + $D + $encoded + $Layout.Framing.RecordTerminator
+    $text = $prefix + $J + $Layout.Framing.ColumnSeparator + $J + $encoded + $Layout.Framing.RecordDelimiter
     $bytes = $script:Utf8.GetBytes($text)
 
     $prefixBytes = $script:Utf8.GetByteCount($prefix)
-    $dBytes = $script:Utf8.GetByteCount($D)
-    $contentBegin = $Cursor + $prefixBytes + $dBytes
+    $leadBytes = (2 * $script:Utf8.GetByteCount($J)) + $script:Utf8.GetByteCount($Layout.Framing.ColumnSeparator)
+    $contentBegin = $Cursor + $prefixBytes + $leadBytes
     $contentEnd = if ($f.ContentBytes -gt 0) { $contentBegin + $f.ContentBytes - 1 } else { $contentBegin }
     return @{
         Bytes           = $bytes
@@ -445,7 +589,7 @@ function Build-HeaderRow
 {
     [CmdletBinding()]
     param([Parameter(Mandatory)] [PSCustomObject]$Layout)
-    return $script:Utf8.GetBytes($Layout.HeaderRowText + $Layout.Framing.RecordTerminator)
+    return $script:Utf8.GetBytes($Layout.HeaderRowText + $Layout.Framing.RecordDelimiter)
 }
 
 Export-ModuleMember -Function @(

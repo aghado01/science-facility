@@ -21,7 +21,7 @@
       "HeaderRowText": { "from": "container.out.layout", "note": "written first in every shard, byte-identical" },
       "HeaderBytes":   { "from": "container.out.layout", "note": "cursor after the header row; first row's RowOffset" },
       "Columns":       { "from": "container.out.layout", "note": "what Build-Row renders per entry — sources, types, widths, block sub-fields" },
-      "Framing":       { "from": "container.out.layout", "note": "delimiter, terminator, block, empty marker, encoding" }
+      "Framing":       { "from": "container.out.layout", "note": "separator character, item join, record delimiter, empty marker, encoding" }
     },
     "entry": {
       "Content":      { "from": "assemble.out.entry.core", "note": "encoded by the container codec at render time (ConvertTo-ContentSpan); content_bytes = its UTF-8 byte count" },

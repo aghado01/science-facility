@@ -7,66 +7,15 @@ separately in [payload-manifest-ledger.md](payload-manifest-ledger.md).
 Tracks are **named, not numbered**. Ordering *within* a track is the current
 recommendation, not a contract. Tracks marked independent may run in parallel.
 
-The throughline: v3's substrate is sound and battery-green through **assemble**;
-**export** is the frontier. Export phase 0 (`rs.core.container`) landed
-2026-08-17; phases 1 and 2 (`rs.core.shards`, `rs.core.serialize`) are empty
-module files with a complete brief behind the first. Finishing v3 is how the Node
-successor gets specified (decision #2) — so at every fork, the simpler answer is
-the one that does not have to be re-derived in another language.
-
-## Track: container-spec-realignment — *blocking, immediate*
-
-The psr declaration was restructured and renamed (`schema/psr.header.json` →
-`contracts/container.spec.jsonc`, 2026-08-18), and the change has not reached the
-module that reads it.
-
-Scoped 2026-08-22: it is **five deltas, not a lookup rename**, and one of them
-moves the wire. Battery reproduces **16 suites · 937 passed · 1 failed** at
-`87dcb8c` (verified by running it, 2026-08-22); the shortfall is exactly
-`container.tests.ps1`'s 70 asserts, which abort at load —
-[rs.core.container.psm1:220](../../../utils/reposnapshot/reposnapshot-v3/rs.core.container.psm1).
-
-1. **Column register moved** — `$decl.columns` →
-   `$decl.shard_container_schema.properties`. Top-level keys are now `format ·
-   name · version · description · properties · conventions ·
-   shard_container_schema · invariants`.
-2. **`framing` dissolved** — `encoding`/`bom` are top-level `properties`;
-   `record_delimiter`/`column_separator` sit on `shard_container_schema`; the
-   block's enclosure is a per-column `record_val_enclosure` + `val_separator`.
-   Under #49 the quartet `FieldDelimiter · BlockOpen · BlockClose ·
-   BlockDelimiter` **leaves the layout object entirely** rather than being
-   renamed — the marks are items.
-3. **Per-column vocabulary** — `presence` → `required` (bool), `width` →
-   `record_width`, `type` → `record_type`, `fields` → nested `properties`,
-   `$default_on` → per-sub-field `default: true` ordered by `val_rank`.
-4. **Source binding is a `$ref` crosswalk, not a grammar string** — the four-form
-   `source` read by `Resolve-SourceValue` is now `record_value.$ref` /
-   `val.$ref` into the sibling contracts, and `conventions` requires the accessor
-   be derived from the ref and to **fail at load** if the pointer does not
-   resolve. This is new capability, not a rename, and it is the piece with no
-   test behind it: `contracts.tests.ps1` explicitly excludes `container.spec.jsonc`
-   from stage-contract parsing ([:102](../../../utils/reposnapshot/tests/contracts.tests.ps1)),
-   so the spec is presently a document the suite does not read — decision #6's
-   failure mode on #6's own subject.
-5. **The wire changed** (#49) — header cells render `name: type` from item-array
-   templates, rows are item lists joined by one space. `HeaderRowText`,
-   `Measure-Row`'s delimiter arithmetic, and ~20 expected-string asserts in
-   `container.tests.ps1` all move. Blast radius stops there: `Resolve-Layout` has
-   exactly one consumer suite and shards/serialize are empty files.
-
-A ~40-line interpreter prototype confirms the declaration is **sufficient** —
-it renders the header from the spec alone, with the byte identity
-`Σ items + (n−1)` checking exactly (175 = 175). Port that shape, do not
-hardcode the spacing.
-
-Exit: battery green, count recorded with the commit it was observed at; the
-spec parsed, its `$ref` pointers resolved, and **its own `record_pattern`s run
-against rows rendered from its own templates**, across every on/off
-configuration — by a test that runs. That round-trip is not ceremony: it caught
-two live defects on 2026-08-22 (a leader bound of `{2,3}` that rejected the
-required-only layout, inherited from the pre-restructure spec; and an
-unspecified resolution order that yields `^[0-9]{digits(EntryCount)}$` for
-gidx). Both were invisible to inspection and immediate under execution.
+The throughline: v3's substrate is sound and the battery is green through
+**export phase 0**; phases 1 and 2 are the frontier. `rs.core.container` landed
+2026-08-17 and was realigned onto the restructured declaration 2026-08-22 — it
+is now the declaration's *interpreter*, and `container.spec.jsonc` is executed
+by a suite rather than read by a human. `rs.core.shards` and
+`rs.core.serialize` are empty module files with a complete brief behind the
+first. Finishing v3 is how the Node successor gets specified (decision #2) — so
+at every fork, the simpler answer is the one that does not have to be re-derived
+in another language.
 
 ## Track: export-e2e — *the main line; assemble → shards → serialize → manifest*
 
