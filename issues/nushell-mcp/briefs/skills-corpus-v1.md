@@ -44,7 +44,7 @@ skills/nushell/                    # NU_SKILL_DIR; rename is later
     pipelines.md       posix-cheatsheet.md parity.md
     file-io.md         data-analysis.md   advanced.md
     stock/                         # branch — Nushell as shipped
-      mcp.md                       # bare nu --mcp, no overlay, 10KB default
+      mcp.md                       # bare nu --mcp, no overlay
       advanced.md                  # job spawn/recv/kill, complete, def extras
       posix.md                     # grep/find/where, complete, PATH-as-list
       inspect.md                   # builtin inspect passthrough
@@ -166,10 +166,15 @@ it stays on the posix row next to "repo search is `rg`."
 - **`mcp.md`** — rewrite as **this package's** launch: pinned
   `deps/nushell` engine, `--config config.nu` as the single layout
   owner, `NU_SKILL_DIR`, `deps/cli` PATH prepend (split-if-string).
-  **State the actual cap**: this package sets `NU_MCP_OUTPUT_LIMIT=20kb`
-  in `.mcp.json`; the stock default is 10KB and that number now lives
-  only in `stock/mcp.md` — the two pages must not read as
-  contradicting each other. Point bare launch at `stock/mcp`.
+  **Cap by meaning, not by number**: the corpus explains what
+  `NU_MCP_OUTPUT_LIMIT` *is* — the inline truncation threshold; a
+  truncated tool result loses nothing (`$history` holds the full
+  value); the resolved inline cap is `par cap` — and never states a
+  literal value. The number is deployment config (`.mcp.json`) and is
+  discoverable live (`$env.NU_MCP_OUTPUT_LIMIT`). Scope: this rule
+  covers deployment values; a module's own documented resolution
+  chain (`par cap`'s fallback order on jobs.md) is spec, not a
+  deployment fact, and stays. Point bare launch at `stock/mcp`.
 - **`advanced.md`** — keep `def` and `try/catch`; jobs and `complete`
   blocks become one-liners to `jobs` / `xq` with the stock pointer.
 - **`posix-cheatsheet.md`** — rows become console translations:
@@ -196,7 +201,7 @@ carry no overlay references.**
 
 | Stock file | Source | Strip on move |
 |---|---|---|
-| `stock/mcp.md` | current `mcp.md` | the `$history \| shape each` census line (dataspection is overlay — it stays on the console side, sessions.md already has it) and the `to json -c` transmission advice (retired, not relocated) |
+| `stock/mcp.md` | current `mcp.md` | the `$history \| shape each` census line (dataspection is overlay — it stays on the console side, sessions.md already has it); the `to json -c` transmission advice (retired, not relocated); the literal "default 10KB" (cap by meaning — the page says outputs over `$env.NU_MCP_OUTPUT_LIMIT` truncate, full value in `$history`, no number) |
 | `stock/advanced.md` | current `job spawn` / `complete` / extra `def` material | — |
 | `stock/posix.md` | current grep / `complete` / PATH-as-list / head-tail rows | — |
 | `stock/inspect.md` | builtin `inspect` passthrough (from gotchas, expanded as needed) | — |
