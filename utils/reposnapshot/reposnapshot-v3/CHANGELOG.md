@@ -1,5 +1,39 @@
 # Changelog 
 
+## 2026-08-24 — rs.core.shards: packer core landed (New-BinAssignment)
+
+Export phase 1 begins with its pure inner layer: `New-BinAssignment(-Sizes
+-HeaderBytes -ShardQuotaBytes [-ShardToleranceBytes] [-OrderStrict]
+[-PackObjective] [-MaxFilesPerShard])` — stages 4–7 of the cascade over ONE
+group's size vector in nominal order. Zero I/O, zero entries, zero layout;
+deterministic throughout (#44). Classify pins overflow (#42) and computes the
+ceiling-anchored, count-capped lower bound; strict baseline is greedy
+contiguous at quota, with tolerance engaging the shapes (#48) — `FrontLoad` as
+maximal quota prefixes forced past quota only by feasibility, `Even` as exact
+lexicographic min-max linear partition (binary search + cut-point DP);
+flexible runs FFD (never worse than strict, tie keeps order), tolerance-bounded
+bin elimination, and an LPT shape pass for `Even`; sequence orders bins by
+first nominal index with the minimum-fill non-oversized bin moved to the tail.
+Aggregates exclude oversized shards; every shard's own `DeviationBytes` stays
+signed and true.
+
+**Implementation falsified the brief's FrontLoad sketch**: greedy-at-quota +
+whole-bin adjacent merge cannot always reach `k_min` — on `(7,4,6,5)` at
+capQ 10 / capC 13 no adjacent pair fits under the ceiling, yet `k_min = 2`
+needs a cut moved inside a bin (`[7,4][6,5]`). The forward construction
+computes the same shape directly; brief §Algorithm amended, and the vector is
+a named test case.
+
+`tests/shards-packer.tests.ps1` (220): the exit gate's synthetic-vector list —
+guards, bands, overflow mid-sequence, the LB roadmap counterexample, both
+shapes brute-forced against all contiguous partitions, the shape-disagreement
+vector, elimination, count-cap binding, determinism by serialized comparison —
+plus a 4-cell comparison mini-harness (shape × OrderStrict, one dataset, table
+printed) asserting ShardCount is shape-invariant and the oversized shard is
+identical in every cell. Every assignment passes a 9-point invariant battery.
+The stage shell `New-ShardPlan` (enumerate/group/measure over real entries,
+plan emission per the contract) is what remains. Battery **18 · 1280 · 0**.
+
 ## 2026-08-24 — rollup vocabulary: `Scope` → `Condition`; root-scope claims rewritten
 
 A rollup is an aggregation **conditioned on a slice of the data** — nothing

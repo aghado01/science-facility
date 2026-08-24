@@ -19,12 +19,15 @@ in another language.
 
 ## Track: export-e2e — *the main line; assemble → shards → serialize → manifest*
 
-1. **`rs.core.shards`** — the brief is complete and the algorithm is settled;
-   the module file is empty. Policy stack, objective, and packing procedure are
-   decisions #40–#48; `PackObjective`'s default is deliberately open pending the
-   comparison harness on real payloads (#48). Planning is exact via `Measure-Row`
-   from the container (#39), so the packer is testable on synthetic size vectors
-   before any payload exists.
+1. **`rs.core.shards`** — **packer core landed 2026-08-24** (`New-BinAssignment`,
+   stages 4–7 pure over a size vector; `shards-packer.tests` 220 green, both
+   shapes exact under strict and brute-forced). What remains is the **stage
+   shell** `New-ShardPlan`: enumerate + group (carried `Extension`), sort per
+   `GroupSort`, measure once via `Measure-Row`, call the core per group,
+   assign ordinals / `Key` widths / `IdxMap`, emit the plan per the contract.
+   `PackObjective`'s default stays deliberately open pending the comparison
+   harness on real payloads (#48) — the 4-cell harness exists in the battery
+   on synthetic data; the real-payload run needs the shell.
 2. **`rs.core.serialize`** — empty module, no brief yet. Writes what shards
    planned; the container already owns row bytes and the receipt, so serialize's
    scope is the write itself plus offset provenance.

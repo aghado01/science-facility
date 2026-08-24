@@ -7,6 +7,24 @@ never as standing claims, and never hand-copied from prose.
 Rulings live in [decisions.md](decisions.md); what remains lives in
 [roadmap.md](roadmap.md).
 
+- **2026-08-24 — shards packer core landed** (`rs.core.shards.psm1` ·
+  `New-BinAssignment`): stages 4–7 as a pure deterministic function over one
+  group's size vector — overflow pinned, ceiling-anchored count-capped lower
+  bound, strict greedy baseline, both #48 shapes exact under strict (FrontLoad
+  = maximal quota prefixes forced only by feasibility; Even = lexicographic
+  min-max via binary search + cut-point DP), flexible FFD + tolerance-bounded
+  elimination + LPT shape pass, tail-rule sequencing. **Implementation
+  falsified the brief's FrontLoad sketch**: whole-bin adjacent merge cannot
+  reach `k_min` on `(7,4,6,5)` at capQ 10/capC 13 — no adjacent pair fits under
+  the ceiling; the cut must move inside a bin. Brief §Algorithm amended; the
+  vector is a named test. `tests/shards-packer.tests.ps1` (220): the exit
+  gate's synthetic vectors, both shapes brute-forced against all contiguous
+  partitions, the shape-disagreement vector (FrontLoad full+runt vs Even
+  near-even on the same input), the LB roadmap counterexample now green, a
+  4-cell shape×strictness mini-harness, and a 9-point invariant battery over
+  every assignment. The stage shell `New-ShardPlan` is what remains of phase 1.
+  Battery at this commit: **18 suites · 1280 passed · 0 failed**.
+
 - **2026-08-24 — rollup vocabulary corrected: `Scope` → `Condition`** (#52
   amended): a rollup is conditioned on a slice of the data being rolled up;
   condition (the WHERE) and grouping (`ByNode`) are independent axes, and

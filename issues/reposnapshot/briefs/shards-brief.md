@@ -290,10 +290,18 @@ both shapes.
    - `OrderStrict && Tolerance == 0` → done.
    - `OrderStrict && Tolerance > 0` → `k_min` = greedy at the ceiling, then
      the shape, exact under **either**:
-     - `FrontLoad`: greedy at quota; while it yields more than `k_min` shards,
-       absorb the last shard backward into predecessors within the ceiling
-       (adjacent merge, latest-first). Overshoot arises only where the merge
-       forces it — clause 3 falls out.
+     - `FrontLoad`: **maximal quota prefixes, forced into the tolerance band
+       only by feasibility** — fill each bin to quota in nominal order, then
+       extend it past quota (never past the ceiling) only while the remaining
+       records cannot fit the remaining bins at the ceiling. Overshoot arises
+       exactly where forced — clause 3 falls out. *(Corrected 2026-08-24 at
+       implementation: the original sketch — greedy-at-quota then merging
+       ADJACENT WHOLE BINS latest-first — is not exact. Counterexample
+       `(7,4,6,5)` at capQ 10 / capC 13: quota-greedy gives `[7][4,6][5]` and
+       no adjacent pair fits under the ceiling, yet `k_min = 2` is achievable
+       by moving a cut inside a bin → `[7,4][6,5]`. The forward construction
+       computes that directly and is what `rs.core.shards` implements; the
+       shape property is brute-forced in `shards-packer.tests`.)*
      - `Even`: linear-partition into `k_min` contiguous parts, minimize the
        largest part, then the next — binary search on the bound + greedy feasibility, `O(n log Σ)`;
        or DP over cut points. Clause 3 holds by Schur-convexity (#48).
