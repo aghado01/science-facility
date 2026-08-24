@@ -191,6 +191,20 @@ everything is `use`-pinned. Rationale accumulated in
 [notes/module-prefixing.md](notes/module-prefixing.md); nothing
 assumes it.
 
+**Parked:** `par cap` terminal default (2026-08-23) — the coded
+last-resort constant in `modules/par/mod.nu` (20000, doubling as the
+silent catch for an *unparseable* `NU_MCP_OUTPUT_LIMIT`) smells: a
+knob this load-bearing should be a shipped default in
+`modules/par/policy.json` under the deployment declaration's override,
+or a required config value that fails closed — not an internal
+literal. A par amendment brief must settle precedence (a shipped
+policy default should *lose* to the deployment declaration, which
+inverts today's explicit-`max_inline_bytes`-wins order — or the two
+cases need distinguishing) and whether a malformed declared value is
+fail-as-data rather than a silent constant. The corpus already
+documents the cap by meaning ([skills-corpus-v1](briefs/skills-corpus-v1.md));
+nothing else assumes the constant.
+
 Package rules (landing obligations, closed shapes, write conventions,
 vocabulary) live in
 [`mcp/nushell-mcp/AGENTS.md`](../../mcp/nushell-mcp/AGENTS.md), not

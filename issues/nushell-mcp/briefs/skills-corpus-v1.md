@@ -154,7 +154,8 @@ it stays on the posix row next to "repo search is `rg`."
   until the rename.
 - **`jobs.md`** — keep; fix name-map `parfeval` → `jobs spawn`
   (`--tag` optional; receipt carries allocated `spawn:<n>`); one Stock
-  pointer to `stock/advanced`.
+  pointer to `stock/advanced`; the `par cap` line names the resolution
+  order without the literal terminal constant (cap by meaning).
 - **`search.md`** — keep; add the three-context line (in-job inline;
   foreground worker over cap is `ok: false`, wrap in `jobs spawn`).
   `^rg` hatch stays; point `where`/`find` for in-memory.
@@ -171,10 +172,15 @@ it stays on the posix row next to "repo search is `rg`."
   truncated tool result loses nothing (`$history` holds the full
   value); the resolved inline cap is `par cap` — and never states a
   literal value. The number is deployment config (`.mcp.json`) and is
-  discoverable live (`$env.NU_MCP_OUTPUT_LIMIT`). Scope: this rule
-  covers deployment values; a module's own documented resolution
-  chain (`par cap`'s fallback order on jobs.md) is spec, not a
-  deployment fact, and stays. Point bare launch at `stock/mcp`.
+  discoverable live (`$env.NU_MCP_OUTPUT_LIMIT`). The same philosophy
+  runs up the chain: jobs.md keeps documenting `par cap`'s resolution
+  *order* (explicit `max_inline_bytes`, else the process's
+  `NU_MCP_OUTPUT_LIMIT`, else a coded last-resort default) but drops
+  the literal terminal constant. The constant itself is an
+  implementation smell — should be a shipped `policy.json` default
+  under the deployment override, or required-and-fail-closed — parked
+  in the roadmap for a par amendment, not this brief. Point bare
+  launch at `stock/mcp`.
 - **`advanced.md`** — keep `def` and `try/catch`; jobs and `complete`
   blocks become one-liners to `jobs` / `xq` with the stock pointer.
 - **`posix-cheatsheet.md`** — rows become console translations:
