@@ -136,13 +136,13 @@ Assert-True ($rDefault.Content -notmatch "`r") 'No Operations: lf applied (CRLF 
 Assert-True ($rDefault.Content -match 'hello   world') 'No Operations: trim-inner NOT applied (opt-in — it rewrites data inside literals)'
 Assert-True ($rDefault.Content -notmatch "`n`n`n") 'No Operations: max-blank-1 applied (at most one blank line survives)'
 Assert-True ($rDefault.Processing[0].Operations.Count -gt 0) 'No Operations: Processing record carries the resolved defaults'
-# #20 RELOCATED (2026-08-24): mark spacing is the CODEC's object join, so the
-# default set must NOT pre-space line ends — a re-added ensure-trailing-space
-# here would double-space every mark on the wire ('{  \n ') and nothing
-# downstream would fail, because measure and render stay self-consistent.
-# This assert is the only tripwire.
-Assert-True ($rDefault.Content -notmatch " `n") 'No Operations: ensure-trailing-space NOT in the defaults — line ends carry no space (the codec owns mark spacing, #20 relocated)'
-Assert-True ($rDefault.Processing[0].Operations -notcontains 'ensure-trailing-space') 'No Operations: the resolved default list itself excludes ensure-trailing-space'
+# #20's successor (2026-08-24): the encoder is a pure substitution, so the
+# wire's ' \n ' mark environment must be PREPARED IN CONTENT — pad-breaks, in
+# the defaults, running last. If it left the defaults, marks would butt solid
+# characters on the wire and nothing downstream would fail (measure and
+# render stay self-consistent), so these asserts are the tripwire.
+Assert-True ($rDefault.Processing[0].Operations -contains 'pad-breaks') 'No Operations: pad-breaks IS in the defaults (the content half of mark spacing)'
+Assert-True ($rDefault.Content -match " `n" -or $rDefault.Content -notmatch "`n") 'No Operations: breaks in default output carry their before-space'
 
 # ============================================================
 # 3. lf
@@ -227,9 +227,9 @@ Assert-True ($rDefaultsZwnj.Content.TrimEnd(@("`n", ' ')) -eq $zwnjText) 'DEFAUL
 # entire surface still leaves them intact.
 $rAllOps = Invoke-Processor -Item "$zwjSeq|$zwnjText" -Config @{
     Operations = @('lf', 'nfc', 'strip-zwsp', 'strip-wj', 'strip-zwnbsp', 'trim-trailing',
-        'trim-inner', 'max-blank-1', 'trim-doc', 'ensure-final-lf')
+        'trim-inner', 'max-blank-1', 'trim-doc', 'ensure-final-lf', 'pad-breaks')
 }
-Assert-True ($rAllOps.Content -eq "$zwjSeq|$zwnjText`n") 'every op selected: ZWJ and ZWNJ still survive'
+Assert-True ($rAllOps.Content -eq "$zwjSeq|$zwnjText `n") 'every op selected: ZWJ and ZWNJ still survive (final break padded before, not after)'
 
 # ============================================================
 # 6. trim-trailing
@@ -242,37 +242,44 @@ $rTrail = Invoke-Processor -Item $trailText -Config @{ Operations = @('trim-trai
 Assert-True ($rTrail.Content -eq "line1`nline2`nline3") 'trim-trailing: trailing spaces removed per line'
 
 # ============================================================
-# 6b. ensure-trailing-space
+# 6b. pad-breaks (successor of ensure-trailing-space, #20 2026-08-24)
 # ============================================================
-Enter-Section '6b. ensure-trailing-space — non-empty lines only'
+Enter-Section '6b. pad-breaks — one space between solid chars and breaks, both directions'
 
-$rSpace = Invoke-Processor -Item "def func()`nx = 1" -Config @{ Operations = @('ensure-trailing-space') }
-Assert-True ($rSpace.Content -eq "def func() `nx = 1 ") 'ensure-trailing-space: one space appended per non-empty line'
+$rPad = Invoke-Processor -Item "def func()`nx = 1" -Config @{ Operations = @('pad-breaks') }
+Assert-True ($rPad.Content -eq "def func() `n x = 1") 'pad-breaks: space before AND after an interior break' $rPad.Content
 
-# The whole point: the escape must not butt against a code character.
-$rTok = Invoke-Processor -Item "def func()" -Config @{ Operations = @('ensure-trailing-space', 'ensure-final-lf') }
-Assert-True ($rTok.Content -eq "def func() `n") 'tokenization: row reads `"def func() \n`", not `"def func()\n`"'
+# The downstream encoder is a pure substitution, so the desired ' \n ' wire
+# environment must already exist in content — that is this op's whole job.
+$rTok = Invoke-Processor -Item "def func()`nnext" -Config @{ Operations = @('pad-breaks') }
+Assert-True ($rTok.Content -eq "def func() `n next") 'the mark will never butt a solid char on either side'
 
-# Empty lines stay empty — no `\n \n` spam.
-$rBlank = Invoke-Processor -Item "a`n`nb" -Config @{ Operations = @('ensure-trailing-space') }
-Assert-True ($rBlank.Content -eq "a `n`nb ") 'ensure-trailing-space: blank line gets NO space'
+# Blank line: interior newlines touch only newlines → the run stays ADJACENT
+# and encodes as the canonical '\n\n'.
+$rBlank = Invoke-Processor -Item "a`n`nb" -Config @{ Operations = @('pad-breaks') }
+Assert-True ($rBlank.Content -eq "a `n`n b") 'blank-line run stays adjacent — flanked as a unit' $rBlank.Content
 
-# Load-bearing: a space on a blank line would make max-blank-1's pattern —
-# which needs ADJACENT newlines — never match, silently disabling the op.
-$rRuns = Invoke-Processor -Item "a`n`n`n`n`nb" -Config @{ Operations = @('ensure-trailing-space', 'max-blank-1') }
-Assert-True ($rRuns.Content -eq "a `n`nb ") 'ensure-trailing-space does not defeat max-blank-1 run collapse'
+# Document-final newline: nothing follows inside the block → no trailing space.
+$rFinal = Invoke-Processor -Item "code" -Config @{ Operations = @('ensure-final-lf', 'pad-breaks') }
+Assert-True ($rFinal.Content -eq "code `n") 'the final break takes its before-space and NO after-space (end of content block)' $rFinal.Content
 
-# Additive, like ensure-final-lf: an existing trailing space is not doubled.
-$rIdem = Invoke-Processor -Item "already there " -Config @{ Operations = @('ensure-trailing-space') }
-Assert-True ($rIdem.Content -eq 'already there ') 'ensure-trailing-space: idempotent when already present'
+# Indented continuation: the line's own indentation already separates — no
+# extra space is inserted, and the indent is preserved exactly.
+$rIndent = Invoke-Processor -Item "if (x) {`n    y()`n}" -Config @{ Operations = @('pad-breaks') }
+Assert-True ($rIndent.Content -eq "if (x) { `n    y() `n }") 'indentation serves as the after-break separation, untouched' $rIndent.Content
 
-# Paired with trim-trailing it means EXACTLY one, regardless of input run.
-$rPair = Invoke-Processor -Item "ragged      `nclean" -Config @{ Operations = @('trim-trailing', 'ensure-trailing-space') }
-Assert-True ($rPair.Content -eq "ragged `nclean ") 'trim-trailing + ensure-trailing-space: exactly one trailing space'
+# Idempotent: an already-spaced break touches no solid char.
+$rIdem = Invoke-Processor -Item "a `n b" -Config @{ Operations = @('pad-breaks') }
+Assert-True ($rIdem.Content -eq "a `n b") 'pad-breaks: idempotent'
 
-# Whitespace-only lines are emptied by trim-trailing first, so they stay bare.
-$rWsOnly = Invoke-Processor -Item "a`n   `nb" -Config @{ Operations = @('trim-trailing', 'ensure-trailing-space') }
-Assert-True ($rWsOnly.Content -eq "a `n`nb ") 'whitespace-only line is emptied, then correctly skipped'
+# Runs LAST: after max-blank-1 collapse and ensure-final-lf, one pass settles
+# every break of the default-shaped document.
+$rChain = Invoke-Processor -Item "a`n`n`n`n`nb" -Config @{ Operations = @('max-blank-1', 'ensure-final-lf', 'pad-breaks') }
+Assert-True ($rChain.Content -eq "a `n`n b `n") 'after collapse + final-lf: interior run adjacent, final break unspaced after' $rChain.Content
+
+# The retired op is now unknown — requesting it is recorded, not honoured.
+$rOld = Invoke-Processor -Item "x`ny" -Config @{ Operations = @('ensure-trailing-space') }
+Assert-True ($rOld.Content -eq "x`ny" -and @($rOld.Processing[0].Skipped | Where-Object Op -eq 'ensure-trailing-space').Count -eq 1) 'ensure-trailing-space no longer exists — UnknownOp in the receipt, content untouched'
 
 # ============================================================
 # 7. trim-inner

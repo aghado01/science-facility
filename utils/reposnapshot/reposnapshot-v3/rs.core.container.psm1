@@ -36,14 +36,16 @@ using namespace System.Collections.Generic
     Content codec (shard-format-notes §Content codec — SPEC): ONE rule table,
     two functions — `ConvertTo-ContentSpan` materializes, `Measure-ContentSpan` counts
     without materializing. Rules: every line terminator (LF, CRLF, CR, NEL,
-    LS, PS, VT, FF) → the break-mark OBJECT — the span is line segments and
-    marks with regular single-space joins, rendered as the four characters
-    ` \n ` per terminator (a blank line is an empty segment → the doubled
-    join, the row's empty-marker convention). Regularity is the criterion:
-    the mark tokenizes identically in every context. This spacing is the
-    CODEC's own operation, separate from the row's item join (#49);
-    ensure-trailing-space (#20) left the whitespace defaults when it landed
-    here. Backslash is never doubled (a source-literal `\n` stays unspaced —
+    LS, PS, VT, FF) → the two-character mark `\n`, a PURE SUBSTITUTION — one
+    symbol for one symbol, no spacing logic in the encoder (user, 2026-08-24).
+    The wire's regular mark environment (` \n ` line break, ` \n\n ` blank
+    line, no space after the document-final mark) is CONTENT preparation:
+    rs-whitespace's `pad-breaks` op inserts one space between any solid
+    character and an adjacent newline, both directions, upstream of encoding.
+    Regularity is the criterion — the mark tokenizes identically in every
+    context — and three stations never cross: rs-whitespace shapes content
+    whitespace, this codec substitutes symbols, the row join spaces row items
+    (#49). Backslash is never doubled (a source-literal `\n` stays unspaced —
     distinguishable from a real break); remaining C0 controls and DEL are
     stripped; TAB stays literal. The container owns the
     one-physical-line-per-row invariant and cannot assume a lane.
@@ -68,19 +70,21 @@ $script:ContractCache = @{}   # $ref targets, parsed once per session
 # set = C0 minus TAB(09) and minus the terminators already in t (0A 0B 0C 0D),
 # plus DEL. Everything else passes verbatim, backslash included.
 #
-# The break mark is an OBJECT within the encoding operation (SPEC rule 1,
-# 2026-08-24): line segments and marks with regular single-space joins.
-# Rendering each terminator as the four characters ' \n ' IS that join —
-# adjacent terminators compose to the doubled-join blank-line form
-# ('a \n  \n b') by construction, and split-on-' \n ' decodes cleanly.
-# Regularity is the criterion: one environment, one tokenization, in every
-# context. This spacing belongs to the codec, not to a whitespace op and not
-# to the row's item join.
+# THE ENCODER IS A PURE SUBSTITUTION (station settled by the user,
+# 2026-08-24): one terminator becomes the one two-character symbol '\n',
+# nothing else — the mark is a single object to this operation, and no
+# spacing logic lives here. The spacing that puts every mark in a regular
+# space-flanked environment on the wire is CONTENT preparation, and content
+# is rs-whitespace's job: its `pad-breaks` op (defaults, runs last) inserts
+# one space between any solid character and an adjacent newline, both
+# directions, before encoding ever happens. Three stations, never crossed:
+# rs-whitespace shapes content whitespace · this codec substitutes symbols ·
+# the row join spaces row items (#49).
 $script:CodecRegex = [regex]::new(
     '(?<t>\r\n|\r|\n|\u0085|\u2028|\u2029|\x0B|\x0C)|(?<s>[\x00-\x08\x0E-\x1F\x7F])',
     [RegexOptions]::Compiled)
-$script:CodecBreak = ' \n '    # four characters: the break-mark OBJECT with its joins
-$script:CodecBreakBytes = 4
+$script:CodecMark = '\n'       # two characters: one symbol, substituted verbatim
+$script:CodecMarkBytes = 2
 
 function ConvertTo-ContentSpan
 {
@@ -93,7 +97,7 @@ function ConvertTo-ContentSpan
     if ([string]::IsNullOrEmpty($Content)) { return '' }
     return $script:CodecRegex.Replace($Content, [MatchEvaluator]{
         param($m)
-        if ($m.Groups['t'].Success) { $script:CodecBreak } else { '' }
+        if ($m.Groups['t'].Success) { $script:CodecMark } else { '' }
     })
 }
 
@@ -104,10 +108,10 @@ function Measure-ContentSpan
         UTF-8 byte width of ConvertTo-ContentSpan($Content) — counted, not materialized.
     .DESCRIPTION
         Whole-string byte count, then per match: a terminator becomes the
-        4-byte mark-object ' \n ' (delta = 4 − its own width), a stripped
-        control becomes 0 (delta = −1).
-        Every match is a BMP non-surrogate, so the remainder's byte count is
-        untouched and the sum is exact against ConvertTo-ContentSpan.
+        2-byte mark (delta = 2 − its own width), a stripped control becomes 0
+        (delta = −1). Every match is a BMP non-surrogate, so the remainder's
+        byte count is untouched and the sum is exact against
+        ConvertTo-ContentSpan.
     #>
     [CmdletBinding()]
     param([AllowNull()][AllowEmptyString()][string]$Content)
@@ -116,7 +120,7 @@ function Measure-ContentSpan
     foreach ($m in $script:CodecRegex.Matches($Content))
     {
         $own = $script:Utf8.GetByteCount($m.Value)
-        if ($m.Groups['t'].Success) { $bytes += $script:CodecBreakBytes - $own } else { $bytes -= $own }
+        if ($m.Groups['t'].Success) { $bytes += $script:CodecMarkBytes - $own } else { $bytes -= $own }
     }
     return $bytes
 }

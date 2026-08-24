@@ -133,23 +133,26 @@ thing to re-derive.
 
 ### The rules
 
-1. **Every line terminator becomes the break mark `\n`, AS AN OBJECT** — LF,
-   CRLF, CR, NEL U+0085, LS U+2028, PS U+2029, VT U+000B, FF U+000C. One
-   marker; the kind is *not* preserved. *(Amended 2026-08-24, user:)* within
-   the encoding operation the span is a list of objects — line segments and
-   break marks — with **regular single-space joins**, so the mark renders in a
-   ` \n ` environment everywhere: `line one \n line two`. A blank line is an
-   empty segment object, surfacing as the doubled join `a \n  \n b` (the same
-   convention as the row's empty marker), which is also what keeps
-   split-on-` \n ` a clean decode. **The criterion is tokenization
-   REGULARITY**: an encoded symbol must tokenize identically in every context
-   in the reader's tokenizer; context-dependent merging (`\nFunction` vs an
-   intact mark, the `]|` class) is the defect itself, and byte/token cost is a
-   price, never a counter-argument. This is the codec's own object-spacing —
-   a separate operation from the ROW's item join (#49), sharing the principle,
-   reaching into nothing: the encoded span still enters the row as ONE item.
-   It subsumes `ensure-trailing-space` (#20), whose space was this intent
-   expressed at the wrong station; the op leaves the whitespace defaults.
+1. **Every line terminator becomes the two-character mark `\n`, a PURE
+   SUBSTITUTION** — LF, CRLF, CR, NEL U+0085, LS U+2028, PS U+2029, VT
+   U+000B, FF U+000C; one symbol per terminator, the kind is *not* preserved,
+   and **no spacing logic lives in the encoder** (user, 2026-08-24 — the
+   escape is one object to this operation; `\` and `n` are never separate
+   concerns). The wire's regular mark environment is **content preparation**,
+   owned by rs-whitespace's `pad-breaks` op (defaults, runs last): one space
+   between any solid character and an adjacent newline, both directions.
+   Everything falls out of that: interior breaks read `code \n code`;
+   consecutive terminators stay ADJACENT so a blank line encodes as the
+   canonical `\n\n` (user: "for the record" — not a space-separated pair);
+   the document-final break takes no trailing space (the end of a content
+   block separates from nothing); indented lines keep indentation as their
+   own separation. **The criterion is tokenization REGULARITY**: an encoded
+   symbol must tokenize identically in every context; context-dependent
+   merging (`\nFunction` vs an intact mark, the `]|` class) is the defect
+   itself, and byte/token cost is a price, never a counter-argument. Three
+   stations, never crossed: rs-whitespace shapes content whitespace · the
+   codec substitutes symbols · the row join spaces row items (#49). The
+   encoded span enters the row as ONE item.
 2. **`\` is never doubled.** Literal backslashes pass through verbatim.
    Corollary of rule 1's spacing: a *source-literal* `\n` stays unspaced while
    a real break is space-flanked, so the #8 ambiguity narrows to sources

@@ -23,6 +23,21 @@ Rulings live in [decisions.md](decisions.md); what remains lives in
   runs memory-to-disk. Remaining on main line: manifest reconciliation.
   Battery at this commit: **20 suites · 1327 passed · 0 failed**.
 
+- **2026-08-24 — mark-spacing station SETTLED: `pad-breaks` in rs-whitespace;
+  the codec is a pure substitution** (the user's original architecture, after
+  a same-day codec-side detour was reverted): content-block whitespace is the
+  content stage's job — `pad-breaks` (defaults, last; succeeds
+  `ensure-trailing-space`, #20) puts one space between any solid char and an
+  adjacent newline, both directions, so runs stay adjacent (blank line → the
+  canonical `\n\n`, per the user's for-the-record), the final break carries no
+  trailing space, and indentation is its own separation. The encoder
+  substitutes one symbol for one terminator, nothing else; the row join never
+  enters content. Full-pipeline hex trace confirms the wire
+  (`{ \n    'x' \n\n    'y' \n } \n`); tripwire keeps pad-breaks in the
+  defaults (nothing downstream fails without it — the pipeline stays
+  self-consistent even when the wire is wrong). Battery:
+  **23 suites · 1393 passed · 0 failed**.
+
 - **2026-08-24 — break mark became an object; #20 relocated to the codec**:
   SPEC rule 1 amended (user) — the span is line segments and break marks with
   regular single-space joins (` \n ` everywhere; blank line = empty segment →

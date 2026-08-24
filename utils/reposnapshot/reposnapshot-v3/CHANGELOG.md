@@ -1,5 +1,32 @@
 # Changelog 
 
+## 2026-08-24 — station settled: pad-breaks (rs-whitespace) prepares, the codec purely substitutes
+
+The mark-spacing story reached its final shape, the user's original
+architecture: **the encoder is a pure substitution** — one terminator becomes
+the one two-character symbol `\n`, nothing else (`CodecMark`, 2 bytes; the
+same-day codec-side spacing detour reverted) — and the wire's regular mark
+environment is **content preparation**: rs-whitespace's new **`pad-breaks`**
+op (defaults, runs last, succeeding `ensure-trailing-space` under #20) inserts
+one space between any solid character and an adjacent newline, both
+directions, via two symmetric zero-width insertions. Everything falls out of
+the lookarounds uncoded: consecutive terminators stay ADJACENT — a blank line
+encodes as the canonical **`\n\n`** (user: for the record), not a
+space-separated pair; the document-final break takes no trailing space (the
+end of a content block separates from nothing); indented lines keep
+indentation as their own separation; idempotent. Three stations, never
+crossed: rs-whitespace shapes content whitespace · the codec substitutes
+symbols · the row join spaces row items (#49).
+
+Full-pipeline hex trace of the probe file confirms the wire:
+`function Probe { \n    'x' \n\n    'y' \n } \n` — every mark
+whitespace-flanked, blank run adjacent, final clean; written bytes == codec
+output. `rs-whitespace.tests` §6b rewritten for pad-breaks (+ tripwire: the
+op must stay in the defaults, since nothing downstream fails without it —
+measure and render stay self-consistent even when the wire is wrong);
+`container.tests` codec section back to bare-substitution expectations.
+Battery **23 · 1393 · 0**.
+
 ## 2026-08-24 — the break mark is an OBJECT: codec owns its spacing; #20 relocated
 
 SPEC rule 1 amended (user): within the encoding operation the span is a list

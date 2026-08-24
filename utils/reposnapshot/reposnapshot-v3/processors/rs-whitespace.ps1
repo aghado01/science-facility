@@ -114,15 +114,17 @@
 
         Default set (what you get with no Operations key):
             lf · nfc · strip-zwsp · strip-wj · strip-zwnbsp · trim-trailing ·
-            max-blank-1 · trim-doc · ensure-final-lf
+            max-blank-1 · trim-doc · ensure-final-lf · pad-breaks
 
-        `ensure-trailing-space` left the default set 2026-08-24 (#20
-        relocated): the space it added was the LEFT half of the break mark's
-        spacing, and that spacing is the CODEC's job — the container renders
-        each break as an object with regular single-space joins (' \n '
-        environment, shard-format-notes §SPEC rule 1). Running both stations
-        double-spaced the wire (measured: '{  \n ' on a full-pipeline trace).
-        The op remains available for callers with a non-psr emission target.
+        `pad-breaks` succeeded `ensure-trailing-space` (#20, 2026-08-24, the
+        station settled by the user): content-block whitespace is THIS
+        processor's job, and the downstream encoder is a pure symbol
+        substitution with no spacing logic. pad-breaks inserts one space
+        between any solid character and an adjacent newline, both directions
+        — runs stay adjacent (blank lines encode as the canonical '\n\n'),
+        the document-final newline takes no trailing space, and indented
+        lines keep indentation as their own separation. It runs LAST, after
+        ensure-final-lf.
 
         `trim-inner` is deliberately OUT of it. Every other default touches
         whitespace at line boundaries and margins, where shape is formatting
@@ -140,7 +142,7 @@ param(
     [hashtable]$Config = @{}
 )
 
-$ops = if ($Config.ContainsKey('Operations')) { @($Config['Operations']) } else { @('lf', 'nfc', 'strip-zwsp', 'strip-wj', 'strip-zwnbsp', 'trim-trailing', 'max-blank-1', 'trim-doc', 'ensure-final-lf') }
+$ops = if ($Config.ContainsKey('Operations')) { @($Config['Operations']) } else { @('lf', 'nfc', 'strip-zwsp', 'strip-wj', 'strip-zwnbsp', 'trim-trailing', 'max-blank-1', 'trim-doc', 'ensure-final-lf', 'pad-breaks') }
 $includeMeta = if ($null -ne $Config['IncludeMeta']) { [bool]$Config['IncludeMeta'] } else { $true }
 
 # Content-key resolution — harmonized content-mutator contract (6d), shared by
@@ -224,32 +226,6 @@ if ('trim-trailing' -in $ops)
     $t = $lines -join "`n"
 }
 
-# The deliberate inverse of trim-trailing, and they are meant to be read as a
-# pair: trim-trailing removes ALL trailing whitespace, this puts exactly one
-# space back, so together they mean "exactly one trailing space on non-empty
-# lines". Reason is reader tokenization — a serialized row should read
-# `def func() \n` rather than `def func()\n`, so the escape does not butt
-# against a code character and blur the token boundary.
-#
-# NON-EMPTY LINES ONLY, and that is load-bearing twice over: it avoids spamming
-# `\n \n` through collapsed blank lines, and a space on a blank line would stop
-# max-blank-1 matching runs at all, since its pattern needs adjacent newlines.
-#
-# A zero-width insertion, so no split/join pass: `(?<=\S)$` matches the
-# end-of-line position ONLY where a non-space precedes it. Both exclusions fall
-# out of that for free — a blank line has no preceding non-space, and a line
-# already ending in a space likewise fails the lookbehind, so the op is additive
-# and idempotent without testing for either case.
-#
-# (?m) so `$` means end-of-LINE, not end-of-string. Note `$` sits between CR and
-# LF on unfolded CRLF, where the lookbehind sees CR and correctly declines — lf
-# has already folded those in any real chain.
-if ('ensure-trailing-space' -in $ops)
-{
-    $ran += 'ensure-trailing-space'
-    $t = $t -replace '(?m)(?<=\S)$', ' '
-}
-
 if ('trim-inner' -in $ops)
 {
     $ran += 'trim-inner'
@@ -277,6 +253,29 @@ if ('ensure-final-lf' -in $ops)
 {
     $ran += 'ensure-final-lf'
     if ($t.Length -gt 0 -and -not $t.EndsWith("`n")) { $t += "`n" }
+}
+
+# LAST of all — after ensure-final-lf, so the final LF exists to take its
+# before-space. Successor of ensure-trailing-space (#20, 2026-08-24), and the
+# content half of the wire's mark-spacing story: one space between any SOLID
+# character and an adjacent newline, BOTH directions, so the downstream
+# encoder — a pure symbol substitution — lands every mark in a regular
+# space-flanked environment. Two symmetric zero-width insertions:
+#
+#   (?<=\S)(?=\n)  a space before a break that touches a solid char
+#   (?<=\n)(?=\S)  a space after a break that touches a solid char
+#
+# Everything the design needs falls out of the lookarounds, uncoded: interior
+# newlines of a blank-line run touch only newlines → runs stay ADJACENT and
+# encode as the canonical '\n\n'; the document-final newline has no follower
+# → no trailing space (the end of a content block separates from nothing);
+# an indented continuation line starts with its own whitespace → the
+# indentation already separates, and no extra space is inserted. Idempotent
+# by the same token — an already-spaced break touches no solid char.
+if ('pad-breaks' -in $ops)
+{
+    $ran += 'pad-breaks'
+    $t = $t -replace '(?<=\S)(?=\n)', ' ' -replace '(?<=\n)(?=\S)', ' '
 }
 
 # Copy-on-mutate return — shared Copy-Bag helper. Clones the bag, replaces the
