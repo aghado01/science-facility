@@ -59,6 +59,7 @@ $suitePaths = @(
     (Join-Path $PSScriptRoot 'serialize.tests.ps1')
     (Join-Path $PSScriptRoot 'manifest.tests.ps1')
     (Join-Path $PSScriptRoot 'selfie.tests.ps1')
+    (Join-Path $PSScriptRoot 'user.tests.ps1')
     (Join-Path $PSScriptRoot 'mutator-chain.tests.ps1')
     (Join-Path $repoRoot 'reposnapshot-v3\processors\tests\rs-whitespace.tests.ps1')
     (Join-Path $repoRoot 'reposnapshot-v3\processors\tests\rs-indent.tests.ps1')

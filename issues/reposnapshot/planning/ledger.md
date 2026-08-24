@@ -23,6 +23,17 @@ Rulings live in [decisions.md](decisions.md); what remains lives in
   runs memory-to-disk. Remaining on main line: manifest reconciliation.
   Battery at this commit: **20 suites · 1327 passed · 0 failed**.
 
+- **2026-08-24 — `rs.core.user` landed** — the convenience entry point
+  (`-Root` in, complete payload out; one script over the six stage calls,
+  `_rs.scratch.ps1`'s replacement per the old TODO). Output convention
+  corrected mid-landing by the user: default `<Root>/.snapshot/{runstamp}/` —
+  snapshots UNDER the crawled tree, protected by the **membrane** (Ignore:
+  IgnoreDefaults + gitignore sentinel; Selection: pattern discipline), never
+  by a writer guard; the test proves it by rerunning over the same root and
+  ingesting the same entry count. `tests/user.tests.ps1` (12). The nushell-mcp
+  snapshot-reader prototype filed to roadmap §Deferred, sequenced after
+  calibration per the user. Battery: **23 suites · 1387 passed · 0 failed**.
+
 - **2026-08-24 — the EXPORT PHASE is complete** — serialize and manifest landed
   the same day as shards, and the selfie fixture proves the whole path.
   `rs.core.serialize` (`Invoke-Serialize`, coded straight against its contract,

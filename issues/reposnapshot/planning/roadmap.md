@@ -22,10 +22,11 @@ gap is closed. Finishing v3 is how the Node successor gets specified
   flexible, Even beats FrontLoad on both overshoot aggregates at equal count.
   Wanted before deciding: more corpora (ThermoMapper-scale, grouped) and a
   quota/tolerance sweep.
-- **A user convenience entry point** — the chain is callable but only tests
-  drive it end to end; `_rs.scratch.ps1`'s replacement (old TODO) is now one
-  thin script over six function calls, plus the runstamped-subdirectory output
-  convention (old TODO).
+- ~~**A user convenience entry point**~~ — **landed 2026-08-24**:
+  `reposnapshot-v3/rs.core.user.ps1` (`-Root` in, complete payload out;
+  default output `<Root>/.snapshot/{runstamp}/`, membrane-protected by
+  convention rather than writer guard; `tests/user.tests.ps1`). The psd1
+  module packaging remains the packaging follow-on (old TODO).
 
 ## Track: crawler-profile — *independent; schedule AFTER shards*
 
@@ -122,6 +123,14 @@ phase is trustworthy.
   picking up the callable alone gets you a function with nothing to sum. The
   discards path is already fine — `membrane.out.skipped` / `ingest.out.skipped`
   carry `SizeBytes` and `Extension`.
+- **nushell-mcp snapshot-reader prototype** — *after calibration and the entry
+  point, not before* (user, 2026-08-24). Lightweight tooling in the
+  nushell-mcp module adapter (`science-facility/mcp/nushell-mcp`) for
+  interacting with written snapshots — parse the tree manifest, seek rows by
+  their byte offsets, light queries over the payload — as an experiment in the
+  downstream MCP mechanics before the Node successor commits to a surface.
+  Reader-side tooling over payload FILES; #1 stands untouched (no MCP is built
+  on the v3 modules — the PowerShell tool stays CLI).
 - **AST-based fragmentation** — one record per H2, semantic sub-addressing.
   Explicitly off the v3 critical path (#47); the packer contract is already
   fragmentation-agnostic, so it lands upstream without touching the export stage.

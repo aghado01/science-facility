@@ -1,5 +1,29 @@
 # Changelog 
 
+## 2026-08-24 — rs.core.user: the convenience entry point
+
+`rs.core.user.ps1` — point `-Root` at a directory, get a complete payload:
+one script over the six stage calls (crawl → membrane → ingest → assemble →
+layout → plan → serialize → manifest), importing the rs.core modules by
+relative path (psd1 packaging stays the follow-on). **Output convention:**
+`<OutRoot>/{runstamp}/<leaf>_sNNN.txt + <leaf>_tree.md`, default OutRoot =
+`<Root>/.snapshot` — the house convention, snapshots UNDER the crawled tree,
+protected by the MEMBRANE rather than a writer guard: Ignore semantics
+excludes `.snapshot/` via IgnoreDefaults (plus the usual gitignore rule via
+sentinels); Selection excludes it by pattern discipline, negations available.
+Same-second reruns get suffixed run dirs. Ergonomics: `-SelectionPatterns`
+flips the membrane to Selection; `-PsStrip` adds the comment stripper;
+`-Columns` drives both the layout and whether rs-content_meta joins the
+chain; `-PassThru` returns IR/Layout/Plan/Receipt for tooling. RunContext
+(RunStamp, Root, GeneratorVersion, ConfigEcho) rides into the IR header and
+the tree's provenance.
+
+`tests/user.tests.ps1` (12): complete payload from one call; the `.snapshot`
+default; **a rerun over the same root ingests the same entries — the
+membrane, not a guard, keeps the payload out of the next crawl** (verified,
+not asserted); collision suffixing; Selection + PsStrip with the stripped
+span seek-verified from the written bytes. Battery **23 · 1387 · 0**.
+
 ## 2026-08-24 — rs.core.manifest reconciled: New-Manifest — THE EXPORT PHASE IS COMPLETE
 
 The 327-line LTS port becomes the contract's module: a **pure formatter over
