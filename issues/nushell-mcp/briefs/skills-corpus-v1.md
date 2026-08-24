@@ -43,12 +43,26 @@ skills/nushell/                    # NU_SKILL_DIR; rename is later
     sessions.md        mcp.md             gotchas.md
     pipelines.md       posix-cheatsheet.md parity.md
     file-io.md         data-analysis.md   advanced.md
-    stock/                         # branch — Nushell as shipped
+    stock/                         # branch — relegated native forms (see membership)
       mcp.md                       # bare nu --mcp, no overlay
-      advanced.md                  # job spawn/recv/kill, complete, def extras
-      posix.md                     # grep/find/where, complete, PATH-as-list
+      advanced.md                  # job spawn/recv/kill, complete
+      posix.md                     # grep-on-files, complete, PATH-as-list, head/tail-on-file
       inspect.md                   # builtin inspect passthrough
 ```
+
+**Membership — relegation of conflicts, not a Nushell textbook.** A
+slice moves to `stock/` iff teaching it up front would conflict with
+the console: either a **landed module supersedes the workflow**
+(`job spawn` → `jobs`, `| complete` → `xq`, grep-shaped file search →
+`rg`, builtin `inspect` → `shape`), or the **packaged deployment
+changes the as-shipped behavior** (bare launch vs `--config`,
+PATH-as-list vs split-if-string). The language itself — `def`,
+`try/catch`, `where` / `select` / `get`, `open` / `save`,
+interpolation, the idioms — is the console's language: happy path, no
+stock counterpart. Membership is a **moving target** that tracks the
+module surface: it grows only when a landing supersedes something
+(that landing owes the relegation — see landing obligations), never
+by taxonomizing bare Nushell in advance.
 
 Both sides point at each other: every stock page opens with one line —
 "Console equivalent: `nu-skills read <topic>`." — and every happy-path
@@ -208,7 +222,7 @@ carry no overlay references.**
 | Stock file | Source | Strip on move |
 |---|---|---|
 | `stock/mcp.md` | current `mcp.md` | the `$history \| shape each` census line (dataspection is overlay — it stays on the console side, sessions.md already has it); the `to json -c` transmission advice (retired, not relocated); the literal "default 10KB" (cap by meaning — the page says outputs over `$env.NU_MCP_OUTPUT_LIMIT` truncate, full value in `$history`, no number) |
-| `stock/advanced.md` | current `job spawn` / `complete` / extra `def` material | — |
+| `stock/advanced.md` | current `job spawn` / `complete` blocks | the extra `def` material — nothing supersedes `def`; it stays in `advanced.md` (membership rule) |
 | `stock/posix.md` | current grep / `complete` / PATH-as-list / head-tail rows | — |
 | `stock/inspect.md` | builtin `inspect` passthrough (from gotchas, expanded as needed) | — |
 
@@ -292,12 +306,17 @@ SKILL.md, not in either docstring, not in the satellite.
   change** as the module.
 - Satellite (`skills/satellite/SKILL.md` — the single source of truth)
   gains one routing line: "`nu-skills list` is the console tree;
-  `nu-skills list stock` is Nushell as shipped." Deploy verbatim to
+  `nu-skills list stock` holds the native forms the console
+  supersedes." Deploy verbatim to
   the client installs (`~/.claude`, `~/.grok`, `~/.codex`
   `skills/nushell-mcp`). It stays an orientation adapter — no corpus
   duplication.
 - vocabulary.md: add the fourth local `kind` closed set
   (`nu-skills list` row, `leaf | branch`).
+- AGENTS.md Rule 1 gains the relegation clause: a landing that
+  supersedes a native workflow (or changes as-shipped behavior)
+  relegates the native slice to `stock/` with cross-pointers **in the
+  same change**. Stock membership grows only this way.
 - Follow-up report appended here: outcome, tests run, deviations.
 
 ## Non-goals (v1)
