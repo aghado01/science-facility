@@ -103,6 +103,41 @@ This piece needed no lexical awareness — it's orthogonal to the here-string
 problem — and shipped independently of it. Battery: **23 suites · 1403
 passed · 0 failed**.
 
+## The settled op set for tabify — PROVISIONAL
+
+Confirmed 2026-08-24 by tracing an invocation mistake, not by changing code:
+`rs-indent`'s design already does what the user specified — "the number of
+tabs does not change, only their size" — but only when **`min-indent-2` and
+`tabify` are requested together**, e.g. `Operations = @('min-indent-2',
+'tabify')`. Fixed execution order runs `min-indent-2` first, which GCD-infers
+the file's real indent step and rescales every depth to `TargetUnit`; `tabify`
+then divides those *already-rescaled* depths by the same `TargetUnit`, so tab
+**count** tracks real hierarchy depth 1:1 and `TargetUnit` is purely the
+declared width, never a second independent divisor. `tabify` requested
+**alone** divides *raw*, un-rescaled depths by `TargetUnit` directly — on this
+corpus's 4-space source that produced 2 tabs per level, not 1, which is what
+the first trial run showed and is what read as "not working as intended." An
+existing, unmodified test (`rs-indent.tests.ps1` §18, `Operations = @('detab',
+'min-indent-2', 'tabify')`, predates this session) already proved the
+composition correct; nothing here required a fix.
+
+Verified against real code, not just the unit test: a full selfie-config
+trial (`min-indent-2`+`tabify`, `TargetUnit=2`, `rs-indent` ahead of
+`rs-whitespace`) over this corpus's real nested PowerShell rendered `→` /
+`→→` / `→→→` for depth-1/2/3 lines exactly, and dropped the payload to
+261,359 bytes (from 288,348 unindented) — real savings, correct hierarchy.
+
+**Marked provisional, not settled, at the user's direction**: this exchange —
+the tabify/min-indent-2 confusion, the earlier mark-spacing station
+back-and-forth, the chain-order dependency this brief is already about — has
+exposed technical debt across the processor chain as a whole (mutator config
+surfaces that are easy to invoke incompletely and fail silently-plausible
+rather than loudly, `TargetUnit` doing double duty depending on which ops
+accompany it, per-processor opt-in surfaces that don't compose obviously). The
+user intends to revisit how the processors work; this op-set finding is
+recorded as the currently-correct invocation, not as a conclusion that
+forecloses that revisit.
+
 ## What remains open — genuinely unresolved, not just unbuilt
 
 - **Nested-scope baseline policy.** When a visitor recurses into a
