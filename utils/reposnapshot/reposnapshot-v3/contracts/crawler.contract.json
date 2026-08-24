@@ -10,20 +10,28 @@
   "out": {
     "result": {
       "RootPath":       { "type": "string" },
-      "Graph":          { "type": "Dictionary[NodePath, node]", "note": "ordinal keys; root = ''" },
-      "DirectoryCount": { "type": "int" },
-      "FileCount":      { "type": "int" },
+      "Graph":          { "type": "Dictionary[NodePath, node]", "note": "ordinal keys; root = ''. STRUCTURE ONLY — what contains what. Aggregates over it live in Rollups" },
+      "Rollups":        { "type": "rollups", "note": "subtree aggregation — a SIBLING of Graph, like Skipped, not folded into it (ledger #52). A rollup is metadata ABOUT the graph, never a property OF a node; welding it on made membrane strip node fields to avoid shipping a pre-filter total on a post-filter node, and made the same aggregation at run scope (DirectoryCount / FileCount, already siblings here) look like a different kind of thing" },
+      "DirectoryCount": { "type": "int",  "note": "NODE count, root included — equals Graph.Count, and equals Rollups.ByNode[''].SubtreeDirCount + 1. It is NOT the root rollup: SubtreeDirCount counts descendants excluding self. Stated because 'the same number at root scope' is exactly the claim that hides an off-by-self; both relations are asserted in crawler.tests" },
+      "FileCount":      { "type": "int",  "note": "genuinely the same aggregation at ROOT scope — equals Rollups.ByNode[''].SubtreeFileCount; asserted in crawler.tests" },
       "SkippedCount":   { "type": "int" },
       "Skipped":        { "type": "skipped[]", "note": "diagnostics feed — a SIBLING of Graph, not folded into it" }
     },
     "node": {
-      "NodePath":         { "type": "string", "note": "graph key; directory portion, trailing '/', root = ''" },
-      "AbsolutePath":     { "type": "string", "note": "trailing '/'" },
-      "NodeDepth":        { "type": "int" },
-      "Files":            { "type": "file[]" },
-      "SubtreeDirCount":  { "type": "int",  "note": "on-disk, pre-filter; descendants not counting self; computed post-walk" },
-      "SubtreeFileCount": { "type": "int",  "note": "on-disk, pre-filter; files at or below" },
-      "SubtreeBytes":     { "type": "long", "note": "on-disk, pre-filter; sum of SizeBytes at or below" }
+      "$comment": "STRUCTURE. A node says what it is and what it contains — nothing that is computed by walking its descendants. Subtree totals moved to out.rollups 2026-08-23 (ledger #52).",
+      "NodePath":     { "type": "string", "note": "graph key; directory portion, trailing '/', root = ''" },
+      "AbsolutePath": { "type": "string", "note": "trailing '/'" },
+      "NodeDepth":    { "type": "int" },
+      "Files":        { "type": "file[]" }
+    },
+    "rollups": {
+      "Scope":  { "type": "string", "note": "THE LAYER'S IDENTITY. 'walked' = every file the crawl saw, before the membrane rejects any of it. The same aggregation over a different predicate is another layer of this shape, keyed the same way — so a consumer can check which set it holds instead of trusting a field name, and no layer can impersonate another" },
+      "ByNode": { "type": "Dictionary[NodePath, rollup]", "note": "same keys as Graph; join, never embed" }
+    },
+    "rollup": {
+      "SubtreeDirCount":  { "type": "int",  "note": "descendants not counting self, within Scope" },
+      "SubtreeFileCount": { "type": "int",  "note": "files at or below, within Scope" },
+      "SubtreeBytes":     { "type": "long", "note": "sum of SizeBytes at or below, within Scope — an aggregation over retained atoms, never a measurement (ledger #52)" }
     },
     "file": {
       "AbsolutePath": { "type": "string",         "note": "read target; ingestion-side only" },

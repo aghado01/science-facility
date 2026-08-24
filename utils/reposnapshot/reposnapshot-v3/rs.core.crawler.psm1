@@ -10,19 +10,31 @@ using namespace System.Security
     Crawl stage — greedy BFS over the root; produces the file-system graph.
 
 .DESCRIPTION
-    Output: @{ RootPath; Graph; DirectoryCount; FileCount; SkippedCount; Skipped }
-      Graph[NodePath] → @{ NodePath; AbsolutePath; NodeDepth; Files;
-                           SubtreeDirCount; SubtreeFileCount; SubtreeBytes }
+    Output: @{ RootPath; Graph; Rollups; DirectoryCount; FileCount;
+               SkippedCount; Skipped }
+      Graph[NodePath] → @{ NodePath; AbsolutePath; NodeDepth; Files }
       Files[]        → @{ AbsolutePath; RelativePath; NodePath; Extension;
                            SizeBytes; LastWriteUtc; CreationUtc; FsAttributes }
+      Rollups        → @{ Scope; ByNode[NodePath] → @{ SubtreeDirCount;
+                           SubtreeFileCount; SubtreeBytes } }  — a SIBLING of
+                           Graph, like Skipped
       Skipped[]      → @{ Path; Reason; [Error] }  — diagnostics, sibling of Graph
 
     Stamping rule: the crawler stamps everything that is FREE at its vantage —
     no extra syscall, no file read. Facts that cost a read (encoding, binary
     sniff, hashes) belong to later stages. Fields exist for later consumers
     even when the next stage does not use them; downstream reads, never
-    re-derives. Subtree rollups are on-disk totals (pre-filter) computed from
-    the graph in memory after the walk.
+    re-derives (ledger #38, measurements only).
+
+    Rollups are METADATA ABOUT the graph, not properties OF a node (ledger
+    #52). They live in their own keyed layer whose `Scope` says which set it
+    aggregates — here 'walked', every file the crawl saw, before the membrane
+    rejects any of it. The same aggregation over a different predicate is a
+    second layer of the same shape, keyed the same way; neither can impersonate
+    a current property of a node, which is what welding them onto nodes did.
+    The run-level counts (DirectoryCount / FileCount) are the same aggregation
+    at root scope and already sat as siblings of Graph — this makes the
+    per-node case consistent with them.
 
     Paths: forward slashes; RelativePath root-anchored, no leading slash;
     NodePath = directory portion with trailing '/', root = ''. AbsolutePath is
@@ -193,12 +205,11 @@ class FileSystemCrawler
             }
         }
 
-        $this.RollUp()
-
         $this.HasRun = $true
         return [PSCustomObject]@{
             RootPath       = $this.RootPath
             Graph          = $this.Graph
+            Rollups        = $this.BuildRollups('walked')
             DirectoryCount = $this.DirectoryCount
             FileCount      = $this.FileCount
             SkippedCount   = $this.Skipped.Count
@@ -207,37 +218,55 @@ class FileSystemCrawler
     }
 
     # ── Private: NewNode — one shape for every graph node ─────────────────
+    # Structure only. Subtree totals are metadata ABOUT the graph and live in
+    # their own layer (BuildRollups, ledger #52) — a node never carries an
+    # aggregate over itself.
     hidden [PSCustomObject] NewNode([string]$nodePath, [string]$absolutePath, [int]$depth)
     {
         return [PSCustomObject]@{
-            NodePath         = $nodePath
-            AbsolutePath     = $absolutePath
-            NodeDepth        = $depth
-            Files            = [List[PSCustomObject]]::new()
-            SubtreeDirCount  = 0      # descendants, not counting self
-            SubtreeFileCount = 0      # files at or below this node
-            SubtreeBytes     = 0L     # sum of SizeBytes at or below this node
+            NodePath     = $nodePath
+            AbsolutePath = $absolutePath
+            NodeDepth    = $depth
+            Files        = [List[PSCustomObject]]::new()
         }
     }
 
-    # ── Private: RollUp — subtree totals, deepest-first so each node is
-    #    complete before it is folded into its parent. In-memory only.
-    hidden [void] RollUp()
+    # ── Private: BuildRollups — the subtree aggregation, over one predicate ──
+    # Deepest-first, so each node is complete before it folds into its parent.
+    # Returns a KEYED LAYER, not node mutations: @{ Scope; ByNode }. The scope
+    # is the layer's identity — run this over a different set (the surviving
+    # entries, the discarded ones) and the result is another layer of the same
+    # shape, keyed the same way, that cannot be mistaken for this one.
+    # In-memory only; reads SizeBytes, measures nothing.
+    hidden [PSCustomObject] BuildRollups([string]$scope)
     {
+        $byNode = [Dictionary[string, PSCustomObject]]::new([StringComparer]::Ordinal)
+        foreach ($nodePath in $this.Graph.Keys)
+        {
+            $byNode[$nodePath] = [PSCustomObject]@{
+                SubtreeDirCount  = 0      # descendants, not counting self
+                SubtreeFileCount = 0      # files at or below this node
+                SubtreeBytes     = 0L     # sum of SizeBytes at or below this node
+            }
+        }
+
         foreach ($node in ($this.Graph.Values | Sort-Object -Property NodeDepth -Descending))
         {
+            $r = $byNode[$node.NodePath]
             foreach ($f in $node.Files)
             {
-                $node.SubtreeFileCount++
-                $node.SubtreeBytes += $f.SizeBytes
+                $r.SubtreeFileCount++
+                $r.SubtreeBytes += $f.SizeBytes
             }
             if ($node.NodePath -eq '') { continue }
 
-            $parent = $this.Graph[$this.ParentNodePath($node.NodePath)]
-            $parent.SubtreeDirCount  += 1 + $node.SubtreeDirCount
-            $parent.SubtreeFileCount += $node.SubtreeFileCount
-            $parent.SubtreeBytes     += $node.SubtreeBytes
+            $p = $byNode[$this.ParentNodePath($node.NodePath)]
+            $p.SubtreeDirCount  += 1 + $r.SubtreeDirCount
+            $p.SubtreeFileCount += $r.SubtreeFileCount
+            $p.SubtreeBytes     += $r.SubtreeBytes
         }
+
+        return [PSCustomObject]@{ Scope = $scope; ByNode = $byNode }
     }
 
     # ── Private: ToNodePath ───────────────────────────────────────────────

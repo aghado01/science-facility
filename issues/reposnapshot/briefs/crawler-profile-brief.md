@@ -77,23 +77,29 @@ sitting at `out.result` as siblings of `Graph`, and `Skipped`'s note says
 "a SIBLING of Graph, **not folded into it**". The three `Subtree*` fields are the
 one place the rule is not applied.
 
-So the disposition is:
+**DONE 2026-08-23** — landed ahead of the rest of this brief, because as a layer
+the profile toggle becomes emit / do-not-emit rather than a conditional `from`,
+which is the expensive part of everything below. What shipped:
 
-- **Move them out of `out.node` into a keyed layer** — a sibling of `Graph`,
-  keyed by `NodePath`, exactly as `Skipped` already is. Not a rewrite of what is
-  computed; a change of where the answer is put.
+- **Moved out of `out.node` into `out.rollups`** — `@{ Scope; ByNode[NodePath] }`,
+  a sibling of `Graph` exactly as `Skipped` already was. Not a rewrite of what is
+  computed; a change of where the answer is put. `RollUp()` (mutating nodes)
+  became `BuildRollups($scope)` (returning a layer).
 - **A layer's identity is its scope**, so no per-field labelling is needed:
-  `rollups(walked)` and `rollups(payload)` share keys and coexist, and neither
-  can impersonate a current property of a node.
-- **Membrane's severing then stops being a special case.** It drops those fields
-  today because carrying a pre-filter total on a post-filter node would be
-  wrong — but that is only necessary because the metadata is welded to the
-  structure. With a layer, membrane simply does not emit a new one, and nothing
-  needs dropping.
-- **The rollup wants to be a callable, not a stamp** — one definition the
-  crawler invokes over the walk and a diagnostic or manifest could invoke over
-  any predicate, in the shape `Format-Row → Measure-Row / Build-Row` already
-  uses (#39).
+  `Scope = 'walked'` here, and a survivors-scope layer would share keys and
+  coexist without either impersonating a node property.
+- **Membrane's severing stopped being a special case.** It has no fields to
+  strip now — it rebuilds nodes as structure and emits no layer.
+- **An off-by-self got pinned.** `FileCount` really is this aggregation at root
+  scope, but `DirectoryCount` counts graph *nodes including root*
+  (`== Graph.Count == ByNode[''].SubtreeDirCount + 1`) while `SubtreeDirCount`
+  counts *descendants excluding self*. Both relations are asserted now — the
+  test caught it against a contract note I had just written wrong, which is
+  exactly the claim ("same number at root scope") that hides it.
+
+Still owed: **the rollup as a callable**, one definition invoked over any
+predicate rather than only by the crawler over the walk (#39's shape). Nothing
+needs a second scope yet, so it stays a private method until something does.
 - **The atom is what must survive**, and today it does not: `SizeBytes` is
   excluded at assemble, so a post-filter subtree rollup is currently
   *impossible* — not merely unwritten. Nothing wants one today (the manifest's

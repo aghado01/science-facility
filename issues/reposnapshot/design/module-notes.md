@@ -13,8 +13,11 @@ read the design docs".
 **Stamping rule (2026-08-15).** The crawler stamps everything that is free at
 its vantage point: no extra syscall, no file read. It already holds a
 `FileAttributes` value and a `FileInfo` per file and the whole graph in memory,
-so `Extension`, `CreationUtc`, `FsAttributes` and per-node subtree rollups cost
-nothing beyond what the walk was doing. Facts that cost a read — encoding,
+so `Extension`, `CreationUtc` and `FsAttributes` cost nothing beyond what the
+walk was doing. The rule governs **measurements only** (#52) — the subtree
+rollups are not stamped facts at all but an aggregation over them, and they
+live in their own layer rather than on the nodes they summarise. Facts that
+cost a read — encoding,
 binary sniff, hashes — belong to later stages, because the crawler walks
 everything ignore is about to discard (`.git`, `node_modules`, build output),
 often 10–100× the surviving count. This is decisions ledger #30 restated as a
@@ -49,7 +52,8 @@ by name): every `from` resolves (input ⊆ upstream output, per field), and the
 **join residues** are printed — for each `Y.in ← X.out.S`, the fields of
 `X.out.S` no `Y.out.*` declares `from` it, i.e. reachable downstream only by
 `Y.out ⋈ X.out` on the retained upstream output (the orchestrator holds both).
-Today's residues: `crawler.out.node − ignore.out.node = {Files, Subtree*}`;
+Today's residues: `crawler.out.node − ignore.out.node = {Files}` (the
+`Subtree*` residue is gone — they left `out.node` for `out.rollups`, #52);
 `ignore.out.node` reaches nothing in ingest (flattening); `ingest.out.bag −
 assemble.out.entry.core = exclude ∪ {Encoding, ReadError}` with the landing
 open. Contracts prime a stage's semantics: assemble is not privileged —
@@ -67,13 +71,28 @@ which the golden test catches. A short-lived `descriptor.json` union register
 (2026-08-15, one day) was replaced by this decomposition — a cross-stage
 god-view read by assemble is what the per-stage model avoids.
 
-**Rollups are on-disk, pre-filter.** `SubtreeDirCount` / `SubtreeFileCount` /
-`SubtreeBytes` describe what is on disk under a node, computed in a
-deepest-first pass over the graph after the walk. Ignore rebuilds nodes with
-its own field set, so rollups do not ride through the filtered graph — and
-should not, since post-filter they would be stale. They are crawler-output
-facts; the orchestrator retains crawler output and hands them to whichever
-consumer (shards, tree manifest) wants them.
+**Rollups are a keyed LAYER, not node fields** (ledger #52, moved 2026-08-23).
+`SubtreeDirCount` / `SubtreeFileCount` / `SubtreeBytes` live in
+`crawler.out.rollups` — `@{ Scope; ByNode[NodePath] }` — a sibling of `Graph`
+exactly as `Skipped` already was. A rollup is metadata *about* the graph, never
+a property *of* a node: it is computed by walking a node's descendants, so
+writing it back onto the node it summarises is the denormalisation that made
+everything downstream awkward.
+
+Two things that used to need explaining stop needing it. The membrane no longer
+"drops" rollups — it rebuilds nodes as structure and simply emits no new layer,
+so there is nothing to strip. And a post-filter rollup is not a *stale* version
+of this one: it is **another layer of the same shape over a different
+predicate**, and `Scope` is what tells them apart, so neither can impersonate
+the other. One aggregation definition, N call sites — the shape
+`Format-Row → Measure-Row / Build-Row` already uses.
+
+Note the run-level counts are *not* uniformly the same aggregation at root
+scope: `FileCount == ByNode[''].SubtreeFileCount`, but `DirectoryCount` counts
+graph **nodes including root** (`== Graph.Count == ByNode[''].SubtreeDirCount +
+1`) while `SubtreeDirCount` counts **descendants excluding self**. Both
+relations are asserted in `crawler.tests` — "the same number at root scope" is
+precisely the claim that hides an off-by-self.
 
 **Path doctrine — store vs view, applied to paths.**
 - `AbsolutePath` exists for unambiguous ingestion-side reads; it never appears
@@ -158,6 +177,9 @@ the schema, which is tested.
 
 **Reads `$f.Extension`** (since 2026-08-15) rather than re-deriving; fails
 fast on a descriptor lacking `RelativePath` or `Extension` — the crawler
-contract, checked at the boundary. Node rollups from `crawler.out.node` are
-not carried (see contracts residue); the membrane rebuilds nodes with
-`{ NodePath; AbsolutePath; NodeDepth; Files; CompiledState }`.
+contract, checked at the boundary. Node rollups are no longer node fields to carry
+(ledger #52): the membrane rebuilds nodes as `{ NodePath; AbsolutePath;
+NodeDepth; Files; CompiledState }` and emits no rollup layer, so nothing is
+stripped and nothing is lost — `crawler.out.rollups` stays the walked-scope
+answer, and a survivors-scope answer would be a second layer, not a repair of
+this one.

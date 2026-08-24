@@ -7,6 +7,26 @@ never as standing claims, and never hand-copied from prose.
 Rulings live in [decisions.md](decisions.md); what remains lives in
 [roadmap.md](roadmap.md).
 
+- **2026-08-23 — subtree rollups moved out of the graph into a keyed layer**
+  (#52 applied): `crawler.out.node` loses `SubtreeDirCount` /
+  `SubtreeFileCount` / `SubtreeBytes`; `crawler.out.rollups` =
+  `@{ Scope; ByNode[NodePath] }` gains them, a sibling of `Graph` exactly as
+  `Skipped` already was. `RollUp()` → `BuildRollups($scope)`; nodes are
+  structure only. The crawler had been applying the sibling rule to run-level
+  counts and diagnostics and *not* to per-node aggregates — one exception, and
+  it was the reason membrane had to strip node fields (residue
+  `crawler.out.node − membrane.out.node` drops from `{Files, Subtree*}` to
+  `{Files}`). `Scope` makes a second predicate a second layer rather than a
+  repair, so no per-field labelling is needed. **The suite caught an off-by-self
+  in a contract note written the same hour**: `FileCount` is this aggregation at
+  root scope, but `DirectoryCount` counts graph nodes *including root*
+  (`== Graph.Count == ByNode[''].SubtreeDirCount + 1`) while `SubtreeDirCount`
+  counts descendants *excluding self* — both now asserted. `module-notes`
+  §rs.core.crawler and §residues follow. Landed **ahead** of the rest of
+  crawler-profile on purpose: as a layer the profile toggle is emit /
+  do-not-emit, not a conditional `from`, which is that track's expensive part.
+  Battery at this commit: **17 suites · 1060 passed · 0 failed**.
+
 - **2026-08-23 — shards read-ahead: five contradictions fixed before any code**,
   plus the `carried` tier and the crawl-vs-ingest doctrine. Read-ahead over
   `shards-brief` and the serialize/manifest contracts, checking sequencing rather

@@ -1,5 +1,35 @@
 # Changelog 
 
+## 2026-08-23 — crawler: subtree rollups become a keyed layer, not node fields
+
+Ledger #52. A rollup is metadata *about* the graph, never a property *of* a
+node — it is computed by walking a node's descendants, so writing it back onto
+the node it summarises is a denormalisation. `SubtreeDirCount` /
+`SubtreeFileCount` / `SubtreeBytes` leave `out.node` for **`out.rollups`** =
+`@{ Scope; ByNode[NodePath] }`, a sibling of `Graph` exactly as `Skipped`
+already was. `RollUp()` (mutated nodes in place) became `BuildRollups($scope)`
+(returns a layer); `NewNode` is structure only.
+
+`Scope` is the layer's identity — `'walked'` here, meaning every file the crawl
+saw before the membrane rejects any of it. A survivors-scope answer is a second
+layer of the same shape over a different predicate, not a repair of this one, so
+neither can impersonate the other and no per-field scope labelling is needed.
+
+Two things stop needing explanation. **Membrane no longer "drops" rollups** —
+it rebuilds nodes as structure and emits no layer, so there is nothing to strip
+(the residue `crawler.out.node − membrane.out.node = {Files, Subtree*}` is now
+just `{Files}`). And the crawler's run-level counts stop looking like a
+different kind of thing from the per-node ones: they were already siblings of
+`Graph`, and the per-node case was the lone exception.
+
+**An off-by-self got pinned in the process.** `FileCount` genuinely is this
+aggregation at root scope, but `DirectoryCount` counts graph **nodes including
+root** (`== Graph.Count == ByNode[''].SubtreeDirCount + 1`) while
+`SubtreeDirCount` counts **descendants excluding self**. Both relations are now
+asserted — the suite caught it against a contract note claiming they were equal.
+`crawler.tests` 53 → 59; the shape check now skips `$`-prefixed contract
+metadata. Battery **17 · 1060 · 0**.
+
 ## 2026-08-23 — assemble gains a `carried` tier; shards read-ahead fixes
 
 **`out.entry` has four tiers, not three** (#50): `core` · **`carried`** ·

@@ -127,7 +127,8 @@ try
     $undeclared = @($stamped | Where-Object { $_ -notin $fileFields })
     Assert-True ($missing.Count -eq 0) 'every out.file field is stamped on the descriptor' "missing: $($missing -join ', ')"
     Assert-True ($undeclared.Count -eq 0) 'no stamped descriptor field is undeclared in out.file' "undeclared: $($undeclared -join ', ')"
-    $nodeFields = @($contract.out.node.Keys)
+    # `$`-prefixed keys are contract metadata ($comment), never fields.
+    $nodeFields = @($contract.out.node.Keys | Where-Object { $_ -notlike '$*' })
     $nodeStamped = @($result.Graph['src/'].PSObject.Properties.Name)
     Assert-True (@($nodeFields | Where-Object { $_ -notin $nodeStamped }).Count -eq 0 -and @($nodeStamped | Where-Object { $_ -notin $nodeFields }).Count -eq 0) `
         'node shape equals out.node exactly' "node: $($nodeStamped -join ','); contract: $($nodeFields -join ',')"
@@ -139,21 +140,36 @@ try
     # -----------------------------------------------------------------------
     Enter-Section '3c. Node rollups (on-disk subtree totals)'
     # -----------------------------------------------------------------------
-    $root = $result.Graph['']
-    $src = $result.Graph['src/']
-    $lib = $result.Graph['src/lib/']
-    $docs = $result.Graph['docs/']
+    # Rollups are a KEYED LAYER beside Graph, not fields on nodes (ledger #52).
+    Assert-True ($null -ne $result.Rollups) 'Rollups is a sibling of Graph in the result envelope'
+    Assert-True ($result.Rollups.Scope -eq 'walked') "the layer names its set — Scope = 'walked'" $result.Rollups.Scope
     foreach ($field in @('SubtreeDirCount', 'SubtreeFileCount', 'SubtreeBytes'))
     {
-        Assert-True ($null -ne $root.PSObject.Properties[$field]) "node field present: $field"
+        Assert-True ($null -eq $result.Graph[''].PSObject.Properties[$field]) "node does NOT carry $field — structure holds no aggregate over itself"
     }
+    Assert-True (@($result.Rollups.ByNode.Keys | Sort-Object) -join ',' -eq (@($result.Graph.Keys | Sort-Object) -join ',')) 'the layer is keyed exactly like Graph — join, never embed'
+
+    $root = $result.Rollups.ByNode['']
+    $src = $result.Rollups.ByNode['src/']
+    $lib = $result.Rollups.ByNode['src/lib/']
+    $docs = $result.Rollups.ByNode['docs/']
     Assert-True ($lib.SubtreeDirCount -eq 0 -and $lib.SubtreeFileCount -eq 1) 'leaf src/lib/: 0 dirs, 1 file' "got $($lib.SubtreeDirCount)/$($lib.SubtreeFileCount)"
     Assert-True ($src.SubtreeDirCount -eq 1 -and $src.SubtreeFileCount -eq 2) 'src/: 1 dir (lib), 2 files (main + util)' "got $($src.SubtreeDirCount)/$($src.SubtreeFileCount)"
     Assert-True ($docs.SubtreeDirCount -eq 0 -and $docs.SubtreeFileCount -eq 1) 'docs/: 0 dirs, 1 file'
-    Assert-True ($root.SubtreeDirCount -eq 3 -and $root.SubtreeFileCount -eq 4) 'root: 3 dirs, 4 files (= DirectoryCount-1 / FileCount)' "got $($root.SubtreeDirCount)/$($root.SubtreeFileCount)"
+    Assert-True ($root.SubtreeDirCount -eq 3 -and $root.SubtreeFileCount -eq 4) 'root: 3 dirs, 4 files' "got $($root.SubtreeDirCount)/$($root.SubtreeFileCount)"
+
+    # Run-level counts vs the root rollup. FileCount IS this aggregation at
+    # root scope. DirectoryCount is NOT: it counts graph NODES (root included),
+    # while SubtreeDirCount counts DESCENDANTS (self excluded) — they differ by
+    # exactly one, and pinning that here is the point. "Same number at root
+    # scope" is the kind of claim that hides an off-by-self.
+    Assert-True ($result.FileCount -eq $root.SubtreeFileCount) 'FileCount == root SubtreeFileCount — genuinely the same aggregation at root scope' "$($result.FileCount) vs $($root.SubtreeFileCount)"
+    Assert-True ($result.DirectoryCount -eq $root.SubtreeDirCount + 1) 'DirectoryCount == root SubtreeDirCount + 1 — nodes-including-self vs descendants' "$($result.DirectoryCount) vs $($root.SubtreeDirCount)"
+    Assert-True ($result.DirectoryCount -eq $result.Graph.Count) 'DirectoryCount == Graph.Count — it is a node count, not a subtree rollup'
+
     $allBytes = ($result.Graph.Values | ForEach-Object { $_.Files } | Measure-Object -Property SizeBytes -Sum).Sum
     Assert-True ($root.SubtreeBytes -eq $allBytes) 'root SubtreeBytes = sum of every file SizeBytes' "got $($root.SubtreeBytes) vs $allBytes"
-    Assert-True ($src.SubtreeBytes -eq ($src.Files[0].SizeBytes + $lib.SubtreeBytes)) 'src/ SubtreeBytes = own files + lib subtree'
+    Assert-True ($src.SubtreeBytes -eq ($result.Graph['src/'].Files[0].SizeBytes + $lib.SubtreeBytes)) 'src/ SubtreeBytes = own files + lib subtree'
     Assert-True ($root.SubtreeBytes -is [long]) 'SubtreeBytes stays [long]'
 
     # -----------------------------------------------------------------------
