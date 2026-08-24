@@ -8,7 +8,7 @@ Recipes are tracked in Git; the materializations they produce under `deps/` (exc
 
 | Recipe | Target / Shelf | Pin Specification | Restore Script |
 |---|---|---|---|
-| `brewery/nushell/` | `deps/nushell/` | `pin.json` | `restore-nushell.ps1` |
+| `brewery/nushell/` | `deps/nushell/` | `pin.json` | `restore-nushell.ps1`, `install-latest.sh` |
 
 ## nushell
 
@@ -18,17 +18,9 @@ The pinned Nushell runtime engine and bundled official plugins.
 Declares the pinned Nushell version (`0.114.1`), official GitHub release URL, and platform artifact metadata (archive URL, SHA-256 hash, and executable name) across platforms (`windows-x64`, `windows-arm64`, `linux-x64`, `linux-arm64`, `darwin-x64`, `darwin-arm64`).
 
 ### `restore-nushell.ps1`
-Cross-platform bootstrap script that:
-1. Detects the host operating system and CPU architecture.
-2. Resolves the corresponding artifact entry in `pin.json`.
-3. Downloads the release archive from GitHub to a temporary scratch directory.
-4. Verifies the archive SHA-256 checksum against the pin.
-5. Extracts the distribution and verifies the restored `nu` executable version.
-6. Stages the engine and plugins into `deps/nushell/`.
-7. Emits a `deps/nushell/restore-receipt.json` stamp.
-8. Runs a smoke test against the test battery (`tests/skills-corpus-v1.nu`).
+PowerShell bootstrap script that resolves against `pin.json`, downloads the verified platform asset, extracts the binary and plugins to `deps/nushell/`, and runs smoke tests.
 
-#### Usage
+#### Usage (PowerShell)
 
 ```powershell
 # Restore if missing or hash mismatch (idempotent):
@@ -40,3 +32,23 @@ Cross-platform bootstrap script that:
 # Skip smoke tests:
 ./mcp/nushell-mcp/brewery/nushell/restore-nushell.ps1 -SkipTests
 ```
+
+### `install-latest.sh`
+Bash script that queries GitHub release inventory for `nushell/nushell`, identifies the latest OS-appropriate portable release archive (MSVC zip on Windows, GNU tar.gz on Linux, Darwin tar.gz on macOS), verifies SHA-256 integrity, extracts `nu` and bundled plugins, stages them into `deps/nushell/`, and writes `restore-receipt.json`.
+
+#### Usage (Bash)
+
+```bash
+# Query latest release and install if newer/missing:
+./mcp/nushell-mcp/brewery/nushell/install-latest.sh
+
+# Force reinstall:
+./mcp/nushell-mcp/brewery/nushell/install-latest.sh --force
+
+# Dry-run inspection (identify platform & matching asset without downloading):
+./mcp/nushell-mcp/brewery/nushell/install-latest.sh --dry-run
+
+# Install specific release tag:
+./mcp/nushell-mcp/brewery/nushell/install-latest.sh --version 0.114.1
+```
+
