@@ -103,6 +103,23 @@ shape, control-flow classes, and invocation-surface duality.
   doctrine-heavy style. Also per the old TODO: strict-mode/pester front-matter
   belongs in test harnesses, not module files.
 
+- **`rs-indent` lexical safety — here-strings and nested code** (filed
+  2026-08-24, blocks wiring `rs-indent` into any default chain). Found while
+  trying to wire it into `rs.core.user`'s ergonomic defaults: it has no
+  string-literal masking, unlike `rs-psstrip`/`rs-csstrip` — it would reshape
+  a here-string's literal interior indentation identically to real code, and
+  the corpus has 15 live sites where that would corrupt fixture data. The
+  design direction is a **visitor, not a mask** (user): recurse into a
+  here-string's interior as its own nested scope and normalize that too,
+  rather than skip it — infrastructure for this already exists
+  (`rs-psstrip`'s real-parser AST walk, reusable). Two open forks recorded,
+  not resolved: single-quoted-only v1 vs. also recursing into expandable
+  here-strings' `$(...)` subexpressions as real code; and the nested scope's
+  baseline policy. Physical-line splitting (a genuinely separate, orthogonal
+  concern — no lexical awareness needed) was pulled out and landed the same
+  day; the lexical-safety piece is what remains.
+  [rs-indent-lexical-safety-brief](../briefs/rs-indent-lexical-safety-brief.md).
+
 - **Character-scan diagnostic** — filed, not started. Bidi controls are reported
   by a read-only diagnostic step rather than stripped (#11/#11b); the decision is
   already captured, so deferring the code loses nothing.

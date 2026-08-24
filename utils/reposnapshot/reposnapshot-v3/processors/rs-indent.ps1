@@ -108,6 +108,17 @@
         # FUTURE: Markdown fenced code block support — apply detab/min-indent-2
         # only inside ``` fences, leaving prose lines untouched. This would
         # allow strip-common to be safely omitted for indented-code-block compat.
+
+        Physical-line splitting (2026-08-24, user): this processor finds line
+        boundaries itself — CRLF, CR, LF, NEL U+0085, LS U+2028, PS U+2029, VT
+        U+000B, FF U+000C — the same terminator vocabulary rs-whitespace's `lf`
+        op recognizes, borrowed rather than reinvented. It does NOT fold them:
+        each line's ORIGINAL terminator bytes are preserved and reattached
+        verbatim on reassembly — folding to `\n` stays rs-whitespace's job.
+        This is what lets rs-indent run BEFORE rs-whitespace in a chain: it no
+        longer assumes lf has already normalized the text, only that its own
+        leading-whitespace reshaping is correct regardless of which terminator
+        kind separates two physical lines.
 #>
 # [CmdletBinding()]
 param(
@@ -167,7 +178,24 @@ $doDetab = (-not $skipped) -and ('detab' -in $ops -or 'min-indent-2' -in $ops -o
 $doMinIndent = (-not $skipped) -and ('min-indent-2' -in $ops)
 $doTabify = (-not $skipped) -and ('tabify' -in $ops)
 
-$lines = $text -split "`n"
+# Physical-line split — CRLF before lone CR (alternation order, same reason
+# rs-whitespace's lf op states: as a character class CRLF would count as two
+# breaks), then the remaining single-character terminator kinds. A capturing
+# group in the split pattern makes [regex]::Split return content and
+# terminator ALTERNATING — content, term, content, term, …, content — one
+# more content element than terminator elements, exactly the shape
+# `-split "`n"` produced before (including the trailing empty-string element
+# when the text ends on a terminator), so $depths sizing below is unchanged.
+# Terminators are NOT folded here — each is carried in $terms and reattached
+# verbatim at the end; folding to `\n` stays rs-whitespace's job.
+$termPattern = '\r\n|\r|\n|\u0085|\u2028|\u2029|\x0B|\x0C'
+$parts = [regex]::Split($text, "($termPattern)")
+$lines = [string[]]::new(($parts.Count + 1) / 2)
+$terms = [string[]]::new($lines.Count - 1)
+for ($i = 0; $i -lt $parts.Count; $i++)
+{
+    if ($i % 2 -eq 0) { $lines[$i / 2] = $parts[$i] } else { $terms[($i - 1) / 2] = $parts[$i] }
+}
 $depths = [int[]]::new($lines.Count)
 
 # ---------------------------------------------------------------------------
@@ -293,7 +321,16 @@ if ($doTabify)
     }
 }
 
-$t = $lines -join "`n"
+# Reassemble with EACH line's ORIGINAL terminator (never a hardcoded "`n"),
+# so a file whose terminators were never folded (rs-indent ran before
+# rs-whitespace's lf) round-trips its terminator bytes exactly, untouched.
+$sb = [System.Text.StringBuilder]::new()
+for ($i = 0; $i -lt $lines.Count; $i++)
+{
+    [void]$sb.Append($lines[$i])
+    if ($i -lt $terms.Count) { [void]$sb.Append($terms[$i]) }
+}
+$t = $sb.ToString()
 
 # ---------------------------------------------------------------------------
 # Copy-on-mutate return — harmonized content-mutator contract (6d)

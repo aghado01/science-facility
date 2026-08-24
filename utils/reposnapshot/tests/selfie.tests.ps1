@@ -181,7 +181,7 @@ try
         RunStamp         = 'selfie'
         Root             = $rootFull
         GeneratorVersion = 'reposnapshot-v3'
-        ConfigEcho       = [pscustomobject]@{ Grouping = 'ByFileType'; Chain = @('file-read', 'rs-whitespace', 'rs-psstrip', 'rs-content_meta') }
+        ConfigEcho       = [pscustomobject]@{ Grouping = 'ByFileType'; Chain = @('file-read', 'rs-psstrip', 'rs-whitespace', 'rs-content_meta') }
     }
     $tree = New-Manifest -Receipt $receipt -Shards $plan.Shards -Plan $plan.Plan -Layout $L -RunContext $runCtx -TreePath (Join-Path $outRoot 'selfie_tree.md')
     $treeText = [IO.File]::ReadAllText($tree.Path)

@@ -390,6 +390,59 @@ Assert-Equal @($p2.Processing[1].Operations).Count 2 'two-pass stack: second rec
 Assert-Equal $p2.RelativePath 'src/a.ps1' 'two-pass stack: identity survives both passes'
 
 # ============================================================
+# 22. Physical-line splitting (2026-08-24) — CRLF/CR/LF and exotic
+#     terminators (NEL, LS, PS, VT, FF), independent of rs-whitespace's lf
+#     having run first; each terminator's original bytes are preserved.
+# ============================================================
+$NEL = [string][char]0x0085
+$LS = [string][char]0x2028
+$PS = [string][char]0x2029
+$VT = [string][char]0x000B
+$FF = [string][char]0x000C
+
+# CRLF round-trips exactly: content reindented, terminator bytes untouched.
+# (detab expands 1 tab -> TargetUnit=2 spaces, per test #8 above.)
+$rCrlf = Invoke-Processor -Item "foo`r`n`tbar" -Config @{ Operations = @('detab') }
+Assert-Equal $rCrlf.Content "foo`r`n  bar" 'CRLF: content reshaped, terminator bytes (CR then LF) preserved exactly'
+
+# Lone CR (old Mac style) is recognized as a line boundary too.
+$rCr = Invoke-Processor -Item "foo`r`tbar" -Config @{ Operations = @('detab') }
+Assert-Equal $rCr.Content "foo`r  bar" 'lone CR: recognized as a physical line boundary'
+
+# THE BUG THIS FIXES: before, only bare `n counted as a boundary, so a file
+# using an exotic terminator EXCLUSIVELY was seen as ONE line — every
+# physical line after the first went completely unprocessed, silently.
+$exotic = "foo{0}`tbar{0}`t`tbaz" -f $NEL
+$rExotic = Invoke-Processor -Item $exotic -Config @{ Operations = @('detab') }
+Assert-Equal $rExotic.Content ("foo{0}  bar{0}    baz" -f $NEL) 'NEL-only file: every physical line reshaped, not just the first'
+
+$rLs = Invoke-Processor -Item ("a{0}`tb" -f $LS) -Config @{ Operations = @('detab') }
+Assert-Equal $rLs.Content ("a{0}  b" -f $LS) 'LS is a recognized line boundary'
+$rPs = Invoke-Processor -Item ("a{0}`tb" -f $PS) -Config @{ Operations = @('detab') }
+Assert-Equal $rPs.Content ("a{0}  b" -f $PS) 'PS is a recognized line boundary'
+$rVt = Invoke-Processor -Item ("a{0}`tb" -f $VT) -Config @{ Operations = @('detab') }
+Assert-Equal $rVt.Content ("a{0}  b" -f $VT) 'VT is a recognized line boundary'
+$rFf = Invoke-Processor -Item ("a{0}`tb" -f $FF) -Config @{ Operations = @('detab') }
+Assert-Equal $rFf.Content ("a{0}  b" -f $FF) 'FF is a recognized line boundary'
+
+# Terminators are carried through VERBATIM, never folded to LF — folding
+# stays rs-whitespace's job. A mixed-terminator file keeps each kind as-is.
+$rMixed = Invoke-Processor -Item "a`r`nb`rc`nd" -Config @{ Operations = @('detab') }
+Assert-Equal $rMixed.Content "a`r`nb`rc`nd" 'mixed terminators: no folding — each kind preserved exactly (rs-indent does not own this)'
+
+# min-indent-2 reshapes LEADING depth correctly across CRLF-separated lines —
+# proves $depths indexing lines up with the terminator-preserving split.
+$rMi = Invoke-Processor -Item "a`r`n    b`r`n        c" -Config @{ Operations = @('min-indent-2') }
+Assert-Equal $rMi.Content "a`r`n  b`r`n    c" 'min-indent-2 over CRLF-separated lines: depths correct, CRLF preserved'
+
+# The chain order this unblocks: rs-indent no longer needs rs-whitespace's lf
+# to have run first. Reshape CRLF content directly, THEN fold — same result
+# as folding first, because rs-indent never touched the terminator bytes.
+$raw = "function f {`r`n`t`t'x'`r`n}"
+$viaIndentFirst = Invoke-Processor -Item $raw -Config @{ Operations = @('min-indent-2') }
+Assert-Equal $viaIndentFirst.Content "function f {`r`n  'x'`r`n}" 'rs-indent runs correctly on RAW (un-folded) content — no dependency on lf having run first'
+
+# ============================================================
 # Summary
 # ============================================================
 Write-Host "`n============================================================" -ForegroundColor Yellow
