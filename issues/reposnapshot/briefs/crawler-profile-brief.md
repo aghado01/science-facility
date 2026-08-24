@@ -1,6 +1,8 @@
 # `rs.core.crawler` — field groups and the standalone profile — brief
 
-**Status:** filed, not started · **Filed:** 2026-08-23 · **Track:** independent;
+**Status:** filed, not started *(the rollup-layer move was carved out and
+landed 2026-08-23/24 — see the ledger; §Rollups below keeps only what this
+brief still needs)* · **Filed:** 2026-08-23 · **Track:** independent;
 **after** `rs.core.shards`, deliberately (§Sequencing) · **Doctrine:** ledger
 #38 (four clauses, amended 2026-08-23), #50 (the carried tier), #31 (stages
 stamp what is free at their vantage) · **Prompted by:** the crawl-vs-ingest
@@ -57,60 +59,22 @@ without `size` cannot offer `SubtreeBytes` at any setting.
 The RS profile enables `identity + size + timestamps`; `fsattrs` is off until a
 membrane test wants it. A standalone caller enables what it likes.
 
-## Rollups are a separate question, and the answer is *not* "drop them"
+## Rollups: already a keyed layer — record in the ledger, not here
 
-`crawler.out.node` carries `SubtreeDirCount` · `SubtreeFileCount` ·
-`SubtreeBytes`. Nothing reads them, and `membrane.out.node` severs them
-(`[NodePath, AbsolutePath, NodeDepth, Files, CompiledState]`). It is tempting to
-file them with `CreationUtc`/`FsAttributes` as unclaimed. **They are a different
-kind of thing** (#52): those are *measurements*, these are *aggregations*.
+The subtree rollups left `out.node` for `out.rollups` = `@{ Condition;
+ByNode[NodePath] }` (landed 2026-08-23; vocabulary corrected to
+condition/grouping 2026-08-24). The record lives in
+[planning/ledger.md](../planning/ledger.md) and the doctrine in #52 — this
+brief does not restate either. What remains relevant *to this brief*:
 
-An aggregation is a function of `(atoms, predicate)`, so the crawl rollup is the
-whole-walk answer — the `GROUP BY` with no `WHERE` — and it is *correct*, not
-stale. What a payload reader would eventually want is the same function over the
-surviving set. Two answers, one definition, two call sites; the sin would be a
-second *implementation*, which is #5's pathology in aggregate form.
-
-But the placement is wrong in a way that is not about scope at all: **a rollup is
-metadata about the graph, not a property of a node.** The crawler already knows
-this — `DirectoryCount` / `FileCount` / `SkippedCount` are run-level rollups
-sitting at `out.result` as siblings of `Graph`, and `Skipped`'s note says
-"a SIBLING of Graph, **not folded into it**". The three `Subtree*` fields are the
-one place the rule is not applied.
-
-**DONE 2026-08-23** — landed ahead of the rest of this brief, because as a layer
-the profile toggle becomes emit / do-not-emit rather than a conditional `from`,
-which is the expensive part of everything below. What shipped:
-
-- **Moved out of `out.node` into `out.rollups`** — `@{ Condition; ByNode[NodePath] }`,
-  a sibling of `Graph` exactly as `Skipped` already was. Not a rewrite of what is
-  computed; a change of where the answer is put. `RollUp()` (mutating nodes)
-  became `BuildRollups($condition)` (returning a layer).
-- **A layer's identity is its condition** — the slice it rolled up: `'walked'`
-  here; the same aggregation conditioned on the survivors would be a second
-  layer sharing keys, and neither can impersonate a node property. Condition
-  (which atoms — the WHERE) and grouping (`ByNode` — the GROUP BY) are
-  independent axes; "root" is on neither, `ByNode['']` being merely the row
-  whose group is the whole slice.
-- **Membrane's severing stopped being a special case.** It has no fields to
-  strip now — it rebuilds nodes as structure and emits no layer.
-- **An off-by-self got pinned.** `FileCount` equals `ByNode[''].SubtreeFileCount`
-  because the root row's group is the whole slice, but `DirectoryCount` counts
-  graph *nodes including root* (`== Graph.Count == ByNode[''].SubtreeDirCount +
-  1`) while `SubtreeDirCount` counts *descendants excluding self*. Both
-  relations are asserted now — the test caught it against a contract note I had
-  just written wrong, and conflating the two axes ("same number, both about the
-  root") is exactly the claim that hides it.
-
-Still owed and **not this brief's**: the rollup as a callable over any
-condition, rather than a private method the crawler invokes over the walk.
-Trigger-gated in [roadmap §Deferred](../planning/roadmap.md) — it fires when
-something first wants a second condition, and it must land together with the
-atom retention it depends on (`SizeBytes` → `carried`, #50): `SizeBytes` dies at
-assemble today, so a rollup conditioned on the survivors is *impossible*, not
-merely unwritten, and the callable alone is a function with nothing to sum.
-Nothing wants one yet (the manifest's `TocTree` is per-row, no directory
-aggregates) — a recorded consequence, not a requirement.
+- **The layer toggles whole** — emit / do-not-emit, never a conditional `from`.
+  That is why the move was carved out and landed ahead of this brief: it
+  removed the expensive part of making rollups configurable.
+- **Dependency edge**: the layer aggregates `SizeBytes`, so a profile without
+  `size` cannot offer it at any setting.
+- **The callable** (one definition, N conditions) is trigger-gated in
+  [roadmap §Deferred](../planning/roadmap.md) together with the atom retention
+  it depends on (`SizeBytes` → `carried`, #50) — not this brief's scope.
 
 ## The bill — this is the part that is not free
 
