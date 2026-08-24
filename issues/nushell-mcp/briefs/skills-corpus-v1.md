@@ -43,10 +43,11 @@ skills/nushell/                    # NU_SKILL_DIR; rename is later
     sessions.md        mcp.md             gotchas.md
     pipelines.md       posix-cheatsheet.md parity.md
     file-io.md         data-analysis.md   advanced.md
-    appendix/                      # branch — relegated forms, filed by origin (see membership)
-      mcp.md                       # bare nu --mcp, no overlay (from mcp.md)
+    appendix/                      # branch — displaced slices, filed by origin (see membership)
+      mcp.md                       # bare nu --mcp launch (from mcp.md)
       advanced.md                  # job spawn/recv/kill, complete (from advanced.md)
-      posix-cheatsheet.md          # grep-on-files, complete, PATH-as-list, head/tail-on-file
+      posix-cheatsheet.md          # grep-on-files, head/tail-on-file rows
+      parity.md                    # PATH-is-always-a-list, as shipped
       inspect.md                   # builtin inspect passthrough (no origin page — own leaf)
 ```
 
@@ -59,7 +60,13 @@ changes the as-shipped behavior** (bare launch vs `--config`,
 PATH-as-list vs split-if-string). The language itself — `def`,
 `try/catch`, `where` / `select` / `get`, `open` / `save`,
 interpolation, the idioms — is the console's language: happy path, no
-stock counterpart. Membership is a **moving target** that tracks the
+stock counterpart. **The unit of relegation is the slice** — a row, a
+block, a claim — never the document: the modules intervene at specific
+points, and everything around those points stays where it is. No
+happy-path page is relegated wholesale — the cheatsheet keeps most of
+its rows, `advanced` keeps `def` and `try/catch`; `mcp.md` is the
+degenerate case where the intervened slice happens to be nearly the
+whole page. Membership is a **moving target** that tracks the
 module surface: it grows only when a landing supersedes something
 (that landing owes the relegation — see landing obligations), never
 by taxonomizing bare Nushell in advance.
@@ -67,12 +74,20 @@ by taxonomizing bare Nushell in advance.
 The branch is the corpus's **appendix**: back-matter the happy path
 footnotes into, where relegated forms stay alive, citable, and
 findable (search walks the whole tree) instead of dying. The branch
-name is *position*; content identity lives one level down: **pages
-are filed by their origin document** — `appendix/mcp`,
-`appendix/advanced`, `appendix/posix-cheatsheet` mirror the
-happy-path stems, so the pairing is guessable in both directions and
-each relegation lands beside the context it left. Material with no
-single origin page gets its own small leaf (`appendix/inspect`). The
+name is *position*; content identity lives one level down: **each
+page is named for the origin document its slices were displaced
+from** — `appendix/advanced` holds what left `advanced.md`, nothing
+more — so the pairing is guessable in both directions and each
+displaced slice lands beside the context it left. The name never
+claims the origin document itself; the page opens by saying so
+("Displaced from `advanced`; console: `nu-skills read jobs`").
+Material with no single origin page gets its own small leaf
+(`appendix/inspect`); a tiny page is honest, not a problem
+(`appendix/parity` is one claim). **One native form has one appendix
+home**: a form displaced from several origins (`| complete` left both
+`advanced.md` and the cheatsheet) gets the home with the fullest
+exposition (`appendix/advanced`), and every other footnote points
+there — never a duplicate section. The
 category word **stock** survives where it informs — in page titles
 and in the happy-path footnote labels ("Stock `job spawn`: …") —
 naming what today's occupants *are*: current Nushell as shipped, not
@@ -83,9 +98,10 @@ attic: what the console retires outright is deleted, not relocated
 occasionally needed earn a footnote and a page here.
 
 Both sides point at each other: every appendix page opens with one
-line — "Console equivalent: `nu-skills read <topic>`." — and every
-happy-path page that supersedes a native workflow carries one short
-**Stock** footnote naming its appendix page. Steer, never ban: `^rg`, `job spawn`, and
+line naming what it was displaced from and the console page that
+supersedes it, and every happy-path page that supersedes a native
+workflow carries one short **Stock** footnote naming the form's one
+appendix home. Steer, never ban: `^rg`, `job spawn`, and
 `| complete` remain documented escape hatches.
 
 ## `nu-skills` v2 — tree-aware serving
@@ -167,7 +183,7 @@ sketch's steer-map phrase "live unbounded pipeline" is tightened to
 | builtin `inspect` | `shape` | `appendix/inspect` |
 | `metadata` | `meta` / `meta stamp` | gotchas (already) |
 | `first N` on a first-run pipeline | bind or store, then slice; `shape` / `read` / `jobs fetch` + `page` | `appendix/posix-cheatsheet` (head/tail on a **file**) |
-| PATH prepend as if always a list | split-if-string then prepend, as `config.nu` does | `appendix/posix-cheatsheet` |
+| PATH prepend as if always a list | split-if-string then prepend, as `config.nu` does | `appendix/parity` |
 | bare `nu --mcp` | this package: pinned engine + `--config` | `appendix/mcp` |
 | huge `open` / `http get` dumped inline | `shape` then `read` / `jobs spawn` | file-io / data-analysis disclose lines |
 
@@ -215,13 +231,17 @@ it stays on the posix row next to "repo search is `rg`."
   launch at `appendix/mcp`.
 - **`advanced.md`** — keep `def` and `try/catch`; jobs and `complete`
   blocks become one-liners to `jobs` / `xq` with the Stock footnote.
-- **`posix-cheatsheet.md`** — rows become console translations:
-  `2>&1` → `xq` (not `complete`); `grep` → `rg` for files, `where` /
-  `find` for columns; PATH prepend → split-if-string; head/tail-on-file
-  points `appendix/posix-cheatsheet`. Footnote: stock equivalents in `appendix/posix-cheatsheet`.
+- **`posix-cheatsheet.md`** — stays whole; only the intervened rows
+  change. `2>&1` row → `xq`, footnote to `appendix/advanced`
+  (`complete`'s one home); grep row → `rg` for files, `where` / `find`
+  for columns, displaced file-grep forms to `appendix/posix-cheatsheet`;
+  head/tail-on-file rows likewise; PATH-prepend row → split-if-string,
+  footnote to `appendix/parity`. Every other row — env vars, subshell,
+  path-exists, jq, try/ignore, exit code, raw read, sed, tee — is
+  timeless parity and does not change.
 - **`parity.md`** — PATH: "after `config.nu`, a list; if you assign a
   string, split on `char esep` first" (config.nu is the proof). The
-  unconditional PATH-is-a-list claim moves to `appendix/posix-cheatsheet`.
+  unconditional PATH-is-a-list claim moves to `appendix/parity`.
 - **`pipelines.md`** — keep `where`/`select`/`get`; **fix the
   examples**: `ls | select … | first 5` and `ls | sort-by size -r |
   first 10` become bind-then-slice. Drop "pipe to `to json` to save
@@ -241,7 +261,8 @@ stale advice, and carry no overlay references.**
 |---|---|---|
 | `appendix/mcp.md` | current `mcp.md` | the `$history \| shape each` census line (dataspection is overlay — it stays on the console side, sessions.md already has it); the `to json -c` transmission advice (retired, not relocated); the literal "default 10KB" (cap by meaning — the page says outputs over `$env.NU_MCP_OUTPUT_LIMIT` truncate, full value in `$history`, no number) |
 | `appendix/advanced.md` | current `job spawn` / `complete` blocks | the extra `def` material — nothing supersedes `def`; it stays in `advanced.md` (membership rule) |
-| `appendix/posix-cheatsheet.md` | current grep / `complete` / PATH-as-list / head-tail rows | — |
+| `appendix/posix-cheatsheet.md` | displaced cheatsheet rows: grep-on-files, head/tail-on-file | the `2>&1` / `complete` native form (one home: `appendix/advanced`); the PATH row's native form (home: `appendix/parity`) |
+| `appendix/parity.md` | parity.md's unconditional PATH-is-a-list claim (+ the cheatsheet PATH row's native form) | — |
 | `appendix/inspect.md` | builtin `inspect` passthrough (from gotchas, expanded as needed) | — |
 
 Each opens with the console-equivalent line. No hand-written branch
@@ -269,7 +290,7 @@ the tension is documented here and nowhere else.
 mcp/nushell-mcp/modules/nu-skills/nu-skills.nu   # tree-aware list/read/search/status
 mcp/nushell-mcp/skills/nushell/SKILL.md          # orientation rewrite
 mcp/nushell-mcp/skills/nushell/references/*.md   # per-file edits above
-mcp/nushell-mcp/skills/nushell/references/appendix/ # new branch (4 leaves)
+mcp/nushell-mcp/skills/nushell/references/appendix/ # new branch (5 leaves)
 mcp/nushell-mcp/skills/satellite/SKILL.md        # one routing line (below)
 mcp/nushell-mcp/tests/skills-corpus-v1.nu        # suite (below)
 issues/nushell-mcp/notes/vocabulary.md           # 4th local `kind` set
