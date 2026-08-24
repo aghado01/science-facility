@@ -14,6 +14,8 @@ Preloaded (`use par *; use jobs *; use dataspection *; use xq *; use rg *` in `c
 | `job spawn` / `job send` / `job recv` | recv takes no id; tags are ints; main thread is `0` | `jobs spawn` / `list` / `collect` / `inspect` / `read` / `fetch` |
 | `job kill` | no registry stamp | `jobs cancel` (stamps `cancelled` + `finished`) |
 
+> Stock `job spawn` / `job recv` / `job kill` / `complete`: `nu-skills read appendix/advanced`.
+
 Native `par-each --threads` bypasses policy. Do not monkey-patch the builtin. Do not `job send`/`recv` the module mailbox (`0x4A4F4253`).
 
 Nested oversubscribe: a spawned closure that itself calls `par` can oversubscribe. Policy is enforced at REPL dispatch only. No `$env` mutex from job threads.
@@ -93,7 +95,7 @@ Query / search consumers return **findings + metadata**, not a receipt table of 
 {ok, n, n_ok, n_err, elapsed, bytes, truncated, findings?}
 ```
 
-On the success path, `findings` is present iff `truncated == false`. A foreground `par` worker over cap is `ok: false`, `truncated: false`, no `findings` and no `tag` — gate on `ok` before reading `findings`. Cap is `par cap` (`max_inline_bytes`, JSON `null` → this process's `NU_MCP_OUTPUT_LIMIT`, else 20000).
+On the success path, `findings` is present iff `truncated == false`. A foreground `par` worker over cap is `ok: false`, `truncated: false`, no `findings` and no `tag` — gate on `ok` before reading `findings`. Cap is `par cap` (resolves `$env.NU_PAR.max_inline_bytes`, else the process's `$env.NU_MCP_OUTPUT_LIMIT`, else coded default).
 
 ## Policy
 
@@ -112,7 +114,7 @@ Registry and `$history` die with the MCP child. When a store appears later: iden
 | MATLAB / vscodepilot | this layer |
 |---|---|
 | `parfor` / `parforeach` | `par` |
-| `parfeval` / `startParallelJob` | `jobs spawn --tag` |
+| `parfeval` / `startParallelJob` | `jobs spawn` (optional `--tag`, allocated `spawn:<n>`) |
 | `fetchOutputs` / `getJobResults` | `jobs collect` (receipts) then `jobs read` (one body; `jobs fetch` if over cap) |
 | `cancel` / `job kill` | `jobs cancel` |
 | `parwhile` / `paruntil` / FileHash batches | not v1 |

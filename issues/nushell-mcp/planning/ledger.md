@@ -3,6 +3,14 @@
 Newest first. Point at commits and briefs. Counts are from the commit
 they were observed at, not standing claims.
 
+- **2026-08-23 — skills-corpus v1: tree-aware nu-skills & appendix branch.**
+  `nu-skills` gains tree awareness (`list`, `list <branch>`, `list --all`,
+  generated branch tables, normalized recursive search). Created
+  `references/appendix/` with 5 origin-filed native slices. SKILL.md rewritten
+  to orientation/discovery mechanics without static catalogs. Primers refined
+  with bi-directional cross-pointers. Satellite, vocabulary (4th `kind` set),
+  and AGENTS.md Rule 1 updated. Suite `skills-corpus-v1.nu` 8/8.
+
 - **2026-08-23 — composition landing hygiene.** Test scratch under
   `artifacts/nushell-mcp/test-runs/` (gitignore; not OS temp, not a hidden
   dir rg would skip). Brief amendment blocks recast as landed; `jobs.md`

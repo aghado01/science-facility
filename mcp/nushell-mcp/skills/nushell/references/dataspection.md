@@ -70,7 +70,11 @@ Never `each {|i| ... | page $i}` in one evaluate. `$history | shape each` is the
 
 **`preview [--chars 200] [--items 5] [--mode head|tail|sandwich]`** — strings `… [+N chars]`, lists `[+K more]`, records keep every key. Idempotent.
 
-**`read`** (`--env`) — known size under cap, the value; over cap, `jobs stash` and `{ok: true, disclosed: false, tag, bytes, retrieve, meta.verb: "read"}`. `retrieve` is `jobs fetch` plus the tag as NUON (pasteable). Unknown size (`shape.bytes == null`) → `{ok: false, disclosed: false, error, trace}`. Cap is `par cap`. Peek, not pop. `jobs fetch` is the uncapped hatch.
+**`read`** (`--env`) — known size under cap, returns the value. Three contexts:
+- **Foreground REPL owner**: over cap, `jobs stash` and return `{ok: true, disclosed: false, tag, bytes, retrieve, meta.verb: "read"}` (`retrieve` is `jobs fetch <tag>`).
+- **Inside a background job (`jobs spawn`)**: returns the full value without stashing (the job row is the quarantine).
+- **Inside a foreground `par` worker**: over cap returns `{ok: false, disclosed: false, error: "inline limit exceeded"}` without stashing — wrap batch in `jobs spawn`.
+Unknown size (`shape.bytes == null`) → `{ok: false, disclosed: false, error, trace}`. Cap is `par cap`. Peek, not pop. `jobs fetch` is the uncapped hatch.
 
 Census/schema/spine/views/meta live in `modules/core/*.nu`; this module re-exports them. `value.*` / `failure fields` are not on `use dataspection *`.
 
@@ -82,6 +86,6 @@ No command throws on odd input. Internal failure is `{error, trace}` on the comm
 
 ## Gotchas in this module
 
-- Builtin `inspect` is a flood trap under `--mcp`. Use `shape`.
+- Builtin `inspect` is a flood trap under `--mcp`. Use `shape` (see `nu-skills read appendix/inspect`).
 - `schema` shadows SQLite's `schema` while this module is in the overlay.
 - `read` is the only `--env` verb here; it uses `$env.JOBS`, not a second store.

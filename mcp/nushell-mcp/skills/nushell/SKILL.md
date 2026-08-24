@@ -3,47 +3,27 @@ name: nushell-agent
 description: Nushell (nu) execution substrate primer with progressive topic disclosure.
 ---
 
-# Nushell Agent Skill 
+# Nushell Agent Skill
 
-Nushell (`nu`) is a structured, type-aware shell substrate. Commands return native tables, records, and streams rather than raw text. It is the preferred shell for interactive, forensic and data-driven workflows. 
+Nushell (`nu`) is a structured, type-aware shell substrate. When running under the science-facility augmented console, `evaluate` provides a **persistent REPL** (variables, modules, `$env`, and `cd` persist across calls) with preloaded runtime services: `nu-skills`, `nu-modules`, `par`, `jobs`, `dataspection`, `xq`, and `rg`.
 
-## Native MCP 
+## Console Discipline
 
-Nushell also ships with native built-in MCP functionality to help agents:
+- **Implicit Return**: Return values implicitly or use `print -e` for diagnostic stderr. Bare `print` in stdio MCP returns empty.
+- **Receipts Before Bodies**: One tool result carries at most one payload. Anything withheld names the call that retrieves it (`jobs fetch <tag>`).
+- **THE RULE (Pipeline Capping)**: Never cap a pipeline on its first run (do not `ls | ... | first 5` or `^rg ... | head`). Store or bind the data first (`let files = (ls | sort-by size -r); $files | first 5`). Slicing an already-stored or bound value is always lawful (`$x`, `$history.N`, `jobs fetch <tag> | page`).
+- **Failure is Data**: Every layer result carries `ok: bool`. Caught failures return `ok: false` as data in a successful evaluate with a `$history` entry. Uncaught engine throws produce error results with no `$history` entry.
+- **Core Modules**:
+  - `jobs`: Handle plane (`jobs spawn`, `list`, `collect`, `inspect`, `read`, `fetch`, `cancel`), `par` data plane, and `xq` execute-and-quarantine.
+  - `search`: Wrapped `rg` returning structured findings, JSON summary, and spine on truncation (`^rg` escape hatch).
+  - `dataspection`: Census and disclosure ladder on a value in hand (`shape`, `schema`, `spine`, `read`, `preview`, `page`, `meta`).
 
-- **`evaluate`** (`mcp__nushell__evaluate`): Executes Nu code in a **persistent REPL** (variables, modules, `$env`, and `cd` persist across calls).
-- **`list_commands`** (`mcp__nushell__list_commands`): Searches and filters available built-in and custom commands.
-- **`command_help`** (`mcp__nushell__command_help`): Retrieves formatted documentation and flag signatures for a command.
+## Topic Discovery (`nu-skills`)
 
-## Interactive Discovery Tools
-When `NU_LIB_DIRS` is configured, companion discovery modules provide structured introspection:
-- **`nu-skills`**: Query skill reference topics (`nu-skills list`, `nu-skills read <topic>`, `nu-skills search <query>`).
-- **`nu-modules`**: Introspect and search library modules in `NU_LIB_DIRS` (`nu-modules list`, `nu-modules inspect <mod>`, `nu-modules search <query>`).
+The reference corpus is served dynamically from the filesystem:
 
-## Important Notes
-- **String Interpolation**: Use `()` → `$"($env.VAR)"` (NOT `$"{$var}"`).
-- **MCP Output**: Never bare `print` in stdio MCP (returns empty). Implicitly return values or use `print -e`.
-- **`where` Scope**: Bare columns only: `where a > 1 and b > 2` (chaining `$in.a and $in.b` rebinds `$in` to bool).
-- **Raw Files**: `cat` is `open --raw file` (`open` parses structured data automatically).
-- **Piping**: Nushell pipes structured data (tables, records) between commands, not raw text.
-- **Path Handling**: Nushell handles path normalization automatically; Prefer forward-slash `/` for paths.
-- **Custom Commands**: Use `def` for custom commands with type hints for better IDE support.
-- **Type Coercion**: Nushell attempts automatic type coercion, but explicit casting with `as` is recommended for clarity.
-
-## Topics 
-Query specific sub-topics individually to avoid context window clutter:
-
-- **`posix-cheatsheet`**: POSIX/Bash to Nushell command translation table (`export`, `2>&1`, `grep`, `sed`, `jq`, `tee`).
-- **`pipelines`**: Structured data pipelines (`where`, `select`, `get`, `sort-by`, `to json`).
-- **`file-io`**: Structured file manipulation (`open`, `save`, auto-parsing JSON/YAML/CSV/SQLite).
-- **`data-analysis`**: HTTP endpoints, Polars DataFrames, SQLite, aggregations (`group-by`, `math`).
-- **`advanced`**: Typed custom commands (`def`), background jobs (`job spawn`), structured errors (`try/catch`).
-- **`parity`**: Cross-platform assurances (Windows/Unix), forward-slash pathing, `$env.PATH` handling.
-- **`gotchas`**: Syntax edge-cases, parenthesized strings, escaping, closure scoping.
-- **`mcp`**: Native `nu --mcp` launch, configuration, and stream handling.
-- **`sessions`**: In-memory engine lifecycle, state persistence, scoping, and `$history` buffer slicing.
-- **`jobs`**: `par` / `jobs` / `xq` — budgeted map, receipts, execute-and-quarantine for externals.
-- **`search`**: `rg` wrapper — JSON findings, spine on truncate, `^rg` escape.
-- **`dataspection`**: census / disclose / bounded views on a value in hand (`shape`, `schema`, `spine`, `read`, `preview`, `page`, `meta`).
-
-_Query inventory via `nu-skills list` or read sub-topics via `nu-skills read <topic>` (or open `references/<topic>.md`)._
+- **List Top Level**: `nu-skills list` (shows top-level pages and the `appendix` branch).
+- **List Appendix**: `nu-skills list appendix` (superseded native forms, filed by origin document).
+- **List All Leaves**: `nu-skills list --all` (every leaf, path-qualified).
+- **Read Topic or Branch**: `nu-skills read <topic>` (e.g. `nu-skills read jobs`, `nu-skills read appendix`, `nu-skills read appendix/advanced`).
+- **Search References**: `nu-skills search <regex>` (searches all topics across root and appendix).

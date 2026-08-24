@@ -1,6 +1,6 @@
 # skills-corpus v1 — console happy path, stock Nushell in the appendix
 
-**Status:** filed 2026-08-23 · **Home:**
+**Status:** landed 2026-08-23 · **Home:**
 `mcp/nushell-mcp/skills/nushell` (corpus) +
 `mcp/nushell-mcp/modules/nu-skills` (tree-aware serving).
 **Sources:** [grok sketch](../discussion/grok-nushell-skills-inventory.md),
@@ -372,3 +372,10 @@ SKILL.md, not in either docstring, not in the satellite.
 - Engine or fork changes; the server-instructions rebuild (deferred
   above).
 - Any module change outside `nu-skills`; any cap-semantics change.
+
+## Follow-up report (landed 2026-08-23)
+
+- **Outcome**: Landed. Upgraded `nu-skills` to tree-aware discovery (`list`, `list <branch>`, `list --all`, generated markdown for `read <branch>`, and recursive search). Created `skills/nushell/references/appendix/` with 5 origin-filed slices (`mcp.md`, `advanced.md`, `posix-cheatsheet.md`, `parity.md`, `inspect.md`). Rewrote `SKILL.md` to orientation/discipline/discovery mechanics. Refined primers with bi-directional stock/console cross-pointers. Synchronized `skills/satellite/SKILL.md`, `vocabulary.md` (4th `kind` closed set), and `AGENTS.md` Rule 1 (relegation clause).
+- **Tests run**: `nu -n mcp/nushell-mcp/tests/skills-corpus-v1.nu` (8/8 passed, including closed row shapes, dynamic child counts, generated tables, extension tolerance, normalized forward-slash search, and corpus link integrity). Full regression test suite battery passed 100% (88 tests total across `composition-v1`, `dataspection-v1`, `par-jobs-v1`, `rg-v1`, `xq-v1`). Smoke tested clean with `nu --config mcp/nushell-mcp/config.nu`.
+- **Deviations**: None.
+

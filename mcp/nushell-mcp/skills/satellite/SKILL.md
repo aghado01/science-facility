@@ -12,7 +12,7 @@ This client-local skill is an orientation adapter, not the knowledge authority. 
 - Execute Nu code with `evaluate`.
 - Find native commands with `list_commands`.
 - Inspect a native command with `command_help`.
-- Query Nushell guidance inside `evaluate` with `nu-skills list`, `nu-skills <topic>`, or `nu-skills search <regex>`. Census and bounded disclose: `nu-skills dataspection` (`shape`, `schema`, `read`, `preview`, `page`).
+- Query Nushell guidance inside `evaluate` with `nu-skills list` (console tree), `nu-skills list appendix` (superseded native forms, filed by origin topic), `nu-skills <topic>`, or `nu-skills search <regex>`. Census and bounded disclose: `nu-skills read dataspection` (`shape`, `schema`, `read`, `preview`, `page`).
 - Discover augmentation modules with `nu-modules list`, `inspect`, `read`, or `search`.
 
 Load only the topic needed for the current task.

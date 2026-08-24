@@ -46,7 +46,11 @@ them in the decisions file.
    and in the client adapters (`~/.claude/skills/nushell-mcp`,
    `~/.grok/skills/nushell-mcp`, `~/.codex/skills/nushell-mcp`).
    A landing updates the docstring, the corpus page, and those adapters
-   **in the same change**. A module without its reference entry is not landed.
+   **in the same change**. A landing that supersedes a native workflow
+   (or changes as-shipped behavior) relegates the native slice to
+   `skills/nushell/references/appendix/` (filed by origin stem) with
+   cross-pointers in the same change. Appendix membership grows only
+   this way. A module without its reference entry is not landed.
 2. **Briefs are the spec.** Work from `issues/nushell-mcp/briefs/<x>.md`;
    amend in place, do not fork. Append a **Follow-up report** entry on
    landing: outcome, tests run, deviations.

@@ -101,10 +101,7 @@ rules are specified in
   `{seq: 42, kind: out, …}` whose body holds `{seq: 0, tag: sq, …}`.
   Renaming landed code to fix a nesting is not worth it; say which
   `seq` you mean when both are in view.
-- **`kind`** survives in three unrelated closed sets (journal record,
-  `page` unit, rg finding). Each is local to one shape and never
-  appears in another; only the *stamp* sense was ambiguous, and that
-  is now `verb`.
+- **`kind`** survives in four unrelated closed sets (journal record `turn | out | exit | note`, `page` unit `rows | lines | chars`, rg finding `match | context`, `nu-skills list` row `leaf | branch`). Each is local to one shape and never appears in another; only the *stamp* sense was ambiguous, and that is now `verb`.
 - **`quarantine`** — ours is *payload* quarantine, para-agent's is
   *commit* quarantine. Both legitimate; always qualified, never bare.
 

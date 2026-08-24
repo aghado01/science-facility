@@ -23,6 +23,7 @@ The built-in MCP server (`nu --mcp`) runs a single, continuous in-memory engine 
   ```nu
   $history.0 | where status == "error" | select id message | first 5
   ```
+  *(Note: Slicing `$history` or an already-bound `$var` with `first`/`last` is always lawful under THE RULE because the value is already safely stored in session memory; only capping a first-run pipeline like `ls \| first 5` is forbidden.)*
 
 ## Session Reset
 - Session state lives for the lifetime of the MCP server process. Restarting the client or MCP server resets the session to a clean default state.

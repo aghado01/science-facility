@@ -31,6 +31,11 @@ Findings rows: `{file, line, col?, kind: match|context, match}`. Context has `co
 
 Spine: `{file, hits}`, hits desc then file asc.
 
-Inside `jobs spawn { rg … }`: never stash; the job row is the quarantine.
+Inside `jobs spawn { rg … }`: never stash; the job row is the quarantine. Three execution contexts:
+- **Foreground REPL owner**: stashes over cap and returns the confirmed `tag` (`jobs fetch <tag>`).
+- **Inside a background job (`jobs spawn`)**: returns findings inline on the job row without stashing.
+- **Inside a foreground `par` worker**: over cap returns `ok: false` with no tag — wrap large search fan-outs in `jobs spawn`.
+
+For searching in-memory tables, columns, or string lists, use native `where` / `find` (see `nu-skills read posix-cheatsheet`).
 
 Do not cap the live search. Do not call ordinary `xq`. Do not parse `^rg` text when this wrapper exists. Body around a hit: `open $file | lines | slice`.
