@@ -133,9 +133,27 @@ thing to re-derive.
 
 ### The rules
 
-1. **Every line terminator becomes `\n`** — LF, CRLF, CR, NEL U+0085, LS U+2028,
-   PS U+2029, VT U+000B, FF U+000C. One marker; the kind is *not* preserved.
+1. **Every line terminator becomes the break mark `\n`, AS AN OBJECT** — LF,
+   CRLF, CR, NEL U+0085, LS U+2028, PS U+2029, VT U+000B, FF U+000C. One
+   marker; the kind is *not* preserved. *(Amended 2026-08-24, user:)* within
+   the encoding operation the span is a list of objects — line segments and
+   break marks — with **regular single-space joins**, so the mark renders in a
+   ` \n ` environment everywhere: `line one \n line two`. A blank line is an
+   empty segment object, surfacing as the doubled join `a \n  \n b` (the same
+   convention as the row's empty marker), which is also what keeps
+   split-on-` \n ` a clean decode. **The criterion is tokenization
+   REGULARITY**: an encoded symbol must tokenize identically in every context
+   in the reader's tokenizer; context-dependent merging (`\nFunction` vs an
+   intact mark, the `]|` class) is the defect itself, and byte/token cost is a
+   price, never a counter-argument. This is the codec's own object-spacing —
+   a separate operation from the ROW's item join (#49), sharing the principle,
+   reaching into nothing: the encoded span still enters the row as ONE item.
+   It subsumes `ensure-trailing-space` (#20), whose space was this intent
+   expressed at the wrong station; the op leaves the whitespace defaults.
 2. **`\` is never doubled.** Literal backslashes pass through verbatim.
+   Corollary of rule 1's spacing: a *source-literal* `\n` stays unspaced while
+   a real break is space-flanked, so the #8 ambiguity narrows to sources
+   containing literally ` \n `.
 3. **Remaining C0 controls and DEL are stripped.**
 4. **TAB stays literal.**
 

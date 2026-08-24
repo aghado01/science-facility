@@ -1,5 +1,35 @@
 # Changelog 
 
+## 2026-08-24 — the break mark is an OBJECT: codec owns its spacing; #20 relocated
+
+SPEC rule 1 amended (user): within the encoding operation the span is a list
+of objects — line segments and break marks — with **regular single-space
+joins**, so every mark sits in a ` \n ` environment: `line one \n line two`.
+A blank line is an empty segment → the doubled join `a \n  \n b` (the row's
+empty-marker convention), which is also what keeps split-on-` \n ` a clean
+decode. **The criterion is tokenization regularity**: an encoded symbol must
+tokenize identically in every context in the reader's tokenizer;
+context-dependent merging (`\nFunction`, the `]|` class) is the defect itself,
+and cost is a price, never a counter-argument. `CodecBreak` → ` \n ` (4
+bytes); `Measure-ContentSpan` delta 4 − own width. Two separate operations,
+one principle: the codec spaces objects inside the span; the row join spaces
+items in the row (#49); neither reaches into the other.
+
+**`ensure-trailing-space` left the rs-whitespace defaults** (#20 relocated,
+op still available opt-in): it was the LEFT half of this spacing, expressed
+at the wrong station — a configurable content op two stages upstream. Both
+failure modes were caught on full-pipeline hex traces through colonel, not
+synthetic entries: a subset op list had silently shipped unspaced marks
+(`\nfunction`), and with the codec join live, both stations running
+double-spaced the wire (`{  \n `). After the relocation the trace shows
+` \n ` uniform, single-station. Source-literal `\n` stays unspaced — the #8
+ambiguity narrows to sources containing literally ` \n `.
+
+`container.tests` updated to the object mark (+ a blank-line doubled-join
+assert, 78 → 79); every other suite derives from the codec and passed
+unchanged — including the on-disk seek contracts in serialize/selfie.
+Battery **23 · 1388 · 0**.
+
 ## 2026-08-24 — rs.core.user: the convenience entry point
 
 `rs.core.user.ps1` — point `-Root` at a directory, get a complete payload:

@@ -114,7 +114,15 @@
 
         Default set (what you get with no Operations key):
             lf · nfc · strip-zwsp · strip-wj · strip-zwnbsp · trim-trailing ·
-            ensure-trailing-space · max-blank-1 · trim-doc · ensure-final-lf
+            max-blank-1 · trim-doc · ensure-final-lf
+
+        `ensure-trailing-space` left the default set 2026-08-24 (#20
+        relocated): the space it added was the LEFT half of the break mark's
+        spacing, and that spacing is the CODEC's job — the container renders
+        each break as an object with regular single-space joins (' \n '
+        environment, shard-format-notes §SPEC rule 1). Running both stations
+        double-spaced the wire (measured: '{  \n ' on a full-pipeline trace).
+        The op remains available for callers with a non-psr emission target.
 
         `trim-inner` is deliberately OUT of it. Every other default touches
         whitespace at line boundaries and margins, where shape is formatting
@@ -132,7 +140,7 @@ param(
     [hashtable]$Config = @{}
 )
 
-$ops = if ($Config.ContainsKey('Operations')) { @($Config['Operations']) } else { @('lf', 'nfc', 'strip-zwsp', 'strip-wj', 'strip-zwnbsp', 'trim-trailing', 'ensure-trailing-space', 'max-blank-1', 'trim-doc', 'ensure-final-lf') }
+$ops = if ($Config.ContainsKey('Operations')) { @($Config['Operations']) } else { @('lf', 'nfc', 'strip-zwsp', 'strip-wj', 'strip-zwnbsp', 'trim-trailing', 'max-blank-1', 'trim-doc', 'ensure-final-lf') }
 $includeMeta = if ($null -ne $Config['IncludeMeta']) { [bool]$Config['IncludeMeta'] } else { $true }
 
 # Content-key resolution — harmonized content-mutator contract (6d), shared by

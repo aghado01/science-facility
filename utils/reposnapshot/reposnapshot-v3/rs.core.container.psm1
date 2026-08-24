@@ -36,11 +36,17 @@ using namespace System.Collections.Generic
     Content codec (shard-format-notes §Content codec — SPEC): ONE rule table,
     two functions — `ConvertTo-ContentSpan` materializes, `Measure-ContentSpan` counts
     without materializing. Rules: every line terminator (LF, CRLF, CR, NEL,
-    LS, PS, VT, FF) → the two characters `\n`; backslash is never doubled;
-    remaining C0 controls and DEL are stripped; TAB stays literal. Under
-    rs-whitespace `lf` upstream, rule 1 is a no-op in the code lane — it stays
-    because the container owns the one-physical-line-per-row invariant and
-    cannot assume a lane.
+    LS, PS, VT, FF) → the break-mark OBJECT — the span is line segments and
+    marks with regular single-space joins, rendered as the four characters
+    ` \n ` per terminator (a blank line is an empty segment → the doubled
+    join, the row's empty-marker convention). Regularity is the criterion:
+    the mark tokenizes identically in every context. This spacing is the
+    CODEC's own operation, separate from the row's item join (#49);
+    ensure-trailing-space (#20) left the whitespace defaults when it landed
+    here. Backslash is never doubled (a source-literal `\n` stays unspaced —
+    distinguishable from a real break); remaining C0 controls and DEL are
+    stripped; TAB stays literal. The container owns the
+    one-physical-line-per-row invariant and cannot assume a lane.
 
     Bytes are UTF-8 without BOM; the record terminator is LF alone (ledger #45).
     Header row = the schema; a record row is the header projected onto an
@@ -61,11 +67,20 @@ $script:ContractCache = @{}   # $ref targets, parsed once per session
 # Group t: line terminators (order matters — \r\n before \r). Group s: strip
 # set = C0 minus TAB(09) and minus the terminators already in t (0A 0B 0C 0D),
 # plus DEL. Everything else passes verbatim, backslash included.
+#
+# The break mark is an OBJECT within the encoding operation (SPEC rule 1,
+# 2026-08-24): line segments and marks with regular single-space joins.
+# Rendering each terminator as the four characters ' \n ' IS that join —
+# adjacent terminators compose to the doubled-join blank-line form
+# ('a \n  \n b') by construction, and split-on-' \n ' decodes cleanly.
+# Regularity is the criterion: one environment, one tokenization, in every
+# context. This spacing belongs to the codec, not to a whitespace op and not
+# to the row's item join.
 $script:CodecRegex = [regex]::new(
     '(?<t>\r\n|\r|\n|\u0085|\u2028|\u2029|\x0B|\x0C)|(?<s>[\x00-\x08\x0E-\x1F\x7F])',
     [RegexOptions]::Compiled)
-$script:CodecBreak = '\n'      # two characters: backslash, n
-$script:CodecBreakBytes = 2
+$script:CodecBreak = ' \n '    # four characters: the break-mark OBJECT with its joins
+$script:CodecBreakBytes = 4
 
 function ConvertTo-ContentSpan
 {
@@ -88,8 +103,9 @@ function Measure-ContentSpan
     .SYNOPSIS
         UTF-8 byte width of ConvertTo-ContentSpan($Content) — counted, not materialized.
     .DESCRIPTION
-        Whole-string byte count, then per match: a terminator becomes 2 bytes
-        (delta = 2 − its own width), a stripped control becomes 0 (delta = −1).
+        Whole-string byte count, then per match: a terminator becomes the
+        4-byte mark-object ' \n ' (delta = 4 − its own width), a stripped
+        control becomes 0 (delta = −1).
         Every match is a BMP non-surrogate, so the remainder's byte count is
         untouched and the sum is exact against ConvertTo-ContentSpan.
     #>

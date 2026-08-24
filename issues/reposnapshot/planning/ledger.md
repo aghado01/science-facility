@@ -23,6 +23,20 @@ Rulings live in [decisions.md](decisions.md); what remains lives in
   runs memory-to-disk. Remaining on main line: manifest reconciliation.
   Battery at this commit: **20 suites · 1327 passed · 0 failed**.
 
+- **2026-08-24 — break mark became an object; #20 relocated to the codec**:
+  SPEC rule 1 amended (user) — the span is line segments and break marks with
+  regular single-space joins (` \n ` everywhere; blank line = empty segment →
+  doubled join), **tokenization regularity as the stated criterion** (an
+  encoded symbol tokenizes identically in every context; variability is the
+  defect; cost is never a counter-argument). `ensure-trailing-space` left the
+  whitespace defaults — it was the left half of this spacing at the wrong
+  station. Both failure modes were caught by **full-pipeline hex traces
+  through colonel** after the user challenged narrow synthetic testing: a
+  subset op list had shipped unspaced marks, and dual stations double-spaced
+  the wire (`{  \n `). Post-fix trace: uniform ` \n `, single station.
+  `container.tests` 78 → 79; all other suites derive from the codec and held.
+  Battery: **23 suites · 1388 passed · 0 failed**.
+
 - **2026-08-24 — `rs.core.user` landed** — the convenience entry point
   (`-Root` in, complete payload out; one script over the six stage calls,
   `_rs.scratch.ps1`'s replacement per the old TODO). Output convention

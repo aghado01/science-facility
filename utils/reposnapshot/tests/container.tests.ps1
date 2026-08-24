@@ -141,8 +141,9 @@ try
     # -----------------------------------------------------------------------
     Enter-Section '2. Codec — ConvertTo-ContentSpan / Measure-ContentSpan'
     # -----------------------------------------------------------------------
-    Assert-True ((ConvertTo-ContentSpan "a`r`nb`rc`nd") -eq 'a\nb\nc\nd') 'CRLF, CR, LF → \n (two chars), kind not preserved' (ConvertTo-ContentSpan "a`r`nb`rc`nd")
-    Assert-True ((ConvertTo-ContentSpan "x`u{0085}y`u{2028}z`u{2029}w`u{000B}v`u{000C}u") -eq 'x\ny\nz\nw\nv\nu') 'NEL, LS, PS, VT, FF → \n'
+    Assert-True ((ConvertTo-ContentSpan "a`r`nb`rc`nd") -eq 'a \n b \n c \n d') 'CRLF, CR, LF → the mark OBJECT with its joins, kind not preserved' (ConvertTo-ContentSpan "a`r`nb`rc`nd")
+    Assert-True ((ConvertTo-ContentSpan "x`u{0085}y`u{2028}z`u{2029}w`u{000B}v`u{000C}u") -eq 'x \n y \n z \n w \n v \n u') 'NEL, LS, PS, VT, FF → the same mark object'
+    Assert-True ((ConvertTo-ContentSpan "a`n`nb") -eq 'a \n  \n b') 'blank line = empty segment → the doubled join (empty-marker convention)' (ConvertTo-ContentSpan "a`n`nb")
     Assert-True ((ConvertTo-ContentSpan 'C:\Users\me\n') -eq 'C:\Users\me\n') 'backslash never doubled; literal \n in source passes verbatim'
     Assert-True ((ConvertTo-ContentSpan "a`tb") -eq "a`tb") 'TAB stays literal'
     Assert-True ((ConvertTo-ContentSpan "a`0b`u{0001}c`u{007F}d`u{001B}e") -eq 'abcde') 'NUL, SOH, DEL, ESC stripped'
@@ -174,9 +175,9 @@ try
         if ($m -ne $e) { $allEqual = $false; $detail += "[$($s.Substring(0, [Math]::Min(20, $s.Length)))… measure=$m encode=$e] " }
     }
     Assert-True $allEqual 'Measure-ContentSpan == utf8(ConvertTo-ContentSpan) across the battery (incl. surrogates, every terminator, controls)' $detail
-    Assert-True ((Measure-ContentSpan "ab`ncd") -eq 6) 'LF: 1 byte → 2 (ab\ncd = 6)'
-    Assert-True ((Measure-ContentSpan "ab`r`ncd") -eq 6) 'CRLF: 2 bytes → 2'
-    Assert-True ((Measure-ContentSpan "ab`u{2028}cd") -eq 6) 'LS: 3 bytes → 2'
+    Assert-True ((Measure-ContentSpan "ab`ncd") -eq 8) 'LF: 1 byte → 4 (ab \n cd = 8)'
+    Assert-True ((Measure-ContentSpan "ab`r`ncd") -eq 8) 'CRLF: 2 bytes → 4'
+    Assert-True ((Measure-ContentSpan "ab`u{2028}cd") -eq 8) 'LS: 3 bytes → 4'
     Assert-True ((Measure-ContentSpan "ab`0cd") -eq 4) 'NUL: 1 byte → 0'
     Assert-True ((Measure-ContentSpan 'é') -eq 2 -and (Measure-ContentSpan '😀') -eq 4) 'multibyte counted in UTF-8'
 
@@ -201,7 +202,7 @@ try
         Content      = "line one`r`nline two`n`ttabbed é"
         ContentMeta  = [pscustomobject]@{ CharCount = 30; WordCount = 5; PunctuationCount = 2; WhitespaceRatio = 0.4037; Entropy = 4.25164; LineStats = [pscustomobject]@{ Mean = 9.5; Median = 9; StdDev = 1.5; Max = 12 } }
     }
-    $expectedContent = 'line one\nline two\n' + "`ttabbed é"
+    $expectedContent = 'line one \n line two \n ' + "`ttabbed é"
     $expectedBytes = $utf8.GetByteCount($expectedContent)
 
     $f = Format-Row -Layout $L1 -Entry $entry -GlobalIdx 42
