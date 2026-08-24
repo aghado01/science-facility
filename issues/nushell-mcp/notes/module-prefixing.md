@@ -80,6 +80,22 @@ is the worst outcome**, because a half-applied convention reads as
 inconsistency rather than as a rule. Decide once, apply everywhere, or
 not at all.
 
+## Shadowing wrappers are structurally exempt (2026-08-23)
+
+`rg` and `gh` work *because* the module shadows the external command
+— `gh pr list` must hit the wrapper for identity routing to be
+transparent; `rg` must intercept to return the envelope. Renaming
+them breaks the mechanism, so the candidate table above overstates
+the prefixable population: `rg` and `gh` can never carry the prefix
+regardless of the decision (`xq` shadows no external and remains
+renameable). The overlay track — working names `nu-git`, `nu-gh`,
+[discussion/agent-porcelain-overlay.md](../discussion/agent-porcelain-overlay.md)
+— is the complementary population: overlay packages must *not*
+shadow, so they need distinguishing names of their own, whatever is
+decided here. If the prefix is adopted, its meaning needs the
+carve-out stated: "furnished and contracted, except wrappers whose
+name is the mechanism."
+
 ## If it is ever adopted
 
 - Prefix candidate is `nu-`, already established by `nu-skills` /

@@ -10,9 +10,19 @@
 the child's PATH — vendor **current** gh into `deps/cli` like ripgrep
 (API floor 2.40; ambient observed ~2.98).
 **Not this brief:** a GitHub API client, curated subcommands, `git`
-itself (git already honors `includeIf` natively).
+itself (git already honors `includeIf` natively). Agent-facing
+read-side views over `gh` are the overlay package (working name
+`nu-gh`) — see
+[discussion/agent-porcelain-overlay.md](../discussion/agent-porcelain-overlay.md);
+this module is the identity substrate the overlay builds on.
+**Amended:** 2026-08-23 (overlay positioning; scope unchanged).
 
 Treat this file as the v1 spec. Amend; do not fork.
+
+**Name:** the module keeps the external's exact name — shadowing `gh`
+*is* the mechanism (anyone typing `gh …` must hit the wrapper).
+Structurally exempt from the parked prefixing decision
+([notes/module-prefixing.md](../notes/module-prefixing.md)).
 
 ## Problem
 
@@ -80,6 +90,13 @@ the xq envelope. Do not parse JSON or grow an rg-like `mode` field —
 xq does not do that, and gh v1 is identity routing, not a GitHub API
 client. `use xq *` at module scope.
 
+Overlay note (2026-08-23): `nu-gh`'s parsing views may need identity
+injection around `process capture` rather than ordinary `xq`. If
+envelope + `jobs fetch` + parse proves clunky there, the shape is an
+exported combinator (run a closure under the resolved identity env —
+token stays interior, hygiene rules unchanged), never a
+token-returning export. Decide in nu-gh-v1; amend here.
+
 ## `gh identity` — the identity receipt
 
 ```
@@ -129,7 +146,8 @@ aipithicus. No `gh auth switch` was run at any point.
 
 ## Non-goals (v1)
 
-- Curated subcommands, aliases, or a GitHub API wrapper
+- Curated subcommands, aliases, or a GitHub API wrapper — read-side
+  views are `nu-gh`'s territory (overlay track, own brief)
 - Token caching across invocations
 - Enterprise hosts (`GH_HOST` ≠ github.com) — pass `--hostname`
   through when it matters; v2 reads `github.host` from git config
