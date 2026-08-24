@@ -85,12 +85,27 @@ only that nothing is checking. `RelativePath` is the same pattern working:
 computed once at crawl, carried to the payload as the record's identity, never
 re-derived by anyone.
 
-**The one thing that is not this smell: re-aggregating.** A rollup is a
-function of `(atoms, predicate)` (ledger #52), so a second scope is a second
-*call site* over one definition and that is correct by design. The rule is:
-**measure once, derive once, aggregate as often as there are predicates** — and
-when you aggregate again, reuse the definition rather than writing a second
-loop, or you have reproduced the same defect class one level up.
+**What the rule is scoped to, and the test that decides it.** The smell is *one
+value recomputed*. So ask: **do the two results have to agree?**
+
+- **Must agree** → it is one fact computed twice, and nothing forces the two to
+  match. Look back.
+- **Must not agree** → they are different facts that happen to share atoms and a
+  definition. There is nothing to fix.
+
+A conditioned aggregate is the second case. `rollups(walked)` and
+`rollups(payload)` are entirely distinct calculations answering distinct
+questions over the same retained measurements (ledger #52) — they are *supposed*
+to differ, and requiring them to agree would itself be the error. This is not an
+exception to the rule; it was never in its scope. Reuse the definition rather
+than writing a second loop, but that is ordinary economy, not a rescue.
+
+**The test cuts both ways, and getting it backwards is easy.** `DirectoryCount`
+and the root rollup's `SubtreeDirCount` were documented as "the same aggregation
+at root scope" and asserted equal — wrongly. They answer different questions
+(graph nodes *including* root vs descendants *excluding* self) and differ by
+exactly one; the suite caught it. Two numbers being adjacent, or derived from
+the same data, does not make them one fact.
 
 ## Known conflation hotspots
 
