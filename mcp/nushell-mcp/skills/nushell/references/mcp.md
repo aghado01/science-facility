@@ -15,4 +15,4 @@ This package runs a persistent Nushell REPL with science-facility extensions on 
 - **Disclose Ladder**: Drill into stored values using `preview` (bounded leaf preview), `page` (bounded slice), or `read` (returns value if under cap, else stashes).
 - **Stream Rules**: Always return values implicitly. Bare `print` in stdio MCP drops output; use `print -e` for diagnostic stderr logging.
 
-> Stock bare `nu --mcp` launch without overlay: `nu-skills read appendix/mcp`.
+> Stock bare `nu --mcp` launch without overlay: [`nu-skills read appendix/mcp`](appendix/mcp.md).

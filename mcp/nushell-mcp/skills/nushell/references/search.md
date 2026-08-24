@@ -36,6 +36,6 @@ Inside `jobs spawn { rg … }`: never stash; the job row is the quarantine. Thre
 - **Inside a background job (`jobs spawn`)**: returns findings inline on the job row without stashing.
 - **Inside a foreground `par` worker**: over cap returns `ok: false` with no tag — wrap large search fan-outs in `jobs spawn`.
 
-For searching in-memory tables, columns, or string lists, use native `where` / `find` (see `nu-skills read posix-cheatsheet`).
+For searching in-memory tables, columns, or string lists, use native `where` / `find` (see [`nu-skills read posix-cheatsheet`](posix-cheatsheet.md)).
 
 Do not cap the live search. Do not call ordinary `xq`. Do not parse `^rg` text when this wrapper exists. Body around a hit: `open $file | lines | slice`.

@@ -15,4 +15,4 @@
 - `open db.sqlite | query db "SELECT name, count(*) FROM logs GROUP BY name"`
 
 ## Large Query Discipline
-For high-volume HTTP responses, large SQL queries, or massive Polars collections, apply the disclosure ladder: check shape with `shape` (see `nu-skills read dataspection`), disclose boundedly with `read` / `page`, or execute in the background with `jobs spawn` (see `nu-skills read jobs`).
+For high-volume HTTP responses, large SQL queries, or massive Polars collections, apply the disclosure ladder: check shape with `shape` (see [`nu-skills read dataspection`](dataspection.md)), disclose boundedly with `read` / `page`, or execute in the background with `jobs spawn` (see [`nu-skills read jobs`](jobs.md)).

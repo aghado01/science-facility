@@ -22,9 +22,9 @@ $files | select name size modified | first 5
 
 ## Large Payloads & Token Economy
 For large or unbounded datasets, do not dump raw tables into the evaluation return. Use the disclosure ladder:
-- **Census first**: `$val | shape` (see `nu-skills read dataspection`)
+- **Census first**: `$val | shape` (see [`nu-skills read dataspection`](dataspection.md))
 - **Bounded read**: `$val | read` (stashes over cap, returning retrieval tag)
-- **Background quarantine**: `jobs spawn { ... }` (see `nu-skills read jobs`)
+- **Background quarantine**: `jobs spawn { ... }` (see [`nu-skills read jobs`](jobs.md))
 
 ## Environment & Scope Persistence
 - **Set Variable**: `$env.FOO = "bar"`

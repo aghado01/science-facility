@@ -13,7 +13,7 @@ def greet [name: string, --shout (-s)]: string -> string {
 - Domain failures in this console return `{ok: false, error: ...}` as data rather than throwing.
 
 ## Background Jobs & Execution
-- In the augmented console, use `jobs spawn` for background execution and quarantine (see `nu-skills read jobs`).
-- For running external commands with automatic stream quarantine, use `xq` (see `nu-skills read posix-cheatsheet`).
+- In the augmented console, use `jobs spawn` for background execution and quarantine (see [`nu-skills read jobs`](jobs.md)).
+- For running external commands with automatic stream quarantine, use `xq` (see [`nu-skills read posix-cheatsheet`](posix-cheatsheet.md)).
 
-> Stock `job spawn` / `job recv` / `job kill` and `| complete`: `nu-skills read appendix/advanced`.
+> Stock `job spawn` / `job recv` / `job kill` and `| complete`: [`nu-skills read appendix/advanced`](appendix/advanced.md).

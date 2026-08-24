@@ -21,4 +21,4 @@ Utilities behave identically across Windows, macOS, and Linux:
   $env.PATH = ($dirs | prepend "/custom/bin" | uniq)
   ```
 
-> Stock unconditional PATH-as-list: `nu-skills read appendix/parity`.
+> Stock unconditional PATH-as-list: [`nu-skills read appendix/parity`](appendix/parity.md).

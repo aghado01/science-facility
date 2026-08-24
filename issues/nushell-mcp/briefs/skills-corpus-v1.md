@@ -104,6 +104,16 @@ workflow carries one short **Stock** footnote naming the form's one
 appendix home. Steer, never ban: `^rg`, `job spawn`, and
 `| complete` remain documented escape hatches.
 
+Pointer form is **dual-surface**: a markdown link whose text is the
+console command — `` [`nu-skills read appendix/advanced`](appendix/advanced.md) `` —
+so the command serves the MCP session (the raw text an agent reads
+through `nu-skills read`) and the relative href serves repo web
+browsing (GitHub blob view). Hrefs are relative to the containing
+file (`appendix/…` from a console page, `../…` from an appendix
+page). Usage examples stay plain code — only navigation pointers are
+linked. Link integrity checks both layers: topic resolution through
+`nu-skills`, and href resolution relative to the file.
+
 ## `nu-skills` v2 — tree-aware serving
 
 | Verb | Contract |
@@ -382,6 +392,11 @@ SKILL.md, not in either docstring, not in the satellite.
   third-party verification 2026-08-23; copied verbatim to `~/.claude`,
   `~/.grok`, `~/.codex` `skills/nushell-mcp/` and diff-verified in
   sync.
+- **2026-08-23 amendment — dual-surface pointers**: all cross-page
+  pointers converted to markdown links with the console command as
+  link text (GitHub-navigable; command preserved in raw text). Hrefs
+  relative to the containing file. Integrity test extended to resolve
+  hrefs (29 links across 16 files verified). Suite 8/8.
 - **Third-party verification (2026-08-23)**: suite re-run
   independently (8/8); exit gates run live (`list` shows `appendix`
   branch `n: 5` with summed size; `search "job spawn"` hits `jobs`,

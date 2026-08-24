@@ -86,6 +86,6 @@ No command throws on odd input. Internal failure is `{error, trace}` on the comm
 
 ## Gotchas in this module
 
-- Builtin `inspect` is a flood trap under `--mcp`. Use `shape` (see `nu-skills read appendix/inspect`).
+- Builtin `inspect` is a flood trap under `--mcp`. Use `shape` (see [`nu-skills read appendix/inspect`](appendix/inspect.md)).
 - `schema` shadows SQLite's `schema` while this module is in the overlay.
 - `read` is the only `--env` verb here; it uses `$env.JOBS`, not a second store.

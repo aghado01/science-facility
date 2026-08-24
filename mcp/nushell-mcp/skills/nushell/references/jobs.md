@@ -14,7 +14,7 @@ Preloaded (`use par *; use jobs *; use dataspection *; use xq *; use rg *` in `c
 | `job spawn` / `job send` / `job recv` | recv takes no id; tags are ints; main thread is `0` | `jobs spawn` / `list` / `collect` / `inspect` / `read` / `fetch` |
 | `job kill` | no registry stamp | `jobs cancel` (stamps `cancelled` + `finished`) |
 
-> Stock `job spawn` / `job recv` / `job kill` / `complete`: `nu-skills read appendix/advanced`.
+> Stock `job spawn` / `job recv` / `job kill` / `complete`: [`nu-skills read appendix/advanced`](appendix/advanced.md).
 
 Native `par-each --threads` bypasses policy. Do not monkey-patch the builtin. Do not `job send`/`recv` the module mailbox (`0x4A4F4253`).
 

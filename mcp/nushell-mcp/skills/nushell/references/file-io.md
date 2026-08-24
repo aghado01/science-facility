@@ -9,7 +9,7 @@
 - **SQLite Database:** `open database.sqlite | get users | where age > 21`
 
 ## Large File Discipline
-For large or unknown structured files, avoid dumping the parsed output into the tool result. Census with `shape` first (`open large.json | shape`), read boundedly with `read` (see `nu-skills read dataspection`), or isolate in the background (`jobs spawn { open large.json }`, see `nu-skills read jobs`).
+For large or unknown structured files, avoid dumping the parsed output into the tool result. Census with `shape` first (`open large.json | shape`), read boundedly with `read` (see [`nu-skills read dataspection`](dataspection.md)), or isolate in the background (`jobs spawn { open large.json }`, see [`nu-skills read jobs`](jobs.md)).
 
 ## Saving Structured Files
 - **Save JSON:** `{ a: 1, b: 2 } | to json | save -f output.json`

@@ -172,6 +172,15 @@ let results = [
                     assert-true $valid $"In ($file_path | path basename): invalid branch '($branch)' in list mention"
                 }
             }
+
+            # Validate markdown link hrefs resolve relative to the containing file
+            let hrefs = ($content | parse -r '\]\((?P<href>[^)]+)\)' | get href? | default [])
+            for href in $hrefs {
+                if not (($href | str starts-with "http") or ($href | str starts-with "#")) {
+                    let target = ($file_path | path dirname | path join $href)
+                    assert-true ($target | path exists) $"In ($file_path | path basename): broken href '($href)'"
+                }
+            }
         }
     })
 ]

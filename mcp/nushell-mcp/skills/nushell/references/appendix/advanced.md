@@ -1,6 +1,6 @@
 # Stock Nushell: Native Background Jobs & Process Completion
 
-Displaced from `advanced`; console equivalent: `nu-skills read jobs` (for jobs) and `nu-skills read posix-cheatsheet` (for `xq`).
+Displaced from `advanced`; console equivalent: [`nu-skills read jobs`](../jobs.md) (for jobs) and [`nu-skills read posix-cheatsheet`](../posix-cheatsheet.md) (for `xq`).
 
 Canonical Nushell includes native background job control and command completion primitives.
 

@@ -1,6 +1,6 @@
 # Stock Nushell: Builtin `inspect` Command
 
-Displaced from `gotchas`; console equivalent: `nu-skills read dataspection`.
+Displaced from `gotchas`; console equivalent: [`nu-skills read dataspection`](../dataspection.md).
 
 Nushell includes a built-in `inspect` command designed for interactive terminal debugging.
 

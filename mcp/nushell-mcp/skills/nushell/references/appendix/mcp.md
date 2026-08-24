@@ -1,6 +1,6 @@
 # Stock Nushell: Native Built-in MCP Server (`nu --mcp`)
 
-Displaced from `mcp`; console equivalent: `nu-skills read mcp`.
+Displaced from `mcp`; console equivalent: [`nu-skills read mcp`](../mcp.md).
 
 Canonical Nushell includes a native Model Context Protocol (MCP) server directly in the `nu` binary.
 

@@ -1,6 +1,6 @@
 # Stock Nushell: As-Shipped PATH Handling
 
-Displaced from `parity`; console equivalent: `nu-skills read parity`.
+Displaced from `parity`; console equivalent: [`nu-skills read parity`](../parity.md).
 
 In canonical Nushell as shipped, `$env.PATH` is specified to be unconditionally a structured list of strings rather than a delimited string.
 
