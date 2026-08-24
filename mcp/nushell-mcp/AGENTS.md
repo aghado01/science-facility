@@ -38,6 +38,18 @@ specs), `.archive/briefs/` (landed/superseded specs), `notes/`
 `planning/ledger.md` (landed work). Briefs are the specs; do not restate
 them in the decisions file.
 
+**Lifecycle** — roadmap is *ahead*, ledger is *done*, briefs hold the
+exposition. An idea earns a brief (`briefs/`) and a roadmap entry;
+rulings along the way go to `planning/decisions.md`. On landing: the
+brief gains its follow-up report; `planning/ledger.md` gets a
+**prepended** entry (newest first, anchored on the header — point at
+commits and briefs; counts are observations, not standing claims); and
+the roadmap entry **compresses to status + brief pointer** — never
+deleted (the sequence numbering is load-bearing), never left carrying
+landed exposition. A brief moves to `.archive/briefs/` once it stops
+being an active amendment target; the mover updates inbound links
+(roadmap, decisions, other briefs) in the same change.
+
 ## Duty cycle — landing a toolset change
 
 Every addition or change to the toolset walks the same stations; skip
@@ -63,8 +75,9 @@ a station consciously, never silently.
 6. **Tests** — suite per brief in `tests/`; corpus changes must pass
    the skills-corpus link-integrity gate (topics and hrefs); smoke
    `nu --config config.nu`.
-7. **Paper trail** — follow-up report on the brief, ledger entry,
-   roadmap status.
+7. **Paper trail** — follow-up report on the brief; prepended ledger
+   entry; roadmap entry compressed to status + pointer (see
+   Lifecycle above).
 8. **When applicable** — vendored binary into `deps/cli` + brewery
    recipe; note drift owed to the served server instructions (aligned
    only at fork rebuild).
