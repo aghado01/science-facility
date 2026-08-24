@@ -46,12 +46,13 @@ fork.
 | group | fields | disposition |
 |---|---|---|
 | `identity` | `AbsolutePath` · `RelativePath` · `NodePath` · `Extension` | **always on** — the record's identity and the membrane's blacklist key; nothing works without it |
-| `size` | `SizeBytes` (+ node `SubtreeBytes`) | on by default — the membrane's `MaxSizeBytes` gate and the subtree rollups both need it |
+| `size` | `SizeBytes` | on by default — the membrane's `MaxSizeBytes` gate and the rollup layer both need it |
 | `timestamps` | `LastWriteUtc` · `CreationUtc` | `LastWriteUtc` reaches the payload as core; `CreationUtc` is standalone-facing |
 | `fsattrs` | `FsAttributes` | no RS consumer today; the obvious latent one is a membrane reparse-point / symlink test |
 
-Node rollups follow their source group (`SubtreeBytes` with `size`;
-`SubtreeDirCount` / `SubtreeFileCount` with `identity`).
+The rollup layer is not a field group — it toggles emit / do-not-emit whole
+(landed 2026-08-23; see §Rollups below). Its dependency edge stands: a profile
+without `size` cannot offer `SubtreeBytes` at any setting.
 
 The RS profile enables `identity + size + timestamps`; `fsattrs` is off until a
 membrane test wants it. A standalone caller enables what it likes.
@@ -81,35 +82,35 @@ one place the rule is not applied.
 the profile toggle becomes emit / do-not-emit rather than a conditional `from`,
 which is the expensive part of everything below. What shipped:
 
-- **Moved out of `out.node` into `out.rollups`** — `@{ Scope; ByNode[NodePath] }`,
+- **Moved out of `out.node` into `out.rollups`** — `@{ Condition; ByNode[NodePath] }`,
   a sibling of `Graph` exactly as `Skipped` already was. Not a rewrite of what is
   computed; a change of where the answer is put. `RollUp()` (mutating nodes)
-  became `BuildRollups($scope)` (returning a layer).
-- **A layer's identity is its scope**, so no per-field labelling is needed:
-  `Scope = 'walked'` here, and a survivors-scope layer would share keys and
-  coexist without either impersonating a node property.
+  became `BuildRollups($condition)` (returning a layer).
+- **A layer's identity is its condition** — the slice it rolled up: `'walked'`
+  here; the same aggregation conditioned on the survivors would be a second
+  layer sharing keys, and neither can impersonate a node property. Condition
+  (which atoms — the WHERE) and grouping (`ByNode` — the GROUP BY) are
+  independent axes; "root" is on neither, `ByNode['']` being merely the row
+  whose group is the whole slice.
 - **Membrane's severing stopped being a special case.** It has no fields to
   strip now — it rebuilds nodes as structure and emits no layer.
-- **An off-by-self got pinned.** `FileCount` really is this aggregation at root
-  scope, but `DirectoryCount` counts graph *nodes including root*
-  (`== Graph.Count == ByNode[''].SubtreeDirCount + 1`) while `SubtreeDirCount`
-  counts *descendants excluding self*. Both relations are asserted now — the
-  test caught it against a contract note I had just written wrong, which is
-  exactly the claim ("same number at root scope") that hides it.
+- **An off-by-self got pinned.** `FileCount` equals `ByNode[''].SubtreeFileCount`
+  because the root row's group is the whole slice, but `DirectoryCount` counts
+  graph *nodes including root* (`== Graph.Count == ByNode[''].SubtreeDirCount +
+  1`) while `SubtreeDirCount` counts *descendants excluding self*. Both
+  relations are asserted now — the test caught it against a contract note I had
+  just written wrong, and conflating the two axes ("same number, both about the
+  root") is exactly the claim that hides it.
 
 Still owed and **not this brief's**: the rollup as a callable over any
-predicate, rather than a private method the crawler invokes over the walk.
+condition, rather than a private method the crawler invokes over the walk.
 Trigger-gated in [roadmap §Deferred](../planning/roadmap.md) — it fires when
-something first wants a second scope, and it must land together with the atom
-retention it depends on (`SizeBytes` → `carried`), or it is a function with
-nothing to sum.
-- **The atom is what must survive**, and today it does not: `SizeBytes` is
-  excluded at assemble, so a post-filter subtree rollup is currently
-  *impossible* — not merely unwritten. Nothing wants one today (the manifest's
-  `TocTree` is per-row and carries no directory aggregates), so this is a
-  recorded consequence rather than a requirement. If one is ever wanted,
-  `SizeBytes` moves to the `carried` tier (#50) and the answer is a second call
-  site, not a new loop.
+something first wants a second condition, and it must land together with the
+atom retention it depends on (`SizeBytes` → `carried`, #50): `SizeBytes` dies at
+assemble today, so a rollup conditioned on the survivors is *impossible*, not
+merely unwritten, and the callable alone is a function with nothing to sum.
+Nothing wants one yet (the manifest's `TocTree` is per-row, no directory
+aggregates) — a recorded consequence, not a requirement.
 
 ## The bill — this is the part that is not free
 

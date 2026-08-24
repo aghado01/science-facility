@@ -73,7 +73,7 @@ god-view read by assemble is what the per-stage model avoids.
 
 **Rollups are a keyed LAYER, not node fields** (ledger #52, moved 2026-08-23).
 `SubtreeDirCount` / `SubtreeFileCount` / `SubtreeBytes` live in
-`crawler.out.rollups` — `@{ Scope; ByNode[NodePath] }` — a sibling of `Graph`
+`crawler.out.rollups` — `@{ Condition; ByNode[NodePath] }` — a sibling of `Graph`
 exactly as `Skipped` already was. A rollup is metadata *about* the graph, never
 a property *of* a node: it is computed by walking a node's descendants, so
 writing it back onto the node it summarises is the denormalisation that made
@@ -82,17 +82,22 @@ everything downstream awkward.
 Two things that used to need explaining stop needing it. The membrane no longer
 "drops" rollups — it rebuilds nodes as structure and simply emits no new layer,
 so there is nothing to strip. And a post-filter rollup is not a *stale* version
-of this one: it is **another layer of the same shape over a different
-predicate**, and `Scope` is what tells them apart, so neither can impersonate
-the other. One aggregation definition, N call sites — the shape
+of this one: it is **the same aggregation conditioned on a different slice**,
+and `Condition` is what tells the layers apart, so neither can impersonate the
+other. One aggregation definition, N call sites — the shape
 `Format-Row → Measure-Row / Build-Row` already uses.
 
-Note the run-level counts are *not* uniformly the same aggregation at root
-scope: `FileCount == ByNode[''].SubtreeFileCount`, but `DirectoryCount` counts
-graph **nodes including root** (`== Graph.Count == ByNode[''].SubtreeDirCount +
-1`) while `SubtreeDirCount` counts **descendants excluding self**. Both
-relations are asserted in `crawler.tests` — "the same number at root scope" is
-precisely the claim that hides an off-by-self.
+**Condition and grouping are independent axes.** The condition is the slice
+rolled up (`'walked'`; survivors or discards would be other layers — the
+WHERE); the grouping is how the result is keyed (`ByNode` — the GROUP BY).
+"Root" is a semantics on neither axis: `ByNode['']` is simply the row whose
+group is the whole slice, which is why `FileCount ==
+ByNode[''].SubtreeFileCount` (an identity of the grouping). `DirectoryCount` is
+not a rollup row at all — it counts graph **nodes including root**
+(`== Graph.Count == ByNode[''].SubtreeDirCount + 1`) while `SubtreeDirCount`
+counts **descendants excluding self**. Both relations are asserted in
+`crawler.tests` — "same number, both about the root" is precisely the adjacency
+that hides an off-by-self.
 
 **Path doctrine — store vs view, applied to paths.**
 - `AbsolutePath` exists for unambiguous ingestion-side reads; it never appears
@@ -180,6 +185,6 @@ fast on a descriptor lacking `RelativePath` or `Extension` — the crawler
 contract, checked at the boundary. Node rollups are no longer node fields to carry
 (ledger #52): the membrane rebuilds nodes as `{ NodePath; AbsolutePath;
 NodeDepth; Files; CompiledState }` and emits no rollup layer, so nothing is
-stripped and nothing is lost — `crawler.out.rollups` stays the walked-scope
-answer, and a survivors-scope answer would be a second layer, not a repair of
-this one.
+stripped and nothing is lost — `crawler.out.rollups` stays the answer
+conditioned on the walked set, and one conditioned on the survivors would be a
+second layer, not a repair of this one.

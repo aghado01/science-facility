@@ -100,12 +100,17 @@ to differ, and requiring them to agree would itself be the error. This is not an
 exception to the rule; it was never in its scope. Reuse the definition rather
 than writing a second loop, but that is ordinary economy, not a rescue.
 
-**The test cuts both ways, and getting it backwards is easy.** `DirectoryCount`
-and the root rollup's `SubtreeDirCount` were documented as "the same aggregation
-at root scope" and asserted equal — wrongly. They answer different questions
-(graph nodes *including* root vs descendants *excluding* self) and differ by
-exactly one; the suite caught it. Two numbers being adjacent, or derived from
-the same data, does not make them one fact.
+**The test cuts both ways, and getting it backwards is easy.** A rollup has two
+independent axes: the **condition** — which slice of the data it runs over
+(walked, surviving, discarded; the WHERE) — and the **grouping** — how the
+result is keyed (per node; the GROUP BY). "Root" is on neither axis:
+`ByNode['']` is just the output row whose group happens to be the whole slice.
+Conflating the axes is how `DirectoryCount` got documented as "the same
+aggregation at root scope" and asserted equal to `ByNode[''].SubtreeDirCount` —
+two numbers that both *sit at the root* but answer different questions (graph
+nodes including root; descendants excluding self) and differ by exactly one.
+The suite caught it. Two numbers being adjacent, or derived from the same data,
+does not make them one fact.
 
 ## Known conflation hotspots
 

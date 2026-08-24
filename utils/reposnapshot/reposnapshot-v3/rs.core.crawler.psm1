@@ -15,7 +15,7 @@ using namespace System.Security
       Graph[NodePath] → @{ NodePath; AbsolutePath; NodeDepth; Files }
       Files[]        → @{ AbsolutePath; RelativePath; NodePath; Extension;
                            SizeBytes; LastWriteUtc; CreationUtc; FsAttributes }
-      Rollups        → @{ Scope; ByNode[NodePath] → @{ SubtreeDirCount;
+      Rollups        → @{ Condition; ByNode[NodePath] → @{ SubtreeDirCount;
                            SubtreeFileCount; SubtreeBytes } }  — a SIBLING of
                            Graph, like Skipped
       Skipped[]      → @{ Path; Reason; [Error] }  — diagnostics, sibling of Graph
@@ -27,14 +27,19 @@ using namespace System.Security
     re-derives (ledger #38, measurements only).
 
     Rollups are METADATA ABOUT the graph, not properties OF a node (ledger
-    #52). They live in their own keyed layer whose `Scope` says which set it
-    aggregates — here 'walked', every file the crawl saw, before the membrane
-    rejects any of it. The same aggregation over a different predicate is a
-    second layer of the same shape, keyed the same way; neither can impersonate
-    a current property of a node, which is what welding them onto nodes did.
-    The run-level counts (DirectoryCount / FileCount) are the same aggregation
-    at root scope and already sat as siblings of Graph — this makes the
-    per-node case consistent with them.
+    #52). They live in their own keyed layer whose `Condition` names the slice
+    of data rolled up — here 'walked', every file the crawl saw, before the
+    membrane rejects any of it. The same aggregation conditioned on a different
+    slice (survivors, discards) is a second layer of the same shape, keyed the
+    same way; neither can impersonate a current property of a node, which is
+    what welding them onto nodes did.
+
+    Condition (which atoms) and grouping (ByNode) are INDEPENDENT AXES, and
+    'root' is on neither: ByNode[''] is merely the row whose group is the whole
+    slice, because the root's subtree is the whole tree. Hence FileCount ==
+    ByNode[''].SubtreeFileCount (an identity of the grouping, asserted in
+    tests), while DirectoryCount is a node count over the structure
+    (== Graph.Count == ByNode[''].SubtreeDirCount + 1) — not a rollup row.
 
     Paths: forward slashes; RelativePath root-anchored, no leading slash;
     NodePath = directory portion with trailing '/', root = ''. AbsolutePath is
@@ -231,14 +236,14 @@ class FileSystemCrawler
         }
     }
 
-    # ── Private: BuildRollups — the subtree aggregation, over one predicate ──
+    # ── Private: BuildRollups — the subtree aggregation, over one condition ──
     # Deepest-first, so each node is complete before it folds into its parent.
-    # Returns a KEYED LAYER, not node mutations: @{ Scope; ByNode }. The scope
-    # is the layer's identity — run this over a different set (the surviving
-    # entries, the discarded ones) and the result is another layer of the same
-    # shape, keyed the same way, that cannot be mistaken for this one.
+    # Returns a KEYED LAYER, not node mutations: @{ Condition; ByNode }. The
+    # condition names the slice rolled up — the same aggregation conditioned on
+    # a different slice (the survivors, the discards) is another layer of the
+    # same shape, keyed the same way, that cannot be mistaken for this one.
     # In-memory only; reads SizeBytes, measures nothing.
-    hidden [PSCustomObject] BuildRollups([string]$scope)
+    hidden [PSCustomObject] BuildRollups([string]$condition)
     {
         $byNode = [Dictionary[string, PSCustomObject]]::new([StringComparer]::Ordinal)
         foreach ($nodePath in $this.Graph.Keys)
@@ -266,7 +271,7 @@ class FileSystemCrawler
             $p.SubtreeBytes     += $r.SubtreeBytes
         }
 
-        return [PSCustomObject]@{ Scope = $scope; ByNode = $byNode }
+        return [PSCustomObject]@{ Condition = $condition; ByNode = $byNode }
     }
 
     # ── Private: ToNodePath ───────────────────────────────────────────────

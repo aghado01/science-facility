@@ -1,5 +1,23 @@
 # Changelog 
 
+## 2026-08-24 — rollup vocabulary: `Scope` → `Condition`; root-scope claims rewritten
+
+A rollup is an aggregation **conditioned on a slice of the data** — nothing
+about it is "scoping". The layer field renames `Scope` → **`Condition`**
+(module, contract, tests); `BuildRollups($scope)` → `BuildRollups($condition)`.
+Two independent axes, now stated wherever the layer is described: the
+**condition** (which atoms — the WHERE; `'walked'` here, survivors or discards
+would be other layers) and the **grouping** (`ByNode` — the GROUP BY). "Root"
+is on neither: `ByNode['']` is merely the row whose group is the whole slice,
+which is why `FileCount` equals it (an identity of the grouping) while
+`DirectoryCount` — a node count over the structure — does not. Conflating the
+axes is precisely what produced yesterday's off-by-self; the module docstring
+still carried the false "run-level counts are the same aggregation at root
+scope" claim and is fixed with the rename. AGENTS §Recalculating,
+module-notes, #52, roadmap, and crawler-profile-brief follow (the brief also
+loses a stray disposition bullet and its stale "rollups ride field groups"
+line). Battery **17 · 1060 · 0**.
+
 ## 2026-08-23 — crawler: subtree rollups become a keyed layer, not node fields
 
 Ledger #52. A rollup is metadata *about* the graph, never a property *of* a

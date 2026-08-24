@@ -142,7 +142,7 @@ try
     # -----------------------------------------------------------------------
     # Rollups are a KEYED LAYER beside Graph, not fields on nodes (ledger #52).
     Assert-True ($null -ne $result.Rollups) 'Rollups is a sibling of Graph in the result envelope'
-    Assert-True ($result.Rollups.Scope -eq 'walked') "the layer names its set — Scope = 'walked'" $result.Rollups.Scope
+    Assert-True ($result.Rollups.Condition -eq 'walked') "the layer names the slice it rolled up — Condition = 'walked'" $result.Rollups.Condition
     foreach ($field in @('SubtreeDirCount', 'SubtreeFileCount', 'SubtreeBytes'))
     {
         Assert-True ($null -eq $result.Graph[''].PSObject.Properties[$field]) "node does NOT carry $field — structure holds no aggregate over itself"
@@ -158,13 +158,14 @@ try
     Assert-True ($docs.SubtreeDirCount -eq 0 -and $docs.SubtreeFileCount -eq 1) 'docs/: 0 dirs, 1 file'
     Assert-True ($root.SubtreeDirCount -eq 3 -and $root.SubtreeFileCount -eq 4) 'root: 3 dirs, 4 files' "got $($root.SubtreeDirCount)/$($root.SubtreeFileCount)"
 
-    # Run-level counts vs the root rollup. FileCount IS this aggregation at
-    # root scope. DirectoryCount is NOT: it counts graph NODES (root included),
-    # while SubtreeDirCount counts DESCENDANTS (self excluded) — they differ by
-    # exactly one, and pinning that here is the point. "Same number at root
-    # scope" is the kind of claim that hides an off-by-self.
-    Assert-True ($result.FileCount -eq $root.SubtreeFileCount) 'FileCount == root SubtreeFileCount — genuinely the same aggregation at root scope' "$($result.FileCount) vs $($root.SubtreeFileCount)"
-    Assert-True ($result.DirectoryCount -eq $root.SubtreeDirCount + 1) 'DirectoryCount == root SubtreeDirCount + 1 — nodes-including-self vs descendants' "$($result.DirectoryCount) vs $($root.SubtreeDirCount)"
+    # Run-level counts vs the root ROW of the grouped rollup. 'Root' is not a
+    # condition — ByNode[''] is just the row whose group is the whole slice
+    # (root's subtree = everything). So FileCount equals it by an identity of
+    # the grouping. DirectoryCount does NOT: it counts graph NODES (root
+    # included), while SubtreeDirCount counts DESCENDANTS (self excluded) —
+    # off by exactly one, and pinning that is the point.
+    Assert-True ($result.FileCount -eq $root.SubtreeFileCount) 'FileCount == ByNode[""].SubtreeFileCount — root row covers the whole walked slice' "$($result.FileCount) vs $($root.SubtreeFileCount)"
+    Assert-True ($result.DirectoryCount -eq $root.SubtreeDirCount + 1) 'DirectoryCount == ByNode[""].SubtreeDirCount + 1 — node count vs descendant count' "$($result.DirectoryCount) vs $($root.SubtreeDirCount)"
     Assert-True ($result.DirectoryCount -eq $result.Graph.Count) 'DirectoryCount == Graph.Count — it is a node count, not a subtree rollup'
 
     $allBytes = ($result.Graph.Values | ForEach-Object { $_.Files } | Measure-Object -Property SizeBytes -Sum).Sum

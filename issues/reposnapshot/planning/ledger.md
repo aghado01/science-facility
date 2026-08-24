@@ -7,6 +7,18 @@ never as standing claims, and never hand-copied from prose.
 Rulings live in [decisions.md](decisions.md); what remains lives in
 [roadmap.md](roadmap.md).
 
+- **2026-08-24 — rollup vocabulary corrected: `Scope` → `Condition`** (#52
+  amended): a rollup is conditioned on a slice of the data being rolled up;
+  condition (the WHERE) and grouping (`ByNode`) are independent axes, and
+  "root" is a semantics on neither — `ByNode['']` is merely the row whose group
+  is the whole slice, which is why `FileCount` equals it while `DirectoryCount`
+  (a node count) does not. Field renamed in module, contract, and tests; every
+  "root scope" claim rewritten in AGENTS §Recalculating, module-notes, #52, the
+  roadmap's deferred entry, and crawler-profile-brief. The module docstring was
+  still claiming "run-level counts are the same aggregation at root scope" —
+  stale against the off-by-self found yesterday; fixed with the rename.
+  Battery: **17 suites · 1060 passed · 0 failed**.
+
 - **2026-08-23 — subtree rollups moved out of the graph into a keyed layer**
   (#52 applied): `crawler.out.node` loses `SubtreeDirCount` /
   `SubtreeFileCount` / `SubtreeBytes`; `crawler.out.rollups` =
