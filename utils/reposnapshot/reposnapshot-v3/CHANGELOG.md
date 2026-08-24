@@ -1,5 +1,34 @@
 # Changelog 
 
+## 2026-08-24 — rs.core.shards complete: New-ShardPlan (the stage shell)
+
+Export phase 1 lands whole. `New-ShardPlan(-Entries -Layout [-Grouping]
+[-GroupSort] [-OrderStrict] [-PackObjective] [-ShardQuotaBytes]
+[-ShardToleranceBytes] [-MaxFilesPerShard] [-ShardStem])` wraps the packer
+core with stages 1–3 and the global half of 7–8: enumerate + group (`Flat` /
+`ByFileType` reading the **carried** `Extension`, lowercased, `'.noext'` —
+never re-derived, #50 / `ByRootDirectory` first path segment, `'.root'`
+first), nominal order per `GroupSort` (`PathAsc` ordinal; `PathHash` via
+numerics `Get-PathHash`, composite tie-break so even an unstable sort cannot
+produce two orders), **measure once** per record via `Measure-Row`, call
+`New-BinAssignment` per group, then global `Ordinal`s, `Key`s (width =
+max(3, digits(ShardCount)) — the D3 literal never existed in code), gidx
+0..N−1 in final reading order (`IdxMap`), and plan/groups/shards/idxmap per
+the contract. The plan holds entry **references** (indices) and echoes the
+resolved knobs including `ShardStem` and `MaxFilesPerShard`. Group order is
+ordinal-sorted keys (`.root` first under ByRootDirectory). Nested imports:
+container (Measure-Row), numerics (Get-PathHash).
+
+`tests/shards-plan.tests.ps1` (33) runs against the REAL layout
+(`Resolve-Layout` over `container.spec.jsonc`) — and asserts **plan = file by
+construction ahead of serialize**: `Build-HeaderRow` + Σ `Build-Row` bytes
+equals every shard's `PlannedSizeBytes`, both without and with gidx (measure
+uses the stand-in, render the assigned value, same width). Also: carried-tier
+boundary throw, group containment, `.root` unsuffixed, hash order verified
+against `Get-PathHash` directly, oversized pass-through, 1000-shard key width
+`s0001…s1000`, empty plan, grouped/flexible/Even determinism by serialized
+comparison. Battery **19 · 1313 · 0**.
+
 ## 2026-08-24 — rs.core.shards: packer core landed (New-BinAssignment)
 
 Export phase 1 begins with its pure inner layer: `New-BinAssignment(-Sizes

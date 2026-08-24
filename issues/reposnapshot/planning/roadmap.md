@@ -19,15 +19,14 @@ in another language.
 
 ## Track: export-e2e — *the main line; assemble → shards → serialize → manifest*
 
-1. **`rs.core.shards`** — **packer core landed 2026-08-24** (`New-BinAssignment`,
-   stages 4–7 pure over a size vector; `shards-packer.tests` 220 green, both
-   shapes exact under strict and brute-forced). What remains is the **stage
-   shell** `New-ShardPlan`: enumerate + group (carried `Extension`), sort per
-   `GroupSort`, measure once via `Measure-Row`, call the core per group,
-   assign ordinals / `Key` widths / `IdxMap`, emit the plan per the contract.
-   `PackObjective`'s default stays deliberately open pending the comparison
-   harness on real payloads (#48) — the 4-cell harness exists in the battery
-   on synthetic data; the real-payload run needs the shell.
+1. ~~**`rs.core.shards`**~~ — **complete 2026-08-24**, both layers:
+   `New-BinAssignment` (stages 4–7 pure; 220 asserts, shapes brute-forced) and
+   `New-ShardPlan` (stages 1–3 + sequencing/plan; 33 asserts against the real
+   layout, including plan = file via `Build-Row` sums ahead of serialize).
+   Still open here: the **#48 default** — the 4-cell harness runs on synthetic
+   data in the battery; the deciding run is over real payloads, now unblocked
+   (assemble → `New-ShardPlan` works end to end; a real-repo comparison is one
+   script away once serialize can write the files for inspection).
 2. **`rs.core.serialize`** — empty module, no brief yet. Writes what shards
    planned; the container already owns row bytes and the receipt, so serialize's
    scope is the write itself plus offset provenance.

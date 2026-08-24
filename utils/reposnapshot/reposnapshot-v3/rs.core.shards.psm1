@@ -30,10 +30,26 @@ using namespace System.Collections.Generic
     OrderStrict && Tolerance == 0 short-circuits at greedy-at-quota (brief
     stage 5: the shape engages under strict only with tolerance).
 
-    Public: New-BinAssignment.
+    THE STAGE SHELL — New-ShardPlan — wraps the core with stages 1–3 and the
+    global half of 7–8: enumerate + group (ByFileType reads the CARRIED
+    Extension, never re-derives — #50), sort per GroupSort into nominal order,
+    measure every record once via Measure-Row (container; #39), call the core
+    per group, then assign global Ordinals, Keys (width from ShardCount, floor
+    3 — never a hardcoded D3), gidx 0..N−1 in final reading order (IdxMap),
+    and emit plan/groups/shards/idxmap per contracts/shards.contract.json.
+    The plan holds entry REFERENCES (indices into the caller's Entries) and
+    echoes the resolved knobs including ShardStem, which serialize needs for
+    filenames and has no other route to.
+
+    Public: New-ShardPlan · New-BinAssignment.
 #>
 
 $script:MaxFilesDefault = 100000
+
+# Nested dependencies: Measure-Row (rs.core.container — the one grammar site,
+# #39) and Get-PathHash (rs.core.numerics — GroupSort's optional key, #4).
+Import-Module (Join-Path $PSScriptRoot 'rs.core.container.psm1')
+Import-Module (Join-Path $PSScriptRoot 'rs.core.numerics.psm1')
 
 # =============================================================================
 # Internals — arithmetic and greedy primitives
@@ -586,4 +602,267 @@ function New-BinAssignment
     }
 }
 
-Export-ModuleMember -Function 'New-BinAssignment'
+# =============================================================================
+# Internals — stage shell (grouping, nominal order)
+# =============================================================================
+
+function Get-GroupKey ([object]$Entry, [string]$Grouping, [int]$Index)
+{
+    switch ($Grouping)
+    {
+        'Flat' { return '' }
+        'ByFileType'
+        {
+            # READ from the carried tier, never re-derived from RelativePath —
+            # two derivations of one fact is the defect class #50 closed.
+            $p = $Entry.PSObject.Properties['Extension']
+            if ($null -eq $p) { throw "New-ShardPlan: entry #$Index carries no Extension — ByFileType reads assemble.out.entry.carried (ledger #50); it never re-derives from RelativePath." }
+            $ext = [string]$p.Value
+            if ([string]::IsNullOrEmpty($ext)) { return '.noext' }
+            return $ext.ToLowerInvariant()
+        }
+        'ByRootDirectory'
+        {
+            $rel = [string]$Entry.RelativePath
+            $slash = $rel.IndexOf('/')
+            if ($slash -lt 0) { return '.root' }
+            return $rel.Substring(0, $slash)
+        }
+    }
+}
+
+function Get-CleanGroupName ([string]$GroupKey)
+{
+    # Key suffix fragment: leading '.' dropped ('.ps1' → 'ps1'); anything
+    # outside [A-Za-z0-9_-] becomes '_' (crawler-derived names may carry
+    # spaces and non-ASCII; filenames must not).
+    $s = $GroupKey.TrimStart('.')
+    if ($s.Length -eq 0) { $s = 'noext' }
+    return ($s -replace '[^A-Za-z0-9_-]', '_')
+}
+
+function Get-NominalOrder ([object[]]$Entries, [List[int]]$Members, [string]$GroupSort)
+{
+    # Deterministic and ordinal (never culture-sensitive): composite sort key
+    # with RelativePath as the ordinal tie-break, so even an unstable sort and
+    # colliding primary keys cannot produce two orders.
+    $n = $Members.Count
+    $keys = [string[]]::new($n)
+    $idx = [int[]]::new($n)
+    for ($j = 0; $j -lt $n; $j++)
+    {
+        $rel = [string]$Entries[$Members[$j]].RelativePath
+        $primary = if ($GroupSort -eq 'PathHash') { Get-PathHash -Path $rel } else { $rel }
+        $keys[$j] = $primary + [char]0 + $rel
+        $idx[$j] = $Members[$j]
+    }
+    [Array]::Sort($keys, $idx, [StringComparer]::Ordinal)
+    return ,$idx
+}
+
+# =============================================================================
+# PUBLIC — New-ShardPlan
+# =============================================================================
+
+function New-ShardPlan
+{
+    <#
+    .SYNOPSIS
+        Export phase 1, the stage entry point: IR entries × resolved layout ×
+        knobs → the ShardPlan (contracts/shards.contract.json out). Pure
+        planning — zero I/O, zero offsets; serialize consumes the plan and
+        nothing flows back.
+    .PARAMETER Entries
+        assemble.out.result.Entries, canonical ingested order. The plan holds
+        INDICES into this array — it never copies content.
+    .PARAMETER Layout
+        container.out.layout (Resolve-Layout), resolved before this stage.
+        HeaderBytes and IdxWidth are read; the object rides whole into
+        Measure-Row, uninterpreted here.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)] [AllowEmptyCollection()] [object[]]$Entries,
+        [Parameter(Mandatory)] [PSCustomObject]$Layout,
+        [ValidateSet('Flat', 'ByFileType', 'ByRootDirectory')] [string]$Grouping = 'Flat',
+        [ValidateSet('PathAsc', 'PathHash')] [string]$GroupSort = 'PathAsc',
+        [switch]$OrderStrict,
+        [ValidateSet('FrontLoad', 'Even')] [string]$PackObjective = 'FrontLoad',
+        [long]$ShardQuotaBytes = 32768,          # working default (#40), not a final config-surface call
+        [long]$ShardToleranceBytes = 4096,       # working default (#41)
+        [ValidateRange(1, [int]::MaxValue)] [int]$MaxFilesPerShard = $script:MaxFilesDefault,
+        [string]$ShardStem = ''
+    )
+
+    if ($null -eq $Layout.PSObject.Properties['HeaderBytes'] -or $null -eq $Layout.PSObject.Properties['IdxWidth'])
+    {
+        throw "New-ShardPlan: Layout lacks HeaderBytes/IdxWidth — pass container.out.layout (Resolve-Layout output), resolved before this stage."
+    }
+    $headerBytes = [long]$Layout.HeaderBytes
+    $idxWidth = [int]$Layout.IdxWidth
+
+    # ── Stage 1: enumerate + group ───────────────────────────────────────
+    $byKey = [Dictionary[string, List[int]]]::new([StringComparer]::Ordinal)
+    for ($i = 0; $i -lt $Entries.Count; $i++)
+    {
+        $p = $Entries[$i].PSObject.Properties['RelativePath']
+        if ($null -eq $p -or [string]::IsNullOrEmpty([string]$p.Value))
+        {
+            throw "New-ShardPlan: entry #$i lacks RelativePath — assemble.out.entry.core is this stage's input contract."
+        }
+        $key = Get-GroupKey $Entries[$i] $Grouping $i
+        if (-not $byKey.ContainsKey($key)) { $byKey[$key] = [List[int]]::new() }
+        $byKey[$key].Add($i)
+    }
+
+    # group order: ordinal-sorted keys; ByRootDirectory puts '.root' first
+    $groupKeys = [string[]]@($byKey.Keys)
+    [Array]::Sort($groupKeys, [StringComparer]::Ordinal)
+    if ($Grouping -eq 'ByRootDirectory' -and $groupKeys -contains '.root')
+    {
+        $groupKeys = @('.root') + @($groupKeys | Where-Object { $_ -ne '.root' })
+    }
+
+    # ── Stages 2–7 per group: sort, measure once, pack ───────────────────
+    $groupOut = [List[object]]::new()
+    $groupBins = [List[object]]::new()   # parallel: @{ Key; Bins (entry-index mapped, core order) }
+    foreach ($gk in $groupKeys)
+    {
+        $ord = Get-NominalOrder $Entries $byKey[$gk] $GroupSort
+        $sizes = [long[]]::new($ord.Count)
+        for ($j = 0; $j -lt $ord.Count; $j++)
+        {
+            $sizes[$j] = [long](Measure-Row -Layout $Layout -Entry $Entries[$ord[$j]])
+        }
+
+        $asg = New-BinAssignment -Sizes $sizes -HeaderBytes $headerBytes -ShardQuotaBytes $ShardQuotaBytes `
+            -ShardToleranceBytes $ShardToleranceBytes -OrderStrict:$OrderStrict -PackObjective $PackObjective `
+            -MaxFilesPerShard $MaxFilesPerShard
+
+        $mapped = [List[object]]::new()
+        foreach ($b in $asg.Bins)
+        {
+            $entryIdx = [int[]]::new($b.Indices.Count)
+            for ($j = 0; $j -lt $b.Indices.Count; $j++) { $entryIdx[$j] = $ord[$b.Indices[$j]] }
+            $mapped.Add([pscustomobject]@{ Core = $b; Entries = $entryIdx })
+        }
+        $groupBins.Add(@{ Key = $gk; Bins = $mapped })
+
+        $groupOut.Add([pscustomobject]@{
+                GroupKey            = $gk
+                EntryCount          = $ord.Count
+                SumRowBytes         = $asg.SumRowBytes
+                ShardCount          = $asg.ShardCount
+                LowerBound          = $asg.LowerBound
+                Gap                 = $asg.Gap
+                OversizedCount      = $asg.OversizedCount
+                SingletonCount      = $asg.SingletonCount
+                InBandCount         = $asg.InBandCount
+                TotalOvershootBytes = $asg.TotalOvershootBytes
+                MaxOvershootBytes   = $asg.MaxOvershootBytes
+                TotalSlackBytes     = $asg.TotalSlackBytes
+                MaxFillBytes        = $asg.MaxFillBytes
+                MinFillBytes        = $asg.MinFillBytes
+            })
+    }
+
+    # ── Stage 7 (global) + 8: ordinals, keys, gidx, plan ─────────────────
+    $totalShards = 0
+    foreach ($g in $groupBins) { $totalShards += $g.Bins.Count }
+    $keyWidth = [Math]::Max(3, $totalShards.ToString().Length)   # width from a bound known before any name is written (#46)
+
+    $shards = [List[object]]::new()
+    $idxMap = [ordered]@{}
+    $ordinal = 0
+    $gidx = 0
+    foreach ($g in $groupBins)
+    {
+        $suffix = ''
+        if ($Grouping -ne 'Flat' -and $g.Key -ne '.root') { $suffix = '_' + (Get-CleanGroupName $g.Key) }
+        foreach ($m in $g.Bins)
+        {
+            $ordinal++
+            $key = 's' + $ordinal.ToString('D' + $keyWidth) + $suffix
+            $b = $m.Core
+            $shards.Add([pscustomobject]@{
+                    Ordinal          = $ordinal
+                    Key              = $key
+                    GroupKey         = $g.Key
+                    Class            = $b.Class
+                    IsOversized      = $b.IsOversized
+                    PlannedSizeBytes = $b.PlannedSizeBytes
+                    DeviationBytes   = $b.DeviationBytes
+                    OvershootBytes   = $b.OvershootBytes
+                    SlackBytes       = $b.SlackBytes
+                    EntryCount       = $b.EntryCount
+                    Entries          = $m.Entries
+                })
+            for ($j = 0; $j -lt $m.Entries.Count; $j++)
+            {
+                $idxMap[[string]$Entries[$m.Entries[$j]].RelativePath] = [pscustomobject]@{
+                    GlobalIdx    = $gidx
+                    ShardOrdinal = $ordinal
+                    ShardKey     = $key
+                    ShardIndex   = $j
+                }
+                $gidx++
+            }
+        }
+    }
+
+    # plan aggregates from the shard list directly (non-oversized scope, #48)
+    $totalPlanned = [long]0
+    $totO = [long]0; $maxO = [long]0; $totS = [long]0; $maxF = [long]0; $minF = [long]0
+    $nOv = 0; $nSing = 0; $nBand = 0
+    $anyNonOv = $false
+    foreach ($s in $shards)
+    {
+        $totalPlanned += $s.PlannedSizeBytes
+        if ($s.IsOversized) { $nOv++ }
+        elseif ($s.Class -eq 'Singleton') { $nSing++ }
+        elseif ($s.Class -eq 'InBand') { $nBand++ }
+        if (-not $s.IsOversized)
+        {
+            if (-not $anyNonOv) { $minF = [long]::MaxValue; $anyNonOv = $true }
+            $totO += $s.OvershootBytes; $totS += $s.SlackBytes
+            if ($s.OvershootBytes -gt $maxO) { $maxO = $s.OvershootBytes }
+            if ($s.PlannedSizeBytes -gt $maxF) { $maxF = $s.PlannedSizeBytes }
+            if ($s.PlannedSizeBytes -lt $minF) { $minF = $s.PlannedSizeBytes }
+        }
+    }
+    if (-not $anyNonOv) { $minF = [long]0 }
+
+    $plan = [PSCustomObject]@{
+        TotalEntries          = $Entries.Count
+        TotalPlannedSizeBytes = $totalPlanned
+        ShardCount            = $totalShards
+        OversizedCount        = $nOv
+        SingletonCount        = $nSing
+        InBandCount           = $nBand
+        TotalOvershootBytes   = $totO
+        MaxOvershootBytes     = $maxO
+        TotalSlackBytes       = $totS
+        MaxFillBytes          = $maxF
+        MinFillBytes          = $minF
+        HeaderOverheadBytes   = [long]$totalShards * $headerBytes
+        Grouping              = $Grouping
+        GroupSort             = $GroupSort
+        OrderStrict           = [bool]$OrderStrict
+        PackObjective         = $PackObjective
+        ShardQuotaBytes       = $ShardQuotaBytes
+        ShardToleranceBytes   = $ShardToleranceBytes
+        MaxFilesPerShard      = $MaxFilesPerShard
+        ShardStem             = $ShardStem
+        HeaderBytes           = $headerBytes
+        IdxWidth              = $idxWidth
+    }
+
+    return [PSCustomObject]@{
+        Plan   = $plan
+        Groups = $groupOut.ToArray()
+        Shards = $shards.ToArray()
+        IdxMap = $idxMap
+    }
+}
+
+Export-ModuleMember -Function @('New-ShardPlan', 'New-BinAssignment')

@@ -7,6 +7,23 @@ never as standing claims, and never hand-copied from prose.
 Rulings live in [decisions.md](decisions.md); what remains lives in
 [roadmap.md](roadmap.md).
 
+- **2026-08-24 — `rs.core.shards` complete: the stage shell landed**
+  (`New-ShardPlan`): enumerate + group (ByFileType reads the carried
+  `Extension` — the #50 consumer, with a boundary throw naming the tier;
+  ByRootDirectory `'.root'` first), nominal order per `GroupSort` with an
+  ordinal composite tie-break, measure once via `Measure-Row`, core per group,
+  global ordinals/keys (width = max(3, digits(ShardCount))), gidx 0..N−1 in
+  reading order, plan per contract with entry references and the full knob
+  echo (`ShardStem` included — the routing gap closed on 08-23).
+  `tests/shards-plan.tests.ps1` (33) runs against the real resolved layout and
+  asserts **plan = file by construction before serialize exists**:
+  `Build-HeaderRow` + Σ `Build-Row` bytes == `PlannedSizeBytes` for every
+  shard, gidx off and on. Export phase 1 is code-complete; what remains on the
+  main line is `rs.core.serialize` (no brief yet) and the manifest
+  reconciliation; the #48 default still waits on the comparison harness over
+  real payloads, which the shell now makes runnable. Battery at this commit:
+  **19 suites · 1313 passed · 0 failed**.
+
 - **2026-08-24 — shards packer core landed** (`rs.core.shards.psm1` ·
   `New-BinAssignment`): stages 4–7 as a pure deterministic function over one
   group's size vector — overflow pinned, ceiling-anchored count-capped lower
