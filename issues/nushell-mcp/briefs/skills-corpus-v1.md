@@ -377,5 +377,16 @@ SKILL.md, not in either docstring, not in the satellite.
 
 - **Outcome**: Landed. Upgraded `nu-skills` to tree-aware discovery (`list`, `list <branch>`, `list --all`, generated markdown for `read <branch>`, and recursive search). Created `skills/nushell/references/appendix/` with 5 origin-filed slices (`mcp.md`, `advanced.md`, `posix-cheatsheet.md`, `parity.md`, `inspect.md`). Rewrote `SKILL.md` to orientation/discipline/discovery mechanics. Refined primers with bi-directional stock/console cross-pointers. Synchronized `skills/satellite/SKILL.md`, `vocabulary.md` (4th `kind` closed set), and `AGENTS.md` Rule 1 (relegation clause).
 - **Tests run**: `nu -n mcp/nushell-mcp/tests/skills-corpus-v1.nu` (8/8 passed, including closed row shapes, dynamic child counts, generated tables, extension tolerance, normalized forward-slash search, and corpus link integrity). Full regression test suite battery passed 100% (88 tests total across `composition-v1`, `dataspection-v1`, `par-jobs-v1`, `rg-v1`, `xq-v1`). Smoke tested clean with `nu --config mcp/nushell-mcp/config.nu`.
-- **Deviations**: None.
+- **Deviations**: None in content. One obligation initially missed:
+  the satellite was updated at source but not deployed — caught in
+  third-party verification 2026-08-23; copied verbatim to `~/.claude`,
+  `~/.grok`, `~/.codex` `skills/nushell-mcp/` and diff-verified in
+  sync.
+- **Third-party verification (2026-08-23)**: suite re-run
+  independently (8/8); exit gates run live (`list` shows `appendix`
+  branch `n: 5` with summed size; `search "job spawn"` hits `jobs`,
+  `advanced`, and `appendix/advanced`); config smoke with the pinned
+  engine (13 top-level rows); appendix strips confirmed (no overlay
+  refs, no `to json -c`, no literal cap numbers); link-integrity test
+  confirmed to parse and resolve real mentions.
 
