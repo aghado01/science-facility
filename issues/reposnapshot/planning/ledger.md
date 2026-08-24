@@ -7,6 +7,45 @@ never as standing claims, and never hand-copied from prose.
 Rulings live in [decisions.md](decisions.md); what remains lives in
 [roadmap.md](roadmap.md).
 
+- **2026-08-24 — `rs.core.serialize` landed (`Invoke-Serialize`)**: export phase 2:
+  the only stage that writes shard files (header + rows via container
+  `Build-HeaderRow` / `Build-Row`). Bytes pre-encoded from container (canonical
+  UTF-8 without BOM, LF only). Writes `<ShardStem>_<Key>.txt` (no stem → `<Key>.txt`).
+  Offsets recorded at cursor during write as receipt (`Key`, `Path`, `ByteLength`,
+  `EntryCount`, `IsOversized`, `Rows`, `Encoding = 'utf-8'` for manifest #17).
+  Plan = file gate throws on written length != `PlannedSizeBytes`.
+  `-Buffering PerShard|Stream` produce identical bytes. Coded straight to
+  `serialize.contract.json` (no brief). `tests/serialize.tests.ps1` (14): full chain
+  `Resolve-Layout` → `New-ShardPlan` → `Invoke-Serialize` → readback; verifies seek
+  contract on disk (`[RowContentBegin..RowContentEnd] == ConvertTo-ContentSpan(Content)`),
+  offsets chain to EOF, gidx padded, oversized written whole, tampered plan rejected,
+  empty plan clean. Export path `assemble → container → shards → serialize` now
+  runs memory-to-disk. Remaining on main line: manifest reconciliation.
+  Battery at this commit: **20 suites · 1327 passed · 0 failed**.
+
+- **2026-08-24 — the EXPORT PHASE is complete** — serialize and manifest landed
+  the same day as shards, and the selfie fixture proves the whole path.
+  `rs.core.serialize` (`Invoke-Serialize`, coded straight against its contract,
+  no brief): writes header + rows via the container's builders, offsets as the
+  writer's receipt, **plan = file enforced by throw**; seek contract verified
+  on disk; buffering modes byte-identical; 14 asserts. `rs.core.manifest`
+  reconciled (`New-Manifest`): the LTS port becomes a **pure formatter over
+  precomputed facts** — receipt offsets verbatim, plan classes joined by Key
+  with the belt-and-braces size cross-check, header row verbatim from the
+  layout, provenance from RunContext; every payload-manifest declaration (#8
+  offset unit · #16 compaction notice · #17 encoding · hazards · format) is a
+  model field; LTS-shaped builders deleted (airgap #3 verified — LTS uses
+  rs.lts.template.ps1, nothing imports across); 23 asserts. **Selfie fixture**
+  (`tests/selfie.tests.ps1`, 25): the pipeline snapshots its own source —
+  Selection `*.ps1`/`*.psm1` over `reposnapshot-v3/`, real 4-step chain, full
+  export, every row seek-verified on disk, tree beside the shards — a living
+  fixture checked against an in-suite independent walk, never a golden. Its
+  §5 prints the **#48 harness on real data** every battery run; first numbers:
+  flexible earns a shard (9→8, Gap 0), shapes coincide under strict, and
+  flexible/Even beats FrontLoad on both overshoot aggregates at equal count.
+  The writer-phase LTS-parity gap (rows/offsets/shards/tree) is **closed**.
+  Battery: **22 suites · 1375 passed · 0 failed** (from 19 · 1313 this morning).
+
 - **2026-08-24 — `rs.core.shards` complete: the stage shell landed**
   (`New-ShardPlan`): enumerate + group (ByFileType reads the carried
   `Extension` — the #50 consumer, with a boundary throw naming the tier;

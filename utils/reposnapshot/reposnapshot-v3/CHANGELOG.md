@@ -1,5 +1,33 @@
 # Changelog 
 
+## 2026-08-24 — rs.core.manifest reconciled: New-Manifest — THE EXPORT PHASE IS COMPLETE
+
+The 327-line LTS port becomes the contract's module: a **pure formatter over
+precomputed facts**. Offsets and byte lengths come verbatim from serialize's
+receipt (nothing recovered post hoc — the LTS regex offset recovery is the
+counterexample this module exists to not be); keys/groups/classes from the
+plan shards, joined by Key with `PlannedSizeBytes` cross-checked against
+`ByteLength` (belt and braces; mismatch = inputs from different runs, throws);
+the psr header row VERBATIM from the layout (one declaration, third sink);
+provenance from RunContext, never hardcoded. Every declaration the
+payload-manifest ledger owes a reader is a **model field**: offset unit (#8),
+compaction notice — a notice, not a cipher key (#16/#10) — emission encoding
+(#17), oversized hazards with "read whole" reasons, format identity. The
+Handlebars-lite engine survives; the LTS-shaped model builders and the stale
+"cipher key" QUEUED note are gone (LTS is served by rs.lts.template.ps1 at
+root — airgap #3 verified, nothing imports across). Writes ONE file, UTF-8 no
+BOM, LF only, byte-deterministic.
+
+`tests/manifest.tests.ps1` (23): declarations on the written file, every
+receipt row's offsets verbatim in the TocTree, directory indentation, payload
+lines, hazards present/absent, provenance verbatim, byte-identical re-render,
+and the cross-check firing on a tampered receipt. The selfie now writes the
+tree beside its shards and verifies every row and shard leaf is declared —
+the fixture emits a COMPLETE payload. Battery **22 · 1375 · 0**.
+
+**assemble → container → shards → serialize → manifest all landed.** The
+writer-phase LTS-parity gap — rows, offsets, shards, tree — is closed.
+
 ## 2026-08-24 — the SELFIE fixture: the pipeline snapshots its own source
 
 `tests/selfie.tests.ps1` (23) — root `reposnapshot-v3/`, **Selection** semantics

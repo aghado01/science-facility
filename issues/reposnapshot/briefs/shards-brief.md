@@ -1,6 +1,14 @@
 # `rs.core.shards` — from the IR to a shard plan — brief
 
-**Status:** filed, not started · **Filed:** 2026-08-15 · **Revised:** 2026-08-16
+**Status:** **landed 2026-08-24** — `reposnapshot-v3/rs.core.shards.psm1`
+(`New-BinAssignment` · `New-ShardPlan`), `tests/shards-packer.tests.ps1`
+(220 asserts: exit-gate synthetic vectors, brute-force shape validation,
+FrontLoad/Even disagreement vector, LB roadmap counterexample, elimination,
+count-cap binding, 9-point invariant battery), `tests/shards-plan.tests.ps1`
+(33 asserts: plan = file by construction against real layout, carried-tier
+`Extension`, group containment, ordinal/hash sorting, gidx mapping, oversized
+pass-through). Export phase 1 complete. #48 default open pending real-payload
+comparison run. · **Filed:** 2026-08-15 · **Revised:** 2026-08-16
 (packing algorithm and policy stack resolved; supersedes the five-phase LTS
 algorithm and the `Greedy | Balanced | Loose` knob), 2026-08-18 (objective
 clause 2 is a *shape* — `PackObjective = FrontLoad | Even`, both implemented;
@@ -472,3 +480,16 @@ serialization; the doubled header row of the 0422 sample (an old LTS bug).
   `assemble.out.result.Entries`. The plan never copies content.
 - ~~Propagation owed to shard-container-brief~~ — **done** 2026-08-23; that
   brief now carries §The item model, the settled #45, and the fixed-width rule.
+
+## Follow-up report (landed 2026-08-24)
+
+- **Packer core (`New-BinAssignment`)**: stages 4–7 implemented pure without I/O or entries.
+  Implementation falsified the FrontLoad sketch: whole-bin adjacent merge cannot always reach
+  `k_min` (counterexample `[7,4,6,5]` at capQ 10 / capC 13 where no adjacent pair fits under ceiling
+  yet `k_min = 2` requires moving the cut inside a bin → `[7,4][6,5]`). The forward construction
+  computes the shape directly; §Algorithm amended and vector added as a named test.
+- **Stage shell (`New-ShardPlan`)**: stages 1–3 + sequencing/plan envelope. Groups `Flat`,
+  `ByFileType` (reading carried `Extension`, #50), `ByRootDirectory` ('.root' first).
+  Fixed-width keys `s001..` dynamically sized from `ShardCount`. `tests/shards-plan.tests.ps1` (33)
+  asserts plan = file by construction against real layout (`Build-HeaderRow` + Σ `Build-Row` == `PlannedSizeBytes`).
+- **Battery**: `tests/shards-packer.tests.ps1` (220), `tests/shards-plan.tests.ps1` (33) both green.

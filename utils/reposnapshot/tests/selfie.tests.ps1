@@ -71,6 +71,7 @@ Import-Module (Join-Path $v3 'rs.core.assemble.psm1') -Force
 Import-Module (Join-Path $v3 'rs.core.container.psm1') -Force
 Import-Module (Join-Path $v3 'rs.core.shards.psm1') -Force
 Import-Module (Join-Path $v3 'rs.core.serialize.psm1') -Force
+Import-Module (Join-Path $v3 'rs.core.manifest.psm1') -Force
 $utf8 = [System.Text.UTF8Encoding]::new($false)
 
 $outRoot = Join-Path ([IO.Path]::GetTempPath()) "rs-selfie-$([guid]::NewGuid().ToString('N').Substring(0,8))"
@@ -172,6 +173,28 @@ try
     }
     Assert-True $seekOk "the seek contract holds for every row of the real payload ($rowsChecked rows)" $why
     Assert-True $crOk 'no raw CR anywhere on disk — CRLF source normalized end to end'
+
+    # the tree file — the payload is COMPLETE: shards + manifest
+    $runCtx = [pscustomobject]@{
+        RunStamp         = 'selfie'
+        Root             = $rootFull
+        GeneratorVersion = 'reposnapshot-v3'
+        ConfigEcho       = [pscustomobject]@{ Grouping = 'ByFileType'; Chain = @('file-read', 'rs-whitespace', 'rs-psstrip', 'rs-content_meta') }
+    }
+    $tree = New-Manifest -Receipt $receipt -Shards $plan.Shards -Plan $plan.Plan -Layout $L -RunContext $runCtx -TreePath (Join-Path $outRoot 'selfie_tree.md')
+    $treeText = [IO.File]::ReadAllText($tree.Path)
+    $ok = $true
+    foreach ($sr in $receipt.Shards)
+    {
+        if (-not $treeText.Contains("``./$(Split-Path $sr.Path -Leaf)``")) { $ok = $false }
+        foreach ($row in $sr.Rows)
+        {
+            $leaf = ([string]$row.RelativePath -split '/')[-1]
+            if (-not $treeText.Contains("$leaf`t$($sr.Key)`t$($row.RowOffset)`t")) { $ok = $false }
+        }
+    }
+    Assert-True $ok 'the tree declares every shard and every row of the real payload'
+    Assert-True ($treeText.Contains($L.HeaderRowText)) 'the tree declares the psr header row verbatim — the third sink of one declaration'
 
     # -----------------------------------------------------------------------
     Enter-Section '5. The #48 harness on the selfie corpus (Flat, real sizes)'

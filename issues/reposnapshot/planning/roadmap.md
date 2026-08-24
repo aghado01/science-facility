@@ -7,36 +7,25 @@ separately in [payload-manifest-ledger.md](payload-manifest-ledger.md).
 Tracks are **named, not numbered**. Ordering *within* a track is the current
 recommendation, not a contract. Tracks marked independent may run in parallel.
 
-The throughline: v3's substrate is sound and the battery is green through
-**export phase 0**; phases 1 and 2 are the frontier. `rs.core.container` landed
-2026-08-17 and was realigned onto the restructured declaration 2026-08-22 — it
-is now the declaration's *interpreter*, and `container.spec.jsonc` is executed
-by a suite rather than read by a human. `rs.core.shards` and
-`rs.core.serialize` are empty module files with a complete brief behind the
-first. Finishing v3 is how the Node successor gets specified (decision #2) — so
-at every fork, the simpler answer is the one that does not have to be re-derived
-in another language.
+The throughline: **the export phase is complete** (2026-08-24) — assemble →
+container → shards → serialize → manifest all landed and battery-green, and the
+selfie fixture runs the whole path against the module's own source every
+battery run, seek-verifying the payload on disk. The writer-phase LTS-parity
+gap is closed. Finishing v3 is how the Node successor gets specified
+(decision #2); what remains is calibration and the tracks below.
 
-## Track: export-e2e — *the main line; assemble → shards → serialize → manifest*
+## Track: export calibration — *what the completed phase unblocks*
 
-1. ~~**`rs.core.shards`**~~ — **complete 2026-08-24**, both layers:
-   `New-BinAssignment` (stages 4–7 pure; 220 asserts, shapes brute-forced) and
-   `New-ShardPlan` (stages 1–3 + sequencing/plan; 33 asserts against the real
-   layout, including plan = file via `Build-Row` sums ahead of serialize).
-   Still open here: the **#48 default** — the 4-cell harness runs on synthetic
-   data in the battery; the deciding run is over real payloads, now unblocked
-   (assemble → `New-ShardPlan` works end to end; a real-repo comparison is one
-   script away once serialize can write the files for inspection).
-2. **`rs.core.serialize`** — empty module, no brief yet. Writes what shards
-   planned; the container already owns row bytes and the receipt, so serialize's
-   scope is the write itself plus offset provenance.
-3. **`rs.core.manifest`** — 327 lines of ported LTS template/TOC code are
-   present (`New-SnapshotTocModel`, `New-ShardedTocModel`, `Expand-TocTemplate`).
-   Owed: reconciliation against the psr declarations and the payload-manifest
-   ledger's `live` entries.
-
-Exit gate: `shards-brief` §Exit gate, plus the comparison harness in the battery
-rather than on the shipping path.
+- **The #48 default** — the selfie prints the 4-cell harness on real data every
+  battery run. First numbers (one corpus, Flat): flexible earns a shard over
+  strict (Gap 0, at the bound); the shapes coincide under strict; under
+  flexible, Even beats FrontLoad on both overshoot aggregates at equal count.
+  Wanted before deciding: more corpora (ThermoMapper-scale, grouped) and a
+  quota/tolerance sweep.
+- **A user convenience entry point** — the chain is callable but only tests
+  drive it end to end; `_rs.scratch.ps1`'s replacement (old TODO) is now one
+  thin script over six function calls, plus the runstamped-subdirectory output
+  convention (old TODO).
 
 ## Track: crawler-profile — *independent; schedule AFTER shards*
 
@@ -81,13 +70,13 @@ source doc; the ledgers only record that the call is outstanding.
 carries (open) · #48 `PackObjective` default (open). *(#45 closed 2026-08-22 —
 settled and propagated.)*
 
-**Container brief** (reconciled 2026-08-22, two calls left live) — streaming vs
-per-shard buffering, `rs.core.serialize`'s to make · empty-content rows:
-the LTS `row_content_end == row_content_begin` branch is ported and asserted,
-but under LeanPayload the case may be unreachable, in which case the branch
-should go rather than be kept alive by its own test. Two exit-gate items are
-also still unmet and now named as such: the LTS column-set comparison, and the
-novel-element e2e claim.
+**Container brief** (reconciled 2026-08-22; buffering settled 2026-08-24 in
+`rs.core.serialize` via `-Buffering PerShard|Stream` byte-identical) —
+empty-content rows: the LTS `row_content_end == row_content_begin` branch is
+ported and asserted, but under LeanPayload the case may be unreachable, in
+which case the branch should go rather than be kept alive by its own test. Two
+exit-gate items are also still unmet and now named as such: the LTS column-set
+comparison, and the novel-element e2e claim.
 
 **Payload manifest** — #6 channels carried · #10 ignore/selection regime · #12
 header `flags` block, retire vs keep · #13 `Header.Root` emission posture vs path

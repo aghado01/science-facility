@@ -1,89 +1,81 @@
-#Requires -Version 7.2
+#Requires -Version 7.5
+
+using namespace System.Collections.Generic
+using namespace System.Text
 
 <#
 .SYNOPSIS
-    Micro template engine and TOC model builders for RepoSnapshot tree manifest files.
+    RepoSnapshot V3 manifest — export phase 3: the payload's declarations to
+    the reader. Builds the tree model from the receipt, the plan, and the
+    layout, renders it through the micro template engine, writes ONE file.
 
 .DESCRIPTION
-    Engine directives (Handlebars-lite):
-        {{Name}}                   — scalar substitution
-        {{#if Name}}...{{/if}}     — conditional block; falsy = null / empty string / empty array
-        {{#each Name}}...{{/each}} — loop; {{this}} for scalar items, {{Prop}} for object items
+    Contract: contracts/manifest.contract.json. Everything here is a
+    FORMATTER over facts computed upstream: offsets and byte lengths come from
+    serialize's receipt (only the writer knows), keys/groups/classes from the
+    plan, the header row verbatim from the layout — nothing is measured,
+    recovered, or derived post hoc (the LTS regex offset recovery is the
+    counterexample this module exists to not be). Every declaration the
+    payload-manifest ledger says a reader is owed is a MODEL FIELD (#8 offsets
+    need their unit · #16 compaction notice · #17 encoding · oversized-shard
+    hazards · format identity), so it is checkable, not prose.
 
-    Public surface:
-        Expand-TocTemplate    — expand $script:TocTemplate against a model hashtable/pscustomobject
-        New-SnapshotTocModel  — build model for a JSON (.json) snapshot tree manifest
-        New-ShardedTocModel   — build model for a sharded (.txt) snapshot tree manifest
+    Engine directives (Handlebars-lite, unchanged): {{Name}} ·
+    {{#if Name}}…{{/if}} · {{#each Name}}…{{/each}} ({{this}} for scalars).
 
-    Internal (available after dot-sourcing):
-        Resolve-TemplateValue — dotted-path property resolver
-        Expand-Template       — recursive three-pass expander
-
-.NOTES
-    Standalone file — dot-source to use. Not a module.
-    Integration COMPLETE: RepoSnapshotLts.psm1 consumes this engine via
-    Import-TocTemplateEngine (Get-RepoSnapshot and Shard-SnapshotFile render
-    tree manifests through Expand-TocTemplate).
-    Named precedent of the config/code-separation architecture (assemble
-    design): neutral engine · thin model builders · the variable parts
-    (template string, instruction sets) as declarative data. The template
-    fixes the artifact's SECTION SEQUENCE; models supply content —
-    operation-order doctrine, writer level.
-
-    QUEUED — Compaction section (design 2026-08-09, not yet implemented):
-    the codec's cipher key belongs here, as an optional `{{#if Compaction}}`
-    block placed BEFORE the Tree block (adjacent to Instructions — both are
-    reader guidance), plus a model-builder field. The tree file is the
-    payload's exclusive entrypoint and is read first, which is what makes it
-    the correct carrier: the key precedes all shard content structurally, not
-    by convention. Contents are a RECEIPT of substitutions actually made, not
-    a catalog of what the codec can do — an absent entry is information. Each
-    entry names the target character AND its code point (`\n -> LF U+000A`);
-    a bare `{newline}` would blur the LF/CR/CRLF distinction the codec's
-    preserve stance exists to maintain. Spec: issues/shard-format-notes.md
-    §"The Compaction block"; obligation: payload-manifest-ledger #16.
+    Public: New-Manifest.
 #>
 
-# ---------------------------------------------------------------------------
-# Shared template
-# Single-quoted here-string: backticks, dollar signs, and {{...}} are all literal.
-# ---------------------------------------------------------------------------
+$script:Utf8 = [UTF8Encoding]::new($false)
 
-$script:TocTemplate = @'
+# ---------------------------------------------------------------------------
+# Template — single-quoted here-string: backticks and {{…}} stay literal.
+# The template fixes the artifact's SECTION SEQUENCE; the model supplies
+# content (config/code separation, writer level).
+# ---------------------------------------------------------------------------
+$script:TreeTemplate = @'
 # Tree Manifest TOC for Snapshot: `{{Title}}`
 
-{{#if SummaryLine}}{{SummaryLine}}
+{{SummaryLine}}
 
-{{/if}}Payload:
+Payload:
 {{#each PayloadLines}}{{this}}
 {{/each}}
+## Declarations
+
+- Format: {{Format}}
+- Offsets: {{OffsetUnit}}
+- Encoding: {{Encoding}}
+- Compaction: {{Compaction}}
+- Header row (first line of every shard, byte-identical): `{{ColumnHeader}}`
+{{#if Hazards}}
+Hazards — these shards exceed quota + tolerance and must be read whole; every
+other shard is within the ceiling:
+{{#each Hazards}}- `{{Key}}` {{ByteLength}} bytes — {{Reason}}
+{{/each}}{{/if}}
 ## Instructions
 
 {{#each Instructions}}{{this}}
 {{/each}}
 ## Tree for `{{TreeLabel}}`
+
 ```
-{{ColumnHeader}}
+{{TreeLegend}}
 {{TocTree}}
 ```
+
+## Provenance
+
+{{#each ProvenanceLines}}{{this}}
+{{/each}}
 '@
 
 # ---------------------------------------------------------------------------
-# Engine — private helpers
+# Engine — private
 # ---------------------------------------------------------------------------
 
 function Resolve-TemplateValue
 {
-    <#
-    .SYNOPSIS
-        Resolve a dotted property path against a model, with optional current-item override.
-    .PARAMETER Model
-        Root model object (pscustomobject or hashtable).
-    .PARAMETER Path
-        Dotted property name, e.g. "Header.Title". Special value "this" returns $CurrentItem.
-    .PARAMETER CurrentItem
-        Current loop item, if inside an #each block.
-    #>
     param(
         [Parameter(Mandatory)] $Model,
         [Parameter(Mandatory)] [string] $Path,
@@ -92,19 +84,14 @@ function Resolve-TemplateValue
 
     if ($Path -eq 'this') { return $CurrentItem }
 
-    # Prefer CurrentItem's property if it has one, otherwise fall back to Model
     $target = if (
         $null -ne $CurrentItem -and
         $CurrentItem -is [psobject] -and
         $null -ne $CurrentItem.PSObject.Properties[$Path]
     )
-    {
-        $CurrentItem
-    }
+    { $CurrentItem }
     else
-    {
-        $Model
-    }
+    { $Model }
 
     $value = $target
     foreach ($part in ($Path -split '\.'))
@@ -114,22 +101,11 @@ function Resolve-TemplateValue
         if ($null -eq $prop) { return $null }
         $value = $prop.Value
     }
-
     return $value
 }
 
 function Expand-Template
 {
-    <#
-    .SYNOPSIS
-        Expand a template string against a model in three passes: each → if → scalars.
-    .PARAMETER Template
-        Template string containing {{...}} directives.
-    .PARAMETER Model
-        Root model (pscustomobject).
-    .PARAMETER CurrentItem
-        Current loop item; set automatically during #each expansion.
-    #>
     param(
         [Parameter(Mandatory)] [string] $Template,
         [Parameter(Mandatory)] $Model,
@@ -138,11 +114,9 @@ function Expand-Template
 
     $result = $Template
 
-    # Pass 1: expand {{#each Name}}...{{/each}}
     $eachRx = [System.Text.RegularExpressions.Regex]::new(
         '\{\{#each\s+([^\}]+)\}\}(.*?)\{\{/each\}\}',
-        [System.Text.RegularExpressions.RegexOptions]::Singleline
-    )
+        [System.Text.RegularExpressions.RegexOptions]::Singleline)
     while ($eachRx.IsMatch($result))
     {
         $result = $eachRx.Replace($result, {
@@ -156,11 +130,9 @@ function Expand-Template
             })
     }
 
-    # Pass 2: expand {{#if Name}}...{{/if}}
     $ifRx = [System.Text.RegularExpressions.Regex]::new(
         '\{\{#if\s+([^\}]+)\}\}(.*?)\{\{/if\}\}',
-        [System.Text.RegularExpressions.RegexOptions]::Singleline
-    )
+        [System.Text.RegularExpressions.RegexOptions]::Singleline)
     while ($ifRx.IsMatch($result))
     {
         $result = $ifRx.Replace($result, {
@@ -177,151 +149,221 @@ function Expand-Template
             })
     }
 
-    # Pass 3: scalar {{Name}} substitution
     $scalarRx = [System.Text.RegularExpressions.Regex]::new('\{\{\s*([A-Za-z0-9_.@]+)\s*\}\}')
     $result = $scalarRx.Replace($result, {
             param($m)
-            $name = $m.Groups[1].Value.Trim()
-            $value = Resolve-TemplateValue -Model $Model -Path $name -CurrentItem $CurrentItem
+            $value = Resolve-TemplateValue -Model $Model -Path ($m.Groups[1].Value.Trim()) -CurrentItem $CurrentItem
             if ($null -eq $value) { '' } else { [string]$value }
         })
 
     return $result
 }
 
-function Get-MonolithInstructionSet
-{
-    <#
-    .SYNOPSIS
-        Instruction set for MONOLITH (.json) snapshot tree manifests.
-    #>
-    [pscustomobject]@{
-        Primary = @(
-            'Monolith snapshot manifests are single JSON files containing the entire tree metadata. They can be large and unwieldy, but are simple to generate and consume.'
-        )
-        Secondary = @()
-    }
-}
-
-function Get-ShardedInstructionSet
-{
-    <#
-    .SYNOPSIS
-        Instruction set for SHARDED (.txt) snapshot tree manifests — the
-        virtual-DB guidance block (reader-directed guidance is a first-class
-        payload feature; shard-format-notes doctrine).
-    #>
-    [pscustomobject]@{
-        Primary = @(
-            'Treat this payload like a virtual database which may be selectively scanned/seeked with byte offsets available for random-access and intentional seeking/fetching.'
-            'You can manage "firehose" context overload by selectively seeking segments of the payload file iteratively over multiple inference cycles.'
-            'Do not use grep to search the data because it will return an explosion of duplications.'
-        )
-        Secondary = @(
-            'Seek to `row_offset` in the .json file to read any entry directly without scanning.'
-            'The shard files are intentionally .txt to encourage use of lower level tools like `read_file` instead of json tools.'
-        )
-    }
-}
-
-
 # ---------------------------------------------------------------------------
-# Model builders
+# Tree rendering — private
 # ---------------------------------------------------------------------------
 
-function New-SnapshotTocModel
+function Build-TocTree
 {
-    <#
-    .SYNOPSIS
-        Build the template model for a JSON snapshot tree manifest.
-    .PARAMETER TreeStem
-        Filename stem of the .json snapshot, e.g. "myrepo_20260426_120000".
-    .PARAMETER TreeFile
-        Full path to the _tree.md output file (leaf name is used in Payload).
-    .PARAMETER TocTree
-        Pre-rendered tree string from Build-TocTree.
-    #>
+    # Rows → the indented directory tree. Directories first, then files, both
+    # ordinal-sorted; four spaces per depth; every file line is
+    # name<TAB>sidx<TAB>row_offset<TAB>row_meta_end<TAB>row_content_begin<TAB>row_content_end
+    # — values verbatim from the receipt, never recomputed here.
     param(
-        [Parameter(Mandatory)] [string] $TreeStem,
-        [Parameter(Mandatory)] [string] $TreeFile,
-        [Parameter(Mandatory)] [string] $TocTree
+        [Parameter(Mandatory)] [string]$RootName,
+        [Parameter(Mandatory)] [AllowEmptyCollection()] [object[]]$Rows   # @{ RelativePath; ShardKey; RowOffset; RowMetaEnd; RowContentBegin; RowContentEnd }
     )
 
-    $instructionSet = Get-MonolithInstructionSet
-
-    [pscustomobject]@{
-        Title        = "$TreeStem.json"
-        SummaryLine  = ''
-        PayloadLines = @("``./$( Split-Path $TreeFile -Leaf )``")
-        Instructions = @($instructionSet.Primary) + $instructionSet.Secondary
-        TreeLabel    = "$TreeStem.json"
-        ColumnHeader = 'file row metadata: name<TAB>row_offset<TAB>row_meta_end<TAB>row_content_begin<TAB>row_content_end'
-        TocTree      = $TocTree
+    $newDir = { @{ Dirs = [Dictionary[string, object]]::new([StringComparer]::Ordinal); Files = [List[object]]::new() } }
+    $root = & $newDir
+    foreach ($row in $Rows)
+    {
+        $segs = ([string]$row.RelativePath) -split '/'
+        $node = $root
+        for ($i = 0; $i -lt $segs.Count - 1; $i++)
+        {
+            if (-not $node.Dirs.ContainsKey($segs[$i])) { $node.Dirs[$segs[$i]] = & $newDir }
+            $node = $node.Dirs[$segs[$i]]
+        }
+        $node.Files.Add([pscustomobject]@{ Name = $segs[-1]; Row = $row })
     }
-}
 
-function New-ShardedTocModel
-{
-    <#
-    .SYNOPSIS
-        Build the template model for a sharded snapshot tree manifest.
-    .PARAMETER PathParts
-        Path-parts object from Get-SnapshotPathParts; needs .Stem property.
-    .PARAMETER TreeFile
-        Full path to the _tree.md output file.
-    .PARAMETER Results
-        Shard result objects; each must expose .Path (string) and .Files (int).
-    .PARAMETER SummaryLine
-        Pre-formatted summary string shown below the title.
-        Example: "Strategy: Auto | MaxShardSizeKB: 2048 | Created: 20260426211500 | Shards: 4"
-    .PARAMETER TocTree
-        Pre-rendered tree string from Build-TocTree.
-    #>
-    param(
-        [Parameter(Mandatory)] $PathParts,
-        [Parameter(Mandatory)] [string] $TreeFile,
-        [Parameter(Mandatory)] $Results,
-        [Parameter(Mandatory)] [string] $SummaryLine,
-        [Parameter(Mandatory)] [string] $TocTree,
-        [Parameter()] [bool] $WriteMetadataBlock = $true,
-        [Parameter()] [string[]] $ExcludedShardBlocks = @()
-    )
-
-    $stem = $PathParts.Stem
-    $treeLeaf = "``./$( Split-Path $TreeFile -Leaf )``"
-    $shardLeaves = @($Results | ForEach-Object { "``./$( Split-Path $_.Path -Leaf )`` files:$($_.Files)" })
-
-    $instructionSet = Get-ShardedInstructionSet
-    [pscustomobject]@{
-        Title        = "${stem}_s*.txt"
-        SummaryLine  = $SummaryLine
-        PayloadLines = @($treeLeaf) + $shardLeaves
-        Instructions = @($instructionSet.Primary) + $instructionSet.Secondary
-        TreeLabel    = "${stem}_s*.txt"
-        ColumnHeader = 'file row metadata: name<TAB>shard_index<TAB>row_offset<TAB>row_meta_end<TAB>row_content_begin<TAB>row_content_end'
-        TocTree      = $TocTree
-        WriteMetadataBlock = $WriteMetadataBlock
-        ExcludedShardBlocks = $ExcludedShardBlocks
+    $sb = [StringBuilder]::new()
+    [void]$sb.Append($RootName).Append("`n")
+    $walk = $null
+    $walk = {
+        param($node, $depth)
+        $indent = '    ' * $depth
+        $dirNames = [string[]]@($node.Dirs.Keys)
+        [Array]::Sort($dirNames, [StringComparer]::Ordinal)
+        foreach ($d in $dirNames)
+        {
+            [void]$sb.Append($indent).Append($d).Append("`n")
+            & $walk $node.Dirs[$d] ($depth + 1)
+        }
+        $files = @($node.Files | Sort-Object -Property Name)
+        foreach ($f in $files)
+        {
+            $r = $f.Row
+            [void]$sb.Append($indent).Append($f.Name).Append("`t").Append($r.ShardKey).
+            Append("`t").Append($r.RowOffset).Append("`t").Append($r.RowMetaEnd).
+            Append("`t").Append($r.RowContentBegin).Append("`t").Append($r.RowContentEnd).Append("`n")
+        }
     }
+    & $walk $root 1
+    return $sb.ToString().TrimEnd("`n")
 }
 
 # ---------------------------------------------------------------------------
-# Public render function
+# PUBLIC — New-Manifest
 # ---------------------------------------------------------------------------
 
-function Expand-TocTemplate
+function New-Manifest
 {
     <#
     .SYNOPSIS
-        Expand $script:TocTemplate against a model and return the rendered string.
-    .PARAMETER Model
-        pscustomobject produced by New-SnapshotTocModel or New-ShardedTocModel.
-    .OUTPUTS
-        Rendered string with trailing whitespace trimmed (ready for Set-Content).
+        Build the tree model from the receipt × plan shards × plan × layout ×
+        RunContext, render it, write exactly one file. Returns @{ Path; Model }
+        — the model is what was rendered, kept for tests, not a second artifact.
+    .PARAMETER Receipt
+        serialize.out.receipt — measured lengths and every row's offsets.
+    .PARAMETER Shards
+        shards.out.result.Shards — classes, groups, planned sizes (joined to
+        the receipt by Key; PlannedSizeBytes is cross-checked against
+        ByteLength, belt and braces).
+    .PARAMETER Plan
+        shards.out.plan — the resolved knob echo for the summary line.
+    .PARAMETER RunContext
+        Provenance — RunStamp, Root, GeneratorVersion, ConfigEcho — verbatim;
+        never hardcoded (LTS hardcoded `module`, wrongly).
+    .PARAMETER InstructionSet
+        Optional replacement for the reader-guidance block.
     #>
+    [CmdletBinding()]
     param(
-        [Parameter(Mandatory)] $Model
+        [Parameter(Mandatory)] [PSCustomObject]$Receipt,
+        [Parameter(Mandatory)] [AllowEmptyCollection()] [object[]]$Shards,
+        [Parameter(Mandatory)] [PSCustomObject]$Plan,
+        [Parameter(Mandatory)] [PSCustomObject]$Layout,
+        [Parameter(Mandatory)] [PSCustomObject]$RunContext,
+        [Parameter(Mandatory)] [string]$TreePath,
+        [string[]]$InstructionSet = $null
     )
 
-    (Expand-Template -Template $script:TocTemplate -Model $Model).TrimEnd()
+    if ($null -eq $Receipt.PSObject.Properties['Shards']) { throw "New-Manifest: -Receipt lacks Shards — pass serialize.out.receipt." }
+    if ($null -eq $Layout.PSObject.Properties['HeaderRowText']) { throw "New-Manifest: -Layout lacks HeaderRowText — pass container.out.layout." }
+
+    # ── join receipt ↔ plan shards by Key; belt-and-braces size check ────
+    $planByKey = @{}
+    foreach ($s in $Shards) { $planByKey[[string]$s.Key] = $s }
+    foreach ($sr in @($Receipt.Shards))
+    {
+        $ps = $planByKey[[string]$sr.Key]
+        if ($null -eq $ps) { throw "New-Manifest: receipt shard '$($sr.Key)' has no counterpart in the plan." }
+        if ([long]$ps.PlannedSizeBytes -ne [long]$sr.ByteLength)
+        {
+            throw "New-Manifest: shard '$($sr.Key)' — plan says $($ps.PlannedSizeBytes) bytes, the receipt measured $($sr.ByteLength). Serialize already gates this; disagreement here means the inputs are from different runs."
+        }
+    }
+
+    # ── model fields (each one a declaration the reader is owed) ─────────
+    $stem = [string]$Plan.ShardStem
+    $title = if ([string]::IsNullOrEmpty($stem)) { 's*.txt' } else { "${stem}_s*.txt" }
+    $treeLeaf = Split-Path $TreePath -Leaf
+
+    $created = ''
+    $p = $RunContext.PSObject.Properties['RunStamp']
+    if ($null -ne $p) { $created = [string]$p.Value }
+    $summary = "Grouping: $($Plan.Grouping) | GroupSort: $($Plan.GroupSort) | OrderStrict: $($Plan.OrderStrict) | ShardQuotaBytes: $($Plan.ShardQuotaBytes) | ShardToleranceBytes: $($Plan.ShardToleranceBytes) | Created: $created | Shards: $($Plan.ShardCount)"
+
+    $payload = [List[string]]::new()
+    $payload.Add("``./$treeLeaf``")
+    foreach ($sr in @($Receipt.Shards))
+    {
+        $ps = $planByKey[[string]$sr.Key]
+        $line = "``./$(Split-Path $sr.Path -Leaf)`` files:$($sr.EntryCount) bytes:$($sr.ByteLength)"
+        if (-not [string]::IsNullOrEmpty([string]$ps.GroupKey)) { $line += " group:$($ps.GroupKey)" }
+        $payload.Add($line)
+    }
+
+    $hazards = [List[object]]::new()
+    foreach ($sr in @($Receipt.Shards))
+    {
+        if ($sr.IsOversized)
+        {
+            $hazards.Add([pscustomobject]@{
+                    Key        = $sr.Key
+                    ByteLength = $sr.ByteLength
+                    Reason     = 'single record exceeds quota + tolerance; kept whole (atomicity)'
+                })
+        }
+    }
+
+    $instructions = if ($null -ne $InstructionSet) { @($InstructionSet) } else
+    {
+        @(
+            'Treat this payload as a virtual database: scan selectively and seek by the byte offsets below for random access, instead of reading everything.'
+            'Manage context by fetching segments of the shard files iteratively over multiple inference cycles.'
+            'Do not grep the shard files — matches duplicate across rows and explode.'
+            'To read one entry: seek to row_content_begin in its shard file and read through row_content_end (inclusive).'
+            'The shard extension is .txt deliberately, so low-level file reads are used instead of format-specific tooling.'
+        )
+    }
+
+    $rows = [List[object]]::new()
+    foreach ($sr in @($Receipt.Shards))
+    {
+        foreach ($r in @($sr.Rows))
+        {
+            $rows.Add([pscustomobject]@{
+                    RelativePath    = $r.RelativePath
+                    ShardKey        = $sr.Key
+                    RowOffset       = $r.RowOffset
+                    RowMetaEnd      = $r.RowMetaEnd
+                    RowContentBegin = $r.RowContentBegin
+                    RowContentEnd   = $r.RowContentEnd
+                })
+        }
+    }
+    $rootName = 'root'
+    $p = $RunContext.PSObject.Properties['Root']
+    if ($null -ne $p -and -not [string]::IsNullOrEmpty([string]$p.Value))
+    {
+        $rootName = Split-Path (([string]$p.Value).TrimEnd('/', '\')) -Leaf
+    }
+
+    $provLines = [List[string]]::new()
+    foreach ($prop in $RunContext.PSObject.Properties)
+    {
+        $v = $prop.Value
+        $rendered = if ($v -is [string] -or $v -is [ValueType]) { [string]$v }
+        else { ($v | ConvertTo-Json -Depth 5 -Compress) }
+        $provLines.Add("- $($prop.Name): $rendered")
+    }
+
+    $model = [pscustomobject]@{
+        Title           = $title
+        Format          = 'psr — piped snapshot rows; shard files are .txt as a reader accommodation, not a format marker'
+        SummaryLine     = $summary
+        PayloadLines    = $payload.ToArray()
+        Instructions    = $instructions
+        ColumnHeader    = [string]$Layout.HeaderRowText
+        OffsetUnit      = 'bytes, 0-based, end offsets inclusive'
+        Encoding        = "$($Receipt.Encoding) — no BOM; LF record terminator"
+        Compaction      = 'content spans are codec-encoded: every source line terminator appears as the two characters \n, remaining C0 controls and DEL are stripped, TAB stays literal; one physical line per row. A notice, not a cipher key — the payload is not byte-faithful to source.'
+        Hazards         = $hazards.ToArray()
+        TocTree         = (Build-TocTree -RootName $rootName -Rows $rows.ToArray())
+        Provenance      = $RunContext
+        TreeLabel       = $title
+        TreeLegend      = 'file row metadata: name<TAB>sidx<TAB>row_offset<TAB>row_meta_end<TAB>row_content_begin<TAB>row_content_end'
+        ProvenanceLines = $provLines.ToArray()
+    }
+
+    $text = (Expand-Template -Template $script:TreeTemplate -Model $model).TrimEnd() + "`n"
+    $text = $text -replace "`r`n", "`n"      # the template literal carries the source file's line endings; the artifact is LF-only
+    [IO.File]::WriteAllBytes($TreePath, $script:Utf8.GetBytes($text))
+
+    return [PSCustomObject]@{ Path = $TreePath; Model = $model }
 }
+
+Export-ModuleMember -Function 'New-Manifest'
