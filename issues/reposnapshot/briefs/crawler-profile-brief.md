@@ -70,13 +70,26 @@ stale. What a payload reader would eventually want is the same function over the
 surviving set. Two answers, one definition, two call sites; the sin would be a
 second *implementation*, which is #5's pathology in aggregate form.
 
+But the placement is wrong in a way that is not about scope at all: **a rollup is
+metadata about the graph, not a property of a node.** The crawler already knows
+this — `DirectoryCount` / `FileCount` / `SkippedCount` are run-level rollups
+sitting at `out.result` as siblings of `Graph`, and `Skipped`'s note says
+"a SIBLING of Graph, **not folded into it**". The three `Subtree*` fields are the
+one place the rule is not applied.
+
 So the disposition is:
 
-- **Keep them**, and **label the scope in the contract** — "every file walked,
-  including those the membrane will reject". An unlabelled aggregate is the only
-  real hazard here, because it invites use as a post-filter number.
-- **Membrane severing them is correct**, not an oversight: a post-membrane node
-  carrying a pre-membrane total is exactly the misuse the label guards against.
+- **Move them out of `out.node` into a keyed layer** — a sibling of `Graph`,
+  keyed by `NodePath`, exactly as `Skipped` already is. Not a rewrite of what is
+  computed; a change of where the answer is put.
+- **A layer's identity is its scope**, so no per-field labelling is needed:
+  `rollups(walked)` and `rollups(payload)` share keys and coexist, and neither
+  can impersonate a current property of a node.
+- **Membrane's severing then stops being a special case.** It drops those fields
+  today because carrying a pre-filter total on a post-filter node would be
+  wrong — but that is only necessary because the metadata is welded to the
+  structure. With a layer, membrane simply does not emit a new one, and nothing
+  needs dropping.
 - **The rollup wants to be a callable, not a stamp** — one definition the
   crawler invokes over the walk and a diagnostic or manifest could invoke over
   any predicate, in the shape `Format-Row → Measure-Row / Build-Row` already
@@ -147,10 +160,19 @@ put two moving pieces under one gate.
 - Whether `fsattrs` should ship **on** with a membrane reparse-point test built
   at the same time, which would retire the "no reader" question outright rather
   than deferring it.
-- Whether the subtree rollups are their own group (`rollups`) or ride `size` /
-  `identity`. They are derived, not measured, so a profile that omits `size`
-  cannot offer `SubtreeBytes` at all — the group graph has a dependency edge the
-  others do not.
+- Whether the rollup layer is a profile **toggle** rather than a field group.
+  Once it is a keyed layer rather than node fields, "off" means the layer is not
+  emitted — no absent-field handling, no conditional `from`. That is a smaller
+  change to the contract graph than a field group, and it may be the reason to
+  do the layer move *before* the profile work rather than alongside it.
+  The dependency edge survives either way: rollups are derived from `SizeBytes`,
+  so a profile without `size` cannot offer `SubtreeBytes` at any setting.
+- **Adjacent, and not the same question:** `membrane.out.node.CompiledState`
+  (`@{ Semantics; Positives; Exceptions }`) is also derived material stamped onto
+  a graph node. It is not an aggregate — it is the stage's own working state, and
+  genuinely per-node under nested ignore files — so #52 does not reach it. Worth
+  asking separately whether it should ship in `out` at all, or whether it is
+  membrane-internal.
 - Whether `skipped` records carry the same groups as `file` (they carry a
   subset today: `Path` · `Reason` · `Error` — note `membrane.out.skipped` and
   `ingest.out.skipped` *do* carry `SizeBytes` and `Extension`, so the atoms of
