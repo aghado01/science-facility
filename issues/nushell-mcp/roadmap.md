@@ -106,48 +106,13 @@ context window as the scarcest resource in the loop:
 
 ## Sequence
 
-1. **`par` / `jobs` v1** — [par-jobs-v1](.archive/briefs/par-jobs-v1.md)
-   · landed 2026-08-21. Data plane + handle plane + budget on the
-   persistent engine. Carries the envelope contract (shape 4) and the
-   registry mechanics.
-2. **dataspection v1** — [dataspection-v1](.archive/briefs/dataspection-v1.md)
-   · **landed** 2026-08-22 (supersedes
-   [hist-v1](.archive/briefs/hist-v1.md)). The discipline
-   as a module: nouns that produce data objects (`shape`, `schema`,
-   `spine`, `meta`) and portable verbs that interact with them
-   (`inspect`, `read`, `preview`, `page`, `stamp`), composing freely.
-   Carries the **disclosure ladder** and the one `bytes` definition.
-   Load after par/jobs (`use par *; use jobs *; use dataspection *`).
-   Census/preview/page/meta are pure; `read` is `--env` and stashes
-   over cap through `jobs stash`. Cap knobs from
-   `$env.NU_PAR.max_inline_bytes` else `NU_MCP_OUTPUT_LIMIT`. **Landed
-   2026-08-22.** Can still be used in parallel with H.
-3. **par-jobs amendments** — after 2, before 4. `jobs disclose` is
-   **not** needed: in-hand cap is `read`; `jobs read` adopts the same
-   cap for *terminal* disclose of an addressed payload; `--full` was
-   the retrieve path (**superseded by N10 `jobs fetch`**). **`jobs inspect` is not
-   `jobs read | shape`.** Inspect stays jobs' own receipt; it calls
-   `shape` on the stored payload internally so `bytes` is one
-   definition — no `jobs shape` export. Receipts gain `meta` via
-   `meta stamp` (spawn/stash/inspect/status/cancel). `par cap` is the
-   one cap resolver. **Landed 2026-08-22.**
-3b. **layering v1** — [layering-v1](.archive/briefs/layering-v1.md)
-   · **landed** 2026-08-22 (A). `modules/core/*.nu` file units;
-   dataspection façade owns `read`; `par`/`jobs` never import
-   `dataspection/mod.nu`. N10 (`jobs fetch`) after this, before 4.
-4. **`xq` v1** — [briefs/xq-v1.md](briefs/xq-v1.md) · **landed**
-   2026-08-22. `process capture` in `core/capture.nu` (unbounded);
-   ordinary `xq` is the terminal command (census, `par cap`, stash).
-5. **`rg` module v1** — [briefs/rg-wrapper-v1.md](briefs/rg-wrapper-v1.md)
-   · **landed** 2026-08-22. Consumes `process capture` + `spine`, not
-   ordinary `xq`. (The module; ripgrep itself is in `deps/cli`.)
-5a. **result composition hardening** —
-   [briefs/composition-v1.md](briefs/composition-v1.md) · **landed**
-   2026-08-23. Outcome-bearing `ok` composes through `par`/`jobs`
-   without discarding values; jobs lifecycle remains a separate fact.
-   The foreground registry allocates retrieval tags and owns payload
-   quarantine; capture measures string/binary streams as returned.
-   Unblocks 6 and `gh-v1`.
+1. **`par` / `jobs` v1** — [par-jobs-v1](.archive/briefs/par-jobs-v1.md) · **landed** 2026-08-21.
+2. **dataspection v1** — [dataspection-v1](.archive/briefs/dataspection-v1.md) · **landed** 2026-08-22 (supersedes [hist-v1](.archive/briefs/hist-v1.md)).
+3. **par-jobs amendments** — [par-jobs-v1](.archive/briefs/par-jobs-v1.md) · **landed** 2026-08-22 (after 2, before 4; `jobs fetch`, `meta stamp`, `par cap`).
+3b. **layering v1** — [layering-v1](.archive/briefs/layering-v1.md) · **landed** 2026-08-22 (A).
+4. **`xq` v1** — [briefs/xq-v1.md](briefs/xq-v1.md) · **landed** 2026-08-22.
+5. **`rg` module v1** — [briefs/rg-wrapper-v1.md](briefs/rg-wrapper-v1.md) · **landed** 2026-08-22.
+5a. **result composition hardening** — [briefs/composition-v1.md](briefs/composition-v1.md) · **landed** 2026-08-23.
 6. **Query tools on the envelope** — mdnav_v2 chunk shards, `nu-skills
    search` fan-out. First real parallelism consumers. Align the chunk
    shape with mdnav_v2's brief rather than inventing twice.
