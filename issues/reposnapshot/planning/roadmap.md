@@ -91,6 +91,18 @@ shape, control-flow classes, and invocation-surface duality.
 
 ## Track: side quests — *non-blocking, pick up when the main line allows*
 
+- **Docstring and comment slimming** (filed 2026-08-24, from the old TODO's
+  "manifesto doc string essays" item). The e2e run made it concrete: the
+  unstripped selfie corpus is 488 KB against 269 KB stripped — comments are
+  ~45% of the codebase's bytes, and they are what pushes `membrane`,
+  `colonel.v2`, and `shards` over the packing ceiling at the working knobs.
+  Rule of the pass (per the standing doctrine): docstrings become minimalist
+  and to the point; **exposition moves to `design/module-notes.md`, never
+  discarded**. The modules written this week (shards, serialize, manifest,
+  user) are in scope alongside the older ones — they carry the same
+  doctrine-heavy style. Also per the old TODO: strict-mode/pester front-matter
+  belongs in test harnesses, not module files.
+
 - **Character-scan diagnostic** — filed, not started. Bidi controls are reported
   by a read-only diagnostic step rather than stripped (#11/#11b); the decision is
   already captured, so deferring the code loses nothing.
