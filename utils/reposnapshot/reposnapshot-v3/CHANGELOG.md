@@ -1,5 +1,28 @@
 # Changelog 
 
+## 2026-08-24 — rs.core.serialize landed: Invoke-Serialize (export phase 2)
+
+Coded straight against `serialize.contract.json` — no brief, deliberately.
+The only stage that writes shard files: header + rows per shard via the
+container's `Build-HeaderRow`/`Build-Row` (bytes pre-encoded; no encoding
+layer here), `<ShardStem>_<Key>.txt` (no stem → `<Key>.txt`), offsets recorded
+from the writer's cursor as the receipt. **The plan = file gate lives here and
+throws**: written length ≠ `PlannedSizeBytes` is an error, as is
+`Σ ByteLength ≠ TotalPlannedSizeBytes`. `-Buffering PerShard|Stream`, same
+bytes either way. Receipt: per shard Key/Path/ByteLength/EntryCount/
+IsOversized/Rows; `Encoding = 'utf-8'` for the manifest (#17). Nothing flows
+back into the plan.
+
+`tests/serialize.tests.ps1` (14): full chain Resolve-Layout → New-ShardPlan →
+Invoke-Serialize → read the bytes back — plan = file on disk; **the seek
+contract on disk** (bytes at `[RowContentBegin..RowContentEnd]` ==
+`ConvertTo-ContentSpan(Content)`, every row); no BOM, no raw CR from CRLF
+sources; header occupies `[0, HeaderBytes)`; offsets chain to EOF; gidx rows
+open with the assigned padded value; buffering modes byte-identical; oversized
+written whole; the gate fires on a tampered plan; empty plan. Battery
+**20 · 1327 · 0**. The export path assemble → container → shards → serialize
+now runs memory-to-disk; manifest reconciliation is the remaining phase.
+
 ## 2026-08-24 — rs.core.shards complete: New-ShardPlan (the stage shell)
 
 Export phase 1 lands whole. `New-ShardPlan(-Entries -Layout [-Grouping]
