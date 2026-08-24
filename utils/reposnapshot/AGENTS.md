@@ -56,6 +56,42 @@ Same construct can play different roles per relationship: `#Requires` is
 *rejected* in processor bodies (inert in ISS-registered functions) and
 *protected* in ingested scripts (live frontmatter sharing comment syntax).
 
+## Recalculating something upstream already had is a lookback signal, not a task
+
+If you find yourself about to derive a value a previous stage held, **stop and
+look back**. Do not implement the derivation. Find where the fact was dropped
+and ask why, because only a few reasons are legitimate and each is on record:
+
+- **portability** — `AbsolutePath` is destroyed because a payload carrying
+  machine-specific paths is not portable;
+- **anti-misuse** — `SizeBytes` is excluded because its presence in the bag is
+  what invited packing on it (ledger #26/#39);
+- **unavailability** — the fact genuinely cannot be had at that vantage
+  (ledger #38).
+
+If the reason turns out to be tidiness, or "nothing downstream needed it yet",
+the fix is **upstream**: retain the fact. The `carried` tier exists for exactly
+this (ledger #50) — on the entry for downstream stages, not counted in
+`Header.Elements`, never a wire column unless `container.spec.jsonc` names one.
+
+**Why it is a defect class and not merely duplication.** Two derivations of one
+fact must agree forever, with nothing forcing them to. `Extension` was the live
+case: stamped at crawl by `[Path]::GetExtension`, carried intact through
+membrane and ingest, destroyed at assemble, then re-derived by shards from
+`RelativePath` for `ByFileType` grouping. The two agree on every realistic
+input and diverge on a trailing-dot leaf. That it is a small divergence is the
+point — you cannot know in advance where two independent derivations differ,
+only that nothing is checking. `RelativePath` is the same pattern working:
+computed once at crawl, carried to the payload as the record's identity, never
+re-derived by anyone.
+
+**The one thing that is not this smell: re-aggregating.** A rollup is a
+function of `(atoms, predicate)` (ledger #52), so a second scope is a second
+*call site* over one definition and that is correct by design. The rule is:
+**measure once, derive once, aggregate as often as there are predicates** — and
+when you aggregate again, reuse the definition rather than writing a second
+loop, or you have reproduced the same defect class one level up.
+
 ## Known conflation hotspots
 
 - **Byte semantics, three layers, never conflated**: `SizeBytes` (on-disk,
