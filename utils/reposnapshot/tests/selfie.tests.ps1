@@ -109,8 +109,10 @@ try
     } `
         -Steps @(
         @{ Key = 'file-read'; Config = @{} }
-        @{ Key = 'rs-whitespace'; Config = @{ Operations = @('lf', 'trim-trailing', 'trim-doc') } }
+        # strippers BEFORE whitespace, so max-blank-1 collapses the runs
+        # stripping leaves behind; empty whitespace Config = processor defaults
         @{ Key = 'rs-psstrip'; Config = @{ Operations = @('block-comments', 'doc-strings', 'comment-blocks', 'line-comments') } }
+        @{ Key = 'rs-whitespace'; Config = @{} }
         @{ Key = 'rs-content_meta'; Config = @{} }
     ) `
         -ChainExecutorPath (Join-Path $v3 'processors\chain-executor.ps1') `

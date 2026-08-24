@@ -108,12 +108,19 @@ $procManifest = @{
 }
 $steps = [System.Collections.Generic.List[object]]::new()
 $steps.Add(@{ Key = 'file-read'; Config = @{} })
-$steps.Add(@{ Key = 'rs-whitespace'; Config = @{ Operations = @('lf', 'trim-trailing', 'trim-doc') } })
+# ORDER: strippers BEFORE whitespace normalization — stripping a doc block
+# flanked by blank lines leaves a multi-blank run, and max-blank-1 can only
+# collapse it if it runs afterwards. (Measured: whitespace-first left 26
+# stripper-made multi-blank runs in the selfie corpus.)
 if ($PsStrip)
 {
     $procManifest['rs-psstrip'] = (Join-Path $v3 'processors\rs-psstrip.ps1')
     $steps.Add(@{ Key = 'rs-psstrip'; Config = @{ Operations = @('block-comments', 'doc-strings', 'comment-blocks', 'line-comments') } })
 }
+# empty Config = the processor's OWN default op set (incl. max-blank-1,
+# ensure-trailing-space, ensure-final-lf) — the processor is the authority on
+# its defaults (#12); subsetting here is how a run loses blank-line collapsing
+$steps.Add(@{ Key = 'rs-whitespace'; Config = @{} })
 if ($Columns -contains 'content_meta')
 {
     $procManifest['rs-content_meta'] = (Join-Path $v3 'processors\rs-content_meta.ps1')
