@@ -7,28 +7,17 @@ Set-StrictMode -Version Latest
 
 .DESCRIPTION
     Coverage:
-      1. Trap regressions — the four PowerShell semantics traps that killed
-         the G1 generation (rs.core.hash/lsh/measures) must stay dead:
-         masked FNV (no overflow throw), sign-bit Hamming (no infinite loop,
-         guarded), >64-bit signatures, Levenshtein on non-empty strings,
-         empty-set Jaccard.
-      2. Pinned lineage vectors — outputs must match the verified G3 sources
-         (mathdig hashlib-new.ps1) bit-for-bit.
-      3. Semantics — SHA256 known vectors, SimHash discrimination, Jaccard
-         conventions, Levenshtein case handling, cosine geometry.
-      4. Sharding contract — the call shapes rs.core.sharding uses.
-
-.NOTES
-    Run from any directory:
-        & "<path>\rs-numerics.tests.ps1"
+      1. Trap regressions — masked FNV, sign-bit Hamming, >64-bit signatures,
+         Levenshtein on non-empty strings, empty-set Jaccard.
+      2. Pinned lineage vectors — outputs must match verified G3 sources bit-for-bit.
+      3. Semantics — SHA256 vectors, SimHash discrimination, Jaccard, Levenshtein, cosine.
+      4. Sharding contract — call shapes rs.core.sharding uses.
 #>
 
 $modulePath = Join-Path $PSScriptRoot '..\..\rs.core.numerics.psm1'
 Import-Module $modulePath -Force -ErrorAction Stop
 
-# ---------------------------------------------------------------------------
-# Assertion framework
-# ---------------------------------------------------------------------------
+#region Assertions
 $script:Passed = 0
 $script:Failed = 0
 
@@ -61,10 +50,10 @@ function Assert-Throws ([scriptblock]$Block, [string]$Label)
     try { & $Block | Out-Null; Assert-True $false $Label '(no exception thrown)' }
     catch { Assert-True $true $Label }
 }
+#endregion
 
-# ---------------------------------------------------------------------------
+#region Test1_TrapRegressions
 Enter-Section 'Trap regressions (G1 must stay dead)'
-# ---------------------------------------------------------------------------
 
 # Law 1: masked FNV — G1 threw "-4.124E+30 to Int64" on any input >= 2 bytes.
 $sim = Get-SimHash -Text ('lorem ipsum dolor sit amet consectetur ' * 100)
@@ -94,10 +83,10 @@ Assert-Equal 3 (Get-LevenshteinDistance -String1 'kitten' -String2 'sitting') 'L
 
 # Binding: empty sets — G1 rejected @() at the parameter binder.
 Assert-Equal 1.0 (Get-JaccardSimilarity -Set1 @() -Set2 @()) 'Jaccard empty sets bind; J(0,0) = 1.0'
+#endregion
 
-# ---------------------------------------------------------------------------
+#region Test2_PinnedVectors
 Enter-Section 'Pinned lineage vectors (must match G3 sources bit-for-bit)'
-# ---------------------------------------------------------------------------
 
 Assert-Equal 'cef7991c1475e5ce' (Get-SimHash -Text 'the quick brown fox jumps over the lazy dog again and again') `
     'SimHash pinned vector (hashlib-new lineage)'
@@ -111,10 +100,10 @@ Assert-Equal '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824' 
 
 Assert-Equal 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855' `
     (Get-ContentHash -Content '') 'SHA256 empty-input digest'
+#endregion
 
-# ---------------------------------------------------------------------------
+#region Test3_IdentitySemantics
 Enter-Section 'Identity semantics'
-# ---------------------------------------------------------------------------
 
 Assert-Equal (Get-ContentHash -Content 'src/a.ts') (Get-PathHash -Path 'src/a.ts') `
     'Get-PathHash == Get-ContentHash for the same string'
@@ -136,22 +125,16 @@ try
 }
 catch
 {
-    # A terminating error inside the try block — a StrictMode property access, a
-    # parameter-binding failure — would otherwise abort the suite SILENTLY:
-    # finally runs, execution resumes after the block, and the summary prints a
-    # PASSING count while the remaining asserts never ran. That mode is invisible
-    # from outside (tests/run-all.ps1 cannot detect it — the counts are
-    # self-consistent), so it has to be caught HERE.
     Assert-True $false "SUITE ABORTED: $($_.Exception.Message)" $_.ScriptStackTrace
 }
 finally { Remove-Item $tmpFile -Force -ErrorAction SilentlyContinue }
 
 Assert-Throws { Get-ContentHash -FilePath (Join-Path ([IO.Path]::GetTempPath()) 'rs-numerics-does-not-exist.bin') } `
     'Missing file throws'
+#endregion
 
-# ---------------------------------------------------------------------------
+#region Test4_SimHashSemantics
 Enter-Section 'SimHash semantics'
-# ---------------------------------------------------------------------------
 
 $textA = 'the quick brown fox jumps over the lazy dog and runs away fast'
 $textB = 'the quick brown fox jumps over the lazy dog and runs away quickly'
@@ -171,10 +154,10 @@ Assert-Equal 3 $stats.DocumentCount 'Get-DocStats counts documents'
 Assert-True ($stats.AvgDocLength -gt 0) 'Get-DocStats average length positive'
 $weighted = Get-SimHash -Text $textA -IdfMap $stats.IdfMap -AvgDocLength $stats.AvgDocLength
 Assert-True ($weighted -match '^[0-9a-f]{16}$') 'IDF-weighted SimHash produces a valid hash'
+#endregion
 
-# ---------------------------------------------------------------------------
+#region Test5_MinHashSemantics
 Enter-Section 'MinHash semantics'
-# ---------------------------------------------------------------------------
 
 $sigX = Get-MinHashSignature -Content ('shared prefix content block ' * 20 + 'unique tail one')
 $sigY = Get-MinHashSignature -Content ('shared prefix content block ' * 20 + 'unique tail two')
@@ -191,10 +174,10 @@ Assert-Equal 128 $zeroSig.Count 'Default signature length 128'
 
 Assert-Throws { Get-JaccardEstimate -Signature1 $sigX -Signature2 (Get-MinHashSignature -Content 'abcd' -NumHashes 4) } `
     'Mismatched signature lengths throw'
+#endregion
 
-# ---------------------------------------------------------------------------
+#region Test6_MeasuresSemantics
 Enter-Section 'Measures semantics'
-# ---------------------------------------------------------------------------
 
 Assert-Equal 4 (Get-HammingDistance -Sig1 '000000000000000f' -Sig2 '0000000000000000') 'Hamming low-bits = 4'
 Assert-Equal 0 (Get-HammingDistance -Sig1 'abc123' -Sig2 'abc123') 'Hamming identical = 0'
@@ -214,19 +197,17 @@ Assert-Equal 1.0 (Get-LevenshteinSimilarity -String1 '' -String2 '') 'Levenshtei
 Assert-Equal 1 (Get-CosineSimilarity -Vector1 @{a = 3; b = 4 } -Vector2 @{a = 6; b = 8 }) 'Cosine parallel = 1'
 Assert-Equal 0 (Get-CosineSimilarity -Vector1 @{x = 1 } -Vector2 @{y = 1 }) 'Cosine orthogonal = 0'
 Assert-Equal 0 (Get-CosineSimilarity -Vector1 @{ } -Vector2 @{x = 1 }) 'Cosine zero-magnitude = 0'
+#endregion
 
-# ---------------------------------------------------------------------------
+#region Test7_ShardingContract
 Enter-Section 'Sharding contract (rs.core.sharding call shapes)'
-# ---------------------------------------------------------------------------
 
 $positional = Get-PathHash 'src/nested/file.ts'
 Assert-True ($positional -match '^[0-9a-f]{64}$') 'Get-PathHash positional (sharding:298)'
 Assert-True ((Get-ContentHash -Content 'x') -match '^[0-9a-f]{64}$') 'Get-ContentHash -Content (sharding:648)'
 Assert-True ((Get-SimHash -Text 'some file content here') -match '^[0-9a-f]{16}$') 'Get-SimHash -Text (sharding:649)'
+#endregion
 
-# ---------------------------------------------------------------------------
-# Summary
-# ---------------------------------------------------------------------------
 Write-Host "`n═══ rs-numerics: $script:Passed passed, $script:Failed failed ═══" `
     -ForegroundColor ($script:Failed -eq 0 ? 'Green' : 'Red')
 

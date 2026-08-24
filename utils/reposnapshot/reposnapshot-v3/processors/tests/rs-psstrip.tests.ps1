@@ -49,9 +49,7 @@ $processorPath = Join-Path $PSScriptRoot '..\rs-psstrip.ps1'
 # into worker runspaces; dot-invocation here needs them loaded explicitly.
 . (Join-Path $PSScriptRoot '_helpers.ps1')
 
-# ---------------------------------------------------------------------------
-# Assertion framework (shared pattern with colonel-dispatch.tests.ps1)
-# ---------------------------------------------------------------------------
+#region Assertions
 $script:Passed = 0
 $script:Failed = 0
 
@@ -83,11 +81,6 @@ function Assert-Equal ($Actual, $Expected, [string]$Label)
 
 function Invoke-Processor ([object]$Item, [hashtable]$Config = @{})
 {
-    # The suite exercises the harmonized descriptor path (6d) — the shape the
-    # chain actually carries. A bare string argument is wrapped into a minimal
-    # Content bag, so transform asserts read $r.Content. The bare-string
-    # convenience path (string in → string out) is covered by
-    # Invoke-ProcessorRaw in sections 1, 2, 9 and 14.
     if ($Item -is [string]) { $Item = [pscustomobject]@{ Content = $Item } }
     & $processorPath $Item $Config
 }
@@ -96,10 +89,9 @@ function Invoke-ProcessorRaw ([object]$Item, [hashtable]$Config = @{})
 {
     & $processorPath $Item $Config
 }
+#endregion
 
-# ---------------------------------------------------------------------------
-# Fixture — one each of all five comment kinds
-# ---------------------------------------------------------------------------
+#region Fixture
 $fixture = @'
 <#
 .SYNOPSIS
@@ -121,6 +113,7 @@ function Invoke-Demo {
     return $len
 }
 '@
+#endregion
 
 Write-Host '============================================================' -ForegroundColor Yellow
 Write-Host ' rs-psstrip.tests.ps1' -ForegroundColor Yellow

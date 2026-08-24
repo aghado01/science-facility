@@ -5,34 +5,18 @@ using namespace System.Text
 
 <#
 .SYNOPSIS
-    RepoSnapshot V3 manifest — export phase 3: the payload's declarations to
-    the reader. Builds the tree model from the receipt, the plan, and the
-    layout, renders it through the micro template engine, writes ONE file.
+    RepoSnapshot V3 manifest — export phase: renders table-of-contents manifest file.
 
 .DESCRIPTION
-    Contract: contracts/manifest.contract.json. Everything here is a
-    FORMATTER over facts computed upstream: offsets and byte lengths come from
-    serialize's receipt (only the writer knows), keys/groups/classes from the
-    plan, the header row verbatim from the layout — nothing is measured,
-    recovered, or derived post hoc (the LTS regex offset recovery is the
-    counterexample this module exists to not be). Every declaration the
-    payload-manifest ledger says a reader is owed is a MODEL FIELD (#8 offsets
-    need their unit · #16 compaction notice · #17 encoding · oversized-shard
-    hazards · format identity), so it is checkable, not prose.
+    Builds the TOC model from the serializer receipt, sharding plan, layout, and
+    RunContext, and renders the manifest markdown document via a lightweight template engine.
 
-    Engine directives (Handlebars-lite, unchanged): {{Name}} ·
-    {{#if Name}}…{{/if}} · {{#each Name}}…{{/each}} ({{this}} for scalars).
-
-    Public: New-Manifest.
+    See docs/serialize-and-manifest.md for manifest structure and declaration fields.
 #>
 
 $script:Utf8 = [UTF8Encoding]::new($false)
 
-# ---------------------------------------------------------------------------
-# Template — single-quoted here-string: backticks and {{…}} stay literal.
-# The template fixes the artifact's SECTION SEQUENCE; the model supplies
-# content (config/code separation, writer level).
-# ---------------------------------------------------------------------------
+#region TreeTemplate
 $script:TreeTemplate = @'
 # Tree Manifest TOC for Snapshot: `{{Title}}`
 
@@ -69,11 +53,9 @@ other shard is within the ceiling:
 {{#each ProvenanceLines}}{{this}}
 {{/each}}
 '@
+#endregion
 
-# ---------------------------------------------------------------------------
-# Engine — private
-# ---------------------------------------------------------------------------
-
+#region Engine
 function Resolve-TemplateValue
 {
     param(
@@ -158,20 +140,14 @@ function Expand-Template
 
     return $result
 }
+#endregion
 
-# ---------------------------------------------------------------------------
-# Tree rendering — private
-# ---------------------------------------------------------------------------
-
+#region TreeRendering
 function Build-TocTree
 {
-    # Rows → the indented directory tree. Directories first, then files, both
-    # ordinal-sorted; four spaces per depth; every file line is
-    # name<TAB>sidx<TAB>row_offset<TAB>row_meta_end<TAB>row_content_begin<TAB>row_content_end
-    # — values verbatim from the receipt, never recomputed here.
     param(
         [Parameter(Mandatory)] [string]$RootName,
-        [Parameter(Mandatory)] [AllowEmptyCollection()] [object[]]$Rows   # @{ RelativePath; ShardKey; RowOffset; RowMetaEnd; RowContentBegin; RowContentEnd }
+        [Parameter(Mandatory)] [AllowEmptyCollection()] [object[]]$Rows
     )
 
     $newDir = { @{ Dirs = [Dictionary[string, object]]::new([StringComparer]::Ordinal); Files = [List[object]]::new() } }
@@ -213,31 +189,14 @@ function Build-TocTree
     & $walk $root 1
     return $sb.ToString().TrimEnd("`n")
 }
+#endregion
 
-# ---------------------------------------------------------------------------
-# PUBLIC — New-Manifest
-# ---------------------------------------------------------------------------
-
+#region New-Manifest
 function New-Manifest
 {
     <#
     .SYNOPSIS
-        Build the tree model from the receipt × plan shards × plan × layout ×
-        RunContext, render it, write exactly one file. Returns @{ Path; Model }
-        — the model is what was rendered, kept for tests, not a second artifact.
-    .PARAMETER Receipt
-        serialize.out.receipt — measured lengths and every row's offsets.
-    .PARAMETER Shards
-        shards.out.result.Shards — classes, groups, planned sizes (joined to
-        the receipt by Key; PlannedSizeBytes is cross-checked against
-        ByteLength, belt and braces).
-    .PARAMETER Plan
-        shards.out.plan — the resolved knob echo for the summary line.
-    .PARAMETER RunContext
-        Provenance — RunStamp, Root, GeneratorVersion, ConfigEcho — verbatim;
-        never hardcoded (LTS hardcoded `module`, wrongly).
-    .PARAMETER InstructionSet
-        Optional replacement for the reader-guidance block.
+        Builds and writes the tree manifest markdown artifact.
     #>
     [CmdletBinding()]
     param(
@@ -253,7 +212,6 @@ function New-Manifest
     if ($null -eq $Receipt.PSObject.Properties['Shards']) { throw "New-Manifest: -Receipt lacks Shards — pass serialize.out.receipt." }
     if ($null -eq $Layout.PSObject.Properties['HeaderRowText']) { throw "New-Manifest: -Layout lacks HeaderRowText — pass container.out.layout." }
 
-    # ── join receipt ↔ plan shards by Key; belt-and-braces size check ────
     $planByKey = @{}
     foreach ($s in $Shards) { $planByKey[[string]$s.Key] = $s }
     foreach ($sr in @($Receipt.Shards))
@@ -262,11 +220,10 @@ function New-Manifest
         if ($null -eq $ps) { throw "New-Manifest: receipt shard '$($sr.Key)' has no counterpart in the plan." }
         if ([long]$ps.PlannedSizeBytes -ne [long]$sr.ByteLength)
         {
-            throw "New-Manifest: shard '$($sr.Key)' — plan says $($ps.PlannedSizeBytes) bytes, the receipt measured $($sr.ByteLength). Serialize already gates this; disagreement here means the inputs are from different runs."
+            throw "New-Manifest: shard '$($sr.Key)' — plan says $($ps.PlannedSizeBytes) bytes, the receipt measured $($sr.ByteLength). Disagreement here means the inputs are from different runs."
         }
     }
 
-    # ── model fields (each one a declaration the reader is owed) ─────────
     $stem = [string]$Plan.ShardStem
     $title = if ([string]::IsNullOrEmpty($stem)) { 's*.txt' } else { "${stem}_s*.txt" }
     $treeLeaf = Split-Path $TreePath -Leaf
@@ -360,10 +317,11 @@ function New-Manifest
     }
 
     $text = (Expand-Template -Template $script:TreeTemplate -Model $model).TrimEnd() + "`n"
-    $text = $text -replace "`r`n", "`n"      # the template literal carries the source file's line endings; the artifact is LF-only
+    $text = $text -replace "`r`n", "`n"
     [IO.File]::WriteAllBytes($TreePath, $script:Utf8.GetBytes($text))
 
     return [PSCustomObject]@{ Path = $TreePath; Model = $model }
 }
+#endregion
 
 Export-ModuleMember -Function 'New-Manifest'

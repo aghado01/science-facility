@@ -4,65 +4,30 @@ using namespace System.Collections.Generic
 using namespace System.IO
 using namespace System.Security
 
-
 <#
 .SYNOPSIS
     Crawl stage — greedy BFS over the root; produces the file-system graph.
 
 .DESCRIPTION
-    Output: @{ RootPath; Graph; Rollups; DirectoryCount; FileCount;
-               SkippedCount; Skipped }
-      Graph[NodePath] → @{ NodePath; AbsolutePath; NodeDepth; Files }
-      Files[]        → @{ AbsolutePath; RelativePath; NodePath; Extension;
-                           SizeBytes; LastWriteUtc; CreationUtc; FsAttributes }
-      Rollups        → @{ Condition; ByNode[NodePath] → @{ SubtreeDirCount;
-                           SubtreeFileCount; SubtreeBytes } }  — a SIBLING of
-                           Graph, like Skipped
-      Skipped[]      → @{ Path; Reason; [Error] }  — diagnostics, sibling of Graph
+    Performs an exhaustive BFS over the root directory and builds the file-system graph
+    with basic metadata (size, timestamps, attributes).
 
-    Stamping rule: the crawler stamps everything that is FREE at its vantage —
-    no extra syscall, no file read. Facts that cost a read (encoding, binary
-    sniff, hashes) belong to later stages. Fields exist for later consumers
-    even when the next stage does not use them; downstream reads, never
-    re-derives (ledger #38, measurements only).
+    Output envelope:
+      @{ RootPath; Graph; Rollups; DirectoryCount; FileCount; SkippedCount; Skipped }
 
-    Rollups are METADATA ABOUT the graph, not properties OF a node (ledger
-    #52). They live in their own keyed layer whose `Condition` names the slice
-    of data rolled up — here 'walked', every file the crawl saw, before the
-    membrane rejects any of it. The same aggregation conditioned on a different
-    slice (survivors, discards) is a second layer of the same shape, keyed the
-    same way; neither can impersonate a current property of a node, which is
-    what welding them onto nodes did.
-
-    Condition (which atoms) and grouping (ByNode) are INDEPENDENT AXES, and
-    'root' is on neither: ByNode[''] is merely the row whose group is the whole
-    slice, because the root's subtree is the whole tree. Hence FileCount ==
-    ByNode[''].SubtreeFileCount (an identity of the grouping, asserted in
-    tests), while DirectoryCount is a node count over the structure
-    (== Graph.Count == ByNode[''].SubtreeDirCount + 1) — not a rollup row.
-
-    Paths: forward slashes; RelativePath root-anchored, no leading slash;
-    NodePath = directory portion with trailing '/', root = ''. AbsolutePath is
-    ingestion-side only — never in a payload.
-
-    Rationale, history, deferred items:
-    issues/reposnapshot/design/module-notes.md §rs.core.crawler
+    See docs/crawler-and-graph.md for design and path invariants.
 #>
 
+#region FileSystemCrawler
 class FileSystemCrawler
 {
-
-    # ── Configuration (immutable after construction) ──────────────────────
-    [string]   $RootPath            # absolute, forward-slash, trailing /
-
-    # ── Results (populated by Invoke) ─────────────────────────────────────
+    [string]   $RootPath
     [Dictionary[string, PSCustomObject]] $Graph
     [List[PSCustomObject]]               $Skipped
     [int]                                $DirectoryCount
     [int]                                $FileCount
     [bool]                               $HasRun
 
-    # ── Constructor (hidden — use New-FileSystemCrawler factory) ───────────
     hidden FileSystemCrawler(
         [string]   $rootPath
     )
@@ -83,7 +48,6 @@ class FileSystemCrawler
         $this.HasRun = $false
     }
 
-    # ── Invoke — single exhaustive BFS walk ───────────────────────────────
     [PSCustomObject] Invoke()
     {
         if ($this.HasRun)
@@ -95,13 +59,13 @@ class FileSystemCrawler
         $queue = [Queue[PSCustomObject]]::new()
         $rootDirPath = $this.RootPath.TrimEnd('/')
 
-        # ── Seed root node ──
+        # Seed root node
         $this.Graph[''] = $this.NewNode('', $this.RootPath, 0)
         $this.DirectoryCount = 1
 
         $queue.Enqueue([PSCustomObject]@{ Path = $rootDirPath; NodeDepth = 0 })
 
-        # ── BFS loop — each directory is its own failure domain ──
+        # BFS walk
         while ($queue.Count -gt 0)
         {
             $item = $queue.Dequeue()
@@ -114,7 +78,6 @@ class FileSystemCrawler
                 {
                     $entry = $entryRaw -replace '\\', '/'
 
-                    # Attribute read isolated — one bad entry does not kill the directory
                     $attrs = $null
                     try { $attrs = [File]::GetAttributes($entry) }
                     catch
@@ -129,8 +92,6 @@ class FileSystemCrawler
 
                     if ($attrs.HasFlag([FileAttributes]::Directory))
                     {
-
-                        # Skip symlinks / junctions — entire subtree excluded
                         if ($attrs.HasFlag([FileAttributes]::ReparsePoint))
                         {
                             $this.Skipped.Add([PSCustomObject]@{
@@ -145,16 +106,14 @@ class FileSystemCrawler
                         $this.Graph[$childNodePath] = $this.NewNode($childNodePath, $entry + '/', $childDepth)
                         $this.DirectoryCount++
                         $queue.Enqueue([PSCustomObject]@{ Path = $entry; NodeDepth = $childDepth })
-
                     }
                     else
                     {
-                        # FILE — one FileInfo stat serves size, timestamps; attributes already in hand
                         $fi = $null
                         try
                         {
                             $fi = [FileInfo]::new($entry)
-                            $null = $fi.Length   # forces the single stat; throws here if it will
+                            $null = $fi.Length
                         }
                         catch
                         {
@@ -170,11 +129,11 @@ class FileSystemCrawler
                                 AbsolutePath = $entry
                                 RelativePath = $nodePath + [Path]::GetFileName($entry)
                                 NodePath     = $nodePath
-                                Extension    = [Path]::GetExtension($entry)   # leading '.', '' if none
+                                Extension    = [Path]::GetExtension($entry)
                                 SizeBytes    = $fi.Length
                                 LastWriteUtc = $fi.LastWriteTimeUtc
                                 CreationUtc  = $fi.CreationTimeUtc
-                                FsAttributes = $attrs                         # [FileAttributes] flags
+                                FsAttributes = $attrs
                             })
                         $this.FileCount++
                     }
@@ -222,10 +181,6 @@ class FileSystemCrawler
         }
     }
 
-    # ── Private: NewNode — one shape for every graph node ─────────────────
-    # Structure only. Subtree totals are metadata ABOUT the graph and live in
-    # their own layer (BuildRollups, ledger #52) — a node never carries an
-    # aggregate over itself.
     hidden [PSCustomObject] NewNode([string]$nodePath, [string]$absolutePath, [int]$depth)
     {
         return [PSCustomObject]@{
@@ -236,22 +191,15 @@ class FileSystemCrawler
         }
     }
 
-    # ── Private: BuildRollups — the subtree aggregation, over one condition ──
-    # Deepest-first, so each node is complete before it folds into its parent.
-    # Returns a KEYED LAYER, not node mutations: @{ Condition; ByNode }. The
-    # condition names the slice rolled up — the same aggregation conditioned on
-    # a different slice (the survivors, the discards) is another layer of the
-    # same shape, keyed the same way, that cannot be mistaken for this one.
-    # In-memory only; reads SizeBytes, measures nothing.
     hidden [PSCustomObject] BuildRollups([string]$condition)
     {
         $byNode = [Dictionary[string, PSCustomObject]]::new([StringComparer]::Ordinal)
         foreach ($nodePath in $this.Graph.Keys)
         {
             $byNode[$nodePath] = [PSCustomObject]@{
-                SubtreeDirCount  = 0      # descendants, not counting self
-                SubtreeFileCount = 0      # files at or below this node
-                SubtreeBytes     = 0L     # sum of SizeBytes at or below this node
+                SubtreeDirCount  = 0
+                SubtreeFileCount = 0
+                SubtreeBytes     = 0L
             }
         }
 
@@ -274,8 +222,6 @@ class FileSystemCrawler
         return [PSCustomObject]@{ Condition = $condition; ByNode = $byNode }
     }
 
-    # ── Private: ToNodePath ───────────────────────────────────────────────
-    # All inputs are forward-slash paths. Root → ''. Others → 'src/lib/' (trailing /).
     hidden [string] ToNodePath([string]$fwdSlashPath)
     {
         $rootTrimmed = $this.RootPath.TrimEnd('/')
@@ -285,7 +231,6 @@ class FileSystemCrawler
         return $rel
     }
 
-    # ── Private: ParentNodePath — 'src/lib/' → 'src/'; 'src/' → '' ─────────
     hidden [string] ParentNodePath([string]$nodePath)
     {
         $trimmed = $nodePath.TrimEnd('/')
@@ -293,18 +238,15 @@ class FileSystemCrawler
         if ($i -lt 0) { return '' }
         return $trimmed.Substring(0, $i + 1)
     }
-
 }
+#endregion
 
+#region New-FileSystemCrawler
 function New-FileSystemCrawler
 {
     <#
     .SYNOPSIS
-        Factory: creates a configured FileSystemCrawler instance.
-    .EXAMPLE
-        $result = (New-FileSystemCrawler -RootPath 'C:\repo').Invoke()
-        # $result.Graph    → Dictionary[NodePath, node]; feed to the ignore stage
-        # $result.Skipped  → diagnostics feed
+        Creates a configured FileSystemCrawler instance.
     #>
     param(
         [Parameter(Mandatory)]
@@ -313,5 +255,6 @@ function New-FileSystemCrawler
     )
     return [FileSystemCrawler]::new($RootPath)
 }
+#endregion
 
 Export-ModuleMember -Function 'New-FileSystemCrawler'

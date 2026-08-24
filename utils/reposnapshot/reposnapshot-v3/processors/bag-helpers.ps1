@@ -1,50 +1,51 @@
-# bag-helpers.ps1 — ISS-registered shared library (NOT a step-processor)
-# =============================================================================
-# Registered into every worker runspace by Compile-Plan -SharedHelperPath, the
-# same way chain-executor is. Never appears in a processor manifest or profile.
-#
-# Unlike a processor, this file DOES declare function wrappers: Compile-Plan
-# registers each top-level function separately as a SessionStateFunctionEntry.
-#
-# WHY THIS EXISTS
-#   The 6d harmonization put the same content-key resolution and copy-on-mutate
-#   clone in four content mutators, and the same clone-all in file-read and
-#   rs-content_meta. `Add-Member` became the fleet's dominant cmdlet purely as a
-#   side effect. One definition of the contract beats six copies of it, and the
-#   clone gets to be a single ordered-hashtable cast instead of N reflection
-#   calls.
-#
-# CLOSURE RULE (same as chain-executor): pure functions, parameters only. No
-# module-scope references — the closure environment does not cross the runspace
-# boundary.
-#
-# STANDALONE USE
-#   Processors dot-invoked outside an ISS (the processors/tests suites) must
-#   dot-source this file first; see processors/tests/_helpers.ps1.
-# =============================================================================
+<#
+.SYNOPSIS
+    ISS-registered shared library for reposnapshot processors.
 
+.DESCRIPTION
+    Registered into every worker runspace by Compile-Plan -SharedHelperPath, the
+    same way chain-executor is. Never appears in a processor manifest or profile.
+
+    Unlike a processor, this file DOES declare function wrappers: Compile-Plan
+    registers each top-level function separately as a SessionStateFunctionEntry.
+
+    WHY THIS EXISTS:
+      The 6d harmonization put the same content-key resolution and copy-on-mutate
+      clone in four content mutators, and the same clone-all in file-read and
+      rs-content_meta. `Add-Member` became the fleet's dominant cmdlet purely as a
+      side effect. One definition of the contract beats six copies of it, and the
+      clone gets to be a single ordered-hashtable cast instead of N reflection calls.
+
+    CLOSURE RULE (same as chain-executor):
+      Pure functions, parameters only. No module-scope references — the closure
+      environment does not cross the runspace boundary.
+
+    STANDALONE USE:
+      Processors dot-invoked outside an ISS (the processors/tests suites) must
+      dot-source this file first; see processors/tests/_helpers.ps1.
+#>
+
+#region Resolve-BagContent
 function Resolve-BagContent
 {
-    # Content-key resolution — the harmonized content-mutator contract (6d).
-    #
-    # Reads Content (descriptor contract) else Text (tp-era). The key that was
-    # read is the key the caller writes back, which is what keeps a mutator
-    # track-agnostic. Content wins when both exist; Text is then left exactly as
-    # found (never edit a key you did not read) — no current producer emits both.
-    #
-    # Returns $null when there is nothing to mutate, so callers guard with one
-    # line and pass the item through untouched:
-    #   - a bag carrying NEITHER key (mirrors rs-content_meta' no-Content rule: a
-    #     mutator with nothing to mutate must not fabricate an empty payload,
-    #     because assemble splits EmptyFile from EmptiedByProcessing and a
-    #     phantom '' would forge an entry)
-    #   - anything that is not a string, hashtable or pscustomobject
-    #
-    # Otherwise returns @{ Kind; Keys; ContentKey; Text }:
-    #   Kind 'String' — bare string in; ContentKey is $null and the caller
-    #                   returns a bare string out (a track-agnostic processor
-    #                   must not invent a track-specific key)
-    #   Kind 'Bag'    — Keys in declaration order, ContentKey, Text
+    <#
+    .SYNOPSIS
+        Content-key resolution — the harmonized content-mutator contract (6d).
+
+    .DESCRIPTION
+        Reads Content (descriptor contract) else Text (tp-era). The key that was
+        read is the key the caller writes back, which is what keeps a mutator
+        track-agnostic. Content wins when both exist; Text is then left exactly as
+        found (never edit a key you did not read) — no current producer emits both.
+
+        Returns $null when there is nothing to mutate:
+          - a bag carrying NEITHER key
+          - anything that is not a string, hashtable or pscustomobject
+
+        Otherwise returns @{ Kind; Keys; ContentKey; Text }:
+          Kind 'String' — bare string in; ContentKey is $null and caller returns bare string out
+          Kind 'Bag'    — Keys in declaration order, ContentKey, Text
+    #>
     param([object] $Item)
 
     if ($Item -is [string])
@@ -68,31 +69,31 @@ function Resolve-BagContent
 
     return $null
 }
+#endregion
 
+#region Copy-Bag
 function Copy-Bag
 {
-    # Copy-on-enrich / copy-on-mutate — one definition for the whole fleet.
-    #
-    # Clones the incoming bag and returns a NEW pscustomobject; the caller's
-    # reference is never mutated. Built by a single [ordered] cast rather than N
-    # Add-Member calls: same property order, one allocation, and it works under
-    # a Bare ISS where Add-Member does not exist.
-    #
-    #   -Resolved  a Resolve-BagContent result. When its Kind is 'String' the
-    #              content itself is returned (bare string in, bare string out).
-    #              When Kind is 'Bag', ContentKey is replaced with -Content.
-    #   -Content   replacement content for the resolved key. Mutators pass their
-    #              transformed text; readers/enrichers omit it.
-    #   -Add       extra properties to set after cloning (adds or overwrites).
-    #              This is how file-read attaches Content/Encoding/ReadError and
-    #              rs-content_meta attaches ContentMeta, without Add-Member.
-    #              Typed IDictionary so callers can pass [ordered]@{} — a plain
-    #              hashtable enumerates in no guaranteed order, which would make
-    #              emitted property order nondeterministic run to run.
-    #   -Record    a Processing record to APPEND to the bag's trail. Chain order
-    #              is array order, so a profile running the same processor twice
-    #              records both passes instead of the second overwriting the
-    #              first. Omit to attach nothing (IncludeMeta = $false).
+    <#
+    .SYNOPSIS
+        Copy-on-enrich / copy-on-mutate helper for processor items.
+
+    .DESCRIPTION
+        Clones the incoming bag and returns a NEW pscustomobject; the caller's
+        reference is never mutated. Built by a single [ordered] cast rather than N
+        Add-Member calls: same property order, one allocation, works under Bare ISS.
+
+    .PARAMETER Item
+        The incoming bag or string.
+    .PARAMETER Resolved
+        A Resolve-BagContent result. When Kind is 'String', Content is returned directly.
+    .PARAMETER Content
+        Replacement content for the resolved key.
+    .PARAMETER Add
+        Extra properties to set after cloning (System.Collections.IDictionary).
+    .PARAMETER Record
+        A Processing record to APPEND to the bag's trail.
+    #>
     param(
         [object]                        $Item,
         [object]                        $Resolved = $null,
@@ -128,3 +129,4 @@ function Copy-Bag
 
     return [pscustomobject]$ord
 }
+#endregion

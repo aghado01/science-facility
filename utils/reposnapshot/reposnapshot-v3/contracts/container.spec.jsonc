@@ -60,7 +60,7 @@
         },
         "val_separator": ",",
         "record_value": {
-          "$ref": "processors/rs-content_meta.contract.json#/out/ContentMeta"
+          "$ref": "rs-content_meta.contract.json#/out/ContentMeta"
         },
         "record_pattern": "^${record_val_enclosure.start}${item_join}[^${val_separator}${record_val_enclosure.start}${record_val_enclosure.end}]+(?:${item_join}${val_separator}${item_join}[^${val_separator}${record_val_enclosure.start}${record_val_enclosure.end}]+)*${item_join}${record_val_enclosure.end}$", // structural pre-check only; the exact pattern (arity + per-element val_type) is DERIVED by the interpreter from the enabled sub-fields — do not hand-maintain element types here. Escaping: enclosure.end "]" must interpolate as \\] inside the class. The element class does NOT exclude ${item_join}: elements are numeric today, and a future string sub-field must stay expressible (the block is designed for accretion) — element boundaries are found by " , ", not by whitespace.
         "properties": {
@@ -70,7 +70,7 @@
             "val_type": "double",
             "val_precision": 4,
             "val": {
-              "$ref": "processors/rs-content_meta.contract.json#/out/ContentMeta/LineStats/Mean"
+              "$ref": "rs-content_meta.contract.json#/out/ContentMeta/LineStats/Mean"
             },
             "default": true
           },
@@ -78,7 +78,7 @@
             "val_rank": 1,
             "val_type": "int",
             "val": {
-              "$ref": "processors/rs-content_meta.contract.json#/out/ContentMeta/CharCount"
+              "$ref": "rs-content_meta.contract.json#/out/ContentMeta/CharCount"
             },
             "default": true
           },
@@ -86,7 +86,7 @@
             "val_rank": 2,
             "val_type": "int",
             "val": {
-              "$ref": "processors/rs-content_meta.contract.json#/out/ContentMeta/WordCount"
+              "$ref": "rs-content_meta.contract.json#/out/ContentMeta/WordCount"
             },
             "default": true
           },
@@ -95,7 +95,7 @@
             "val_rank": 3,
             "val_type": "int",
             "val": {
-              "$ref": "processors/rs-content_meta.contract.json#/out/ContentMeta/PunctuationCount"
+              "$ref": "rs-content_meta.contract.json#/out/ContentMeta/PunctuationCount"
             },
             "default": false
           },
@@ -104,7 +104,7 @@
             "val_type": "double",
             "val_precision": 4,
             "val": {
-              "$ref": "processors/rs-content_meta.contract.json#/out/ContentMeta/WhitespaceRatio"
+              "$ref": "rs-content_meta.contract.json#/out/ContentMeta/WhitespaceRatio"
             },
             "default": true
           },
@@ -113,7 +113,7 @@
             "val_type": "double",
             "val_precision": 4,
             "val": {
-              "$ref": "processors/rs-content_meta.contract.json#/out/ContentMeta/Entropy"
+              "$ref": "rs-content_meta.contract.json#/out/ContentMeta/Entropy"
             },
             "default": true
           }

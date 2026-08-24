@@ -52,9 +52,7 @@ $processorPath = Join-Path $PSScriptRoot '..\rs-whitespace.ps1'
 # into worker runspaces; dot-invocation here needs them loaded explicitly.
 . (Join-Path $PSScriptRoot '_helpers.ps1')
 
-# ---------------------------------------------------------------------------
-# Assertion framework
-# ---------------------------------------------------------------------------
+#region Assertions
 $script:Passed = 0
 $script:Failed = 0
 
@@ -86,11 +84,6 @@ function Assert-Equal ($Actual, $Expected, [string]$Label)
 
 function Invoke-Processor ([object]$Item, [hashtable]$Config = @{})
 {
-    # The suite exercises the harmonized descriptor path (6d) — the shape the
-    # chain actually carries. A bare string argument is wrapped into a minimal
-    # Content bag, so transform asserts read $r.Content. The bare-string
-    # convenience path (string in → string out) is covered by
-    # Invoke-ProcessorRaw in sections 1, 12 and 15.
     if ($Item -is [string]) { $Item = [pscustomobject]@{ Content = $Item } }
     & $processorPath $Item $Config
 }
@@ -99,6 +92,7 @@ function Invoke-ProcessorRaw ([object]$Item, [hashtable]$Config = @{})
 {
     & $processorPath $Item $Config
 }
+#endregion
 
 Write-Host '============================================================' -ForegroundColor Yellow
 Write-Host ' rs-whitespace.tests.ps1 (rs-whitespace)' -ForegroundColor Yellow

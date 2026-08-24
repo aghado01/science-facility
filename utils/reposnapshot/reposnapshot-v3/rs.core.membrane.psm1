@@ -5,35 +5,16 @@ using namespace System.Text
 using namespace System.Text.RegularExpressions
 <#
 .SYNOPSIS
-    Membrane stage — decides which crawled files pass through: selection,
-    implicit (sentinels) or explicit (globs), under either semantics, plus the
-    hard exclusions. GlobCompiler (this module's dependency, semantics-neutral)
-    compiles per-node state from glob sources; Invoke-Membrane applies it plus
-    the eligibility guards.
+    Membrane stage — determines file ingestion eligibility via glob compilation and hard guards.
 
 .DESCRIPTION
-    Contract: contracts/membrane.contract.json (in = a slice of crawler.out; out =
-    pruned graph, nodes rebuilt, file descriptors the same objects filtered).
-    Enriches nothing; fails fast if a descriptor lacks RelativePath/Extension.
+    Filters the filesystem graph produced by the crawler. Enforces hard file size and
+    extension guards, and evaluates glob patterns under Ignore or Selection semantics.
 
-    GlobCompiler — five semantics-neutral stages + pruning:
-      0 Normalize · 1 Coalesce · 2 Walk · 3 Reduce · 4 Gather-Scatter (regex)
-    GlobSemantics is interpretation, applied only at the rim: it picks the
-    sources (Ignore: sentinels + virtual root ignore file; Selection: user
-    globs only, no sentinel I/O, no directory pruning) and is stamped on every
-    CompiledState { Semantics; Positives; Exceptions }; TestPath is the single
-    semantic authority (dual truth table on Semantics). Params belonging to
-    the other semantics are inert, never errors.
-
-    Invoke-Membrane — two eligibility guards run BEFORE any glob test, on
-    crawler metadata only (no I/O): MaxSizeBytes and the extension blacklist
-    below. They are not glob semantics and do not invert with GlobSemantics.
-
-    Semantics, rationale, history:
-    issues/reposnapshot/reports/ignore-semantics-update.md
+    See docs/membrane-and-globs.md for 5-stage glob compiler architecture and semantics modes.
 #>
 
-#region GlobCompiler — Normalize / Coalesce / Walk / Reduce / Gather-Scatter (semantics-neutral)
+#region GlobCompiler
 
 class GlobCompiler
 {
@@ -665,8 +646,9 @@ class GlobCompiler
         }
     }
 }
+#endregion
 
-# ── Factory function ──────────────────────────────────────────────────────
+#region New-GlobCompiler
 function New-GlobCompiler
 {
     <#
@@ -832,8 +814,9 @@ function New-GlobCompiler
         SentinelIgnoreFiles = $sentinelAggregate
     }
 }
+#endregion
 
-# ── Standalone filter utility ────────────────────────────────────────────
+#region Test-PathExcluded
 function Test-PathExcluded
 {
     <#
@@ -864,30 +847,9 @@ function Test-PathExcluded
 
     return [GlobCompiler]::TestPath($RelativePath, $NodeState)
 }
-
 #endregion
 
-# ══════════════════════════════════════════════════════════════════════════
-# MEMBRANE STAGE — eligibility guards + glob verdicts
-# ══════════════════════════════════════════════════════════════════════════
-
-# =============================================================================
-# Hard extension blacklist — the one guard that stands OUTSIDE glob semantics.
-#
-# reposnapshot has no business ingesting blobs of binary. Images, media,
-# archives, compiled output, office documents, fonts and data blobs are never
-# source material a reading agent wants, under EITHER GlobSemantics — a
-# Selection run for '*' must still not pull in a .png. So this is not a
-# pattern source that participates in inheritance/negation/precedence; it is
-# an unconditional eligibility guard applied by Invoke-Membrane before any glob
-# test, on the crawler-stamped Extension alone (no read).
-#
-# It is data, not logic — a plain list. It lives here because no run-config
-# system exists yet to hold it; when admiral's config projection lands this
-# is the first obvious `defaults.membrane.extensionBlacklist` entry, and the
-# code path is already a parameter (-ExtensionBlacklist, additive), so lifting
-# it out is a one-line change. Do not turn it into a glob source to "unify" it.
-# =============================================================================
+#region HardExtensionBlacklist
 $script:HardExtensionBlacklist = [HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
 @(
     # Images
@@ -905,7 +867,9 @@ $script:HardExtensionBlacklist = [HashSet[string]]::new([StringComparer]::Ordina
     # Data / model blobs
     '.bin', '.dat', '.pkl', '.npy', '.npz', '.parquet', '.db', '.sqlite'
 ) | ForEach-Object { [void]$script:HardExtensionBlacklist.Add($_) }
+#endregion
 
+#region Invoke-Membrane
 function Invoke-Membrane
 {
     <#
@@ -980,7 +944,7 @@ function Invoke-Membrane
         foreach ($e in $ExtensionBlacklist) { [void]$extBlacklist.Add($e) }
     }
 
-    #Region Filter file lists in joined nodes
+    # Filter file lists in joined nodes
     foreach ($compiled in $CompiledNodes)
     {
         $np = $compiled.NodePath
@@ -1052,6 +1016,7 @@ function Invoke-Membrane
         Skipped = $skipped.ToArray()
     }
 }
+#endregion
 
 # Please sort exports alphabetically within each section.
 Export-ModuleMember -Function @(

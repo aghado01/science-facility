@@ -2,44 +2,39 @@
 
 <#
 .SYNOPSIS
-    rs.core.user — the convenience entry point: point it at a directory, get a
-    complete sharded snapshot (shard files + tree manifest) in a runstamped
-    output directory. One script over the six stage calls.
+    rs.core.user — convenient high-level CLI entry point for RepoSnapshot V3.
 
 .DESCRIPTION
-    Runs the whole v3 chain — crawl → membrane → ingest (file-read →
-    rs-whitespace [→ rs-psstrip] → rs-content_meta) → assemble →
-    Resolve-Layout → New-ShardPlan → Invoke-Serialize → New-Manifest — with
-    ergonomic defaults. Imports the rs.core modules by relative path; psd1
-    module packaging is the planned follow-on (TODO: reshape into a module).
-
-    OUTPUT CONVENTION: every run writes into its own runstamped directory,
-        <OutRoot>/<yyyyMMdd_HHmmss>/<RootLeaf>_s001.txt … <RootLeaf>_tree.md
-    Default OutRoot = <Root>/.snapshot — the house convention: snapshots live
-    UNDER the crawled tree, and the membrane keeps them out of the next run.
-    Under Ignore semantics that is automatic ('.snapshot/' is in the
-    membrane's IgnoreDefaults, and the usual .gitignore rule is picked up by
-    the sentinel scan); under Selection semantics the patterns simply do not
-    include it — or exclude it explicitly with a negated selection. No writer
-    guard: protection is the membrane's job, by design. Runstamp collisions
-    within one second get a numeric suffix.
+    Runs the full end-to-end v3 pipeline:
+      Crawl → Membrane → Ingest → Assemble → Resolve-Layout → New-ShardPlan →
+      Invoke-Serialize → New-Manifest
 
 .PARAMETER Root
     The directory to snapshot.
 .PARAMETER OutRoot
-    Where runstamped output directories accumulate. Default: see above.
+    Output directory for runstamped snapshot folders (defaults to <Root>/.snapshot).
 .PARAMETER SelectionPatterns
-    When given, the membrane runs SELECTION semantics — only matching files
-    pass (e.g. '*.ps1','*.psm1'). Default: IGNORE semantics with the standard
-    defaults and sentinel files (.gitignore/.snapignore).
+    When supplied, membrane runs Selection semantics. Default: Ignore semantics.
 .PARAMETER PsStrip
-    Add rs-psstrip to the chain (PowerShell comment stripping — code-lane
-    corpora only; it is lexically PS-aware and belongs nowhere near prose).
+    Applies PowerShell comment stripping (code corpora only).
 .PARAMETER Columns
-    Optional psr columns to enable. Default gidx + content_meta; the
-    rs-content_meta step is included in the chain exactly when the column is.
+    Active psr wire columns (default: gidx, content_meta).
+.PARAMETER Grouping
+    Sharding partition mode: 'Flat', 'ByFileType', or 'ByRootDirectory'.
+.PARAMETER GroupSort
+    Entry sorting strategy within groups: 'PathAsc' or 'PathHash'.
+.PARAMETER OrderStrict
+    Preserves exact input order during bin packing.
+.PARAMETER PackObjective
+    Bin distribution shape: 'FrontLoad' (default) or 'Even'.
+.PARAMETER ShardQuotaBytes
+    Target shard byte limit (default: 32768).
+.PARAMETER ShardToleranceBytes
+    Allowed shard expansion before creating a new bin (default: 4096).
+.PARAMETER MaxFilesPerShard
+    Maximum entries per shard (default: 100000).
 .PARAMETER PassThru
-    Also return Plan, Receipt, Layout, and the IR on the result object.
+    Returns the intermediate IR, Layout, Plan, and Receipt objects on the output.
 
 .EXAMPLE
     ./rs.core.user.ps1 -Root ../reposnapshot-v3 -SelectionPatterns '*.ps1','*.psm1' -PsStrip
@@ -63,22 +58,19 @@ param(
     [switch]$PassThru
 )
 
+#region ModuleImports
 $v3 = $PSScriptRoot
 foreach ($m in 'crawler', 'membrane', 'colonel.v2', 'ingest', 'assemble', 'container', 'shards', 'serialize', 'manifest')
 {
-    # colonel's dispatch verbs are internal vocabulary, not user surface —
-    # suppress the unapproved-verb warning in this user-facing tool
     Import-Module (Join-Path $v3 "rs.core.$m.psm1") -Force -DisableNameChecking
 }
+#endregion
 
-# ── resolve paths and the output convention ─────────────────────────────────
+#region PathResolution
 $rootFull = (Resolve-Path $Root).Path.TrimEnd('\', '/')
 $leaf = Split-Path $rootFull -Leaf
 if ([string]::IsNullOrEmpty($OutRoot))
 {
-    # house convention: snapshots live under the crawled tree; the membrane
-    # keeps .snapshot/ out of the next run (IgnoreDefaults / gitignore
-    # sentinel under Ignore semantics; pattern discipline under Selection)
     $OutRoot = Join-Path $rootFull '.snapshot'
 }
 $outFull = [IO.Path]::GetFullPath($OutRoot)
@@ -88,8 +80,9 @@ $outDir = Join-Path $outFull $runStamp
 $n = 1
 while (Test-Path $outDir) { $n++; $outDir = Join-Path $outFull "${runStamp}_$n" }
 $runStamp = Split-Path $outDir -Leaf
+#endregion
 
-# ── crawl → membrane ────────────────────────────────────────────────────────
+#region CrawlAndMembrane
 $crawl = (New-FileSystemCrawler -RootPath $rootFull).Invoke()
 $compiled = if ($null -ne $SelectionPatterns -and $SelectionPatterns.Count -gt 0)
 {
@@ -100,26 +93,21 @@ else
     New-GlobCompiler -CrawlerGraph $crawl.Graph
 }
 $filtered = Invoke-Membrane -CompiledNodes $compiled.CompiledNodes -CrawlerGraph $crawl.Graph
+#endregion
 
-# ── ingest (chain follows the switches) → assemble ──────────────────────────
+#region IngestAndAssemble
 $procManifest = @{
     'file-read'     = (Join-Path $v3 'processors\file-read.ps1')
     'rs-whitespace' = (Join-Path $v3 'processors\rs-whitespace.ps1')
 }
 $steps = [System.Collections.Generic.List[object]]::new()
 $steps.Add(@{ Key = 'file-read'; Config = @{} })
-# ORDER: strippers BEFORE whitespace normalization — stripping a doc block
-# flanked by blank lines leaves a multi-blank run, and max-blank-1 can only
-# collapse it if it runs afterwards. (Measured: whitespace-first left 26
-# stripper-made multi-blank runs in the selfie corpus.)
+
 if ($PsStrip)
 {
     $procManifest['rs-psstrip'] = (Join-Path $v3 'processors\rs-psstrip.ps1')
     $steps.Add(@{ Key = 'rs-psstrip'; Config = @{ Operations = @('block-comments', 'doc-strings', 'comment-blocks', 'line-comments') } })
 }
-# empty Config = the processor's OWN default op set (incl. max-blank-1,
-# ensure-trailing-space, ensure-final-lf) — the processor is the authority on
-# its defaults (#12); subsetting here is how a run loses blank-line collapsing
 $steps.Add(@{ Key = 'rs-whitespace'; Config = @{} })
 if ($Columns -contains 'content_meta')
 {
@@ -147,8 +135,9 @@ $runContext = [pscustomobject]@{
     }
 }
 $ir = Invoke-Assemble -DispatchOutput $ingest -RunContext $runContext
+#endregion
 
-# ── layout → plan → write ───────────────────────────────────────────────────
+#region ShardAndSerialize
 $layout = Resolve-Layout -Header $ir.Header -Columns $Columns
 $plan = New-ShardPlan -Entries $ir.Entries -Layout $layout -Grouping $Grouping -GroupSort $GroupSort `
     -OrderStrict:$OrderStrict -PackObjective $PackObjective -ShardQuotaBytes $ShardQuotaBytes `
@@ -159,8 +148,9 @@ $receipt = Invoke-Serialize -Plan $plan -Entries $ir.Entries -Layout $layout -Ou
 $treePath = Join-Path $outDir "${leaf}_tree.md"
 $null = New-Manifest -Receipt $receipt -Shards $plan.Shards -Plan $plan.Plan -Layout $layout `
     -RunContext $runContext -TreePath $treePath
+#endregion
 
-# ── summary ─────────────────────────────────────────────────────────────────
+#region Output
 Write-Host "reposnapshot: $($ir.Header.EntryCount) entries → $($receipt.ShardCount) shards, $($receipt.TotalBytes) bytes" -ForegroundColor Green
 Write-Host "  $outDir" -ForegroundColor DarkGray
 if ($plan.Plan.OversizedCount -gt 0)
@@ -186,3 +176,4 @@ if ($PassThru)
     $result['Receipt'] = $receipt
 }
 [pscustomobject]$result
+#endregion

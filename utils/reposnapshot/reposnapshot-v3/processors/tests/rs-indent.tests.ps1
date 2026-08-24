@@ -51,9 +51,7 @@ $processorPath = Join-Path $PSScriptRoot '..\rs-indent.ps1'
 # into worker runspaces; dot-invocation here needs them loaded explicitly.
 . (Join-Path $PSScriptRoot '_helpers.ps1')
 
-# ---------------------------------------------------------------------------
-# Assertion framework
-# ---------------------------------------------------------------------------
+#region Assertions
 $script:Passed = 0
 $script:Failed = 0
 
@@ -98,6 +96,7 @@ function Invoke-ProcessorRaw ([object]$Item, [hashtable]$Config = @{})
 {
     & $processorPath $Item $Config
 }
+#endregion
 
 Write-Host '============================================================' -ForegroundColor Yellow
 Write-Host ' rs-indent.tests.ps1' -ForegroundColor Yellow

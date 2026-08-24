@@ -5,37 +5,43 @@ using namespace System.IO
 
 <#
 .SYNOPSIS
-    RepoSnapshot V3 serialize — export phase 2: the ONLY stage that writes
-    shard files. Renders via the container's Build-HeaderRow / Build-Row, so
-    plan and file cannot disagree; offsets are the writer's receipt.
+    RepoSnapshot V3 serialize — export phase: writes shard files to disk.
 
 .DESCRIPTION
-    Contract: contracts/serialize.contract.json. Consumes the ShardPlan
-    envelope (membership + order), the resolved layout, and the entries;
-    writes <ShardStem>_<Key>.txt per shard (no stem → <Key>.txt). Bytes come
-    pre-encoded from the container — UTF-8 no BOM, LF only, no encoding layer
-    here. The plan = file gate LIVES HERE: every written file's length must
-    equal its shard's PlannedSizeBytes or the stage throws. Offsets are
-    measured at the cursor during the write — never derived from Measure-Row,
-    never recovered from written bytes. Nothing flows back into the plan.
+    Renders shard files via Build-HeaderRow and Build-Row from rs.core.container.
+    Enforces the plan = file byte-length invariant and returns the writer receipt
+    with observed row offsets.
 
-    Public: Invoke-Serialize.
+    See docs/serialize-and-manifest.md for serializer specifications.
 #>
 
 Import-Module (Join-Path $PSScriptRoot 'rs.core.container.psm1')
 
+#region Invoke-Serialize
 function Invoke-Serialize
 {
     <#
     .SYNOPSIS
-        Write every planned shard file and return the receipt: per shard the
-        path and measured length, per row the offsets the writer observed.
+        Writes planned shard files to disk and returns serialization receipts.
+
     .PARAMETER Plan
-        The New-ShardPlan result envelope (shards.out.result): Plan, Shards,
-        IdxMap. Read, never mutated.
+        The New-ShardPlan result envelope (Plan, Shards, IdxMap).
+
+    .PARAMETER Entries
+        The ordered array of IR entry objects.
+
+    .PARAMETER Layout
+        The resolved container layout from Resolve-Layout.
+
+    .PARAMETER OutDir
+        Target output directory.
+
     .PARAMETER Buffering
-        PerShard (default): render one shard in memory, write once. Stream:
-        write rows as rendered. Same bytes either way.
+        'PerShard' (default) buffers shard bytes in memory before writing.
+        'Stream' writes directly to file stream.
+
+    .OUTPUTS
+        [PSCustomObject] @{ Shards; ShardCount; TotalBytes; Encoding }
     #>
     [CmdletBinding()]
     param(
@@ -48,7 +54,7 @@ function Invoke-Serialize
 
     foreach ($m in 'Plan', 'Shards', 'IdxMap')
     {
-        if ($null -eq $Plan.PSObject.Properties[$m]) { throw "Invoke-Serialize: -Plan lacks '$m' — pass the New-ShardPlan result envelope (shards.out.result)." }
+        if ($null -eq $Plan.PSObject.Properties[$m]) { throw "Invoke-Serialize: -Plan lacks '$m' — pass the New-ShardPlan result envelope." }
     }
     if ($null -eq $Layout.PSObject.Properties['HeaderBytes'] -or $null -eq $Layout.PSObject.Properties['IdxWidth'])
     {
@@ -74,7 +80,7 @@ function Invoke-Serialize
         try
         {
             $sink.Write($headerRow, 0, $headerRow.Length)
-            $cursor = [long]$headerRow.Length            # == Layout.HeaderBytes; the first row's RowOffset
+            $cursor = [long]$headerRow.Length
             foreach ($ei in @($shard.Entries))
             {
                 $i = [int]$ei
@@ -85,7 +91,7 @@ function Invoke-Serialize
                 if ($idxOn)
                 {
                     $placement = $Plan.IdxMap[$rel]
-                    if ($null -eq $placement) { throw "Invoke-Serialize: IdxMap has no placement for '$rel' — gidx is enabled and every row needs its assigned value." }
+                    if ($null -eq $placement) { throw "Invoke-Serialize: IdxMap has no placement for '$rel'." }
                     $g = $placement.GlobalIdx
                 }
                 $rr = Build-Row -Layout $Layout -Entry $entry -Cursor $cursor -GlobalIdx $g
@@ -107,7 +113,7 @@ function Invoke-Serialize
         $len = [FileInfo]::new($path).Length
         if ($len -ne [long]$shard.PlannedSizeBytes)
         {
-            throw "Invoke-Serialize: plan = file VIOLATED at $name — written $len bytes, planned $($shard.PlannedSizeBytes). Plan and writer read one grammar; an input changed between planning and writing."
+            throw "Invoke-Serialize: plan = file violated at $name (written: $len, planned: $($shard.PlannedSizeBytes))."
         }
         $total += $len
         $receipts.Add([pscustomobject]@{
@@ -122,7 +128,7 @@ function Invoke-Serialize
 
     if ($total -ne [long]$Plan.Plan.TotalPlannedSizeBytes)
     {
-        throw "Invoke-Serialize: Σ ByteLength ($total) ≠ plan.TotalPlannedSizeBytes ($($Plan.Plan.TotalPlannedSizeBytes))."
+        throw "Invoke-Serialize: Total ByteLength ($total) ≠ TotalPlannedSizeBytes ($($Plan.Plan.TotalPlannedSizeBytes))."
     }
 
     return [PSCustomObject]@{
@@ -132,5 +138,6 @@ function Invoke-Serialize
         Encoding   = 'utf-8'
     }
 }
+#endregion
 
 Export-ModuleMember -Function 'Invoke-Serialize'

@@ -8,31 +8,21 @@ Set-StrictMode -Version Latest
 .DESCRIPTION
     Covers:
       1. Direct-invocation metric parity (LTS formulas: counts, entropy,
-         whitespace ratio, line stats incl. the upper-median quirk,
-         compression gate at >100 chars)
+         whitespace ratio, line stats incl. upper-median quirk, compression gate)
       2. No-Content contract — pass-through unenriched (envelope-shaped item)
       3. Empty-content behavior — ContentMeta attached with zeroed metrics
-      4. Copy-on-enrich — identity fields cloned, Content unmutated, caller's
-         object untouched
+      4. Copy-on-enrich — identity fields cloned, Content unmutated, caller's object untouched
       5. Colonel dispatch — file-read → rs-content_meta chain in real runspaces
-         (also proves GZipStream resolves in worker runspaces)
-
-.NOTES
-    Run from any directory:
-        & "$PSScriptRoot\rs-content_meta.tests.ps1"
 #>
 
 $procDir = Split-Path $PSScriptRoot -Parent
 $v3 = Split-Path $procDir -Parent
 $attrPath = Join-Path $procDir 'rs-content_meta.ps1'
 
-# Shared ISS helpers (Resolve-BagContent / Copy-Bag) — colonel registers these
-# into worker runspaces; dot-invocation here needs them loaded explicitly.
+# Shared ISS helpers
 . (Join-Path $PSScriptRoot '_helpers.ps1')
 
-# ---------------------------------------------------------------------------
-# Minimal assertion framework (house pattern)
-# ---------------------------------------------------------------------------
+#region Assertions
 $script:Passed = 0
 $script:Failed = 0
 
@@ -61,14 +51,12 @@ function Invoke-Attr ([object]$Item, [hashtable]$Config = @{})
 {
     & $attrPath $Item $Config
 }
+#endregion
 
-# ---------------------------------------------------------------------------
+#region Test1_MetricParity
 Enter-Section '1. Metric parity (LTS formulas)'
-# ---------------------------------------------------------------------------
 # Content "aaaa`nbb": 7 chars (a×4, LF, b×2), 2 words, 3 unique chars,
-# entropy = -(4/7·log2(4/7) + 1/7·log2(1/7) + 2/7·log2(2/7)) ≈ 1.3788,
-# ws ratio 1/7 ≈ 0.1429, lines 'aaaa'(4) 'bb'(2): mean 3, upper-median 4,
-# stddev 1, max 4; ≤100 chars → compression gate closed (1.0).
+# entropy ≈ 1.3788, ws ratio ≈ 0.1429, lines 'aaaa'(4) 'bb'(2): mean 3, median 4
 $r = Invoke-Attr ([pscustomobject]@{ RelativePath = 'x.txt'; Content = "aaaa`nbb" })
 $a = $r.ContentMeta
 Assert-True ($a.SpanBytes -eq 7) 'SpanBytes = 7 (ASCII: bytes == chars)' "got $($a.SpanBytes)"
@@ -98,28 +86,28 @@ $big = 'a' * 300
 $r4 = Invoke-Attr ([pscustomobject]@{ Content = $big })
 Assert-True ($r4.ContentMeta.CompressionRatio -lt 1.0 -and $r4.ContentMeta.CompressionRatio -gt 0) `
     'CompressionRatio < 1 for repetitive >100-char content' "got $($r4.ContentMeta.CompressionRatio)"
+#endregion
 
-# ---------------------------------------------------------------------------
+#region Test2_NoContent
 Enter-Section '2. No-Content contract'
-# ---------------------------------------------------------------------------
 $envelope = [pscustomobject]@{ Id = 'thread-1'; Path = 't.md'; Exchanges = @(1, 2, 3) }
 $re = Invoke-Attr $envelope
 Assert-True ($null -eq $re.PSObject.Properties['ContentMeta']) 'envelope passes through unenriched'
 Assert-True ($re.Id -eq 'thread-1' -and $re.Exchanges.Count -eq 3) 'envelope properties preserved'
+#endregion
 
-# ---------------------------------------------------------------------------
+#region Test3_EmptyContent
 Enter-Section '3. Empty content'
-# ---------------------------------------------------------------------------
 $rz = Invoke-Attr ([pscustomobject]@{ RelativePath = 'empty.txt'; Content = '' })
 $az = $rz.ContentMeta
 Assert-True ($null -ne $az) 'empty string still gets ContentMeta'
 Assert-True ($az.SpanBytes -eq 0 -and $az.CharCount -eq 0 -and $az.WordCount -eq 0 -and $az.Entropy -eq 0) 'zeroed count metrics (incl. SpanBytes)'
 Assert-True ($az.CompressionRatio -eq 1.0 -and $az.WhitespaceRatio -eq 0) 'zeroed ratio metrics'
 Assert-True ($az.LineStats.Mean -eq 0 -and $az.LineStats.Max -eq 0) 'zeroed line stats'
+#endregion
 
-# ---------------------------------------------------------------------------
+#region Test4_CopyOnEnrich
 Enter-Section '4. Copy-on-enrich'
-# ---------------------------------------------------------------------------
 $src = [pscustomobject]@{
     AbsolutePath = 'C:/repo/a.ps1'; RelativePath = 'a.ps1'; NodePath = ''
     SizeBytes = 999; LastWriteUtc = [datetime]::UtcNow; Content = 'x y z'
@@ -133,10 +121,10 @@ Assert-True ($rc.Content -eq 'x y z') 'Content unmutated'
 Assert-True ($null -eq $src.PSObject.Properties['ContentMeta']) "caller's object untouched"
 Assert-True ($rc.SizeBytes -eq 999 -and $rc.ContentMeta.CharCount -eq 5) `
     'provenance split: SizeBytes (on-disk) vs ContentMeta.CharCount (processed)'
+#endregion
 
-# ---------------------------------------------------------------------------
+#region Test5_ColonelDispatch
 Enter-Section '5. Colonel dispatch (file-read → rs-content_meta)'
-# ---------------------------------------------------------------------------
 Import-Module (Join-Path $v3 'rs.core.colonel.v2.psm1') -Force -WarningAction SilentlyContinue
 
 $fixtureRoot = Join-Path ([IO.Path]::GetTempPath()) "rs-attr-test-$([guid]::NewGuid().ToString('N').Substring(0,8))"
@@ -169,19 +157,13 @@ try
 }
 catch
 {
-    # A terminating error inside the try block — a StrictMode property access, a
-    # parameter-binding failure — would otherwise abort the suite SILENTLY:
-    # finally runs, execution resumes after the block, and the summary prints a
-    # PASSING count while the remaining asserts never ran. That mode is invisible
-    # from outside (tests/run-all.ps1 cannot detect it — the counts are
-    # self-consistent), so it has to be caught HERE.
     Assert-True $false "SUITE ABORTED: $($_.Exception.Message)" $_.ScriptStackTrace
 }
 finally
 {
     Remove-Item -LiteralPath $fixtureRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
+#endregion
 
-# ---------------------------------------------------------------------------
 Write-Host "`n═══ rs-content_meta.tests: $script:Passed passed, $script:Failed failed ═══" -ForegroundColor $(if ($script:Failed -eq 0) { 'Green' } else { 'Red' })
 if ($script:Failed -gt 0) { exit 1 }

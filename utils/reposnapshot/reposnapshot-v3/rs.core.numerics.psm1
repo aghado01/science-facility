@@ -10,53 +10,17 @@ Set-StrictMode -Version Latest
 
 <#
 .SYNOPSIS
-    Numeric primitives for RepoSnapshot: exact identity, fuzzy signatures,
-    similarity measures.
+    Numeric primitives for RepoSnapshot: exact identity, fuzzy signatures, and similarity measures.
 
 .DESCRIPTION
-    Replaces rs.core.hash + rs.core.lsh + rs.core.measures (G1 generation,
-    non-functional — see issues/reposnapshot/discussion/rs-core-numerics-cross-exam-20260723.md).
-    Demand-driven: only surfaces with consumers or near-term corpus use.
-
-    Region 1  IDENTITY    Get-PathHash, Get-ContentHash, Get-StreamHash (SHA256)
-    Region 2  SIGNATURES  Get-SimHash, Get-DocStats, Get-MinHashSignature,
-                          Get-JaccardEstimate
-    Region 3  MEASURES    Get-HammingDistance/-Similarity, Get-JaccardSimilarity/
-                          -Distance, Get-LevenshteinDistance/-Similarity,
-                          Get-CosineSimilarity
-
-    Classes are internal. Consumers Import-Module and call functions; no
-    `using module` required.
-
-.NOTES
-    Module: rs.core.numerics — leaf substrate, no rs.core dependencies.
-
-    Provenance (G3-verified sources, see the cross-exam doc):
-      SimHash/MinHash/Fnv1a64  ← mathdig/hashlib-new.ps1 (composite snapshot
-                                 json-jsonl_20260424_022119, masked-uint64 gen)
-      SHA256 surface           ← rs.core.hash.psm1 (the part that worked)
-      Cosine                   ← rs.core.measures.psm1 (the part that worked)
-      Hamming/Levenshtein      ← rewritten here (G1 versions never ran)
-
-    MASKED-ARITHMETIC LAW — PowerShell checked arithmetic widens overflow to
-    double (silent precision loss, then bitwise-op throw). House rules:
-      1. Never multiply unmasked on signed types.
-         64-bit: widen via [System.UInt128], truncate back to [ulong].
-         32-bit: [uint64] accumulator with -band 0xFFFFFFFFul.
-         Byte:   -band 0xFF, typed [byte] end-to-end.
-      2. Never `x -band (x - 1)` popcount on [long] — sign-bit infinite loop.
-         Use [System.Numerics.BitOperations]::PopCount on [uint64].
-      3. Always parenthesize 2D-array indices: `$dp[($i - 1), $j]` — or use
-         1D rows (as Levenshtein does here).
-      4. Class methods and ctors take full arg lists — PS silently ignores
-         default parameter values in classes.
-      5. Char/string equality is explicit — PS `-eq` is case-insensitive;
-         compare code points or use -ceq.
+    Provides mathematical and hash primitives:
+      - Identity: Get-PathHash, Get-ContentHash, Get-StreamHash (SHA256)
+      - Signatures: Get-SimHash, Get-DocStats, Get-MinHashSignature, Get-JaccardEstimate
+      - Measures: Get-HammingDistance/-Similarity, Get-JaccardSimilarity/-Distance,
+                  Get-LevenshteinDistance/-Similarity, Get-CosineSimilarity
 #>
 
-# ═══════════════════════════════════════════════════════════════════════════
-# INTERNAL CLASSES (not exported; reach them only through the functions below)
-# ═══════════════════════════════════════════════════════════════════════════
+#region InternalClasses
 
 class SimHash
 {
@@ -259,10 +223,9 @@ class MinHash
         return [double]$matchCount / $Sig1.Length
     }
 }
+#endregion
 
-# ═══════════════════════════════════════════════════════════════════════════
-# REGION 1 — IDENTITY (exact, SHA256)
-# ═══════════════════════════════════════════════════════════════════════════
+#region Identity
 
 function Get-PathHash
 {
@@ -337,10 +300,9 @@ function Get-StreamHash
 
     return [Convert]::ToHexString([SHA256]::HashData($Stream)).ToLowerInvariant()
 }
+#endregion
 
-# ═══════════════════════════════════════════════════════════════════════════
-# REGION 2 — SIGNATURES (fuzzy)
-# ═══════════════════════════════════════════════════════════════════════════
+#region Signatures
 
 function Get-SimHash
 {
@@ -492,10 +454,9 @@ function Get-JaccardEstimate
 
     return [MinHash]::EstimateJaccard($Signature1, $Signature2)
 }
+#endregion
 
-# ═══════════════════════════════════════════════════════════════════════════
-# REGION 3 — MEASURES
-# ═══════════════════════════════════════════════════════════════════════════
+#region Measures
 
 function Get-HammingDistance
 {
@@ -740,10 +701,7 @@ function Get-CosineSimilarity
 
     return $dotProduct / $magnitude
 }
-
-# ═══════════════════════════════════════════════════════════════════════════
-# EXPORTS
-# ═══════════════════════════════════════════════════════════════════════════
+#endregion
 
 Export-ModuleMember -Function @(
     # Region 1 — identity

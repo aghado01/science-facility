@@ -9,57 +9,29 @@ Set-StrictMode -Version Latest
 
 <#
 .SYNOPSIS
-    RepoSnapshot V3 colonel — processor-chain compilation and runspace-pool
-    dispatch (v2: plan-driven; the v1 fluent/RunMode API is retired).
+    RepoSnapshot V3 colonel — processor-chain compilation and runspace-pool dispatch.
 
 .DESCRIPTION
-    Two-call surface:
-      Compile-Plan — validates processor scripts (AST: top-level param block
-        required, interior helpers legitimate, #Requires rejected via
-        $ast.ScriptRequirements), registers bodies + chain-executor into an
-        InitialSessionState, returns a frozen Plan. All name resolution and
-        planning happens here; workers make zero decisions.
-      Invoke-Plan — slices Items round-robin across a worker budget
-        (Resolve-WorkerBudget), executes the chain per item via
-        Invoke-ChainExecutor inside a runspace pool, returns the
-        index-stable envelope @{ Results; Errors; Warnings; Streams; Budget;
-        Timing }. Errors are collected and collated like any other output
-        stream — see `Streams` in the Invoke-Plan contract below.
+    Two-call API surface:
+      Compile-Plan: Validates processor scripts via AST, registers bodies and
+                    chain-executor into an InitialSessionState, returns a frozen Plan.
+      Invoke-Plan:  Slices items across a worker pool, executes chains via
+                    Invoke-ChainExecutor, returns an index-stable envelope.
 
-    Items are ItemDescriptor objects dispatched verbatim (rs.core.ingest
-    forwards them); processors receive them as $Item and copy-on-enrich.
-    The _ChainHalt convention is owned by chain-executor (processors only
-    set the property). RunspaceManager/New-RunspaceManager is a thin
-    convenience holder over Invoke-Plan for repeated Run() calls with
-    sticky knobs — the pipeline path (ingest) calls Invoke-Plan directly.
-
-    Module-level #Requires is fine HERE — the prohibition is on processor
-    scripts, whose bodies become ISS-registered functions where the
-    directive is inert (see Compile-Plan validation).
+    See docs/colonel-and-iss.md for architecture and closure rules.
 #>
 
-# =============================================================================
-# ENUMS
-# =============================================================================
-
+#region Enums
 enum IssPreset
 {
-    Bare  # Create()          — empty engine (0 cmdlets); processor scripts must be fully self-contained
-    Core  # CreateDefault2    — PS core cmdlets only; default; good isolation/speed balance
-    Full  # CreateDefault     — full module + provider set; use when processors need providers
+    Bare  # Empty engine (0 cmdlets)
+    Core  # PS core cmdlets (default)
+    Full  # Full module + provider set
 }
+#endregion
 
-# =============================================================================
-# PURE FUNCTIONS — planning and budget; no side effects, no class state
-# =============================================================================
-
-# -----------------------------------------------------------------------------
-# $script:ReadProcessorScript
-# Validates and reads a single processor script file.
-# Stored as a module-scoped scriptblock so Compile-Plan can hand it to raw
-# [PowerShell]::Create() workers without capturing module-scope state.
-# RUNSPACE BOUNDARY: must reference only its own parameters.
-# -----------------------------------------------------------------------------
+#region ReadProcessorScript
+# Module-scoped scriptblock for validating and reading a processor script file.
 $script:ReadProcessorScript = {
     param([string]$Key, [string]$Path)
     $result = @{ Key = $Key; Fn = "Invoke-$Key"; Body = $null; Error = $null }
@@ -71,12 +43,7 @@ $script:ReadProcessorScript = {
 
         $body = Get-Content -LiteralPath $Path -Raw
 
-        # AST validation of the body-only contract. The positive requirement
-        # is a TOP-LEVEL param block (chain-executor calls processors with two
-        # positional args); a file that is just an outer function wrapper has
-        # no top-level param block and fails here. Interior helper functions
-        # (e.g. tp-perplexity's _MaskByRegex) are legitimate — the previous
-        # regex rejected any 'function' keyword and blocked them.
+        # AST validation of the body-only contract
         $parseErrors = $null
         $astTokens = $null
         $ast = [System.Management.Automation.Language.Parser]::ParseInput(
@@ -87,11 +54,7 @@ $script:ReadProcessorScript = {
             return $result
         }
 
-        # #Requires check via the parser's own authority, not a regex. The
-        # directive is only honored for script FILES — inert inside an
-        # ISS-registered function body, whose environment Build-Iss owns.
-        # (A regex over-matches: '# Requires manual setup' is an ordinary
-        # comment — PowerShell's directive syntax is exactly '#Requires'.)
+        # #Requires is inert inside ISS-registered function bodies
         if ($null -ne $ast.ScriptRequirements)
         {
             $result.Error = 'Processor scripts must not declare #Requires (ISS-load contract).'
@@ -100,21 +63,11 @@ $script:ReadProcessorScript = {
 
         if ($null -eq $ast.ParamBlock)
         {
-            $result.Error = 'Processor scripts must declare a top-level param($Item, $Config) block — body only, no outer function wrapper.'
+            $result.Error = 'Processor scripts must declare a top-level param($Item, $Config) block.'
             return $result
         }
 
-        # Engine-state commands are banned for the same reason as #Requires: the
-        # environment belongs to Build-Iss, and a body-only fragment must not set
-        # it. Set-StrictMode was the live case — carried by only 2 of 7 processors,
-        # so the fleet was already inconsistent, and under the Bare preset it is a
-        # NON-terminating error: the processor keeps running WITHOUT strict mode
-        # while writing to the error stream, which colonel now collects per worker.
-        # The strictness that matters is structural anyway (processors probe
-        # PSObject.Properties rather than assuming shape), and the test harnesses
-        # set it at script scope — strictness where it catches bugs, without the
-        # runtime dependency where it costs.
-        # Checked over the whole fragment, interior helpers included.
+        # Engine-state modifications belong to Build-Iss, not processor bodies
         $banned = @('Set-StrictMode', 'Set-PSDebug')
         $cmdAsts = $ast.FindAll(
             { param($n) $n -is [System.Management.Automation.Language.CommandAst] }, $true)
@@ -123,7 +76,7 @@ $script:ReadProcessorScript = {
             $name = $c.GetCommandName()
             if ($null -ne $name -and $banned -contains $name)
             {
-                $result.Error = "Processor scripts must not call $name — engine state belongs to Build-Iss, not to a body-only fragment (same contract as the #Requires ban)."
+                $result.Error = "Processor scripts must not call $name (engine state belongs to Build-Iss)."
                 return $result
             }
         }
@@ -133,14 +86,15 @@ $script:ReadProcessorScript = {
     catch { $result.Error = $_.Exception.Message }
     return $result
 }
+#endregion
 
-# -----------------------------------------------------------------------------
-# Build-Iss
-# Constructs an InitialSessionState from a preset + optional module list.
-# NOT thread-safe — always call serially.
-# -----------------------------------------------------------------------------
+#region Build-Iss
 function Build-Iss
 {
+    <#
+    .SYNOPSIS
+        Constructs an InitialSessionState from a preset and module list.
+    #>
     param(
         [IssPreset] $Preset = [IssPreset]::Core,
         [string[]]  $Modules = @()
@@ -150,18 +104,6 @@ function Build-Iss
     {
         ([IssPreset]::Bare)
         {
-            # NOT ::CreateEmpty() — no such method exists on InitialSessionState.
-            # Its statics are Create / CreateDefault / CreateDefault2 / CreateFrom /
-            # CreateFromSessionConfigurationFile / CreateRestricted. The prior call
-            # threw, leaving $iss null; Compile-Plan still reported success and the
-            # failure only surfaced at dispatch as "Invoke-ChainExecutor is not
-            # recognized". Bare had therefore never worked — masked because every
-            # profile uses Core (every processor documents an IssPreset floor of Core).
-            #
-            # Create() is the empty factory, and it defaults to LanguageMode
-            # NoLanguage — which rejects the AddScript this module uses at the worker
-            # boundary. CreateDefault2 defaults to FullLanguage, which is why Core
-            # never needed this. The mode must therefore be set explicitly.
             $bare = [InitialSessionState]::Create()
             $bare.LanguageMode = [System.Management.Automation.PSLanguageMode]::FullLanguage
             $bare
@@ -171,8 +113,6 @@ function Build-Iss
         default { [InitialSessionState]::CreateDefault2() }
     }
 
-    # Fail loudly here rather than letting a null ISS travel: that is what turned a
-    # bad factory call into a misleading downstream error about a missing function.
     if ($null -eq $iss)
     {
         throw "Build-Iss: InitialSessionState construction returned null for preset '$Preset'."
@@ -185,33 +125,15 @@ function Build-Iss
 
     return $iss
 }
+#endregion
 
-# -----------------------------------------------------------------------------
-# Compile-Plan
-# Reads + validates processor scripts, builds the ISS, registers all processor
-# functions and Invoke-ChainExecutor into the ISS, returns a frozen Plan.
-#
-# Parameters
-#   Manifest          hashtable  { 'processor-key' = 'path/to/script.ps1' }
-#   Steps             ordered object[]  @{ Key = string; Config = hashtable }
-#   ChainExecutorPath string     path to chain-executor.ps1
-#   SharedHelperPath  string[]   optional library files whose TOP-LEVEL functions
-#                                are each registered into the ISS (e.g.
-#                                processors/bag-helpers.ps1). Unlike processors,
-#                                these declare function wrappers.
-#   IssPreset         IssPreset  enum value (default Core)
-#   IssModules        string[]   extra PS modules pre-loaded into every worker
-#   InitThreads       int        max concurrent bootstrap readers (default 4)
-#
-# Returns [pscustomobject] @{ Plan; Errors; Warnings }
-#   Plan is $null when Errors is non-empty.
-#   Plan shape:
-#     Steps         — ordered array [pscustomobject] @{ Key; Fn; Config }
-#     Iss           — InitialSessionState (processors + chain-executor loaded)
-#     ProcessorKeys — string[]
-# -----------------------------------------------------------------------------
+#region Compile-Plan
 function Compile-Plan
 {
+    <#
+    .SYNOPSIS
+        Reads and validates processor scripts, builds ISS, and returns a frozen Plan.
+    #>
     param(
         [Parameter(Mandatory)] [hashtable]  $Manifest,
         [Parameter(Mandatory)] [object[]]   $Steps,
@@ -225,7 +147,6 @@ function Compile-Plan
     $errors = [System.Collections.Generic.List[string]]::new()
     $warnings = [System.Collections.Generic.List[string]]::new()
 
-    # ── Input validation ──────────────────────────────────────────────────────
     if ($null -eq $Manifest -or $Manifest.Count -eq 0)
     {
         $errors.Add('Manifest is empty — no processors to load.')
@@ -242,7 +163,6 @@ function Compile-Plan
         return [pscustomobject]@{ Plan = $null; Errors = $errors.ToArray(); Warnings = $warnings.ToArray() }
     }
 
-    # ── Collect referenced processor keys ─────────────────────────────────────
     $referencedKeys = [System.Collections.Generic.HashSet[string]]::new()
     foreach ($step in $Steps)
     {
@@ -267,11 +187,7 @@ function Compile-Plan
         return [pscustomobject]@{ Plan = $null; Errors = $errors.ToArray(); Warnings = $warnings.ToArray() }
     }
 
-    # ── Phase 1: Parallel bootstrap read + validate (PSOne-style fan-out) ─────
-    # Raw [PowerShell]::Create() — no pool, no ISS, no budget machinery.
-    # Bypasses colonel's own ISS to avoid the bootstrap catch-22.
-    # ISS construction in Phase 3 is serial (InitialSessionState is not thread-safe).
-
+    # Parallel bootstrap read + validate
     $entriesToRead = @($Manifest.GetEnumerator() | Where-Object { $referencedKeys.Contains($_.Key) })
 
     $batches = [System.Collections.Generic.List[object[]]]::new()
@@ -306,7 +222,7 @@ function Compile-Plan
         }
     }
 
-    # ── Phase 2: Validate loaded bodies ───────────────────────────────────────
+    # Validate loaded bodies
     $validBodies = @{}
     foreach ($loaded in $loadedBodies)
     {
@@ -319,11 +235,9 @@ function Compile-Plan
         return [pscustomobject]@{ Plan = $null; Errors = $errors.ToArray(); Warnings = $warnings.ToArray() }
     }
 
-    # ── Phase 3: Serial ISS construction ─────────────────────────────────────
-    # InitialSessionState is not thread-safe — must be serial.
+    # Serial ISS construction
     $iss = Build-Iss -Preset $IssPreset -Modules $IssModules
 
-    # Register processor function bodies
     foreach ($key in $referencedKeys)
     {
         $entry = $validBodies[$key]
@@ -332,18 +246,13 @@ function Compile-Plan
         )
     }
 
-    # Register Invoke-ChainExecutor — loaded exactly like processors, same ISS mechanism.
-    # chain-executor.ps1 must be body-only (no outer function wrapper), param() first.
+    # Register Invoke-ChainExecutor
     $chainBody = Get-Content -LiteralPath $ChainExecutorPath -Raw
     $iss.Commands.Add(
         [System.Management.Automation.Runspaces.SessionStateFunctionEntry]::new('Invoke-ChainExecutor', $chainBody)
     )
 
-    # Register shared helper libraries. UNLIKE processors and chain-executor,
-    # these files DO declare function wrappers — each top-level function is
-    # registered separately, so one file can supply several helpers. The body
-    # text is taken from the AST rather than by string surgery, so nested braces
-    # and here-strings inside a helper are handled by the parser, not a regex.
+    # Register shared helper libraries
     foreach ($helperPath in $SharedHelperPath)
     {
         $helperSrc = Get-Content -LiteralPath $helperPath -Raw
@@ -351,7 +260,6 @@ function Compile-Plan
         foreach ($fn in $helperAst.FindAll(
                 { param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $false))
         {
-            # Body.Extent.Text includes the wrapping braces; SessionStateFunctionEntry wants the interior.
             $bodyText = $fn.Body.Extent.Text
             $iss.Commands.Add(
                 [System.Management.Automation.Runspaces.SessionStateFunctionEntry]::new(
@@ -360,9 +268,7 @@ function Compile-Plan
         }
     }
 
-    # ── Phase 4: Bind steps to resolved Fn names ─────────────────────────────
-    # All name resolution happens here at compile time.
-    # Workers receive resolved Fn strings — no manifest lookups at runtime.
+    # Bind steps to resolved Fn names
     $boundSteps = foreach ($step in $Steps)
     {
         [pscustomobject]@{
@@ -382,32 +288,15 @@ function Compile-Plan
         Warnings = $warnings.ToArray()
     }
 }
+#endregion
 
-# -----------------------------------------------------------------------------
-# Resolve-WorkerBudget
-# Pure function. Determines thread count for a given batch.
-#
-# Parameters
-#   ItemCount         int           required
-#   MaxWorkers        nullable[int] explicit ceiling; $null = auto
-#   ReservedCores     int           cores withheld when auto (default 2)
-#   MinItemsPerWorker int           grading threshold (default 4)
-#
-# Returns [pscustomobject] @{ Threads; Policy; Warnings; Inputs }
-# -----------------------------------------------------------------------------
-
-# TODO: adjust budget policy based on new testing
-# | Items | Graded | Ceiling | Threads |
-# | ---- - | ------ | ------ - | ------ - |
-# | 1     | 1      | 14      | 1       |
-# | 4     | 1      | 14      | 1       |
-# | 8     | 2      | 14      | 2       |
-# | 20    | 5      | 14      | 5       |
-# | 60    | 15     | 14      | 14      |
-# | 200   | 50     | 14      | 14      |
-
+#region Resolve-WorkerBudget
 function Resolve-WorkerBudget
 {
+    <#
+    .SYNOPSIS
+        Determines thread count and allocation policy for a batch.
+    #>
     param(
         [Parameter(Mandatory)] [int]           $ItemCount,
         [nullable[int]]                        $MaxWorkers = $null,
@@ -431,11 +320,10 @@ function Resolve-WorkerBudget
     else
     {
         $policy = 'Auto'
-        $reserved = [Math]::Min($ReservedCores, $logical - 1)   # always leave at least 1 core
+        $reserved = [Math]::Min($ReservedCores, $logical - 1)
         $ceiling = [Math]::Max(1, $logical - $reserved)
     }
 
-    # Grading: don't spin workers that would receive fewer than MinItemsPerWorker items
     $graded = if ($MinItemsPerWorker -gt 0 -and $ItemCount -gt 0)
     {
         [Math]::Max(1, [int][Math]::Ceiling($ItemCount / $MinItemsPerWorker))
@@ -458,42 +346,19 @@ function Resolve-WorkerBudget
         }
     }
 }
+#endregion
 
-# =============================================================================
-# Invoke-Plan
-# Dispatches a compiled Plan against a batch of items using a RunspacePool.
-# Pool is opened with (1, $threads) — Threads=1 is the serial case, no branch.
-# Each worker calls Invoke-ChainExecutor per item in its slice.
-# Results are written by index into a pre-allocated ordered array.
-#
-# Parameters
-#   Items             object[]
-#   Plan              pscustomobject   from Compile-Plan
-#   MaxWorkers        nullable[int]    explicit thread ceiling; $null = auto
-#   ReservedCores     int              (default 2)
-#   MinItemsPerWorker int              (default 4)
-#   WaitTimeoutMs     int              (default 60000)
-#
-# Returns [pscustomobject] @{ Results; Errors; Warnings; Streams; Budget; Timing }
-#
-#   Streams   ALL five worker streams, structured and collated in worker order:
-#             @{ Stream; Worker; Message; ErrorId; Category; Target; StackTrace }
-#             Stream is Error|Warning|Verbose|Debug|Information. Errors are one
-#             stream among five, not a special case — Warning/Verbose/Debug/
-#             Information were formerly discarded, so a processor's Write-Warning
-#             vanished silently. Records keep FullyQualifiedErrorId, CategoryInfo,
-#             TargetObject and ScriptStackTrace, which ToString() destroys.
-#   Errors    flat string[] projection kept for existing consumers (ingest merges
-#             it; suites assert on it). Fed from the structured rows plus
-#             chain-executor's per-item entries and dispatch-level failures.
-#   Warnings  budget warnings plus worker Warning records.
-# =============================================================================
+#region Invoke-Plan
 function Invoke-Plan
 {
+    <#
+    .SYNOPSIS
+        Dispatches a compiled Plan against a batch of items using a RunspacePool.
+
+    .OUTPUTS
+        [PSCustomObject] @{ Results; Errors; Warnings; Streams; Budget; Timing }
+    #>
     param(
-        # AllowEmptyCollection: Mandatory alone rejects @() at binding time,
-        # which made the intentional count-0 early-return below unreachable
-        # for direct callers (ingest short-circuits earlier, harnesses don't).
         [Parameter(Mandatory)] [AllowEmptyCollection()] [object[]] $Items,
         [Parameter(Mandatory)] [pscustomobject] $Plan,
         [nullable[int]]                         $MaxWorkers = $null,
@@ -507,7 +372,7 @@ function Invoke-Plan
     $timing = @{}
     $swTotal = [System.Diagnostics.Stopwatch]::StartNew()
 
-    # ── Budget ────────────────────────────────────────────────────────────────
+    # Budget resolution
     $budgetParams = @{
         ItemCount         = $Items.Count
         MaxWorkers        = $MaxWorkers
@@ -520,9 +385,6 @@ function Invoke-Plan
 
     $threads = $budget.Threads
     $count = $Items.Count
-
-    # Pre-allocate index-stable output array.
-    # Untyped to prevent PS from unrolling a single-null [object[]] on assignment.
     $ordered = [object[]]::new($count)
 
     if ($count -eq 0)
@@ -536,7 +398,7 @@ function Invoke-Plan
         }
     }
 
-    # ── Slice items round-robin across workers ────────────────────────────────
+    # Slice items round-robin
     $sliceItems = [System.Collections.Generic.List[object][]]::new($threads)
     $sliceIdxs = [System.Collections.Generic.List[int][]]::new($threads)
     for ($t = 0; $t -lt $threads; $t++)
@@ -551,8 +413,7 @@ function Invoke-Plan
         $sliceIdxs[$slot].Add($i)
     }
 
-
-    # ── Open pool — (1, $threads); Threads=1 is serial, no special branch ────
+    # Open RunspacePool
     $swPool = [System.Diagnostics.Stopwatch]::StartNew()
     $pool = [RunspaceFactory]::CreateRunspacePool($Plan.Iss)
     $null = $pool.SetMinRunspaces(1)
@@ -562,14 +423,7 @@ function Invoke-Plan
     $pool.Open()
     $timing['PoolOpenMs'] = $swPool.ElapsedMilliseconds
 
-    # ── Stream collation ──────────────────────────────────────────────────────
-    # Results are collated index-stably; streams get the same treatment rather
-    # than being flattened to one joined string per worker. Errors are ONE stream
-    # among five — Warning/Verbose/Debug/Information used to be discarded
-    # outright, so a processor calling Write-Warning vanished without trace.
-    # Records are kept structured: ToString() throws away FullyQualifiedErrorId,
-    # CategoryInfo, TargetObject and ScriptStackTrace, which are precisely the
-    # fields worth having when a processor misbehaves inside a runspace.
+    # Stream harvester helper
     $readWorkerStreams = {
         param([object] $Ps, [int] $WorkerIndex)
 
@@ -597,7 +451,6 @@ function Invoke-Plan
         {
             foreach ($rec in $spec.Records)
             {
-                # InformationRecord carries MessageData; the rest carry Message.
                 $msg = if ($rec -is [System.Management.Automation.InformationRecord])
                 { [string]$rec.MessageData } else { [string]$rec.Message }
 
@@ -616,14 +469,12 @@ function Invoke-Plan
         return $rows
     }
 
-    # ── Worker scriptblock — RUNSPACE BOUNDARY ────────────────────────────────
-    # using namespace directives are parse-time and module-scoped — they do NOT
-    # propagate into AddScript() contexts. All .NET types here must be fully qualified.
+    # Worker scriptblock
     $workerScript = {
         param(
             [object[]]  $MyItems,
             [int[]]     $MyIdxs,
-            [object[]]  $PlanSteps,    # array of hashtable @{ Key; Fn; Config }
+            [object[]]  $PlanSteps,
             [object[]]  $OrderedOut,
             [System.Collections.Concurrent.ConcurrentBag[string]] $ErrorBag
         )
@@ -642,14 +493,11 @@ function Invoke-Plan
         }
     }
 
-    # Serialize Plan.Steps as plain hashtables for safe runspace boundary crossing.
-    # pscustomobject properties survive serialization but hashtables are safer and
-    # avoid deserialization type-fidelity surprises with nested objects.
     $planStepsForWorker = @(
         $Plan.Steps | ForEach-Object { @{ Key = $_.Key; Fn = $_.Fn; Config = $_.Config } }
     )
 
-    # ── Dispatch ──────────────────────────────────────────────────────────────
+    # Dispatch workers
     $workers = [System.Collections.Generic.List[hashtable]]::new($threads)
     $swDispatch = [System.Diagnostics.Stopwatch]::StartNew()
 
@@ -669,7 +517,7 @@ function Invoke-Plan
     }
     $timing['DispatchMs'] = $swDispatch.ElapsedMilliseconds
 
-    # ── Wait ──────────────────────────────────────────────────────────────────
+    # Wait for completion
     $swWait = [System.Diagnostics.Stopwatch]::StartNew()
     $swWall = [System.Diagnostics.Stopwatch]::StartNew()
     foreach ($worker in $workers)
@@ -682,10 +530,7 @@ function Invoke-Plan
     }
     $timing['WaitMs'] = $swWait.ElapsedMilliseconds
 
-    # ── Collect results, streams, and dispose workers ─────────────────────────
-    # Worker order is deterministic here (the $workers list is built in slice
-    # order), so $streams is collated deterministically even though $errors
-    # remains a ConcurrentBag whose own ordering is not guaranteed.
+    # Collect results and streams
     $swCollect = [System.Diagnostics.Stopwatch]::StartNew()
     $streams = [System.Collections.Generic.List[pscustomobject]]::new()
     for ($wi = 0; $wi -lt $workers.Count; $wi++)
@@ -703,29 +548,21 @@ function Invoke-Plan
                 $errors.Add('Worker did not complete before timeout; stopped forcibly.')
             }
 
-            # Harvest EVERY stream, whether or not HadErrors is set — warnings and
-            # verbose output are worth collecting from a worker that succeeded.
             foreach ($row in (& $readWorkerStreams $worker.PS $wi)) { $streams.Add($row) }
         }
         catch { $errors.Add("Worker collect error: $($_.Exception.Message)") }
         finally { $worker.PS.Dispose() }
     }
 
-    # Back-compat projection: Errors stays a flat string[] for existing consumers
-    # (ingest merges it; suites assert on it), now fed from the structured rows.
     foreach ($row in $streams)
     {
         if ($row.Stream -eq 'Error') { $errors.Add("Worker [$($row.Worker)] $($row.Message)") }
     }
     $timing['CollectMs'] = $swCollect.ElapsedMilliseconds
 
-    # ── Pool teardown ─────────────────────────────────────────────────────────
     try { $pool.Close(); $pool.Dispose() } catch {}
-
     $timing['TotalMs'] = $swTotal.ElapsedMilliseconds
 
-    # Worker Warning records join the envelope's Warnings (previously only
-    # Resolve-WorkerBudget could contribute, so processor warnings were lost).
     foreach ($row in $streams)
     {
         if ($row.Stream -eq 'Warning') { $warnings.Add("Worker [$($row.Worker)] $($row.Message)") }
@@ -740,24 +577,9 @@ function Invoke-Plan
         Timing   = [pscustomobject]$timing
     }
 }
+#endregion
 
-# =============================================================================
-# RunspaceManager / New-RunspaceManager
-# Thin holder for a compiled Plan plus runtime knobs.
-# All planning lives in Compile-Plan. This class only holds state between
-# Run() calls and surfaces the Invoke-Plan parameters as settable properties.
-#
-# Typical usage:
-#   $compiled = Compile-Plan -Manifest $m -Steps $s -ChainExecutorPath $p
-#   if ($compiled.Errors) { throw ($compiled.Errors -join "`n") }
-#
-#   $manager = New-RunspaceManager -Plan $compiled.Plan
-#   $result  = $manager.Run($items)
-#   # $result.Results  — [object[]] ordered by original batch index
-#   # $result.Errors   — string[]
-#   # $result.Budget   — thread count + policy detail
-#   # $result.Timing   — phase breakdown in ms
-# =============================================================================
+#region RunspaceManager
 class RunspaceManager
 {
     [pscustomobject] $Plan
@@ -788,6 +610,10 @@ class RunspaceManager
 
 function New-RunspaceManager
 {
+    <#
+    .SYNOPSIS
+        Constructs a RunspaceManager instance over a compiled Plan.
+    #>
     [OutputType([RunspaceManager])]
     param(
         [Parameter(Mandatory)] [pscustomobject] $Plan,
@@ -804,6 +630,7 @@ function New-RunspaceManager
     $mgr.WaitTimeoutMs = $WaitTimeoutMs
     return $mgr
 }
+#endregion
 
 Export-ModuleMember -Function @(
     'Compile-Plan'

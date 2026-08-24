@@ -4,56 +4,21 @@ using namespace System.Collections.Generic
 
 <#
 .SYNOPSIS
-    RepoSnapshot V3 shards — the packer core: deterministic bin assignment over
-    one group's measured size vector. Pure integers; zero I/O, zero entries,
-    zero layout.
+    RepoSnapshot V3 shards — bin packing and shard planning.
 
 .DESCRIPTION
-    Brief: issues/reposnapshot/briefs/shards-brief.md (§Algorithm stages 4–7,
-    §Objective, §Policy stack). Contract: contracts/shards.contract.json — this
-    module is the packer under it; New-ShardPlan, the stage shell over real
-    entries and the resolved layout, is still owed and will call
-    New-BinAssignment once per group.
+    Groups, measures, and packs entries into deterministic, bounded shards
+    under configurable packing objectives (FrontLoad vs Even).
 
-    Input is ONE GROUP's row sizes in NOMINAL ORDER — index i IS the nominal
-    position (Measure-Row output, exact by #39/#49). Per-bin row capacity is
-    quota − HeaderBytes; ceiling = quota + tolerance (#40/#41). Overflow
-    outranks the objectives: HeaderBytes + row > ceiling → own pinned bin at
-    any size (#42); atomicity, never split (#47). The lower bound is
-    CEILING-anchored and count-capped (2026-08-23 correction — a quota-anchored
-    bound exceeds the achievable count whenever tolerance does its job).
-    Everything is deterministic: no randomness, explicit tie-breaks (#44).
-
-    Objective per group, lexicographic (#40/#48): (1) fewest bins under the
-    ceiling; (2) the PackObjective shape — FrontLoad | Even — over the settled
-    count; (3) least overshoot as an invariant of both shapes, never a value.
-    OrderStrict && Tolerance == 0 short-circuits at greedy-at-quota (brief
-    stage 5: the shape engages under strict only with tolerance).
-
-    THE STAGE SHELL — New-ShardPlan — wraps the core with stages 1–3 and the
-    global half of 7–8: enumerate + group (ByFileType reads the CARRIED
-    Extension, never re-derives — #50), sort per GroupSort into nominal order,
-    measure every record once via Measure-Row (container; #39), call the core
-    per group, then assign global Ordinals, Keys (width from ShardCount, floor
-    3 — never a hardcoded D3), gidx 0..N−1 in final reading order (IdxMap),
-    and emit plan/groups/shards/idxmap per contracts/shards.contract.json.
-    The plan holds entry REFERENCES (indices into the caller's Entries) and
-    echoes the resolved knobs including ShardStem, which serialize needs for
-    filenames and has no other route to.
-
-    Public: New-ShardPlan · New-BinAssignment.
+    See docs/sharding-and-packing.md for bin packing algorithm details and group sorting.
 #>
 
 $script:MaxFilesDefault = 100000
 
-# Nested dependencies: Measure-Row (rs.core.container — the one grammar site,
-# #39) and Get-PathHash (rs.core.numerics — GroupSort's optional key, #4).
 Import-Module (Join-Path $PSScriptRoot 'rs.core.container.psm1')
 Import-Module (Join-Path $PSScriptRoot 'rs.core.numerics.psm1')
 
-# =============================================================================
-# Internals — arithmetic and greedy primitives
-# =============================================================================
+#region Internals
 
 function Get-CeilDiv ([long]$A, [long]$B)
 {
@@ -393,11 +358,9 @@ function Invoke-EvenLptPass ([List[object]]$Bins, [long[]]$Sizes, [long]$CapC, [
     }
     return $true
 }
+#endregion
 
-# =============================================================================
-# PUBLIC — New-BinAssignment
-# =============================================================================
-
+#region New-BinAssignment
 function New-BinAssignment
 {
     <#
@@ -601,10 +564,9 @@ function New-BinAssignment
         ShapePassApplied    = $shapeApplied
     }
 }
+#endregion
 
-# =============================================================================
-# Internals — stage shell (grouping, nominal order)
-# =============================================================================
+#region StageShellInternals
 
 function Get-GroupKey ([object]$Entry, [string]$Grouping, [int]$Index)
 {
@@ -659,11 +621,9 @@ function Get-NominalOrder ([object[]]$Entries, [List[int]]$Members, [string]$Gro
     [Array]::Sort($keys, $idx, [StringComparer]::Ordinal)
     return ,$idx
 }
+#endregion
 
-# =============================================================================
-# PUBLIC — New-ShardPlan
-# =============================================================================
-
+#region New-ShardPlan
 function New-ShardPlan
 {
     <#
@@ -864,5 +824,6 @@ function New-ShardPlan
         IdxMap = $idxMap
     }
 }
+#endregion
 
 Export-ModuleMember -Function @('New-ShardPlan', 'New-BinAssignment')

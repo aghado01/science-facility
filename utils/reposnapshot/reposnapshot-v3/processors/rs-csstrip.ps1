@@ -7,33 +7,18 @@
     based on the Config.Operations array.
 
     Unlike rs-psstrip.ps1, this processor is regex-only — no native C# AST is
-    available from PowerShell.  Known limitation: // and /* tokens that appear
+    available from PowerShell. Known limitation: // and /* tokens that appear
     inside string literals (including verbatim @"..." strings) may be incorrectly
-    treated as comments.  This is acceptable for token-reduction use cases where
-    output is consumed by an LLM rather than compiled.
-    Pending evaluation (lts-v3-transfer-audit inventory): adopt LTS
-    Normalize-FileContent's combined string-or-comment alternation scan, which
-    closes the string-literal false-positive class in one pattern.
+    treated as comments.
 
     Behavior note: line endings are normalized CRLF/CR → LF as a side effect
     before span analysis (offsets require a stable newline basis).
 
-    ISS-load-safe: no #Requires, top-level param contract (interior helpers
-    permitted per colonel AST validation).
-
-    Processor self-documentation (no runtime enforcement in this file):
-        - Item contract:  harmonized content mutator (consolidation 6d) —
-          reads Content (descriptor contract) else Text (tp-era), mutates it,
-          and writes the SAME key back on a CLONE of the incoming bag; every
-          other property passes through untouched. Copy-on-mutate: the mutator
-          sibling of file-read's copy-on-enrich. Track-agnostic — the
-          processor never renames, invents, or edits a key it did not read.
-          Bare string in → bare string out. Bag carrying neither key →
-          returned untouched. Per-invocation metadata appends one record to
-          the `Processing` element.
-        - Position class: content mutator
-        - Intended Colonel IssPreset floor: Core
-        - Required IssModules: none
+    ISS-load-safe: no #Requires, top-level param contract.
+      - Item contract:  harmonized content mutator (consolidation 6d)
+      - Position class: content mutator
+      - Intended Colonel IssPreset floor: Core
+      - Required IssModules: none
 
 .COMMENT KINDS
     BlockComment      /* ... */ on own line(s), no surrounding code            (default: strip)
@@ -44,23 +29,17 @@
     InlineComment     // trailing on a code line (code precedes on same line) (default: keep)
 
 .PARAMETER Item
-    String, hashtable, or pscustomobject.  Recognised keys: Text, Path, Id.
+    String, hashtable, or pscustomobject. Recognised keys: Text, Path, Id.
 
 .PARAMETER Config
     Hashtable with optional keys:
       Operations  [string[]] opt-in strip list; default: all four structural kinds (interior + inline kept)
                   Valid values: 'block-comments','interior-comments','doc-strings','comment-blocks','line-comments','inline-comments'
-      IncludeMeta [bool] default $true  — attach the `Processing` record. $false
-                  returns the mutated bag WITHOUT the record; it never collapses a
-                  bag to a bare string (that was the tp-era envelope behavior 6d
-                  removed). Bare-string input is unaffected either way.
+      IncludeMeta [bool] default $true — attach the `Processing` record.
 
 .NOTES
-        Processing element (harmonized mutator metadata, 6d):
-            An ordered array on the bag; each mutator invocation APPENDS
-                @{ Processor; Operations }
-            Chain order = array order. Assemble collates it as an ordinary
-            element (open element model — no per-element branches).
+    Processing element (harmonized mutator metadata, 6d):
+      An ordered array on the bag; each mutator invocation APPENDS @{ Processor; Operations }.
 #>
 param(
     [Parameter(Position = 0)]
@@ -70,58 +49,36 @@ param(
     [hashtable]$Config = @{}
 )
 
-# ---------------------------------------------------------------------------
-# Config resolution
-# ---------------------------------------------------------------------------
+#region Config
 $ops = if ($Config.ContainsKey('Operations')) { @($Config['Operations']) } else { @('block-comments', 'doc-strings', 'comment-blocks', 'line-comments') }
 $includeMeta = if ($null -ne $Config['IncludeMeta']) { [bool]$Config['IncludeMeta'] } else { $true }
+#endregion
 
-# ---------------------------------------------------------------------------
-# Content-key resolution — harmonized content-mutator contract (6d)
-#
-# Read Content (descriptor contract) else Text (tp-era); the key that was read
-# is the key written back, which is what keeps this processor track-agnostic.
-# A bag carrying NEITHER key is returned untouched (mirrors rs-content_meta'
-# no-Content contract): a mutator with nothing to mutate must not fabricate an
-# empty payload — assemble routes empty content to Diagnostics and splits
-# EmptyFile from EmptiedByProcessing, so a phantom '' would forge an entry.
-# Content wins when both keys exist; Text is then left exactly as found (never
-# edit a key you did not read) — no current producer emits both.
-# ---------------------------------------------------------------------------
+#region ContentKey
+# Read Content (descriptor contract) else Text (tp-era); write back the same key.
 $bc = Resolve-BagContent -Item $Item
 if ($null -eq $bc) { return $Item }
 
 $text = $bc.Text
+#endregion
 
-# ---------------------------------------------------------------------------
-# Normalize line endings (CRLF/CR -> LF)
-# ---------------------------------------------------------------------------
+#region LineEndings
 $text = $text -replace "`r`n", "`n" -replace "`r", "`n"
+#endregion
 
-# ---------------------------------------------------------------------------
-# Build strip spans via regex
-# ---------------------------------------------------------------------------
+#region BuildSpans
 $spansToStrip = [System.Collections.Generic.List[pscustomobject]]::new()
 
 $stripBlock    = 'block-comments'    -in $ops
 $stripInterior = 'interior-comments' -in $ops
-$stripDoc         = 'doc-strings'           -in $ops
-$stripCB          = 'comment-blocks'        -in $ops
-$stripLine        = 'line-comments'         -in $ops
-$stripInline      = 'inline-comments'       -in $ops
+$stripDoc      = 'doc-strings'       -in $ops
+$stripCB       = 'comment-blocks'    -in $ops
+$stripLine     = 'line-comments'     -in $ops
+$stripInline   = 'inline-comments'   -in $ops
+#endregion
 
-# ---------------------------------------------------------------------------
-# Block comments  /* ... */
-# One regex pass classifies each match as standalone or inline-block, then
-# routes to the appropriate op.
-#
-#   Standalone     — only whitespace precedes /* on its first line AND
-#                    only whitespace follows */ on its last line.
-#                    Span expanded to consume leading indent + trailing newline.
-#   InlineBlock    — code precedes /* OR code follows */ on the same line.
-#                    Short, informative placeholders (e.g. empty catch bodies).
-#                    Span covers the /* */ token only; surrounding code is kept.
-# ---------------------------------------------------------------------------
+#region BlockComments
+# /* ... */ — classifies matches as standalone or inline-block
 if ($stripBlock -or $stripInterior)
 {
     $rx = [regex]::new('(?s)/\*.*?\*/', 'None')
@@ -156,12 +113,10 @@ if ($stripBlock -or $stripInterior)
         $spansToStrip.Add([pscustomobject]@{ Start = $s; End = $e })
     }
 }
+#endregion
 
-# ---------------------------------------------------------------------------
-# Doc strings  ///  (triple-slash XML doc comments)
-# Matched before the generic // pass; (?!/) guard on // patterns below ensures
-# no double-matching regardless of operation combination.
-# ---------------------------------------------------------------------------
+#region DocStrings
+# /// (triple-slash XML doc comments)
 if ($stripDoc)
 {
     $rxDoc = [regex]::new('(?m)^([^\S\n]*)///[^\n]*(\n)?', 'None')
@@ -170,11 +125,10 @@ if ($stripDoc)
         $spansToStrip.Add([pscustomobject]@{ Start = $m.Index; End = $m.Index + $m.Length })
     }
 }
+#endregion
 
-# ---------------------------------------------------------------------------
+#region StandaloneLines
 # Standalone // lines — collect, then classify into LineComment / CommentBlock
-# (?!/) guard prevents matching /// lines (doc-string or not).
-# ---------------------------------------------------------------------------
 if ($stripCB -or $stripLine)
 {
     $rxLine = [regex]::new('(?m)^([^\S\n]*)//(?!/)[^\n]*(\n)?', 'None')
@@ -186,7 +140,7 @@ if ($stripCB -or $stripLine)
         # Verify no code precedes // on this line
         $slashIdx = $m.Index + $m.Groups[1].Length
         $before = $text.Substring($m.Index, $slashIdx - $m.Index)
-        if ($before -match '\S') { continue }   # code before // → InlineComment, handled below
+        if ($before -match '\S') { continue }   # code before // → InlineComment
 
         $lineNum = ($text.Substring(0, $m.Index) -split "`n").Count
 
@@ -232,11 +186,10 @@ if ($stripCB -or $stripLine)
         $spansToStrip.Add([pscustomobject]@{ Start = $s2; End = $sm.End })
     }
 }
+#endregion
 
-# ---------------------------------------------------------------------------
-# Inline comments — // after code on the same line
-# (?!/) guard avoids matching /// (rare mid-line case, but consistent).
-# ---------------------------------------------------------------------------
+#region InlineComments
+# // after code on the same line
 if ($stripInline)
 {
     $rxInline = [regex]::new('[ \t]*//(?!/)[^\n]*', 'None')
@@ -249,18 +202,13 @@ if ($stripInline)
         $spansToStrip.Add([pscustomobject]@{ Start = $m.Index; End = $m.Index + $m.Length })
     }
 }
+#endregion
 
-# ---------------------------------------------------------------------------
-# Merge overlapping / adjacent spans
-# ---------------------------------------------------------------------------
+#region MergeSpans
 $merged = [System.Collections.Generic.List[pscustomobject]]::new()
 
 if ($spansToStrip.Count -gt 0)
 {
-    # In-place List.Sort — no pipeline. Sort-Object is a STABLE sort and
-    # List.Sort is not, but stability is not load-bearing here: the merge below
-    # takes max(End) over overlapping spans, so equal-Start ties produce the
-    # same union either way.
     $spansToStrip.Sort([System.Comparison[object]] { param($a, $b) $a.Start.CompareTo($b.Start) })
     $sorted = $spansToStrip
     $cur = [pscustomobject]@{ Start = $sorted[0].Start; End = $sorted[0].End }
@@ -280,10 +228,9 @@ if ($spansToStrip.Count -gt 0)
     }
     $merged.Add($cur)
 }
+#endregion
 
-# ---------------------------------------------------------------------------
-# Reconstruct text from the non-stripped spans
-# ---------------------------------------------------------------------------
+#region ReconstructText
 $sb = [System.Text.StringBuilder]::new($text.Length)
 $pos = 0
 
@@ -301,11 +248,10 @@ if ($pos -lt $text.Length)
 }
 
 $stripped = $sb.ToString()
+#endregion
 
-# ---------------------------------------------------------------------------
+#region Emit
 # Copy-on-mutate return — harmonized content-mutator contract (6d)
-# Clone the bag, replace the content key, pass everything else through so
-# identity fields (and any elements earlier chain steps attached) survive.
-# ---------------------------------------------------------------------------
 $record = if ($includeMeta) { [pscustomobject]@{ Processor = 'rs-csstrip'; Operations = @($ops) } } else { $null }
 return Copy-Bag -Item $Item -Resolved $bc -Content $stripped -Record $record
+#endregion
