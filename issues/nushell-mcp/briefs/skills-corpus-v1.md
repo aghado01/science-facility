@@ -1,4 +1,4 @@
-# skills-corpus v1 — console happy path, stock Nushell as a branch
+# skills-corpus v1 — console happy path, stock Nushell in the appendix
 
 **Status:** filed 2026-08-23 · **Home:**
 `mcp/nushell-mcp/skills/nushell` (corpus) +
@@ -43,15 +43,15 @@ skills/nushell/                    # NU_SKILL_DIR; rename is later
     sessions.md        mcp.md             gotchas.md
     pipelines.md       posix-cheatsheet.md parity.md
     file-io.md         data-analysis.md   advanced.md
-    stock/                         # branch — relegated native forms (see membership)
-      mcp.md                       # bare nu --mcp, no overlay
-      advanced.md                  # job spawn/recv/kill, complete
-      posix.md                     # grep-on-files, complete, PATH-as-list, head/tail-on-file
-      inspect.md                   # builtin inspect passthrough
+    appendix/                      # branch — relegated forms, filed by origin (see membership)
+      mcp.md                       # bare nu --mcp, no overlay (from mcp.md)
+      advanced.md                  # job spawn/recv/kill, complete (from advanced.md)
+      posix-cheatsheet.md          # grep-on-files, complete, PATH-as-list, head/tail-on-file
+      inspect.md                   # builtin inspect passthrough (no origin page — own leaf)
 ```
 
 **Membership — relegation of conflicts, not a Nushell textbook.** A
-slice moves to `stock/` iff teaching it up front would conflict with
+slice moves to `appendix/` iff teaching it up front would conflict with
 the console: either a **landed module supersedes the workflow**
 (`job spawn` → `jobs`, `| complete` → `xq`, grep-shaped file search →
 `rg`, builtin `inspect` → `shape`), or the **packaged deployment
@@ -64,24 +64,28 @@ module surface: it grows only when a landing supersedes something
 (that landing owes the relegation — see landing obligations), never
 by taxonomizing bare Nushell in advance.
 
-In document terms the branch is the corpus's **appendix**: back-matter
-the happy path footnotes into, where relegated forms stay alive,
-citable, and findable (search walks the whole tree) instead of dying.
-`stock` stays the branch *name* because it says what the occupants
-*are* — current Nushell as shipped — while appendix says where they
-*sit*; the **Stock** footnote label on happy-path pages keeps the
-content identity for the same reason. An appendix is not an attic:
-what the console retires outright is deleted, not relocated (the
-`to json -c` strip above) — only forms that remain true and
-occasionally needed earn a footnote and a page here. If a second
-category of not-quite-dead material ever appears, the branch
-generalizes to `appendix/` with sub-branches then — the tree-aware
-listing makes that a directory move — not in advance.
+The branch is the corpus's **appendix**: back-matter the happy path
+footnotes into, where relegated forms stay alive, citable, and
+findable (search walks the whole tree) instead of dying. The branch
+name is *position*; content identity lives one level down: **pages
+are filed by their origin document** — `appendix/mcp`,
+`appendix/advanced`, `appendix/posix-cheatsheet` mirror the
+happy-path stems, so the pairing is guessable in both directions and
+each relegation lands beside the context it left. Material with no
+single origin page gets its own small leaf (`appendix/inspect`). The
+category word **stock** survives where it informs — in page titles
+and in the happy-path footnote labels ("Stock `job spawn`: …") —
+naming what today's occupants *are*: current Nushell as shipped, not
+deprecated. A future relegation that is not stock material files the
+same way, by origin stem, under its own label. An appendix is not an
+attic: what the console retires outright is deleted, not relocated
+(the `to json -c` strip below) — only forms that remain true and
+occasionally needed earn a footnote and a page here.
 
-Both sides point at each other: every stock page opens with one line —
-"Console equivalent: `nu-skills read <topic>`." — and every happy-path
-page that supersedes a native workflow carries one short **Stock** line
-naming the stock page. Steer, never ban: `^rg`, `job spawn`, and
+Both sides point at each other: every appendix page opens with one
+line — "Console equivalent: `nu-skills read <topic>`." — and every
+happy-path page that supersedes a native workflow carries one short
+**Stock** footnote naming its appendix page. Steer, never ban: `^rg`, `job spawn`, and
 `| complete` remain documented escape hatches.
 
 ## `nu-skills` v2 — tree-aware serving
@@ -119,12 +123,12 @@ Rulings, each deliberate:
   **never `bytes`**, which has one reserved NUON definition. `modified`
   is dropped.
 - **`topic` is the path relative to `references/`, no `.md`, forward
-  slashes on every platform** (`jobs`, `stock`, `stock/advanced`).
+  slashes on every platform** (`jobs`, `appendix`, `appendix/advanced`).
   Windows `ls`/`path parse` yield backslashes — normalize at
   derivation, and in `search` rows, or nested topics are unaddressable.
-  Bare stems must not collide: `mcp` and `stock/mcp` are distinct
+  Bare stems must not collide: `mcp` and `appendix/mcp` are distinct
   topics everywhere, including search results.
-- `read` tolerates a trailing `.md` (`stock/mcp.md` → `stock/mcp`).
+- `read` tolerates a trailing `.md` (`appendix/mcp.md` → `appendix/mcp`).
 - Bare `nu-skills` / `read index` / `read root` still return SKILL.md.
 - The unknown-topic error lists the `--all` inventory, not the
   top level.
@@ -152,19 +156,19 @@ sketch's steer-map phrase "live unbounded pipeline" is tightened to
 
 ## Corpus edits
 
-### Steer map (stock → console → stock page)
+### Steer map (stock → console → appendix page)
 
-| Agent reaches for | Happy path | Stock kept at |
+| Agent reaches for | Happy path | Appendix |
 |---|---|---|
-| `job spawn` / `recv` / `kill` | `jobs spawn` / `collect` / `cancel` | `stock/advanced` |
-| `par-each --threads` | `par` | `stock/advanced` |
-| `^cmd \| complete` / `do { cmd } \| complete` | `xq`; `process capture` for wrappers only | `stock/advanced` |
-| `grep` / `^rg` | `rg` (files); `where` / `find` (in-memory) | `stock/posix` |
-| builtin `inspect` | `shape` | `stock/inspect` |
+| `job spawn` / `recv` / `kill` | `jobs spawn` / `collect` / `cancel` | `appendix/advanced` |
+| `par-each --threads` | `par` | `appendix/advanced` |
+| `^cmd \| complete` / `do { cmd } \| complete` | `xq`; `process capture` for wrappers only | `appendix/advanced` |
+| `grep` / `^rg` | `rg` (files); `where` / `find` (in-memory) | `appendix/posix-cheatsheet` |
+| builtin `inspect` | `shape` | `appendix/inspect` |
 | `metadata` | `meta` / `meta stamp` | gotchas (already) |
-| `first N` on a first-run pipeline | bind or store, then slice; `shape` / `read` / `jobs fetch` + `page` | `stock/posix` (head/tail on a **file**) |
-| PATH prepend as if always a list | split-if-string then prepend, as `config.nu` does | `stock/posix` |
-| bare `nu --mcp` | this package: pinned engine + `--config` | `stock/mcp` |
+| `first N` on a first-run pipeline | bind or store, then slice; `shape` / `read` / `jobs fetch` + `page` | `appendix/posix-cheatsheet` (head/tail on a **file**) |
+| PATH prepend as if always a list | split-if-string then prepend, as `config.nu` does | `appendix/posix-cheatsheet` |
+| bare `nu --mcp` | this package: pinned engine + `--config` | `appendix/mcp` |
 | huge `open` / `http get` dumped inline | `shape` then `read` / `jobs spawn` | file-io / data-analysis disclose lines |
 
 In-memory `where` / `find` on a table is stock Nu **and** happy path;
@@ -176,13 +180,13 @@ it stays on the posix row next to "repo search is `rg`."
   (persistent `evaluate`, preloaded modules, `nu-skills`); the
   discipline as one list (implicit return; receipts before bodies;
   THE RULE as worded above; failure is data — `ok: false` in
-  `$history`); how to open the tree (`list`, `list stock`, `read`,
+  `$history`); how to open the tree (`list`, `list appendix`, `read`,
   `search`). **No topic enumeration** — at most name the console core
   (`jobs`, `search`, `dataspection`). YAML `name: nushell-agent` stays
   until the rename.
 - **`jobs.md`** — keep; fix name-map `parfeval` → `jobs spawn`
   (`--tag` optional; receipt carries allocated `spawn:<n>`); one Stock
-  pointer to `stock/advanced`; the `par cap` line names the resolution
+  pointer to `appendix/advanced`; the `par cap` line names the resolution
   order without the literal terminal constant (cap by meaning).
 - **`search.md`** — keep; add the three-context line (in-job inline;
   foreground worker over cap is `ok: false`, wrap in `jobs spawn`).
@@ -208,16 +212,16 @@ it stays on the posix row next to "repo search is `rg`."
   implementation smell — should be a shipped `policy.json` default
   under the deployment override, or required-and-fail-closed — parked
   in the roadmap for a par amendment, not this brief. Point bare
-  launch at `stock/mcp`.
+  launch at `appendix/mcp`.
 - **`advanced.md`** — keep `def` and `try/catch`; jobs and `complete`
-  blocks become one-liners to `jobs` / `xq` with the stock pointer.
+  blocks become one-liners to `jobs` / `xq` with the Stock footnote.
 - **`posix-cheatsheet.md`** — rows become console translations:
   `2>&1` → `xq` (not `complete`); `grep` → `rg` for files, `where` /
   `find` for columns; PATH prepend → split-if-string; head/tail-on-file
-  points `stock/posix`. Footnote: stock equivalents in `stock/posix`.
+  points `appendix/posix-cheatsheet`. Footnote: stock equivalents in `appendix/posix-cheatsheet`.
 - **`parity.md`** — PATH: "after `config.nu`, a list; if you assign a
   string, split on `char esep` first" (config.nu is the proof). The
-  unconditional PATH-is-a-list claim moves to `stock/posix`.
+  unconditional PATH-is-a-list claim moves to `appendix/posix-cheatsheet`.
 - **`pipelines.md`** — keep `where`/`select`/`get`; **fix the
   examples**: `ls | select … | first 5` and `ls | sort-by size -r |
   first 10` become bind-then-slice. Drop "pipe to `to json` to save
@@ -227,18 +231,18 @@ it stays on the posix row next to "repo search is `rg`."
   `http`/`polars`; one disclose line each (large structured value is
   `shape` then `read`, not a dump). No wrappers for these.
 
-### Stock moves — move, then strip
+### Appendix moves — move, then strip
 
-Create `stock/` from current native slices. A move is not a verbatim
-copy: **stock pages describe stock behavior, not stale advice, and
-carry no overlay references.**
+Create `appendix/` from current native slices. A move is not a
+verbatim copy: **appendix pages describe as-shipped behavior, not
+stale advice, and carry no overlay references.**
 
-| Stock file | Source | Strip on move |
+| Appendix file | Source | Strip on move |
 |---|---|---|
-| `stock/mcp.md` | current `mcp.md` | the `$history \| shape each` census line (dataspection is overlay — it stays on the console side, sessions.md already has it); the `to json -c` transmission advice (retired, not relocated); the literal "default 10KB" (cap by meaning — the page says outputs over `$env.NU_MCP_OUTPUT_LIMIT` truncate, full value in `$history`, no number) |
-| `stock/advanced.md` | current `job spawn` / `complete` blocks | the extra `def` material — nothing supersedes `def`; it stays in `advanced.md` (membership rule) |
-| `stock/posix.md` | current grep / `complete` / PATH-as-list / head-tail rows | — |
-| `stock/inspect.md` | builtin `inspect` passthrough (from gotchas, expanded as needed) | — |
+| `appendix/mcp.md` | current `mcp.md` | the `$history \| shape each` census line (dataspection is overlay — it stays on the console side, sessions.md already has it); the `to json -c` transmission advice (retired, not relocated); the literal "default 10KB" (cap by meaning — the page says outputs over `$env.NU_MCP_OUTPUT_LIMIT` truncate, full value in `$history`, no number) |
+| `appendix/advanced.md` | current `job spawn` / `complete` blocks | the extra `def` material — nothing supersedes `def`; it stays in `advanced.md` (membership rule) |
+| `appendix/posix-cheatsheet.md` | current grep / `complete` / PATH-as-list / head-tail rows | — |
+| `appendix/inspect.md` | builtin `inspect` passthrough (from gotchas, expanded as needed) | — |
 
 Each opens with the console-equivalent line. No hand-written branch
 catalog page — the directory is the branch.
@@ -265,14 +269,14 @@ the tension is documented here and nowhere else.
 mcp/nushell-mcp/modules/nu-skills/nu-skills.nu   # tree-aware list/read/search/status
 mcp/nushell-mcp/skills/nushell/SKILL.md          # orientation rewrite
 mcp/nushell-mcp/skills/nushell/references/*.md   # per-file edits above
-mcp/nushell-mcp/skills/nushell/references/stock/ # new branch (4 leaves)
+mcp/nushell-mcp/skills/nushell/references/appendix/ # new branch (4 leaves)
 mcp/nushell-mcp/skills/satellite/SKILL.md        # one routing line (below)
 mcp/nushell-mcp/tests/skills-corpus-v1.nu        # suite (below)
 issues/nushell-mcp/notes/vocabulary.md           # 4th local `kind` set
 ```
 
 Implementation order: (1) `nu-skills` tree-aware + tests; (2) create
-`stock/` by move-and-strip; (3) rewrite SKILL.md + primers, patch the
+`appendix/` by move-and-strip; (3) rewrite SKILL.md + primers, patch the
 `jobs`/`search`/`dataspection` holes; (4) satellite line + deploy;
 (5) vocabulary amendment.
 
@@ -283,17 +287,17 @@ the filesystem (`glob **/*.md` under `references/`) — never hard-code
 a leaf count that breaks on the next page.
 
 - `list`: top-level rows only; closed row shape; `kind` ∈
-  `leaf | branch`; `stock` row has `kind: branch`, `n` == its child
+  `leaf | branch`; `appendix` row has `kind: branch`, `n` == its child
   count; no duplicate topics.
-- `list stock`: exactly the stock leaves, path-qualified topics.
+- `list appendix`: exactly the appendix leaves, path-qualified topics.
 - `list --all`: length == filesystem leaf count; every topic uses
   forward slashes.
-- `read jobs`; `read stock/mcp`; `read stock/mcp.md` (tolerated);
-  `read stock` → generated markdown table string naming each child;
+- `read jobs`; `read appendix/mcp`; `read appendix/mcp.md` (tolerated);
+  `read appendix` → generated markdown table string naming each child;
   bare `nu-skills` → SKILL.md.
-- `search`: a string that exists only in a stock page returns a
-  `stock/…` forward-slash topic; `search "job spawn"` hits **both**
-  `stock/advanced` and the steer line on `jobs`.
+- `search`: a string that exists only in an appendix page returns an
+  `appendix/…` forward-slash topic; `search "job spawn"` hits **both**
+  `appendix/advanced` and the steer line on `jobs`.
 - `status`: recursive leaf count.
 - Unknown topic: error message lists the `--all` inventory.
 - **Link integrity**: scan every corpus page for
@@ -308,9 +312,9 @@ green by omission.
 
 ## Exit gate
 
-One `evaluate`: `nu-skills list` shows `stock` as a branch row with a
-truthful child count. A second: `nu-skills search "job spawn"` returns
-rows in both `jobs` (steer line) and `stock/advanced`. Grep the
+One `evaluate`: `nu-skills list` shows `appendix` as a branch row with
+a truthful child count. A second: `nu-skills search "job spawn"` returns
+rows in both `jobs` (steer line) and `appendix/advanced`. Grep the
 package: **no hand-maintained topic enumeration survives** — not in
 SKILL.md, not in either docstring, not in the satellite.
 
@@ -320,8 +324,8 @@ SKILL.md, not in either docstring, not in the satellite.
   change** as the module.
 - Satellite (`skills/satellite/SKILL.md` — the single source of truth)
   gains one routing line: "`nu-skills list` is the console tree;
-  `nu-skills list stock` holds the native forms the console
-  supersedes." Deploy verbatim to
+  `nu-skills list appendix` holds the superseded forms, filed by
+  origin topic." Deploy verbatim to
   the client installs (`~/.claude`, `~/.grok`, `~/.codex`
   `skills/nushell-mcp`). It stays an orientation adapter — no corpus
   duplication.
@@ -329,8 +333,9 @@ SKILL.md, not in either docstring, not in the satellite.
   (`nu-skills list` row, `leaf | branch`).
 - AGENTS.md Rule 1 gains the relegation clause: a landing that
   supersedes a native workflow (or changes as-shipped behavior)
-  relegates the native slice to `stock/` with cross-pointers **in the
-  same change**. Stock membership grows only this way.
+  relegates the native slice to `appendix/` (filed by origin stem)
+  with cross-pointers **in the same change**. Appendix membership
+  grows only this way.
 - Follow-up report appended here: outcome, tests run, deviations.
 
 ## Non-goals (v1)

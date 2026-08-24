@@ -226,4 +226,4 @@ here. Term senses — whose word is whose — are in
 | [write-conventions-v1](notes/write-conventions-v1.md) | filed; governs every write (state vs scratch, locality, chronology, precedence) |
 | [gh-v1](briefs/gh-v1.md) | filed; composition-v1 unblocked; then needs `gh` ≥ 2.40 in `deps/cli`; amended 2026-08-23 (overlay positioning) |
 | [agent-porcelain-overlay](discussion/agent-porcelain-overlay.md) | discussion 2026-08-23; overlay track — nu-git-v1 then nu-gh-v1, briefs to file |
-| [skills-corpus-v1](briefs/skills-corpus-v1.md) | filed 2026-08-23; synthesizes discussion/ grok + gemini inventory notes + third-party review; corpus happy-path/stock split, tree-aware `nu-skills` |
+| [skills-corpus-v1](briefs/skills-corpus-v1.md) | filed 2026-08-23; synthesizes discussion/ grok + gemini inventory notes + third-party review; corpus happy-path/appendix split, tree-aware `nu-skills` |
