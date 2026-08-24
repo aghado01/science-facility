@@ -64,6 +64,20 @@ module surface: it grows only when a landing supersedes something
 (that landing owes the relegation — see landing obligations), never
 by taxonomizing bare Nushell in advance.
 
+In document terms the branch is the corpus's **appendix**: back-matter
+the happy path footnotes into, where relegated forms stay alive,
+citable, and findable (search walks the whole tree) instead of dying.
+`stock` stays the branch *name* because it says what the occupants
+*are* — current Nushell as shipped — while appendix says where they
+*sit*; the **Stock** footnote label on happy-path pages keeps the
+content identity for the same reason. An appendix is not an attic:
+what the console retires outright is deleted, not relocated (the
+`to json -c` strip above) — only forms that remain true and
+occasionally needed earn a footnote and a page here. If a second
+category of not-quite-dead material ever appears, the branch
+generalizes to `appendix/` with sub-branches then — the tree-aware
+listing makes that a directory move — not in advance.
+
 Both sides point at each other: every stock page opens with one line —
 "Console equivalent: `nu-skills read <topic>`." — and every happy-path
 page that supersedes a native workflow carries one short **Stock** line
