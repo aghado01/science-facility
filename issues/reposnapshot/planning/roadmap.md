@@ -113,6 +113,22 @@ shape, control-flow classes, and invocation-surface duality.
 Restated so they cannot fall out. These become consumers only after the export
 phase is trustworthy.
 
+- **The rollup as a callable** (#52's remaining half) — *trigger-gated, not
+  scheduled*. `BuildRollups($scope)` is a private crawler method today: one
+  definition, one call site, over the walked set. #52 says the definition is the
+  single source of truth and a second scope is a second **call site**, never a
+  second loop. So the day something wants a rollup over a different predicate —
+  a manifest declaring per-directory payload sizes, a diagnostic totalling what
+  the membrane discarded — the work is to lift it to a callable over
+  `(atoms, predicate)` and emit another layer of the same shape. **Do not do
+  this speculatively**: with one scope it is indirection with no second caller.
+  **The precondition is the trap.** A survivors-scope subtree rollup needs
+  `SizeBytes` at the call site, and `SizeBytes` is excluded at assemble — the
+  atom dies before any downstream caller could exist. So the callable and the
+  atom retention (`SizeBytes` → `carried`, #50) are **one change, not two**;
+  picking up the callable alone gets you a function with nothing to sum. The
+  discards path is already fine — `membrane.out.skipped` / `ingest.out.skipped`
+  carry `SizeBytes` and `Extension`.
 - **AST-based fragmentation** — one record per H2, semantic sub-addressing.
   Explicitly off the v3 critical path (#47); the packer contract is already
   fragmentation-agnostic, so it lands upstream without touching the export stage.

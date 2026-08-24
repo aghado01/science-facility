@@ -97,9 +97,12 @@ which is the expensive part of everything below. What shipped:
   test caught it against a contract note I had just written wrong, which is
   exactly the claim ("same number at root scope") that hides it.
 
-Still owed: **the rollup as a callable**, one definition invoked over any
-predicate rather than only by the crawler over the walk (#39's shape). Nothing
-needs a second scope yet, so it stays a private method until something does.
+Still owed and **not this brief's**: the rollup as a callable over any
+predicate, rather than a private method the crawler invokes over the walk.
+Trigger-gated in [roadmap §Deferred](../planning/roadmap.md) — it fires when
+something first wants a second scope, and it must land together with the atom
+retention it depends on (`SizeBytes` → `carried`), or it is a function with
+nothing to sum.
 - **The atom is what must survive**, and today it does not: `SizeBytes` is
   excluded at assemble, so a post-filter subtree rollup is currently
   *impossible* — not merely unwritten. Nothing wants one today (the manifest's
