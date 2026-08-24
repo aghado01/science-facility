@@ -136,6 +136,13 @@ Assert-True ($rDefault.Content -notmatch "`r") 'No Operations: lf applied (CRLF 
 Assert-True ($rDefault.Content -match 'hello   world') 'No Operations: trim-inner NOT applied (opt-in — it rewrites data inside literals)'
 Assert-True ($rDefault.Content -notmatch "`n`n`n") 'No Operations: max-blank-1 applied (at most one blank line survives)'
 Assert-True ($rDefault.Processing[0].Operations.Count -gt 0) 'No Operations: Processing record carries the resolved defaults'
+# #20 RELOCATED (2026-08-24): mark spacing is the CODEC's object join, so the
+# default set must NOT pre-space line ends — a re-added ensure-trailing-space
+# here would double-space every mark on the wire ('{  \n ') and nothing
+# downstream would fail, because measure and render stay self-consistent.
+# This assert is the only tripwire.
+Assert-True ($rDefault.Content -notmatch " `n") 'No Operations: ensure-trailing-space NOT in the defaults — line ends carry no space (the codec owns mark spacing, #20 relocated)'
+Assert-True ($rDefault.Processing[0].Operations -notcontains 'ensure-trailing-space') 'No Operations: the resolved default list itself excludes ensure-trailing-space'
 
 # ============================================================
 # 3. lf
