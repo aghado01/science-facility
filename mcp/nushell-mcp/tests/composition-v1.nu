@@ -8,6 +8,8 @@ const WORKSPACE = ($PKG | path dirname | path dirname)
 const NU_LIB_DIRS = [$MODULES_DIR]
 const JOBS_MBOX = 0x4A4F4253
 
+use ./support/scratch.nu ["test scratch"]
+
 if ($CLI | path exists) {
     let path = (
         if ($env.PATH | describe) =~ "list" { $env.PATH } else { $env.PATH | split row (char esep) }
@@ -70,11 +72,8 @@ $env.NU_PAR = (
     )
 )
 
-let SCRATCH = (
-    $WORKSPACE
-    | path join "artifacts" "nushell-mcp" "test-runs" $"(date now | format date '%Y%m%d_%H%M%S')_composition-v1"
-)
-mkdir $SCRATCH
+let TEST_RUNS = ($WORKSPACE | path join "artifacts" "nushell-mcp" "test-runs")
+let SCRATCH = (test scratch $TEST_RUNS composition-v1)
 
 let results = [
     (t "outcome record success" {

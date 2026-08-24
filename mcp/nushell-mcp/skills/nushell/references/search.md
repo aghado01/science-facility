@@ -15,10 +15,11 @@ Injects `--json` once if absent. No other flag rewrite. Mode is decided on the *
 ## Envelope
 
 ```
-{ok, mode, n, n_files, elapsed, bytes, truncated, args, error?, tag?, findings?, spine?, text?, meta}
+{ok, mode, n, n_files, elapsed, bytes, truncated, args, error?, trace?, tag?, findings?, spine?, text?, meta}
 ```
 
 - `ok`: exit 0 or 1 (no match is `ok: true, n: 0`). Exit 2 → `ok: false`, short `error`.
+- Capture/spawn failure keeps `trace` when one was captured; ordinary ripgrep exit 2 has only the short `error`.
 - `mode`: `json | text`.
 - json census from the `summary` event: `n` = `matched_lines`, `n_files` = `searches_with_match`.
 - `bytes`: NUON of the findings table (json) or `stream bytes` of stdout (text), vs `par cap`. A binary capture stream is `ok: false`. Ripgrep `path.bytes` / `lines.bytes` without text is unsupported encoding (`ok: false`), never `match: ""`.

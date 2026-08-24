@@ -116,10 +116,11 @@ def rg-fail [args: list, error: string, elapsed, --trace: string] {
 
 # Search via ripgrep. `--wrapped`; injects `--json` once if absent. Mode is detected
 # on the return path: JSON events → `json`, anything else → `text`. Envelope:
-# `{ok, mode, n, n_files, elapsed, bytes, truncated, args, error?, tag?, findings?, spine?, text?}`.
+# `{ok, mode, n, n_files, elapsed, bytes, truncated, args, error?, trace?, tag?, findings?, spine?, text?}`.
 # json: `findings` under cap, `spine`+stash over cap. text: `text` under cap, omit+stash over.
 # Cap is `par cap`. Inside a job, never stash. Foreground `par` worker over cap: `ok: false`,
 # no tag, `truncated: false`. Tag is allocated by `jobs stash --prefix rg` after storage.
+# Capture/spawn failures keep the short `error` and `trace` when one was captured.
 # `help rg` is this contract; `^rg` is the escape.
 export def --env --wrapped main [...args] {
     let forwarded = (if (rg-has-json $args) { $args } else { ["--json"] ++ $args })

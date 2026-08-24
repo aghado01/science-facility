@@ -8,6 +8,8 @@ const JOBS_MBOX = 0x4A4F4253
 const CLI = ($PKG | path join deps cli)
 const WORKSPACE = ($PKG | path dirname | path dirname)
 
+use ./support/scratch.nu ["test scratch"]
+
 if ($CLI | path exists) {
     let path = (
         if ($env.PATH | describe) =~ "list" { $env.PATH } else { $env.PATH | split row (char esep) }
@@ -65,11 +67,8 @@ if (which rg | is-empty) {
     return
 }
 
-let FIX = (
-    $WORKSPACE
-    | path join "artifacts" "nushell-mcp" "test-runs" $"(date now | format date '%Y%m%d_%H%M%S')_rg-v1"
-)
-mkdir $FIX
+let TEST_RUNS = ($WORKSPACE | path join "artifacts" "nushell-mcp" "test-runs")
+let FIX = (test scratch $TEST_RUNS rg-v1)
 "needle aaa needle\nplain line\nbbb needle\n" | save --force ($FIX | path join "a.txt")
 "needle ccc\n" | save --force ($FIX | path join "b.txt")
 "zzz\n" | save --force ($FIX | path join "c.txt")

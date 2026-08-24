@@ -37,6 +37,7 @@ def xq-fail [cmd: string, args: list, error: string, elapsed, --trace: string] {
 # `{stdout, stderr}` via `jobs stash --prefix` and return census + confirmed `tag`.
 # Inside a job, never stash (job row is the quarantine). Foreground `par` worker over
 # cap: `ok: false`, no tag, `truncated: false` — wrap the batch in `jobs spawn`.
+# Capture/spawn failures keep the short `error` and `trace` when one was captured.
 # `--wrapped`; argv forwarded.
 export def --env --wrapped main [...args] {
     if ($args | is-empty) {

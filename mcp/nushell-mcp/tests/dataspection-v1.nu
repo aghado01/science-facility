@@ -234,19 +234,21 @@ let results = [
         assert-eq $val.retrieve $"jobs fetch ($val.tag | to nuon --raw)" "retrieve"
         assert-eq $val.meta.verb "read" "stamped"
     })
-    (t "config PATH splits a Windows string" {
+    (t "config PATH splits an inherited string" {
         let cfg = ($MODULES_DIR | path dirname | path join config.nu)
-        let collapsed = "C:\\Windows\\System32;C:\\Windows"
-        let script = '{describe: ($env.PATH | describe), collapsed: ($env.PATH | any {|p| $p | str contains ";"}), first: ($env.PATH | first)} | to nuon --raw'
+        let parts = ["path-probe-a" "path-probe-b"]
+        let collapsed = ($parts | str join (char esep))
+        let script = '{describe: ($env.PATH | describe), path: $env.PATH, first: ($env.PATH | first)} | to nuon --raw'
         let out = (
-            with-env { PATH: $collapsed, Path: $collapsed } {
+            with-env { PATH: $collapsed } {
                 ^$nu.current-exe --config $cfg -c $script | complete
             }
         )
         assert-eq $out.exit_code 0 "config child ok"
         let val = ($out.stdout | str trim | from nuon)
         assert-true ($val.describe | str starts-with "list") "path is list"
-        assert-eq $val.collapsed false "no semicolon entry"
+        assert-eq ($collapsed in $val.path) false "collapsed entry removed"
+        assert-eq ($parts | all {|p| $p in $val.path}) true "inherited entries preserved"
         let cli = ($MODULES_DIR | path dirname | path join deps cli)
         if ($cli | path exists) {
             assert-eq $val.first $cli "deps/cli first"
