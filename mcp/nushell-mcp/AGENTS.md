@@ -38,6 +38,37 @@ specs), `.archive/briefs/` (landed/superseded specs), `notes/`
 `planning/ledger.md` (landed work). Briefs are the specs; do not restate
 them in the decisions file.
 
+## Duty cycle — landing a toolset change
+
+Every addition or change to the toolset walks the same stations; skip
+a station consciously, never silently.
+
+1. **Brief** — file or amend in `issues/nushell-mcp/briefs/` (Rule 2);
+   the brief is the spec and receives the follow-up report on landing.
+2. **Code** — module + `main` docstring, standards per Rules 3–4c;
+   field names checked against `notes/vocabulary.md` **before** coding —
+   a new sense amends vocabulary, then sweeps (Rule 7).
+3. **Config** — `config.nu` preload (order matters; single layout
+   owner) and `.mcp.json` launcher env when the launch surface changes.
+   Deployment values live in config; docs explain what a knob *means*,
+   never its number.
+4. **Corpus** — pointed guidance for the new capability; if it
+   supersedes a native form, relegate that **slice** to
+   `references/appendix/` (origin stem, one home per form) with
+   dual-surface cross-pointers both ways (Rule 1).
+5. **Satellite** — update `skills/satellite/SKILL.md` when routing
+   changes, **and deploy verbatim** to the client installs
+   (`~/.claude` / `~/.grok` / `~/.codex` `skills/nushell-mcp/`).
+   The deploy is its own step — and the historically missed one.
+6. **Tests** — suite per brief in `tests/`; corpus changes must pass
+   the skills-corpus link-integrity gate (topics and hrefs); smoke
+   `nu --config config.nu`.
+7. **Paper trail** — follow-up report on the brief, ledger entry,
+   roadmap status.
+8. **When applicable** — vendored binary into `deps/cli` + brewery
+   recipe; note drift owed to the served server instructions (aligned
+   only at fork rebuild).
+
 ## Rules
 
 1. **Documented, not encoded — and not landed until documented.**
