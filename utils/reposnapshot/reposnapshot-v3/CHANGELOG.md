@@ -1,5 +1,25 @@
 # Changelog 
 
+## 2026-08-24 — the SELFIE fixture: the pipeline snapshots its own source
+
+`tests/selfie.tests.ps1` (23) — root `reposnapshot-v3/`, **Selection** semantics
+for `*.ps1`/`*.psm1`, the real chain (file-read → rs-whitespace → rs-psstrip →
+rs-content_meta), then layout (gidx + content_meta) → `New-ShardPlan`
+(ByFileType) → `Invoke-Serialize` → the bytes read back. PowerShell ingesting
+PowerShell, on purpose. A **living fixture**: every assertion is an invariant
+or checked against ground truth recomputed in-suite (an independent directory
+walk) — never a golden count, so the corpus tracks the code. On today's tree:
+27 files → 8 shards → 269,301 bytes; membrane survivors equal the independent
+walk exactly; ContentMeta at full presence; the seek contract verified for
+every row of the real payload; no raw CR on disk.
+
+Section 5 is the **#48 harness on real data**, printed every battery run —
+first numbers (Flat, working defaults): flexible earns a shard over strict
+(9 → 8, Gap 0, provably tight); the two shapes coincide under strict on this
+corpus; under flexible, Even beats FrontLoad on both overshoot aggregates
+(TotO 7157 vs 8485, MaxO 2415 vs 3742) at equal shard count. One corpus, one
+grouping — a data point, not the default decision. Battery **21 · 1350 · 0**.
+
 ## 2026-08-24 — rs.core.serialize landed: Invoke-Serialize (export phase 2)
 
 Coded straight against `serialize.contract.json` — no brief, deliberately.
