@@ -2,7 +2,7 @@
 
 Per-file plan compilation for heterogeneous ingestion sets. A declared **spine** fixes the canonical stage sequence; routed stages carry a meta-token resolved per file class from **routing tables**. `Compile-Plan` emits a **plan family** — a small set of dense, frozen chains plus an extension→variant map — and the colonel hands each ingest item its assigned chain. Language-specificity exists only as data in the routing tables, consumed only by the compiler.
 
-> **Status**: target shape. Current code compiles a single monolithic chain; the adaptation sites and sequence are listed under [Implementation Sequence](#implementation-sequence). One open decision is marked inline.
+> **Status**: target shape. Current code compiles a single monolithic chain; the adaptation sites and sequence are listed under [Implementation Sequence](#implementation-sequence).
 
 ## Two-Layer Contract
 
@@ -21,6 +21,7 @@ One file, `processors/routing.json`, holds both the spine and the routing tables
 {
   "Stages": [
     { "Stage": "read",       "Processor": "file-read" },
+    { "Stage": "parse",      "Processor": "tp-perplexity" },
     { "Stage": "$strip",     "Routed": "Strip" },
     { "Stage": "indent",     "Processor": "rs-indent" },
     { "Stage": "whitespace", "Processor": "rs-whitespace" },
@@ -41,6 +42,7 @@ Loader rules:
 | Extensions | Dot-less in the file; normalized to lowercase-with-dot on load. |
 | `Processors` entries | Processor **keys** (manifest names), in declared order; multi-entry routes splice as consecutive peer steps. |
 | Route validation | Every route's keys must exist in the processor manifest — validated unconditionally, even for routes no corpus file will use. |
+| Exactly-once | Every processor the spine references belongs to exactly one stage: either one fixed stage's `Processor`, or route membership under exactly one token (multiple routes under the *same* token may share a processor). Double appearance is a hard error — this supersedes the earlier duplicate-splice caution. |
 | Token discipline | Tokens (`$strip`, …) exist only as data read from this file — never as PowerShell string literals in source (double-quoted `"$strip"` interpolates to empty). |
 
 ## Compilation: The Plan Family
@@ -85,7 +87,7 @@ Routing resolves before `file-read` runs, so it can never depend on content (no 
 
 ## Caller Surface
 
-Callers **enable stages, never order them**. `-StripComments` enables `$strip`; position comes from the spine.
+Callers **enable stages, never order them** — the routing instance of [stage-architecture.md](stage-architecture.md)'s "Config Selects, Implementation Owns Sequence". `-StripComments` enables `$strip`; position comes from the spine.
 
 `-Processors` forks into two explicit modes:
 
@@ -94,7 +96,19 @@ Callers **enable stages, never order them**. `-StripComments` enables `$strip`; 
 
 Under the canon path, today's soft chain cautions become compiler guarantees and are no longer printed; under verbatim they remain as warnings.
 
-> **OPEN — stage classification for out-of-spine processors.** The spine only knows the stages it names; `tp-perplexity` exists outside it, and the processor manifest is filename discovery with no metadata. Set-under-canon needs a derivable position for any nameable processor. Candidates: a `Stage` field in `configs/<key>.json`; enumerating all processors in the spine; or verbatim-only for unclassified processors. This decision gates only the caller-surface step — the artifact, compiler, and dispatch steps are independent of it.
+### Classification
+
+The spine is the **single processor registry**; classification is structural, declared by where a processor appears:
+
+- **Fixed-stage processors** appear as a stage entry (`{ "Stage": "parse", "Processor": "tp-perplexity" }`). Declared is not enabled: a spine entry fixes position only; the stage runs when a caller enables it.
+- **Routed processors** are classified by route membership — a language stripper is a `$strip`-stage processor *because* a `Strip` route names it. No separate declaration exists or is needed.
+- `configs/<key>.json` carries **no ordering metadata** — it stays pure config with its warn-and-default posture; classification lives where hard-error validation and referential integrity already are (the same argument that fused spine and routing tables into one file extends to membership: a stage rename cannot orphan classifications in the same document).
+
+Consequences:
+
+- **Set-mode resolution**: naming a processor key enables its stage. For a routed stage this enables the token — routing still decides per file class, so `-Processors 'rs-psstrip'` on a mixed corpus enables `$strip` wherever it resolves. `-StripComments` and naming a `Strip` member are the same operation spelled two ways.
+- **Unregistered processor named under canon mode** → hard error stating both fixes: register it in the spine, or run verbatim.
+- **Unreferenced processor *file* on disk** → inert, not an error — a WIP processor can land in `processors/` without breaking runs. Completeness for the shipped set (manifest ⊆ spine) is enforced by a repo test, not at runtime.
 
 ## Echo
 
@@ -118,6 +132,7 @@ Any manifest structure that tabulates per-step data across files keys by variant
 6. The default variant always exists and equals the spine minus all holes.
 7. Tokens exist only as data, never as PowerShell string literals.
 8. Each stage's postcondition states which byte accounting survives it (`SpanBytes` vs `SizeBytes` — see [content-metrics.md](content-metrics.md)); wherever line-ending canonicalization lands, this is stated, not discovered.
+9. Every processor is classified by a single appearance in the spine — one fixed stage, or route membership under one token. `configs/` carries no ordering metadata; classification is structural.
 
 ## Implementation Sequence
 
@@ -125,8 +140,8 @@ Each step lands with its tests through `tests/run-all.ps1` before the next begin
 
 | Step | Work | Test gate |
 |---|---|---|
-| 1 | `processors/routing.json` (spine + `Strip` routes for powershell/csharp) + loader with normalization and hard-error validation | Malformed-file errors; extension normalization; route keys exist in manifest |
-| 2 | `Compile-Plan` emits the family (`Variants`/`Routing`/union `Iss`/union `ProcessorKeys`) | Pure-function tests: mixed extension set → expected variant tuples; dense chains of differing lengths; default variant present; spine invariants (measure last, strip precedes whitespace); validate-all vs bind-present |
+| 1 | `processors/routing.json` (spine incl. fixed `parse` entry for `tp-perplexity` + `Strip` routes for powershell/csharp) + loader with normalization and hard-error validation | Malformed-file errors; extension normalization; route keys exist in manifest; exactly-once |
+| 2 | `Compile-Plan` emits the family (`Variants`/`Routing`/union `Iss`/union `ProcessorKeys`) | Pure-function tests: mixed extension set → expected variant tuples; dense chains of differing lengths; default variant present; spine invariants (measure last, strip precedes whitespace); validate-all vs bind-present; completeness (manifest ⊆ spine) |
 | 3 | Colonel: third slice array, family marshal, worker lookup table | Index-stable envelope over mixed corpus; each item demonstrably ran its assigned chain (bag `Processing` trail) |
-| 4 | Caller surface (*after the OPEN decision*): `-StripComments` → `$strip`; `-Processors` set semantics + verbatim flag; caution retirement on canon path | End-to-end heterogeneous ingest (`.ps1`/`.cs`/`.md`) |
+| 4 | Caller surface: `-StripComments` → `$strip`; `-Processors` set semantics (stage enablement) + verbatim flag; unregistered-processor hard error; caution retirement on canon path | End-to-end heterogeneous ingest (`.ps1`/`.cs`/`.md`) |
 | 5 | Per-variant ConfigEcho with token resolutions | Echo assertions in the e2e test |
