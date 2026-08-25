@@ -11,12 +11,12 @@
     "Columns": [
         "gidx"
     ],
-    "Grouping": "ByRootDirectory",
-    "GroupSort": "PathAsc",
-    "OrderStrict": false,
-    "PackObjective": "FrontLoad",
     "ShardQuotaBytes": 32768,
     "ShardToleranceBytes": 4096,
     "MaxFilesPerShard": 1000,
+    "Grouping": "ByRootDirectory",
+    "GroupSort": "PathAsc",
+    "PackObjective": "FrontLoad",
+    "OrderStrict": false,
     "PassThru": false
 }
