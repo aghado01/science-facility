@@ -27,14 +27,14 @@ Set-StrictMode -Version Latest
       9.  detab — pure-space file: depths accumulated, no change to characters
      10.  detab — pure-tab file: 1 tab expanded to TargetUnit spaces
      11.  detab — mixed tab/space lines: tabs expanded uniformly
-     12.  min-indent-2 — GCD collapse 4-space to 2-space
-     13.  min-indent-2 — already at TargetUnit: no change
-     14.  min-indent-2 — operates on absolute depths (no strip-common required)
+     12.  min-indent — GCD collapse 4-space to 2-space
+     13.  min-indent — already at TargetUnit: no change
+     14.  min-indent — operates on absolute depths (no strip-common required)
      15.  tabify — converts 2-space indentation to tabs
      16.  tabify — remainder spaces preserved when depth not divisible by TargetUnit
-     17.  tabify — does not require min-indent-2
-     18.  min-indent-2 + tabify — full chain
-     19.  strip-common + detab + min-indent-2 + tabify — all ops together
+     17.  tabify — does not require min-indent
+     18.  min-indent + tabify — full chain
+     19.  strip-common + detab + min-indent + tabify — all ops together
      20.  TargetUnit = 4 — custom target unit respected
      21.  Harmonized content-mutator contract (6d) — identity survival,
           copy-on-mutate, Text-key preservation, no-content pass-through,
@@ -130,7 +130,7 @@ Assert-Equal $r.Id 'id2' 'pscustomobject input: Id passed through'
 Enter-Section '2. Skip list'
 
 $mdItem = [pscustomobject]@{ Content = "  hello`n    world"; Path = 'readme.md'; Id = 'md1' }
-$r = Invoke-Processor -Item $mdItem -Config @{ Operations = @('strip-common', 'min-indent-2') }
+$r = Invoke-Processor -Item $mdItem -Config @{ Operations = @('strip-common', 'min-indent') }
 Assert-True ($r.Processing[0].Skipped -eq $true) '.md extension: Skipped = $true on the Processing record'
 Assert-Equal $r.Content "  hello`n    world" '.md extension: text unchanged'
 Assert-Equal $r.Processing[0].Processor 'rs-indent' '.md extension: Processing record present'
@@ -145,7 +145,7 @@ foreach ($ext in @('.txt', '.json', '.yaml', '.xml', '.html'))
 # Skip-list path resolution: descriptor bags carry RelativePath, not Path — a
 # Path-only lookup would silently stop protecting Markdown in code-track chains.
 $mdDesc = [pscustomobject]@{ RelativePath = 'docs/readme.md'; NodePath = 'docs/'; Content = "  hello`n    world" }
-$r = Invoke-Processor -Item $mdDesc -Config @{ Operations = @('strip-common', 'min-indent-2') }
+$r = Invoke-Processor -Item $mdDesc -Config @{ Operations = @('strip-common', 'min-indent') }
 Assert-True ($r.Processing[0].Skipped -eq $true) 'descriptor bag: .md skipped via RelativePath'
 Assert-Equal $r.Content "  hello`n    world" 'descriptor bag: markdown content untouched'
 
@@ -254,31 +254,31 @@ $r = Invoke-Processor -Item "`t  foo" -Config @{ Operations = @('detab') }
 Assert-Equal $r.Content "    foo" 'detab: tab(→2) + 2 spaces = 4 spaces leading'
 
 # ============================================================
-# 12. min-indent-2 — GCD collapse 4-space → 2-space
+# 12. min-indent — GCD collapse 4-space → 2-space
 # ============================================================
-Enter-Section '12. min-indent-2 — GCD collapse'
+Enter-Section '12. min-indent — GCD collapse'
 
 # 4-space indented file → collapsed to 2-space
-$r = Invoke-Processor -Item "foo`n    bar`n        baz" -Config @{ Operations = @('detab', 'min-indent-2') }
-Assert-Equal $r.Content "foo`n  bar`n    baz" 'min-indent-2: 4-space unit collapsed to 2'
+$r = Invoke-Processor -Item "foo`n    bar`n        baz" -Config @{ Operations = @('detab', 'min-indent') }
+Assert-Equal $r.Content "foo`n  bar`n    baz" 'min-indent: 4-space unit collapsed to 2'
 
 # ============================================================
-# 13. min-indent-2 — already at TargetUnit
+# 13. min-indent — already at TargetUnit
 # ============================================================
-Enter-Section '13. min-indent-2 — already target unit'
+Enter-Section '13. min-indent — already target unit'
 
 $input = "foo`n  bar`n    baz"
-$r = Invoke-Processor -Item $input -Config @{ Operations = @('detab', 'min-indent-2') }
-Assert-Equal $r.Content $input 'min-indent-2: 2-space unit unchanged'
+$r = Invoke-Processor -Item $input -Config @{ Operations = @('detab', 'min-indent') }
+Assert-Equal $r.Content $input 'min-indent: 2-space unit unchanged'
 
 # ============================================================
-# 14. min-indent-2 — absolute depths, no strip-common required
+# 14. min-indent — absolute depths, no strip-common required
 # ============================================================
-Enter-Section '14. min-indent-2 — absolute depths'
+Enter-Section '14. min-indent — absolute depths'
 
 # Common indent of 4, unit of 4: GCD([4,8,12]) = 4, scaled to 2 → [2,4,6]
-$r = Invoke-Processor -Item "    foo`n        bar`n            baz" -Config @{ Operations = @('detab', 'min-indent-2') }
-Assert-Equal $r.Content "  foo`n    bar`n      baz" 'min-indent-2: absolute depths scaled correctly'
+$r = Invoke-Processor -Item "    foo`n        bar`n            baz" -Config @{ Operations = @('detab', 'min-indent') }
+Assert-Equal $r.Content "  foo`n    bar`n      baz" 'min-indent: absolute depths scaled correctly'
 
 # ============================================================
 # 15. tabify — 2-space → tabs
@@ -298,21 +298,21 @@ $r = Invoke-Processor -Item "   foo" -Config @{ Operations = @('detab', 'tabify'
 Assert-Equal $r.Content "`t foo" 'tabify: 3-space → 1 tab + 1 remainder space'
 
 # ============================================================
-# 17. tabify — independent of min-indent-2
+# 17. tabify — independent of min-indent
 # ============================================================
-Enter-Section '17. tabify without min-indent-2'
+Enter-Section '17. tabify without min-indent'
 
 # 4-space file, tabify only (no collapse) — unit stays 4, each 4 spaces → 1 tab
 $r = Invoke-Processor -Item "foo`n    bar`n        baz" -Config @{ Operations = @('detab', 'tabify') }
 Assert-Equal $r.Content "foo`n`t`tbar`n`t`t`t`tbaz" 'tabify: 4-space file tabified at TargetUnit=2'
 
 # ============================================================
-# 18. min-indent-2 + tabify — full chain
+# 18. min-indent + tabify — full chain
 # ============================================================
-Enter-Section '18. min-indent-2 + tabify'
+Enter-Section '18. min-indent + tabify'
 
-$r = Invoke-Processor -Item "foo`n    bar`n        baz" -Config @{ Operations = @('detab', 'min-indent-2', 'tabify') }
-Assert-Equal $r.Content "foo`n`tbar`n`t`tbaz" 'min-indent-2 + tabify: 4-space collapsed then tabified'
+$r = Invoke-Processor -Item "foo`n    bar`n        baz" -Config @{ Operations = @('detab', 'min-indent', 'tabify') }
+Assert-Equal $r.Content "foo`n`tbar`n`t`tbaz" 'min-indent + tabify: 4-space collapsed then tabified'
 
 # ============================================================
 # 19. All ops together
@@ -321,7 +321,7 @@ Enter-Section '19. All ops'
 
 # 4-space file with 4-space common offset
 $r = Invoke-Processor -Item "    foo`n        bar`n            baz" -Config @{
-    Operations = @('strip-common', 'detab', 'min-indent-2', 'tabify')
+    Operations = @('strip-common', 'detab', 'min-indent', 'tabify')
 }
 Assert-Equal $r.Content "foo`n`tbar`n`t`tbaz" 'all ops: strip-common + collapse + tabify'
 
@@ -331,7 +331,7 @@ Assert-Equal $r.Content "foo`n`tbar`n`t`tbaz" 'all ops: strip-common + collapse 
 Enter-Section '20. TargetUnit = 4'
 
 # 2-space file rescaled to 4-space
-$r = Invoke-Processor -Item "foo`n  bar`n    baz" -Config @{ Operations = @('detab', 'min-indent-2'); TargetUnit = 4 }
+$r = Invoke-Processor -Item "foo`n  bar`n    baz" -Config @{ Operations = @('detab', 'min-indent'); TargetUnit = 4 }
 Assert-Equal $r.Content "foo`n    bar`n        baz" 'TargetUnit=4: 2-space unit rescaled to 4'
 
 # tabify at TargetUnit=4
@@ -378,11 +378,11 @@ Assert-True ($null -eq $rHalt.PSObject.Properties['Content']) 'no-content bag: n
 Assert-True ($null -eq $rHalt.PSObject.Properties['Processing']) 'no-content bag: no Processing record attached'
 Assert-Equal $rHalt.ReadError 'BinaryOrNulContent' 'no-content bag: returned intact'
 
-# The documented two-pass stack: detab, then strip-common + min-indent-2.
+# The documented two-pass stack: detab, then strip-common + min-indent.
 # Both passes record separately — the concrete reason the trail is a list.
 $stack = [pscustomobject]@{ RelativePath = 'src/a.ps1'; Content = "foo`n`tbar`n`t`tbaz" }
 $p1 = Invoke-Processor -Item $stack -Config @{ Operations = @('detab') }
-$p2 = Invoke-Processor -Item $p1 -Config @{ Operations = @('strip-common', 'min-indent-2') }
+$p2 = Invoke-Processor -Item $p1 -Config @{ Operations = @('strip-common', 'min-indent') }
 Assert-Equal $p2.Processing.Count 2 'two-pass stack: both rs-indent passes recorded'
 Assert-Equal $p2.Processing[0].Operations[0] 'detab' 'two-pass stack: first record keeps its own ops'
 Assert-Equal @($p2.Processing[1].Operations).Count 2 'two-pass stack: second record keeps its own ops'
@@ -429,16 +429,16 @@ Assert-Equal $rFf.Content ("a{0}  b" -f $FF) 'FF is a recognized line boundary'
 $rMixed = Invoke-Processor -Item "a`r`nb`rc`nd" -Config @{ Operations = @('detab') }
 Assert-Equal $rMixed.Content "a`r`nb`rc`nd" 'mixed terminators: no folding — each kind preserved exactly (rs-indent does not own this)'
 
-# min-indent-2 reshapes LEADING depth correctly across CRLF-separated lines —
+# min-indent reshapes LEADING depth correctly across CRLF-separated lines —
 # proves $depths indexing lines up with the terminator-preserving split.
-$rMi = Invoke-Processor -Item "a`r`n    b`r`n        c" -Config @{ Operations = @('min-indent-2') }
-Assert-Equal $rMi.Content "a`r`n  b`r`n    c" 'min-indent-2 over CRLF-separated lines: depths correct, CRLF preserved'
+$rMi = Invoke-Processor -Item "a`r`n    b`r`n        c" -Config @{ Operations = @('min-indent') }
+Assert-Equal $rMi.Content "a`r`n  b`r`n    c" 'min-indent over CRLF-separated lines: depths correct, CRLF preserved'
 
 # The chain order this unblocks: rs-indent no longer needs rs-whitespace's lf
 # to have run first. Reshape CRLF content directly, THEN fold — same result
 # as folding first, because rs-indent never touched the terminator bytes.
 $raw = "function f {`r`n`t`t'x'`r`n}"
-$viaIndentFirst = Invoke-Processor -Item $raw -Config @{ Operations = @('min-indent-2') }
+$viaIndentFirst = Invoke-Processor -Item $raw -Config @{ Operations = @('min-indent') }
 Assert-Equal $viaIndentFirst.Content "function f {`r`n  'x'`r`n}" 'rs-indent runs correctly on RAW (un-folded) content — no dependency on lf having run first'
 
 # ============================================================

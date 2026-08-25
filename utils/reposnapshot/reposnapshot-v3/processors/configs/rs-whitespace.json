@@ -1,0 +1,15 @@
+{
+    "Operations": [
+        "lf",
+        "nfc",
+        "strip-zwsp",
+        "strip-wj",
+        "strip-zwnbsp",
+        "max-blank-1",
+        "trim-trailing",
+        "trim-inner",
+        "trim-doc",
+        "pad-breaks"
+    ],
+    "IncludeMeta": true
+}

@@ -28,11 +28,11 @@
     Op surface:
       strip-common    Subtract minimum leading-space depth from all non-blank lines
       detab           Single O(n) sweep: extract leading \s+, expand tabs to TargetUnit spaces
-      min-indent-2    GCD-infer file's indent unit, rescale uniformly to TargetUnit (auto-requires detab)
+      min-indent      GCD-infer file's indent unit, rescale uniformly to TargetUnit (auto-requires detab)
       tabify          Convert leading space runs to tabs at TargetUnit width (auto-requires detab)
 
     Internal execution order (fixed):
-      strip-common → detab → min-indent-2 → tabify
+      strip-common → detab → min-indent → tabify
 
     Contraindications:
       Prose/markup formats are skipped (.md, .txt, .rst, .html, .xml, .json, .yaml, .toml, .csv).

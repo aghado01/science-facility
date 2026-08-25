@@ -23,7 +23,7 @@
     The ingest chain after file-read, as an ordered array. Each entry is
     either a bare processor-key string (default Config: {}) or an object
     { Key; Config }, e.g.:
-      @('rs-whitespace', @{ Key = 'rs-indent'; Config = @{ Operations = @('detab','min-indent-2','tabify'); TargetUnit = 2 } })
+      @('rs-whitespace', @{ Key = 'rs-indent'; Config = @{ Operations = @('detab','min-indent','tabify'); TargetUnit = 2 } })
     Key must name a processors\<Key>.ps1 file. When given, this fully
     replaces the legacy PsStrip-driven chain (file-read → [rs-psstrip] →
     rs-whitespace → [rs-content_meta]) — nothing after file-read is implied.

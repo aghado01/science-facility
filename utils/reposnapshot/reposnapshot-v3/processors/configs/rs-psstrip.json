@@ -1,0 +1,11 @@
+{
+    "Operations": [
+        "block-comments",
+        "doc-strings",
+        "comment-blocks",
+        "line-comments"
+    ],
+    "IncludeMeta": true,
+    "MaskHereStrings": true,
+    "ForceRegexFallback": false
+}

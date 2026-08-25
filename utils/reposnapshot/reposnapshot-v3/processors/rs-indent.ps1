@@ -33,8 +33,8 @@ $skipped = $ext -in $skipExts
 
 #region GatesAndLineSplit
 $doStripCommon = (-not $skipped) -and ('strip-common' -in $ops)
-$doDetab       = (-not $skipped) -and ('detab' -in $ops -or 'min-indent-2' -in $ops -or 'tabify' -in $ops)
-$doMinIndent   = (-not $skipped) -and ('min-indent-2' -in $ops)
+$doDetab       = (-not $skipped) -and ('detab' -in $ops -or 'min-indent' -in $ops -or 'tabify' -in $ops)
+$doMinIndent   = (-not $skipped) -and ('min-indent' -in $ops)
 $doTabify      = (-not $skipped) -and ('tabify' -in $ops)
 
 # Split physical lines while preserving original terminator bytes for reassembly.
@@ -106,7 +106,7 @@ if ($doDetab)
 }
 #endregion
 
-#region Stage3_MinIndent2
+#region Stage3_MinIndent
 # GCD-infer file's current indent unit and rescale depths uniformly to TargetUnit.
 if ($doMinIndent)
 {
