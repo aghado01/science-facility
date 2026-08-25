@@ -268,13 +268,48 @@ function Compile-Plan
         }
     }
 
-    # Bind steps to resolved Fn names
+    # Bind steps to resolved Fn names and load external JSON configs
     $boundSteps = foreach ($step in $Steps)
     {
+        $key = [string]$step.Key
+        $procPath = [string]$Manifest[$key]
+        $procDir = if ($procPath) { [System.IO.Path]::GetDirectoryName($procPath) } else { '' }
+        $cfgPath = if ($procDir) { Join-Path $procDir "configs\$key.json" } else { '' }
+
+        $effectiveConfig = @{}
+        if ($cfgPath -and [System.IO.File]::Exists($cfgPath))
+        {
+            try
+            {
+                $json = [System.IO.File]::ReadAllText($cfgPath)
+                $fileDefaults = $json | ConvertFrom-Json -AsHashtable
+                if ($null -ne $fileDefaults)
+                {
+                    foreach ($k in $fileDefaults.Keys) { $effectiveConfig[$k] = $fileDefaults[$k] }
+                }
+            }
+            catch
+            {
+                $warnings.Add("Compile-Plan: failed to parse config file '$cfgPath': $($_.Exception.Message)")
+            }
+        }
+
+        if ($null -ne $step.Config)
+        {
+            if ($step.Config -is [System.Collections.IDictionary])
+            {
+                foreach ($k in $step.Config.Keys) { $effectiveConfig[$k] = $step.Config[$k] }
+            }
+            elseif ($step.Config -is [System.Management.Automation.PSCustomObject])
+            {
+                foreach ($p in $step.Config.PSObject.Properties) { $effectiveConfig[$p.Name] = $p.Value }
+            }
+        }
+
         [pscustomobject]@{
-            Key    = [string]$step.Key
-            Fn     = [string]$validBodies[$step.Key].Fn
-            Config = $step.Config ?? @{}
+            Key    = $key
+            Fn     = [string]$validBodies[$key].Fn
+            Config = $effectiveConfig
         }
     }
 

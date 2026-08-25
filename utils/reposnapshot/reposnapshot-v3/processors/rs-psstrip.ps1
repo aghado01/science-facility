@@ -51,7 +51,11 @@ function _SplitCommentPopulation {
 #endregion
 
 #region Config
-$ops = if ($Config.ContainsKey('Operations')) { @($Config['Operations']) } else { @('block-comments', 'doc-strings', 'comment-blocks', 'trim-inner', 'line-comments') }
+if ($Config.Count -eq 0 -or -not $Config.ContainsKey('Operations'))
+{
+    $Config = Resolve-ProcessorConfig -ProcessorName 'rs-psstrip' -CallerConfig $Config
+}
+$ops = @($Config['Operations'])
 $includeMeta = if ($null -ne $Config['IncludeMeta']) { [bool]$Config['IncludeMeta'] } else { $true }
 #endregion
 

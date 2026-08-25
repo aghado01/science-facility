@@ -296,7 +296,7 @@ else
     # legacy default chain — unchanged from before -Processors existed
     if ($PsStrip)
     {
-        $steps.Add(@{ Key = 'rs-psstrip'; Config = @{ Operations = @('block-comments', 'doc-strings', 'comment-blocks', 'line-comments') } })
+        $steps.Add(@{ Key = 'rs-psstrip'; Config = @{} })
     }
     $steps.Add(@{ Key = 'rs-whitespace'; Config = @{} })
     if ($Columns -contains 'content_meta')

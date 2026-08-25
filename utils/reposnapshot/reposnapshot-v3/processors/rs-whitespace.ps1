@@ -7,7 +7,11 @@ param(
 )
 
 #region Config
-$ops = if ($Config.ContainsKey('Operations')) { @($Config['Operations']) } else { @('lf', 'nfc', 'strip-zwsp', 'strip-wj', 'strip-zwnbsp', 'trim-trailing', 'max-blank-1', 'trim-doc', 'ensure-final-lf', 'pad-breaks') }
+if ($Config.Count -eq 0 -or -not $Config.ContainsKey('Operations'))
+{
+    $Config = Resolve-ProcessorConfig -ProcessorName 'rs-whitespace' -CallerConfig $Config
+}
+$ops = @($Config['Operations'])
 $includeMeta = if ($null -ne $Config['IncludeMeta']) { [bool]$Config['IncludeMeta'] } else { $true }
 #endregion
 

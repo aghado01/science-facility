@@ -8,6 +8,10 @@ param(
 )
 
 #region Config
+if ($Config.Count -eq 0 -or -not $Config.ContainsKey('Operations'))
+{
+    $Config = Resolve-ProcessorConfig -ProcessorName 'rs-indent' -CallerConfig $Config
+}
 $ops = @($Config['Operations'])
 $includeMeta = if ($null -ne $Config['IncludeMeta']) { [bool]$Config['IncludeMeta'] } else { $true }
 $targetUnit = if ($null -ne $Config['TargetUnit'] -and [int]$Config['TargetUnit'] -gt 0) { [int]$Config['TargetUnit'] } else { 2 }

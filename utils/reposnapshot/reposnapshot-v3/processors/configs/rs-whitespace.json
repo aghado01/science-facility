@@ -5,10 +5,10 @@
         "strip-zwsp",
         "strip-wj",
         "strip-zwnbsp",
-        "max-blank-1",
         "trim-trailing",
-        "trim-inner",
+        "max-blank-1",
         "trim-doc",
+        "ensure-final-lf",
         "pad-breaks"
     ],
     "IncludeMeta": true

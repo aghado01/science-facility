@@ -105,3 +105,41 @@ function Copy-Bag
     return [pscustomobject]$ord
 }
 #endregion
+
+#region Resolve-ProcessorConfig
+function Resolve-ProcessorConfig
+{
+    <#
+    .SYNOPSIS
+        Resolves processor configuration by merging caller overrides on top of external JSON defaults.
+    #>
+    param(
+        [Parameter(Mandatory)] [string]$ProcessorName,
+        [hashtable]$CallerConfig = @{}
+    )
+
+    $effective = @{}
+    $configsDir = Join-Path $PSScriptRoot 'configs'
+    $cfgPath = Join-Path $configsDir "$ProcessorName.json"
+    if ([System.IO.File]::Exists($cfgPath))
+    {
+        try
+        {
+            $json = [System.IO.File]::ReadAllText($cfgPath)
+            $parsed = $json | ConvertFrom-Json -AsHashtable
+            if ($null -ne $parsed)
+            {
+                foreach ($k in $parsed.Keys) { $effective[$k] = $parsed[$k] }
+            }
+        }
+        catch {}
+    }
+
+    if ($null -ne $CallerConfig)
+    {
+        foreach ($k in $CallerConfig.Keys) { $effective[$k] = $CallerConfig[$k] }
+    }
+
+    return $effective
+}
+#endregion

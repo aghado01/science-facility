@@ -8,7 +8,11 @@ param(
 )
 
 #region Config
-$ops = if ($Config.ContainsKey('Operations')) { @($Config['Operations']) } else { @('block-comments', 'doc-strings', 'comment-blocks', 'line-comments') }
+if ($Config.Count -eq 0 -or -not $Config.ContainsKey('Operations'))
+{
+    $Config = Resolve-ProcessorConfig -ProcessorName 'rs-csstrip' -CallerConfig $Config
+}
+$ops = @($Config['Operations'])
 $includeMeta = if ($null -ne $Config['IncludeMeta']) { [bool]$Config['IncludeMeta'] } else { $true }
 #endregion
 
