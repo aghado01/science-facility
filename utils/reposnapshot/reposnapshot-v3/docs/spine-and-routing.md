@@ -9,7 +9,7 @@ Per-file plan compilation for heterogeneous ingestion sets. A declared **spine**
 The design rests on two independent guarantees that must not be conflated:
 
 1. **Correctness — precondition self-sufficiency.** Each processor establishes its own preconditions (see [mutator-contracts.md](mutator-contracts.md)); some operations therefore run redundantly across processors. This is deliberate: it makes *every* stage combination correct by construction, including compiled variants with stages spliced out. No stage may ever assume its canonical predecessor ran. This discipline is load-bearing for routing — the day it erodes, per-file variation silently breaks for the variants that omit a stage.
-2. **Canon — nominal ordering.** The spine orders the nominal path for quality and non-waste. Placement is derived, not taste: **stage A follows stage B if B can produce output violating A's postcondition.** (Stripping emits trailing whitespace → tidy follows strip; every mutator invalidates measurement → measure runs last.) A new stage is placed by asking which existing postconditions it can break.
+2. **Canon — nominal ordering.** The spine orders the nominal path for quality and non-waste. Placement is derived, not taste: **stage A follows stage B if B can produce output violating A's postcondition.** (Stripping emits trailing whitespace → tidy follows strip; measurement describes the content rendered downstream, not the raw input, so every mutation invalidates it → measure runs last.) A new stage is placed by asking which existing postconditions it can break.
 
 Correctness never depends on the canon; the canon exists so the nominal run is clean and so a reading agent can rely on a stable stage story.
 
@@ -19,14 +19,13 @@ One file, `processors/registry.json`, is the source of truth for canonical order
 
 ```json
 {
-  "Spine": ["read", "parse", "$strip", "indent", "whitespace", "measure"],
+  "Spine": ["read", "$strip", "indent", "whitespace", "measure"],
   "Languages": {
     "powershell": ["ps1", "psm1", "psd1"],
     "csharp":     ["cs", "csx"]
   },
   "Processors": {
     "file-read":       { "Stage": "read" },
-    "tp-perplexity":   { "Stage": "parse" },
     "rs-psstrip":      { "Stage": "$strip", "Language": "powershell" },
     "rs-csstrip":      { "Stage": "$strip", "Language": "csharp" },
     "rs-indent":       { "Stage": "indent" },
@@ -35,6 +34,8 @@ One file, `processors/registry.json`, is the source of truth for canonical order
   }
 }
 ```
+
+`Spine` ids name **processor families** in their prescribed rank order — read before everything, measurement after every mutation. A family is either fixed (exactly one member) or language-routed (a `$` token); the rank order is a property of the family, so strippers for any language occupy the same slot in otherwise equivalent chains.
 
 `Processors` is keyed on processor keys — the same keyspace as the manifest and `configs/<key>.json` — so **exactly-once holds by construction** (one entry, one `Stage`) and **completeness is a set comparison**. Routes are **derived**, not declared: the `$strip` members for `powershell` are the processors whose entries declare that pair, in registry declaration order. Registry entries carry classification only, never config; `configs/` stays at exactly one file per processor key.
 
@@ -113,7 +114,7 @@ Consequences:
 
 - **Set-mode resolution**: naming a processor key enables its stage. For a routed stage this enables the token — routing still decides per file class, so `-Processors 'rs-psstrip'` on a mixed corpus enables `$strip` wherever it resolves. `-StripComments` and naming a `Strip` member are the same operation spelled two ways.
 - **Unregistered processor named under canon mode** → hard error stating both fixes: register it in the spine, or run verbatim.
-- **Unreferenced processor *file* on disk** → inert, not an error — a WIP processor can land in `processors/` without breaking runs. Completeness for the shipped set (manifest ⊆ registry keys) is enforced by a repo test, not at runtime.
+- **Unreferenced processor *file* on disk** → inert, not an error — a WIP processor can land in `processors/` without breaking runs. `tp-perplexity` is the live instance: document-ingestion lineage, deliberately unregistered until the code/non-code shared architecture is revisited — verbatim mode can still run it. Completeness for the shipped set (manifest ⊆ registry keys) is a repo test with documented deferrals (`tp-perplexity`), not a runtime check.
 
 ## Echo
 
@@ -145,8 +146,8 @@ Each step lands with its tests through `tests/run-all.ps1` before the next begin
 
 | Step | Work | Test gate |
 |---|---|---|
-| 1 | `processors/registry.json` (`Spine`/`Languages`/`Processors` sections: fixed `parse` entry for `tp-perplexity`, `$strip` members for powershell/csharp) + loader with normalization and hard-error validation | Malformed-file errors; extension normalization and one-language-per-extension; registry keys exist in manifest; stage/language cross-validation |
-| 2 | `Compile-Plan` emits the family (`Variants`/`Routing`/union `Iss`/union `ProcessorKeys`) | Pure-function tests: mixed extension set → expected variant tuples; dense chains of differing lengths; default variant present; spine invariants (measure last, strip precedes whitespace); validate-all vs bind-present; completeness (manifest ⊆ registry) |
+| 1 | `processors/registry.json` (`Spine`/`Languages`/`Processors` sections; `$strip` members for powershell/csharp) + loader with normalization and hard-error validation | Malformed-file errors; extension normalization and one-language-per-extension; registry keys exist in manifest; stage/language cross-validation |
+| 2 | `Compile-Plan` emits the family (`Variants`/`Routing`/union `Iss`/union `ProcessorKeys`) | Pure-function tests: mixed extension set → expected variant tuples; dense chains of differing lengths; default variant present; spine invariants (measure last, strip precedes whitespace); validate-all vs bind-present; completeness (manifest ⊆ registry, documented deferrals excluded) |
 | 3 | Colonel: third slice array, family marshal, worker lookup table | Index-stable envelope over mixed corpus; each item demonstrably ran its assigned chain (bag `Processing` trail) |
 | 4 | Caller surface: `-StripComments` → `$strip`; `-Processors` set semantics (stage enablement) + verbatim flag; unregistered-processor hard error; caution retirement on canon path | End-to-end heterogeneous ingest (`.ps1`/`.cs`/`.md`) |
 | 5 | Per-variant ConfigEcho with token resolutions | Echo assertions in the e2e test |
