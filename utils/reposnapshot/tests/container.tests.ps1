@@ -265,7 +265,7 @@ try
     $threw = $null; try { Build-Row -Layout $L1 -Entry $entry -Cursor 0 | Out-Null } catch { $threw = $_.Exception.Message }
     Assert-True ($null -ne $threw -and $threw -like '*GlobalIdx is required*') 'Build-Row without GlobalIdx under gidx throws' $threw
     $threw = $null; try { Build-Row -Layout $L1 -Entry $entry -Cursor 0 -GlobalIdx 12345 | Out-Null } catch { $threw = $_.Exception.Message }
-    Assert-True ($null -ne $threw -and $threw -like '*exceeds the fixed width*') 'gidx wider than IdxWidth throws (never widened silently)' $threw
+    Assert-True ($null -ne $threw -and $threw -like '*exceeds fixed width*') 'gidx wider than IdxWidth throws (never widened silently)' $threw
     $rr0 = Build-Row -Layout $L0 -Entry $entry -Cursor 0
     Assert-True (($utf8.GetString($rr0.Bytes)) -like "src/Foo.cs | $expectedBytes | *") 'required-only layout: no gidx, no block'
 
