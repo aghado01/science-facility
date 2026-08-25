@@ -10,7 +10,8 @@ using namespace System.Collections.Generic
     Groups, measures, and packs entries into deterministic, bounded shards
     under configurable packing objectives (FrontLoad vs Even).
 
-    See docs/sharding-and-packing.md for bin packing algorithm details and group sorting.
+.LINK
+    docs/sharding-and-packing.md
 #>
 
 $script:MaxFilesDefault = 100000
@@ -22,9 +23,7 @@ Import-Module (Join-Path $PSScriptRoot 'rs.core.numerics.psm1')
 
 function Get-CeilDiv ([long]$A, [long]$B)
 {
-    # Integer ceiling division. Never via [long] casts of doubles — the cast
-    # rounds half-to-even, so ceil(9/5) would come back 3 (via 2.6 → 3 is
-    # right, but 2.5-family values corrupt silently). Pure integer instead.
+    # Integer ceiling division (pure integer arithmetic avoiding float rounding)
     if ($A -le 0) { return 0L }
     $rem = $A % $B
     $quot = [long](($A - $rem) / $B)
@@ -33,10 +32,7 @@ function Get-CeilDiv ([long]$A, [long]$B)
 
 function Get-GreedyBins ([long[]]$Sizes, [int[]]$Order, [long]$Cap, [int]$MaxFiles)
 {
-    # Contiguous greedy over $Order: close the bin when the next record would
-    # breach Cap or the count cap. A record alone larger than Cap still gets a
-    # bin (solo — the InBand case when Cap is the quota capacity); records
-    # larger than the CEILING capacity never reach here (pinned at stage 4).
+    # Contiguous greedy partition over nominal order
     $bins = [List[object]]::new()
     $cur = $null
     foreach ($i in $Order)
@@ -91,16 +87,7 @@ function Test-EvenFeasible ([long[]]$Sizes, [int[]]$Order, [long]$Bound, [int]$M
 
 function Get-FrontLoadStrictBins ([long[]]$Sizes, [int[]]$Order, [int]$K, [long]$CapQ, [long]$CapC, [int]$MaxFiles)
 {
-    # Maximal quota prefixes, extended into the tolerance band ONLY while the
-    # remaining records cannot fit the remaining bins at the ceiling — so
-    # overshoot arises exactly where forced (clause 3 falls out).
-    #
-    # This is the forward form of the brief's sketch. The sketch's literal
-    # procedure — greedy-at-quota then merging ADJACENT WHOLE BINS latest-first
-    # — is not exact: on sizes (7,4,6,5) at capQ 10 / capC 13, quota-greedy
-    # gives [7][4,6][5] and no adjacent pair fits under the ceiling, yet
-    # k_min = 2 is achievable by moving the cut inside a bin → [7,4][6,5].
-    # The forward construction computes that directly.
+    # Maximal quota prefixes with forward tolerance expansion. See docs/sharding-and-packing.md.
     $bins = [List[object]]::new()
     $j = 0
     for ($b = 0; $b -lt $K; $b++)
@@ -163,13 +150,7 @@ function Add-SortedDesc ([long[]]$Vec, [long]$X)
 
 function Get-EvenStrictBins ([long[]]$Sizes, [int[]]$Order, [int]$K, [long]$CapC, [int]$MaxFiles)
 {
-    # Lexicographic min-max linear partition (minimize the largest part, then
-    # the next, and so on — #48): binary search for the minimal max B*, then
-    # DP over cut points with sorted-desc vector values. Valid because
-    # inserting the same part size into two sorted vectors preserves their
-    # lexicographic order. Cost O(n²·K) worst case — Even+strict is the
-    # analytical mode and groups are per-Grouping subsets; FrontLoad is the
-    # working default.
+    # Lexicographic min-max linear partition (B* search + DP). See docs/sharding-and-packing.md.
     $n = $Order.Count
     $pre = [long[]]::new($n + 1)
     for ($j = 0; $j -lt $n; $j++) { $pre[$j + 1] = $pre[$j] + $Sizes[$Order[$j]] }
@@ -270,10 +251,7 @@ function Get-FfdBins ([long[]]$Sizes, [int[]]$Order, [long]$Cap, [int]$MaxFiles)
 
 function Invoke-BinElimination ([List[object]]$Bins, [long[]]$Sizes, [long]$CapC, [int]$MaxFiles, [int]$TargetK)
 {
-    # Tolerance-bounded bin elimination: smallest bin first (ties → earlier
-    # first nominal index), best-fit its records into the other bins with
-    # capacity = ceiling; eliminated iff ALL place. Repeat until the target is
-    # reached or a full pass changes nothing. Deterministic throughout.
+    # Tolerance-bounded bin elimination: smallest bin first, best-fit into remaining bins.
     $ids = 0
     foreach ($b in $Bins) { $b.Id = $ids; $ids++ }
     while ($Bins.Count -gt $TargetK)
@@ -321,12 +299,7 @@ function Invoke-BinElimination ([List[object]]$Bins, [long[]]$Sizes, [long]$CapC
 
 function Invoke-EvenLptPass ([List[object]]$Bins, [long[]]$Sizes, [long]$CapC, [int]$MaxFiles)
 {
-    # Even shape under flexible membership: LPT redistribution over the SAME
-    # bin count — records by size desc (ties → nominal asc) into the currently
-    # least-filled bin with room (ties → lowest Id). Approximate by design
-    # (the brief: flexible Even is LPT; strict Even is the exact mode).
-    # Returns $false — leaving the bins untouched — if any record cannot
-    # place, which the caller surfaces as ShapePassApplied.
+    # Even shape under flexible membership: LPT redistribution over the same bin count.
     $ids = 0
     foreach ($b in $Bins) { $b.Id = $ids; $ids++ }
     $all = [List[int]]::new()
@@ -575,8 +548,7 @@ function Get-GroupKey ([object]$Entry, [string]$Grouping, [int]$Index)
         'Flat' { return '' }
         'ByFileType'
         {
-            # READ from the carried tier, never re-derived from RelativePath —
-            # two derivations of one fact is the defect class #50 closed.
+            # Read Extension from carried tier (never re-derive from path)
             $p = $Entry.PSObject.Properties['Extension']
             if ($null -eq $p) { throw "New-ShardPlan: entry #$Index carries no Extension — ByFileType reads assemble.out.entry.carried (ledger #50); it never re-derives from RelativePath." }
             $ext = [string]$p.Value
@@ -595,9 +567,6 @@ function Get-GroupKey ([object]$Entry, [string]$Grouping, [int]$Index)
 
 function Get-CleanGroupName ([string]$GroupKey)
 {
-    # Key suffix fragment: leading '.' dropped ('.ps1' → 'ps1'); anything
-    # outside [A-Za-z0-9_-] becomes '_' (crawler-derived names may carry
-    # spaces and non-ASCII; filenames must not).
     $s = $GroupKey.TrimStart('.')
     if ($s.Length -eq 0) { $s = 'noext' }
     return ($s -replace '[^A-Za-z0-9_-]', '_')
@@ -605,9 +574,7 @@ function Get-CleanGroupName ([string]$GroupKey)
 
 function Get-NominalOrder ([object[]]$Entries, [List[int]]$Members, [string]$GroupSort)
 {
-    # Deterministic and ordinal (never culture-sensitive): composite sort key
-    # with RelativePath as the ordinal tie-break, so even an unstable sort and
-    # colliding primary keys cannot produce two orders.
+    # Deterministic composite sort key with RelativePath tie-breaker
     $n = $Members.Count
     $keys = [string[]]::new($n)
     $idx = [int[]]::new($n)

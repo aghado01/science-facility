@@ -56,10 +56,13 @@
 
 .PARAMETER ConfigPath
     JSON file supplying any parameter above by name (PascalCase keys matching
-    the parameter names, e.g. { "Root": "...", "PsStrip": true }). Defaults to
+    the parameter names, e.g. { "Root": "...", "Processors": [...] }). Defaults to
     user-config.json next to this script; silently skipped if that default
     file is absent. An explicitly-passed -ConfigPath that does not exist is an
     error. Mutually exclusive with -Config when both are explicitly passed.
+
+.LINK
+    docs/user-cli-and-config.md
 
     Precedence: CLI arg > (-Config or -ConfigPath, whichever was passed) >
     built-in default. -Root has no built-in default — it must come from the
@@ -101,32 +104,8 @@ param(
 )
 
 #region ConfigMerge
-# Three ways settings can arrive, in this order of resolution:
-#   1. -Config <hashtable-or-object>  — an in-line value, no file I/O.
-#   2. -ConfigPath <file>             — explicit file path, read and parsed.
-#   3. (neither passed)               — user-config.json beside this script,
-#                                        used if present, silently skipped if
-#                                        not (that default path "existing" is
-#                                        not the same as being explicitly
-#                                        passed — only an explicit -ConfigPath
-#                                        that is missing is an error).
-# -Config and -ConfigPath are mutually exclusive when BOTH are explicitly
-# passed — ConfigPath's own default value doesn't count as "passed" here;
-# $PSBoundParameters is what distinguishes an explicit flag from a default.
-#
-# -Root dropped [Parameter(Mandatory)] so an unbound Root can fall through to
-# the config below — PowerShell binds/prompts for Mandatory params BEFORE the
-# script body runs, which would pre-empt ever reaching a config at all. Root
-# has no ValidateSet/ValidateRange to lean on, so every path (CLI-bound,
-# config-sourced, or plain missing) gets the same explicit Container check
-# below.
-#
-# Grouping/GroupSort/PackObjective/MaxFilesPerShard keep their param-block
-# ValidateSet/ValidateRange working for free: PowerShell re-validates a
-# variable against its own attribute on every reassignment within the same
-# scope, not just at initial parameter binding — so a bad config value throws
-# PowerShell's own clear error right at the assignment lines below, no extra
-# checking needed.
+# Resolution precedence: CLI Flags > Config (-Config or -ConfigPath) > Built-in Defaults.
+# See docs/user-cli-and-config.md for resolution and binding invariants.
 function Get-ConfigOverride ($Bound, $Cfg, [string]$Name, $Current)
 {
     if ($Bound.ContainsKey($Name)) { return $Current }
@@ -146,9 +125,7 @@ function ConvertTo-ConfigHashtable ($Value)
     throw "rs.core.user: -Config must be a hashtable or an object with named properties (got $($Value.GetType().Name))."
 }
 
-# Normalizes one -Processors entry to the @{ Key; Config } shape Compile-Plan
-# expects (see processors\chain-executor.ps1's CHAINING CONTRACT). A bare
-# string is sugar for "this key, default Config {}".
+# Normalize a -Processors entry to @{ Key; Config }. Bare string defers to processors/configs/<Key>.json.
 function ConvertTo-ProcessorStep ($Entry)
 {
     if ($Entry -is [string]) { return @{ Key = $Entry; Config = @{} } }
@@ -256,10 +233,7 @@ $filtered = Invoke-Membrane -CompiledNodes $compiled.CompiledNodes -CrawlerGraph
 #endregion
 
 #region IngestAndAssemble
-# Every processors\*.ps1 file (minus the two infra scripts) is registered
-# regardless of what actually runs — Compile-Plan only reads manifest entries
-# whose Key is referenced by $steps, so this costs nothing and needs no edit
-# when a new processor file shows up.
+# Discover all processors/*.ps1 scripts for step validation.
 $procDir = Join-Path $v3 'processors'
 $procManifest = @{}
 foreach ($f in Get-ChildItem -LiteralPath $procDir -Filter '*.ps1' -File)
@@ -294,9 +268,7 @@ else
     }
 }
 
-# Soft cautions, not errors — an explicit -Processors chain is allowed to
-# violate these; they are established invariants of the format (pad-breaks
-# spacing, content_meta's enrich-only-tail contract), not rules enforced here.
+# Invariant cautions (non-fatal advisories)
 $resolvedKeys = @($steps | ForEach-Object Key)
 if ($resolvedKeys -notcontains 'rs-whitespace')
 {

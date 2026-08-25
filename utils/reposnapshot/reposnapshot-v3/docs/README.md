@@ -14,6 +14,7 @@ This directory contains the collected architectural doctrines, invariants, and d
 - [Sharding & Packing](file:///D:/aghado01/science-facility/utils/reposnapshot/reposnapshot-v3/docs/sharding-and-packing.md) — Multi-objective deterministic bin packing (`FrontLoad` vs `Even`), group sorting, and quota management.
 - [Serialize & Manifest](file:///D:/aghado01/science-facility/utils/reposnapshot/reposnapshot-v3/docs/serialize-and-manifest.md) — Writer receipts, plan-file invariance, and Handlebars-lite tree manifest generation.
 - [Horizontal Internals](file:///D:/aghado01/science-facility/utils/reposnapshot/reposnapshot-v3/docs/horizontal-internals.md) — Parameter forwarding via `DynamicParam` reflection and stage wrapper registration.
+- [User CLI & Config](file:///D:/aghado01/science-facility/utils/reposnapshot/reposnapshot-v3/docs/user-cli-and-config.md) — Orchestration entry point, resolution precedence, and configuration lifecycle.
 
 ### Processors & Mutator Doctrines
 - [Mutator Contracts](file:///D:/aghado01/science-facility/utils/reposnapshot/reposnapshot-v3/docs/mutator-contracts.md) — Harmonized content mutators, copy-on-mutate, bag resolution, and `_ChainHalt`.
