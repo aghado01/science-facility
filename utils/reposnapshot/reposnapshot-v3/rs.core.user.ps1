@@ -15,18 +15,13 @@
     Output directory for runstamped snapshot folders (defaults to <Root>/.snapshot).
 .PARAMETER SelectionPatterns
     When supplied, membrane runs Selection semantics. Default: Ignore semantics.
-.PARAMETER PsStrip
-    Applies PowerShell comment stripping (code corpora only). Sugar for the
-    single-processor case; ignored when -Processors is given — build the same
-    step into -Processors instead.
 .PARAMETER Processors
     The ingest chain after file-read, as an ordered array. Each entry is
-    either a bare processor-key string (default Config: {}) or an object
-    { Key; Config }, e.g.:
-      @('rs-whitespace', @{ Key = 'rs-indent'; Config = @{ Operations = @('detab','min-indent','tabify'); TargetUnit = 2 } })
-    Key must name a processors\<Key>.ps1 file. When given, this fully
-    replaces the legacy PsStrip-driven chain (file-read → [rs-psstrip] →
-    rs-whitespace → [rs-content_meta]) — nothing after file-read is implied.
+    either a bare processor-key string (which automatically defers to its
+    processors/configs/<Key>.json default configuration) or an object
+    { Key; Config } with specific overrides, e.g.:
+      @('rs-psstrip', 'rs-whitespace', @{ Key = 'rs-indent'; Config = @{ TargetUnit = 4 } })
+    Key must name a processors\<Key>.ps1 file.
     Columns still separately controls what lands on the wire: a processor's
     fields only appear there if the matching column is also requested, and a
     requested column with no processor computing it renders empty.
@@ -75,13 +70,13 @@
     # Reads every setting from user-config.json next to this script.
 
 .EXAMPLE
-    ./rs.core.user.ps1 -Root ../reposnapshot-v3 -SelectionPatterns '*.ps1','*.psm1' -PsStrip
+    ./rs.core.user.ps1 -Root ../reposnapshot-v3 -SelectionPatterns '*.ps1','*.psm1'
 
 .EXAMPLE
     ./rs.core.user.ps1 -ConfigPath ./recipes/full-audit.json
 
 .EXAMPLE
-    ./rs.core.user.ps1 -Config @{ Root = '..\reposnapshot-v3'; PsStrip = $true }
+    ./rs.core.user.ps1 -Config @{ Root = '..\reposnapshot-v3'; Processors = @('rs-psstrip', 'rs-whitespace') }
 
 .EXAMPLE
     ./rs.core.user.ps1 -Root ../reposnapshot-v3 -Processors 'rs-indent', 'rs-whitespace', 'rs-content_meta'
@@ -91,7 +86,6 @@ param(
     [string]$Root,
     [string]$OutRoot,
     [string[]]$SelectionPatterns = $null,
-    [switch]$PsStrip,
     [string[]]$Columns = @('gidx', 'content_meta'),
     [ValidateSet('Flat', 'ByFileType', 'ByRootDirectory')] [string]$Grouping = 'Flat',
     [ValidateSet('PathAsc', 'PathHash')] [string]$GroupSort = 'PathAsc',
@@ -204,7 +198,6 @@ if ($null -ne $cfg)
     $OutRoot             = Get-ConfigOverride $b $cfg 'OutRoot' $OutRoot
     $SelectionPatterns   = Get-ConfigOverride $b $cfg 'SelectionPatterns' $SelectionPatterns
     if ($null -ne $SelectionPatterns) { $SelectionPatterns = [string[]]$SelectionPatterns }
-    $PsStrip             = [bool](Get-ConfigOverride $b $cfg 'PsStrip' $PsStrip.IsPresent)
     $Columns             = [string[]](Get-ConfigOverride $b $cfg 'Columns' $Columns)
     $Grouping            = [string](Get-ConfigOverride $b $cfg 'Grouping' $Grouping)
     $GroupSort           = [string](Get-ConfigOverride $b $cfg 'GroupSort' $GroupSort)
@@ -280,7 +273,7 @@ $steps.Add(@{ Key = 'file-read'; Config = @{} })
 
 if ($null -ne $Processors -and $Processors.Count -gt 0)
 {
-    # explicit chain — fully replaces the legacy PsStrip/Columns-driven default
+    # explicit chain
     foreach ($entry in $Processors)
     {
         $step = ConvertTo-ProcessorStep $entry
@@ -293,11 +286,7 @@ if ($null -ne $Processors -and $Processors.Count -gt 0)
 }
 else
 {
-    # legacy default chain — unchanged from before -Processors existed
-    if ($PsStrip)
-    {
-        $steps.Add(@{ Key = 'rs-psstrip'; Config = @{} })
-    }
+    # default chain
     $steps.Add(@{ Key = 'rs-whitespace'; Config = @{} })
     if ($Columns -contains 'content_meta')
     {
@@ -321,10 +310,6 @@ if ($cmIdx -ge 0 -and $cmIdx -ne $resolvedKeys.Count - 1)
 if (($Columns -contains 'content_meta') -and $resolvedKeys -notcontains 'rs-content_meta')
 {
     Write-Host "  caution: Columns requests content_meta but no rs-content_meta step runs — that wire column will render empty." -ForegroundColor Yellow
-}
-if ($PsStrip -and $null -ne $Processors -and $Processors.Count -gt 0)
-{
-    Write-Host "  note: -PsStrip is ignored — -Processors was given, and takes over the whole chain after file-read." -ForegroundColor DarkGray
 }
 
 $ingest = Invoke-Ingest -FilteredFsGraph $filtered -Manifest $procManifest -Steps @($steps) `

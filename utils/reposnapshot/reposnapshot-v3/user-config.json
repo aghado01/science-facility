@@ -1,5 +1,5 @@
 {
-    "$comment": "rs.core.user.ps1 reads this file automatically when run with no -ConfigPath. Keys are the script's own PascalCase parameter names (see rs.core.user.ps1 -? or its .PARAMETER blocks) — any key here can still be overridden per-run with the matching CLI flag. Root has no built-in default and must be filled in before this can run bare.",
+    "$comment": "rs.core.user.ps1 reads this file automatically when run with no -ConfigPath. Keys are the script's own PascalCase parameter names (see rs.core.user.ps1 -? or its .PARAMETER blocks) — any key here can still be overridden per-run with the matching CLI flag. Processors defaults defer to processors/configs/<Key>.json.",
     "Root": null,
     "OutRoot": null,
     "SelectionPatterns": [
@@ -7,11 +7,17 @@
         "*.psm1",
         "!tests/"
     ],
-    "PsStrip": true,
-    "Columns": [
-        "gidx"
+    "Processors": [
+        "rs-psstrip",
+        "rs-indent",
+        "rs-whitespace",
+        "rs-content_meta"
     ],
-    "ShardQuotaBytes": 32768,
+    "Columns": [
+        "gidx",
+        "content_meta"
+    ],
+    "ShardQuotaBytes": 65536,
     "ShardToleranceBytes": 4096,
     "MaxFilesPerShard": 1000,
     "Grouping": "ByRootDirectory",

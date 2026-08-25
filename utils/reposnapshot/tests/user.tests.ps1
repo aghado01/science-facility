@@ -13,7 +13,7 @@ Set-StrictMode -Version Latest
       2. The output convention — default OutRoot is <grandparent>/<leaf>
          (sibling of the project, named after the root); output inside the
          root is refused; same-second reruns get suffixed run dirs.
-      3. Selection + PsStrip — only matching files ingest; comments are gone
+      3. Selection + Processors — only matching files ingest; comments are gone
          from the payload (verified by seeking the written bytes).
       4. Config file — -ConfigPath drives a bare invocation; an explicit CLI
          arg still beats it; a bad enum value or a missing explicit path
@@ -22,8 +22,8 @@ Set-StrictMode -Version Latest
          invocation with no file at all; -Config and -ConfigPath together
          (both explicit) is refused rather than silently picking one.
       6. -Processors — a mixed bare-string/object chain runs rs-psstrip with
-         its own Config, independent of -PsStrip; an unknown key or a
-         Key-less entry fails fast; omitting rs-whitespace prints a caution.
+         its own Config; an unknown key or a Key-less entry fails fast;
+         omitting rs-whitespace prints a caution.
 
 .NOTES
     rs.core.user.ps1 auto-discovers reposnapshot-v3/user-config.json by
@@ -116,9 +116,9 @@ try
     Assert-True ($rB.OutDir -ne $rC.OutDir -and (Test-Path $rB.TreePath) -and (Test-Path $rC.TreePath)) 'every run gets its own directory, collisions suffixed' "$($rB.RunStamp) / $($rC.RunStamp)"
 
     # -----------------------------------------------------------------------
-    Enter-Section '3. Selection + PsStrip'
+    Enter-Section '3. Selection + Processors'
     # -----------------------------------------------------------------------
-    $r2 = & $userScript -Root $proj -OutRoot (Join-Path $tmp 'out2') -SelectionPatterns '*.ps1' -PsStrip -PassThru -ConfigPath $emptyConfig 6>$null
+    $r2 = & $userScript -Root $proj -OutRoot (Join-Path $tmp 'out2') -SelectionPatterns '*.ps1' -Processors 'rs-psstrip', 'rs-whitespace' -PassThru -ConfigPath $emptyConfig 6>$null
     Assert-True ($r2.EntryCount -eq 2) 'Selection *.ps1: only the two scripts ingest' "entries $($r2.EntryCount)"
     $row = $null; $shardPath = $null
     foreach ($sr in $r2.Receipt.Shards)
@@ -143,7 +143,7 @@ try
 
     $out4 = Join-Path $tmp 'out4'
     $cfgPath = Join-Path $tmp 'config.json'
-    @{ Root = $proj4; OutRoot = $out4; SelectionPatterns = @('*.ps1'); PsStrip = $true } | ConvertTo-Json | Set-Content -Path $cfgPath
+    @{ Root = $proj4; OutRoot = $out4; SelectionPatterns = @('*.ps1'); Processors = @('rs-psstrip', 'rs-whitespace') } | ConvertTo-Json | Set-Content -Path $cfgPath
 
     $r4 = & $userScript -ConfigPath $cfgPath 6>$null
     Assert-True ($r4.EntryCount -eq 2) 'bare invocation, config only: Selection *.ps1 from the config ingests a.ps1 + sub/b.ps1' "entries $($r4.EntryCount)"
@@ -170,7 +170,7 @@ try
     # -----------------------------------------------------------------------
     Enter-Section '5. Inline -Config'
     # -----------------------------------------------------------------------
-    $r6 = & $userScript -Config @{ Root = $proj4; OutRoot = $out4; SelectionPatterns = @('*.ps1'); PsStrip = $true } 6>$null
+    $r6 = & $userScript -Config @{ Root = $proj4; OutRoot = $out4; SelectionPatterns = @('*.ps1'); Processors = @('rs-psstrip', 'rs-whitespace') } 6>$null
     Assert-True ($r6.EntryCount -eq 2) 'a hashtable passed to -Config drives a bare invocation, no file at all' "entries $($r6.EntryCount)"
 
     # a PSCustomObject (e.g. a ConvertFrom-Json result without -AsHashtable)
@@ -197,7 +197,7 @@ try
     }
     $bytes = [IO.File]::ReadAllBytes($shardPath)
     $span = [System.Text.Encoding]::UTF8.GetString([byte[]]$bytes[([int]$row.RowContentBegin)..([int]$row.RowContentEnd)])
-    Assert-True (-not $span.Contains('strip me') -and $span.Contains('alpha')) 'the object entry''s own Config (Operations) took effect, with no -PsStrip passed at all' $span
+    Assert-True (-not $span.Contains('strip me') -and $span.Contains('alpha')) 'the object entry''s own Config (Operations) took effect' $span
 
     $threw = $null; try { & $userScript -Root $proj4 -Processors 'rs-nonexistent' -ConfigPath $emptyConfig 6>$null } catch { $threw = $_.Exception.Message }
     Assert-True ($null -ne $threw -and $threw -like "*'rs-nonexistent'*Known:*") 'an unknown processor key fails fast, names the file it looked for' $threw
