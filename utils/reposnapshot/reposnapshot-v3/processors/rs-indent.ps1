@@ -1,4 +1,7 @@
-# See [rs-indent.md](docs/rs-indent.md) for docstring
+<#
+.LINK
+    docs/rs-indent.md
+#>
 param(
     [Parameter(Position = 0)]
     [object]$Item,

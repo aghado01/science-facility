@@ -1,4 +1,7 @@
-# See [rs-csstrip.md](docs/rs-csstrip.md) for docstring
+<#
+.LINK
+    docs/rs-csstrip.md
+#>
 param(
     [Parameter(Position = 0)]
     [object]$Item,

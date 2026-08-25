@@ -1,4 +1,7 @@
-# See [bag-helpers.md](docs/bag-helpers.md) for docstring
+<#
+.LINK
+    docs/bag-helpers.md
+#>
 
 #region Resolve-BagContent
 function Resolve-BagContent

@@ -1,4 +1,7 @@
-# See [rs-psstrip.md](docs/rs-psstrip.md) for docstring
+<#
+.LINK
+    docs/rs-psstrip.md
+#>
 param(
     [Parameter(Position = 0)]
     [object]$Item,

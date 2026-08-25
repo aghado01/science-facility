@@ -1,4 +1,7 @@
-# See [chain-executor.md](docs/chain-executor.md) for docstring
+<#
+.LINK
+    docs/chain-executor.md
+#>
 param(
     [object]    $Item,
     [hashtable] $Plan,

@@ -1,4 +1,7 @@
-# See [rs-content_meta.md](docs/rs-content_meta.md) for docstring
+<#
+.LINK
+    docs/rs-content_meta.md
+#>
 param($Item, $Config)
 
 #region NoContentGuard

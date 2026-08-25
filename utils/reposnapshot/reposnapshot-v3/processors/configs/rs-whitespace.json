@@ -8,7 +8,7 @@
         "trim-trailing",
         "max-blank-1",
         "trim-doc",
-        "ensure-final-lf",
+        "trim-inner",
         "pad-breaks"
     ],
     "IncludeMeta": true

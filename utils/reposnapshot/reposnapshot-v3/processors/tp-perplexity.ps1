@@ -1,4 +1,7 @@
-# See [tp-perplexity.md](docs/tp-perplexity.md) for docstring
+<#
+.LINK
+    docs/tp-perplexity.md
+#>
 param(
     [Parameter(Position = 0)]
     [object]$Item,

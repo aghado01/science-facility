@@ -1,4 +1,7 @@
-# See [file-read.md](docs/file-read.md) for docstring
+<#
+.LINK
+    docs/file-read.md
+#>
 param($Item, $Config)
 
 #region FileRead

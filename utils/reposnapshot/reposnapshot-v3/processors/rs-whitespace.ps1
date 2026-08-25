@@ -1,4 +1,7 @@
-# See [rs-whitespace.md](docs/rs-whitespace.md) for docstring
+<#
+.LINK
+    docs/rs-whitespace.md
+#>
 param(
     [Parameter(Position = 0)]
     [object]$Item,
