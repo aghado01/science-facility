@@ -133,6 +133,32 @@ function Build-Iss
 # type. All four functions are pure over hashtables except the single read in
 # Import-SequenceManifest.
 
+# Private. Binds a declared filename to the on-disk inventory, returning the stub
+# the manifest is keyed by. Catches both an absent processor and a right-stem /
+# wrong-extension typo, which a stub comparison alone would let through.
+function Resolve-ProcessorFile
+{
+    param(
+        [Parameter(Mandatory)] [string]    $File,
+        [Parameter(Mandatory)] [hashtable] $Manifest,
+        [Parameter(Mandatory)] [string]    $Where
+    )
+
+    $key = [System.IO.Path]::GetFileNameWithoutExtension($File)
+    if (-not $Manifest.ContainsKey($key))
+    {
+        throw "Import-SequenceManifest: $Where names '$File', which has no processor on disk (known: $($Manifest.Keys -join ', '))."
+    }
+
+    $onDisk = [System.IO.Path]::GetFileName([string]$Manifest[$key])
+    if ($onDisk -ne $File)
+    {
+        throw "Import-SequenceManifest: $Where names '$File', but the processor on disk is '$onDisk'."
+    }
+
+    return $key
+}
+
 function Import-SequenceManifest
 {
     <#
@@ -164,9 +190,9 @@ function Import-SequenceManifest
         throw "Import-SequenceManifest: '$Path' declares no Processors."
     }
     $rawProcs = $raw['Processors']
-    $rawRouting = if ($raw.Contains('Routing') -and $null -ne $raw['Routing']) { $raw['Routing'] } else { @{} }
-
-    # Normalize entries; Group and Rank are ordinals, so they must parse as integers.
+    # Normalize entries. Group and Rank are ordinals; an entry is routed when it
+    # carries a Routing array in place of a File, so routed-ness is structural and
+    # needs no sigil to mark it.
     $procs = @{}
     foreach ($key in $rawProcs.Keys)
     {
@@ -194,91 +220,75 @@ function Import-SequenceManifest
         $requires = @()
         if ($e.Contains('Requires') -and $null -ne $e['Requires']) { $requires = @([string[]]$e['Requires']) }
 
+        # Exactly one of File or Routing: a slot either names its processor outright
+        # or defers to per-extension occupancy. Both, or neither, is a declaration bug.
+        $hasFile = $e.Contains('File') -and -not [string]::IsNullOrWhiteSpace([string]$e['File'])
+        $hasRoutes = $e.Contains('Routing') -and $null -ne $e['Routing']
+        if ($hasFile -eq $hasRoutes)
+        {
+            throw "Import-SequenceManifest: '$key' must declare exactly one of File or Routing."
+        }
+
+        $procKey = $null
+        $routes = @()
+
+        if ($hasFile)
+        {
+            $procKey = Resolve-ProcessorFile -File ([string]$e['File']) -Manifest $Manifest -Where "'$key'"
+        }
+        else
+        {
+            $claimed = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+            foreach ($r in @($e['Routing']))
+            {
+                if ($r -isnot [System.Collections.IDictionary] -or -not $r.Contains('File'))
+                {
+                    throw "Import-SequenceManifest: a route under '$key' names no File."
+                }
+
+                $rFile = [string]$r['File']
+                $rKey = Resolve-ProcessorFile -File $rFile -Manifest $Manifest -Where "route '$rFile' under '$key'"
+
+                $exts = @()
+                if ($r.Contains('Extensions') -and $null -ne $r['Extensions']) { $exts = @($r['Extensions']) }
+                if ($exts.Count -eq 0)
+                {
+                    throw "Import-SequenceManifest: route '$rFile' under '$key' declares no Extensions."
+                }
+
+                # Extensions normalize to the crawler's leading-dot form. Occupancy of
+                # a slot must be unambiguous, so no two routes may claim the same one —
+                # but separate slots claiming it is legitimate and expected.
+                $norm = [System.Collections.Generic.List[string]]::new()
+                foreach ($x in $exts)
+                {
+                    $ext = '.' + ([string]$x).TrimStart('.').ToLowerInvariant()
+                    if (-not $claimed.Add($ext))
+                    {
+                        throw "Import-SequenceManifest: extension '$ext' is claimed by two routes under '$key'."
+                    }
+                    $norm.Add($ext)
+                }
+
+                $routes += [pscustomobject]@{ Key = $rKey; File = $rFile; Extensions = $norm.ToArray() }
+            }
+
+            if ($routes.Count -eq 0)
+            {
+                throw "Import-SequenceManifest: '$key' declares an empty Routing array."
+            }
+        }
+
         $procs[$key] = @{
-            Key      = $key
+            Slot     = $key
             Group    = $group
             Rank     = $rank
             Default  = if ($e.Contains('Default')) { [bool]$e['Default'] } else { $false }
             Requires = $requires
-            IsToken  = $key.StartsWith('$')
+            Key      = $procKey
+            Routes   = $routes
+            IsRouted = $hasRoutes
         }
-    }
-
-    # A fixed key names its own processor file; a token names none and routes instead.
-    foreach ($key in $procs.Keys)
-    {
-        if ($procs[$key].IsToken)
-        {
-            if (-not $rawRouting.Contains($key))
-            {
-                throw "Import-SequenceManifest: token '$key' has no Routing table."
-            }
-        }
-        elseif (-not $Manifest.ContainsKey($key))
-        {
-            throw "Import-SequenceManifest: '$key' has no processors\$key.ps1 (known: $($Manifest.Keys -join ', '))."
-        }
-    }
-    foreach ($token in $rawRouting.Keys)
-    {
-        if (-not $procs.ContainsKey($token))
-        {
-            throw "Import-SequenceManifest: Routing declares '$token', which has no Processors entry."
-        }
-        if (-not $procs[$token].IsToken)
-        {
-            throw "Import-SequenceManifest: Routing declares '$token', which is not a token."
-        }
-    }
-
-    # Routes bind to real processor files; extensions normalize to the crawler's
-    # leading-dot form and must name at most one class across the whole manifest.
-    $routing = @{}
-    $extMap = @{}
-    foreach ($token in $rawRouting.Keys)
-    {
-        $langs = @{}
-        foreach ($lang in $rawRouting[$token].Keys)
-        {
-            $route = $rawRouting[$token][$lang]
-            if ($route -isnot [System.Collections.IDictionary] -or
-                -not $route.Contains('processor') -or
-                [string]::IsNullOrWhiteSpace([string]$route['processor']))
-            {
-                throw "Import-SequenceManifest: route $token/$lang names no processor."
-            }
-
-            # A route names a processor key, never a filename: the manifest derives
-            # its keys from the same on-disk stubs, so a correctly named processor
-            # cannot miss, and there is no second spelling to keep in agreement.
-            $rKey = [string]$route['processor']
-            if (-not $Manifest.ContainsKey($rKey))
-            {
-                throw "Import-SequenceManifest: route $token/$lang names '$rKey', which is not a processor key (known: $($Manifest.Keys -join ', '))."
-            }
-
-            $exts = @()
-            if ($route.Contains('extensions') -and $null -ne $route['extensions']) { $exts = @($route['extensions']) }
-            if ($exts.Count -eq 0)
-            {
-                throw "Import-SequenceManifest: route $token/$lang declares no extensions."
-            }
-
-            $norm = [System.Collections.Generic.List[string]]::new()
-            foreach ($x in $exts)
-            {
-                $ext = '.' + ([string]$x).TrimStart('.').ToLowerInvariant()
-                if ($extMap.ContainsKey($ext) -and $extMap[$ext] -ne $lang)
-                {
-                    throw "Import-SequenceManifest: extension '$ext' maps to both '$($extMap[$ext])' and '$lang'; a file class must be unambiguous."
-                }
-                $extMap[$ext] = $lang
-                $norm.Add($ext)
-            }
-
-            $langs[$lang] = @{ Language = $lang; Extensions = $norm.ToArray(); Key = $rKey }
-        }
-        $routing[$token] = $langs
     }
 
     # Rank 0 reserves a group for a single member; otherwise ranks separate co-applying members.
@@ -324,10 +334,8 @@ function Import-SequenceManifest
     }
 
     return [pscustomobject]@{
-        Path         = $Path
-        Processors   = $procs
-        Routing      = $routing
-        ExtensionMap = $extMap
+        Path       = $Path
+        Processors = $procs
     }
 }
 
@@ -357,7 +365,7 @@ function Resolve-EnabledSet
         if ([string]::IsNullOrWhiteSpace($k)) { continue }
         if (-not $procs.ContainsKey($k))
         {
-            throw "Resolve-EnabledSet: '$k' has no sequence-manifest entry. Add one, or supply the chain literally with -RunVerbatim."
+            throw "Resolve-EnabledSet: '$k' has no sequencer entry. Add one, or supply the chain literally with -RunVerbatim."
         }
         [void]$wanted.Add($k)
     }
@@ -379,19 +387,23 @@ function Resolve-EnabledSet
     return @($wanted)
 }
 
-function Resolve-Classes
+function Resolve-Routing
 {
     <#
     .SYNOPSIS
-        Determines which file classes the corpus actually contains.
+        Maps each corpus extension to the variant that will process it.
 
     .DESCRIPTION
-        A class is a language named by an enabled token's routes whose extensions
-        appear in the corpus. 'default' joins the list only when some present
-        extension goes unclaimed, so an all-PowerShell run compiles no unused variant.
+        The sequencer names no languages, so a file class IS its resolution tuple:
+        for each enabled routed slot, which route claims the extension. Extensions
+        that resolve identically therefore share one variant by construction, and an
+        extension no enabled route claims lands on 'default'. A variant is compiled
+        only if some corpus extension actually resolves to it.
 
     .OUTPUTS
-        [string[]] class names
+        [PSCustomObject] @{ ExtensionMap; Resolutions }
+          ExtensionMap — extension -> variant key
+          Resolutions  — variant key -> @{ slot -> processor key }
     #>
     param(
         [Parameter(Mandatory)] [pscustomobject]           $Sequence,
@@ -399,87 +411,95 @@ function Resolve-Classes
         [AllowEmptyCollection()] [AllowNull()] [string[]] $Extensions = @()
     )
 
-    $present = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $procs = $Sequence.Processors
+
+    $routedSlots = @(
+        @($Enabled) |
+            Where-Object { $procs[$_].IsRouted } |
+            Sort-Object { $procs[$_].Group }, { $procs[$_].Rank }
+    )
+
+    $extMap = @{}
+    $resolutions = @{}
+
     foreach ($x in @($Extensions))
     {
         if ([string]::IsNullOrWhiteSpace($x)) { continue }
-        [void]$present.Add('.' + ([string]$x).TrimStart('.').ToLowerInvariant())
-    }
+        $ext = '.' + ([string]$x).TrimStart('.').ToLowerInvariant()
+        if ($extMap.ContainsKey($ext)) { continue }
 
-    $classes = [System.Collections.Generic.List[string]]::new()
-    $claimed = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+        $hits = @{}
+        $parts = [System.Collections.Generic.List[string]]::new()
 
-    foreach ($token in $Sequence.Routing.Keys)
-    {
-        if (@($Enabled) -notcontains $token) { continue }
-        foreach ($lang in $Sequence.Routing[$token].Keys)
+        foreach ($slot in $routedSlots)
         {
-            $hit = $false
-            foreach ($ext in $Sequence.Routing[$token][$lang].Extensions)
-            {
-                if ($present.Contains($ext)) { $hit = $true; [void]$claimed.Add($ext) }
-            }
-            if ($hit -and -not $classes.Contains($lang)) { $classes.Add($lang) }
+            # Occupancy is decided on the route records themselves; the flattened
+            # union only ever answers "claimed at all", which falls out of $parts.
+            $route = @($procs[$slot].Routes | Where-Object { $ext -in $_.Extensions })
+            if ($route.Count -eq 0) { continue }
+            $hits[$slot] = $route[0].Key
+            $parts.Add($route[0].Key)
         }
+
+        $variantKey = if ($parts.Count -eq 0) { 'default' } else { $parts -join '+' }
+        $extMap[$ext] = $variantKey
+        if (-not $resolutions.ContainsKey($variantKey)) { $resolutions[$variantKey] = $hits }
     }
 
-    $unclaimed = $false
-    foreach ($ext in $present)
-    {
-        if (-not $claimed.Contains($ext)) { $unclaimed = $true; break }
+    return [pscustomobject]@{
+        ExtensionMap = $extMap
+        Resolutions  = $resolutions
     }
-    if ($unclaimed -or $present.Count -eq 0) { $classes.Insert(0, 'default') }
-
-    return @($classes)
 }
 
 function Resolve-Variants
 {
     <#
     .SYNOPSIS
-        Compiles one dense step list per file class.
+        Compiles one dense step list per variant.
 
     .DESCRIPTION
-        Each class walks the enabled set, resolves routed tokens against its own
-        routes, and splices out any token that does not resolve — variants differ
-        in length and carry no holes. Sorting is by (Group, Rank).
+        Each variant walks the enabled set, takes its own resolution for every routed
+        slot, and splices out any slot that did not resolve — variants differ in
+        length and carry no holes. Sorting is by (Group, Rank).
 
     .OUTPUTS
-        [hashtable] class -> [PSCustomObject[]] @{ Key; Slot; Config }
+        [hashtable] variant key -> [PSCustomObject[]] @{ Key; Slot; Config }
     #>
     param(
         [Parameter(Mandatory)] [pscustomobject] $Sequence,
         [Parameter(Mandatory)] [string[]]       $Enabled,
-        [Parameter(Mandatory)] [string[]]       $Classes
+        [Parameter(Mandatory)] [hashtable]      $Resolutions
     )
 
     $procs = $Sequence.Processors
     $variants = @{}
 
-    foreach ($class in @($Classes))
+    foreach ($variantKey in $Resolutions.Keys)
     {
+        $hits = $Resolutions[$variantKey]
         $steps = [System.Collections.Generic.List[object]]::new()
-        foreach ($key in @($Enabled))
-        {
-            $meta = $procs[$key]
-            $resolved = $key
 
-            if ($meta.IsToken)
+        foreach ($slot in @($Enabled))
+        {
+            $meta = $procs[$slot]
+
+            if ($meta.IsRouted)
             {
-                $table = $Sequence.Routing[$key]
-                if ($class -eq 'default' -or -not $table.ContainsKey($class)) { continue }
-                $resolved = $table[$class].Key
+                if (-not $hits.ContainsKey($slot)) { continue }
+                $resolved = $hits[$slot]
             }
+            else { $resolved = $meta.Key }
 
             $steps.Add([pscustomobject]@{
                     Key   = $resolved
-                    Slot  = $key
+                    Slot  = $slot
                     Group = $meta.Group
                     Rank  = $meta.Rank
                 })
         }
 
-        $variants[$class] = @(
+        $variants[$variantKey] = @(
             $steps | Sort-Object Group, Rank | ForEach-Object {
                 [pscustomobject]@{ Key = $_.Key; Slot = $_.Slot; Config = @{} }
             }
@@ -1038,6 +1058,6 @@ Export-ModuleMember -Function @(
     'Build-Iss'
     'Import-SequenceManifest'
     'Resolve-EnabledSet'
-    'Resolve-Classes'
+    'Resolve-Routing'
     'Resolve-Variants'
 )

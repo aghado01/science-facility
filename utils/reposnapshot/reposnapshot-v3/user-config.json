@@ -9,9 +9,9 @@
     ],
     "IncludeProcessors": [
         "StripComments",
-        "rs_indent",
-        "rs_whitespace", 
-        "rs_content_meta"
+        "Indentation",
+        "Whitespace", 
+        "ContentMetadata"
     ],
     "Columns": [
         "gidx", 

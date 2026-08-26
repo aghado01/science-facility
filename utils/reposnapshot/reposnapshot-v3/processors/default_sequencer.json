@@ -1,49 +1,31 @@
 {
     "Processors": {
-        "file_read": { 
-            "Group": "1", 
-            "Rank": "0", 
-            "Default": true, 
-            "filename" : "file_read.ps1", 
-            "Requires": []
-        },
-        "StripComments": { 
-            "Group": "2", 
-            "Rank": "0", 
-            "Default": false, 
-            "Requires": ["file-read.ps1"], 
-            "Routing": {
-            "powershell": {
-                "extensions": [ "ps1", "psm1", "psd1" ],
-                "filename" : "rs.ps.strip.ps1"
-            },
-            "csharp": {
-                "extensions": [ "cs", "csx" ],
-                "filename": "rs.cs.strip.ps1"
-                }
-            }
-        },
-        "rs_indent": { 
-            "Group": "3", 
-            "Rank": "1", 
-            "Default": false, 
-            "filename" : "rs.indent.ps1", 
-            "Requires": ["file-read.ps1"] 
-        },
-        "rs_whitespace": {
-            "Group": "3", 
-            "Rank": "2", 
-            "Default": false, 
-            "filename" : "rs.whitespace.ps1", 
-            "Requires": ["file-read.ps1"] 
-        },
-        "rs_content_meta": {
-            "Group": "4", 
-            "Rank": "0", 
-            "Default": false,   
-            "filename" : "rs.content_meta.ps1", 
-            "Requires": ["file-read.ps1"] 
-        }
-        
+      "file_read": {
+        "Group": 1, "Rank": 0, "Default": true,
+        "File": "file_read.ps1"
+      },
+    "StripComments": {
+    "Group": 2, "Rank": 0, "Default": false,
+    "Requires": ["file_read"],
+    "Routing": [
+        { "File": "rs.ps.strip.ps1", "Extensions": ["ps1", "psm1", "psd1"] },
+        { "File": "rs.cs.strip.ps1", "Extensions": ["cs", "csx"] }
+    ]
+    }, 
+      "Indentation": {
+        "Group": 3, "Rank": 1, "Default": false,
+        "File": "rs.indent.ps1",
+        "Requires": ["file_read"]
+      },
+      "Whitespace": {
+        "Group": 3, "Rank": 2, "Default": false,
+        "File": "rs.whitespace.ps1",
+        "Requires": ["file_read"]
+      },
+      "ContentMetadata": {
+        "Group": 4, "Rank": 0, "Default": false,
+        "File": "rs.content_meta.ps1",
+        "Requires": ["file_read"]
+      }
     }
-}
+  }
