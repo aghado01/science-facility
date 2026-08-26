@@ -403,9 +403,9 @@ function Resolve-Routing
     .OUTPUTS
         [PSCustomObject] @{ ExtensionMap; Resolutions }
           ExtensionMap — extension -> variant key
-          Resolutions  — variant key -> ordered [PSCustomObject[]] @{ Slot; Key },
-                         in canon order. This list is the artifact; the key is a
-                         canonical form derived from it, for lookup only.
+          Resolutions  — variant key -> [ordered] slot -> implementation, in canon
+                         order. This map is the artifact; the key is a canonical
+                         form derived from it, for lookup and dedup only.
     #>
     param(
         [Parameter(Mandatory)] [pscustomobject]           $Sequence,
@@ -430,10 +430,12 @@ function Resolve-Routing
         $ext = '.' + ([string]$x).TrimStart('.').ToLowerInvariant()
         if ($extMap.ContainsKey($ext)) { continue }
 
-        # The resolution is an ORDERED LIST of (slot, implementation) pairs, in canon
-        # order — that is the artifact, and it stays a list. $routedSlots is already
-        # sorted by (Group, Rank), so appending preserves the canon.
-        $pairs = [System.Collections.Generic.List[object]]::new()
+        # The resolution is an ORDERED MAP of slot -> implementation. It is read both
+        # ways — walked in canon order by the echo, and looked up by slot when
+        # compiling a variant — so it is an OrderedDictionary rather than a list
+        # (which would force a scan) or a hashtable (which would lose the order).
+        # $routedSlots is already sorted by (Group, Rank), so insertion is the canon.
+        $pairs = [ordered]@{}
 
         foreach ($slot in $routedSlots)
         {
@@ -441,19 +443,20 @@ function Resolve-Routing
             # union only ever answers "claimed at all", which falls out of $pairs.
             $route = @($procs[$slot].Routes | Where-Object { $ext -in $_.Extensions })
             if ($route.Count -eq 0) { continue }
-            $pairs.Add([pscustomobject]@{ Slot = $slot; Key = $route[0].Key })
+            $pairs[$slot] = $route[0].Key
         }
 
-        # The key is an IDENTITY DERIVED from that list — a canonical form for
-        # dictionary lookup and dedup, never the artifact itself. Nothing may parse
-        # it, match on it, or display it as if it named a processor; read the pairs.
-        # The separator is illegal in a filename, so no two distinct lists collapse
-        # onto one key.
+        # The key is an IDENTITY DERIVED from that map — a canonical form for
+        # dictionary lookup and dedup, never the artifact itself, because an
+        # OrderedDictionary hashes by reference and two equal resolutions must be one
+        # variant. Nothing may parse it, match on it, or display it as if it named a
+        # processor; read the pairs. The separator is illegal in a filename, so no two
+        # distinct resolutions collapse onto one key.
         $variantKey = 'default'
-        if ($pairs.Count -gt 0) { $variantKey = (@($pairs | ForEach-Object Key) -join '|') }
+        if ($pairs.Count -gt 0) { $variantKey = (@($pairs.Values) -join '|') }
 
         $extMap[$ext] = $variantKey
-        if (-not $resolutions.ContainsKey($variantKey)) { $resolutions[$variantKey] = $pairs.ToArray() }
+        if (-not $resolutions.ContainsKey($variantKey)) { $resolutions[$variantKey] = $pairs }
     }
 
     return [pscustomobject]@{
@@ -474,7 +477,7 @@ function Resolve-Variants
         length and carry no holes. Sorting is by (Group, Rank).
 
     .PARAMETER Resolutions
-        Variant key -> ordered list of (Slot, Key) pairs, from Resolve-Routing.
+        Variant key -> ordered slot -> implementation map, from Resolve-Routing.
 
     .OUTPUTS
         [hashtable] variant key -> [PSCustomObject[]] @{ Key; Slot; Config }
@@ -490,7 +493,7 @@ function Resolve-Variants
 
     foreach ($variantKey in $Resolutions.Keys)
     {
-        $pairs = @($Resolutions[$variantKey])
+        $pairs = $Resolutions[$variantKey]
         $steps = [System.Collections.Generic.List[object]]::new()
 
         foreach ($slot in @($Enabled))
@@ -500,9 +503,8 @@ function Resolve-Variants
             if ($meta.IsRouted)
             {
                 # A routed slot this variant did not resolve is spliced out entirely.
-                $hit = @($pairs | Where-Object { $_.Slot -eq $slot })
-                if ($hit.Count -eq 0) { continue }
-                $resolved = $hit[0].Key
+                if (-not $pairs.Contains($slot)) { continue }
+                $resolved = [string]$pairs[$slot]
             }
             else { $resolved = $meta.Key }
 

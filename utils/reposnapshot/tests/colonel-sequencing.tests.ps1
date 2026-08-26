@@ -309,13 +309,16 @@ try
     Assert-True ($issKeys -eq 'file_read,rs.content_meta,rs.cs.strip,rs.indent,rs.ps.strip,rs.whitespace') `
         'the ISS registers the union across variants — both strippers' $issKeys
 
-    # Meaning is read from Resolutions — an ORDERED list of (Slot, Key) pairs —
-    # never by parsing the variant key.
-    $psPairs = @($compiled.Plan.Resolutions['rs.ps.strip'])
-    Assert-True ($psPairs.Count -eq 1 -and $psPairs[0].Slot -eq 'StripComments' -and $psPairs[0].Key -eq 'rs.ps.strip') `
-        'the Plan carries each variant resolution as a (Slot, Key) pair' `
-        (($psPairs | ForEach-Object { "$($_.Slot)=$($_.Key)" }) -join ', ')
-    Assert-True (@($compiled.Plan.Resolutions['default']).Count -eq 0) `
+    # Meaning is read from Resolutions — an ORDERED slot -> implementation map —
+    # never by parsing the variant key. It is walked in order and keyed by slot.
+    $psPairs = $compiled.Plan.Resolutions['rs.ps.strip']
+    Assert-True ((@($psPairs.Keys) -join ',') -eq 'StripComments') `
+        'the resolution is keyed by slot, in canon order' (@($psPairs.Keys) -join ',')
+    Assert-True ($psPairs['StripComments'] -eq 'rs.ps.strip') `
+        'and looks up the implementation directly, without a scan'
+    Assert-True ($psPairs -is [System.Collections.Specialized.OrderedDictionary]) `
+        'ordered, so canon order survives into the report'
+    Assert-True ($compiled.Plan.Resolutions['default'].Count -eq 0) `
         'the default variant resolved no routed slot'
 
     $stripStep = @($compiled.Plan.Variants['rs.ps.strip'] | Where-Object Key -eq 'rs.ps.strip')[0]
