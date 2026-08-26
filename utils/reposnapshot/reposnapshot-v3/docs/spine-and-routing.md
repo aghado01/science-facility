@@ -114,7 +114,8 @@ Consequences:
 
 - **Set-mode resolution**: naming a processor key enables its stage. For a routed stage this enables the token — routing still decides per file class, so `-Processors 'rs-psstrip'` on a mixed corpus enables `$strip` wherever it resolves. `-StripComments` and naming a `Strip` member are the same operation spelled two ways.
 - **Unregistered processor named under canon mode** → hard error stating both fixes: register it in the spine, or run verbatim.
-- **Unreferenced processor *file* on disk** → inert, not an error — a WIP processor can land in `processors/` without breaking runs. `tp-perplexity` is the live instance: document-ingestion lineage, deliberately unregistered until the code/non-code shared architecture is revisited — verbatim mode can still run it. Completeness for the shipped set (manifest ⊆ registry keys) is a repo test with documented deferrals (`tp-perplexity`), not a runtime check.
+- **Unreferenced processor *file* on disk** → inert, not an error — a WIP processor can land in `processors/` without breaking runs. Completeness for the shipped set (manifest ⊆ registry keys) is a repo test, not a runtime check.
+- **Deferral is structural**: `processors/deferred/` sits outside the non-recursive manifest glob, so a parked processor (`tp-perplexity`, document-ingestion lineage) is invisible to manifest, registry, and completeness alike. Restoring the file to `processors/` is the re-activation gesture — plus a registry entry to run under canon.
 
 ## Echo
 
@@ -147,7 +148,7 @@ Each step lands with its tests through `tests/run-all.ps1` before the next begin
 | Step | Work | Test gate |
 |---|---|---|
 | 1 | `processors/registry.json` (`Spine`/`Languages`/`Processors` sections; `$strip` members for powershell/csharp) + loader with normalization and hard-error validation | Malformed-file errors; extension normalization and one-language-per-extension; registry keys exist in manifest; stage/language cross-validation |
-| 2 | `Compile-Plan` emits the family (`Variants`/`Routing`/union `Iss`/union `ProcessorKeys`) | Pure-function tests: mixed extension set → expected variant tuples; dense chains of differing lengths; default variant present; spine invariants (measure last, strip precedes whitespace); validate-all vs bind-present; completeness (manifest ⊆ registry, documented deferrals excluded) |
+| 2 | `Compile-Plan` emits the family (`Variants`/`Routing`/union `Iss`/union `ProcessorKeys`) | Pure-function tests: mixed extension set → expected variant tuples; dense chains of differing lengths; default variant present; spine invariants (measure last, strip precedes whitespace); validate-all vs bind-present; completeness (manifest ⊆ registry) |
 | 3 | Colonel: third slice array, family marshal, worker lookup table | Index-stable envelope over mixed corpus; each item demonstrably ran its assigned chain (bag `Processing` trail) |
 | 4 | Caller surface: `-StripComments` → `$strip`; `-Processors` set semantics (stage enablement) + verbatim flag; unregistered-processor hard error; caution retirement on canon path | End-to-end heterogeneous ingest (`.ps1`/`.cs`/`.md`) |
 | 5 | Per-variant ConfigEcho with token resolutions | Echo assertions in the e2e test |
