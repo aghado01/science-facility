@@ -175,20 +175,26 @@ function Resolve-RefAccessor ([string]$Ref, [string]$SpecDir, [string]$Where)
     {
         $script:ContractCache[$target] = Get-Content -LiteralPath $target -Raw | ConvertFrom-Json -AsHashtable
     }
-    $node = $script:ContractCache[$target]
+    $doc = $script:ContractCache[$target]
+    $node = $doc
     foreach ($s in $segs)
     {
         $node = Get-Prop $node $s
         if ($null -eq $node) { throw "rs.core.container: '$Ref' at $Where does not resolve — $file has no /$($segs -join '/')." }
     }
 
-    switch -Wildcard ($file)
+    # Accessor shape follows what the contract DECLARES itself to be, never what it
+    # is named: a producer contract names a processor, a stage contract names a
+    # stage. Renaming a contract file is inert here, and a filename that drifts from
+    # its declaration cannot silently change how refs resolve.
+    if (Get-Prop $doc 'processor') { return 'entry.' + (@($segs[1..($segs.Count - 1)]) -join '.') }
+
+    switch (Get-Prop $doc 'stage')
     {
-        'assemble.contract.json'  { return 'entry.' + (@($segs[3..($segs.Count - 1)]) -join '.') }
-        'shards.contract.json'    { return 'plan.'  + $segs[-1] }
-        'container.contract.json' { return 'codec.' + $segs[-1] }
-        'rs.*.contract.json'      { return 'entry.' + (@($segs[1..($segs.Count - 1)]) -join '.') }
-        default { throw "rs.core.container: '$Ref' at $Where points at $file, which has no accessor derivation." }
+        'assemble'  { return 'entry.' + (@($segs[3..($segs.Count - 1)]) -join '.') }
+        'shards'    { return 'plan.' + $segs[-1] }
+        'container' { return 'codec.' + $segs[-1] }
+        default { throw "rs.core.container: '$Ref' at $Where points at $file, which declares no processor and no stage with an accessor derivation." }
     }
 }
 #endregion

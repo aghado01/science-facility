@@ -107,25 +107,41 @@ function Resolve-OutShape ([hashtable]$Contracts, [string]$Ref)
 try
 {
     # -----------------------------------------------------------------------
-    Enter-Section '1. Every contract parses and names its stage'
+    Enter-Section '1. Every contract parses and declares its kind'
     # -----------------------------------------------------------------------
-    # *.contract.json, excluding rs.*.contract.json — contracts/ also holds
-    # payload declarations (container.spec.jsonc, excluded by extension) and
-    # processor producer-contracts (rs.content_meta.contract.json and any
-    # future rs.* sibling), which declare { processor, in, out } rather than
-    # { stage, in, out } and must not be parsed as a stage contract.
-    $files = @(Get-ChildItem -LiteralPath $schemaDir -Filter '*.contract.json' -Exclude 'rs.*.contract.json' | Sort-Object Name)
+    # contracts/ holds two kinds of *.contract.json, and each one DECLARES which
+    # it is: a stage contract names a stage, a producer contract names a processor.
+    # Partition on the declaration, never on the filename — a filename-shaped rule
+    # (the -Exclude 'rs-*' this replaces) breaks silently the next time a contract
+    # is renamed, and reads as a passing suite because the excluded file is simply
+    # never examined. (container.spec.jsonc is a payload declaration, excluded by
+    # extension.)
+    $files = @(Get-ChildItem -LiteralPath $schemaDir -Filter '*.contract.json' | Sort-Object Name)
     Assert-True ($files.Count -ge 1) "contract files found under contracts/" "got $($files.Count)"
 
     $contracts = @{}
+    $producers = @{}
     foreach ($f in $files)
     {
         $c = Get-Content -LiteralPath $f.FullName -Raw | ConvertFrom-Json -AsHashtable
-        $expected = $f.Name -replace '\.contract\.json$', ''
-        Assert-True ($c.stage -eq $expected) "$($f.Name): stage = '$expected'" "got '$($c.stage)'"
+        $isStage = $c.ContainsKey('stage')
+        $isProducer = $c.ContainsKey('processor')
+
+        Assert-True ($isStage -xor $isProducer) "$($f.Name): declares exactly one of stage or processor" `
+            "stage=$isStage processor=$isProducer"
         Assert-True ($c.ContainsKey('in') -and $c.ContainsKey('out')) "$($f.Name): has in and out"
-        $contracts[$c.stage] = $c
+
+        # Filename agrees with declaration — a convention check, NOT the
+        # discriminator. It catches a rename that updated only one of the two.
+        $declared = if ($isStage) { $c.stage } else { $c.processor }
+        $expected = $f.Name -replace '\.contract\.json$', ''
+        Assert-True ($declared -eq $expected) "$($f.Name): declares '$expected'" "got '$declared'"
+
+        if ($isStage) { $contracts[$c.stage] = $c } else { $producers[$c.processor] = $c }
     }
+
+    Assert-True ($producers.Count -ge 1) 'at least one producer contract was examined, not skipped' `
+        "got $($producers.Count)"
 
     # -----------------------------------------------------------------------
     Enter-Section '2. Every `from` resolves (input ⊆ upstream output, per field)'
