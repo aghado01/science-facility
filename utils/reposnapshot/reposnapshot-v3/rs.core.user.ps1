@@ -15,20 +15,47 @@
     Output directory for runstamped snapshot folders (defaults to <Root>/.snapshot).
 .PARAMETER SelectionPatterns
     When supplied, membrane runs Selection semantics. Default: Ignore semantics.
-.PARAMETER Processors
-    The ingest chain after file_read, as an ordered array. Each entry is
-    either a bare processor-key string (which automatically defers to its
-    processors/configs/<Key>.json default configuration) or an object
-    { Key; Config } with specific overrides, e.g.:
-      @('rs.ps.strip', 'rs.whitespace', @{ Key = 'rs.indent'; Config = @{ TargetUnit = 4 } })
-    Key must name a processors\<Key>.ps1 file.
+.PARAMETER IncludeProcessors
+    Which capabilities to run, as a SET — array position carries no meaning.
+    Names are the slots declared in processors/default_sequencer.json
+    ('StripComments', 'Indentation', 'Whitespace', 'ContentMetadata'), not
+    processor filenames. Order comes from the sequencer's Group and Rank, and
+    slots a named one Requires are pulled in automatically, as are slots marked
+    Default (file_read).
+
+    A slot may be ROUTED: 'StripComments' resolves to a different stripper per
+    file extension. Planning therefore compiles one chain per distinct
+    resolution across the corpus — a small set — and dispatch hands each item
+    the chain its extension resolved to. A file no route claims still runs
+    every other stage; its chain is simply one step shorter. Requesting
+    StripComments over a mixed corpus means "strip where a stripper exists".
+
     Columns still separately controls what lands on the wire: a processor's
     fields only appear there if the matching column is also requested, and a
     requested column with no processor computing it renders empty.
-    A resolved chain missing rs.whitespace, or running rs.content_meta before
-    other content mutators, prints a caution (not an error) — pad-breaks
-    spacing and content_meta's enrich-only-tail contract are established
-    invariants of this format, not requirements enforced here.
+.PARAMETER RunVerbatim
+    Runs a literal chain instead of compiling from the sequencer: -Processors is
+    taken as an ordered list, in the order given, identically for every file, and
+    the canon is not consulted. Nothing is routed, so a language-specific
+    processor named here runs on every file regardless of extension — which is
+    the point. This is the instrument for deliberately violating the format's
+    invariants; the cautions below are printed only in this mode, because under
+    the sequencer they are guarantees rather than advice.
+.PARAMETER Processors
+    Only with -RunVerbatim: the literal chain after file_read, as an ordered array
+    (file_read is prepended unless you place it yourself — without it there is no
+    content and the chain yields nothing). Each entry is
+    either a bare processor-key string (which defers to its
+    processors/configs/<Key>.json defaults) or an object { Key; Config } with
+    overrides, e.g.:
+      @('rs.ps.strip', 'rs.whitespace', @{ Key = 'rs.indent'; Config = @{ TargetUnit = 4 } })
+    Key must name a processors\<Key>.ps1 file. A chain missing rs.whitespace, or
+    running rs.content_meta before other content mutators, prints a caution (not
+    an error) — pad-breaks spacing and content_meta's enrich-only-tail contract
+    are established invariants of this format, not requirements enforced here.
+.PARAMETER SequenceManifest
+    Path to the sequencer declaring the canon and its routes. Defaults to
+    processors/default_sequencer.json.
 .PARAMETER Columns
     Active psr wire columns (default: gidx, content_meta).
 .PARAMETER Grouping
@@ -79,10 +106,15 @@
     ./rs.core.user.ps1 -ConfigPath ./recipes/full-audit.json
 
 .EXAMPLE
-    ./rs.core.user.ps1 -Config @{ Root = '..\reposnapshot-v3'; Processors = @('rs.ps.strip', 'rs.whitespace') }
+    ./rs.core.user.ps1 -Config @{ Root = '..\reposnapshot-v3'; IncludeProcessors = @('StripComments', 'Whitespace') }
 
 .EXAMPLE
-    ./rs.core.user.ps1 -Root ../reposnapshot-v3 -Processors 'rs.indent', 'rs.whitespace', 'rs.content_meta'
+    ./rs.core.user.ps1 -Root ../reposnapshot-v3 -IncludeProcessors 'Indentation', 'Whitespace', 'ContentMetadata'
+    # A set, not a sequence — the sequencer orders these, and pulls in file_read.
+
+.EXAMPLE
+    ./rs.core.user.ps1 -Root ../src -RunVerbatim -Processors 'rs.whitespace', 'rs.ps.strip'
+    # Deliberately out of canon, on every file regardless of extension.
 #>
 [CmdletBinding()]
 param(
@@ -98,7 +130,10 @@ param(
     [long]$ShardToleranceBytes = 4096,
     [ValidateRange(1, [int]::MaxValue)] [int]$MaxFilesPerShard = 100000,
     [switch]$PassThru,
+    [string[]]$IncludeProcessors = $null,
+    [switch]$RunVerbatim,
     [object[]]$Processors = $null,
+    [string]$SequenceManifest = (Join-Path $PSScriptRoot 'processors\default_sequencer.json'),
     [object]$Config,
     [string]$ConfigPath = (Join-Path $PSScriptRoot 'user-config.json')
 )
@@ -172,8 +207,12 @@ if ($null -ne $cfg) {
     $ShardToleranceBytes = [long](Get-ConfigOverride $b $cfg 'ShardToleranceBytes' $ShardToleranceBytes)
     $MaxFilesPerShard = [int](Get-ConfigOverride $b $cfg 'MaxFilesPerShard' $MaxFilesPerShard)
     $PassThru = [bool](Get-ConfigOverride $b $cfg 'PassThru' $PassThru.IsPresent)
+    $IncludeProcessors = Get-ConfigOverride $b $cfg 'IncludeProcessors' $IncludeProcessors
+    if ($null -ne $IncludeProcessors) { $IncludeProcessors = [string[]]@($IncludeProcessors) }
+    $RunVerbatim = [bool](Get-ConfigOverride $b $cfg 'RunVerbatim' $RunVerbatim.IsPresent)
     $Processors = Get-ConfigOverride $b $cfg 'Processors' $Processors
     if ($null -ne $Processors) { $Processors = @($Processors) }
+    $SequenceManifest = [string](Get-ConfigOverride $b $cfg 'SequenceManifest' $SequenceManifest)
 }
 
 if ([string]::IsNullOrEmpty($Root)) {
@@ -224,11 +263,22 @@ foreach ($f in Get-ChildItem -LiteralPath $procDir -Filter '*.ps1' -File) {
     $procManifest[[IO.Path]::GetFileNameWithoutExtension($f.Name)] = $f.FullName
 }
 
-$steps = [System.Collections.Generic.List[object]]::new()
-$steps.Add(@{ Key = 'file_read'; Config = @{} })
+# Two modes. Under the sequencer the caller names capabilities and the compiler
+# owns order, routing and the file_read prologue — so nothing is assembled here.
+# Under -RunVerbatim the caller's literal chain is handed over untouched.
+$ingestParams = @{
+    FilteredFsGraph   = $filtered
+    Manifest          = $procManifest
+    ChainExecutorPath = (Join-Path $v3 'processors\chain_executor.ps1')
+    SharedHelperPath  = (Join-Path $v3 'processors\bag_helpers.ps1')
+}
 
-if ($null -ne $Processors -and $Processors.Count -gt 0) {
-    # explicit chain
+if ($RunVerbatim) {
+    if ($null -eq $Processors -or $Processors.Count -eq 0) {
+        throw "rs.core.user: -RunVerbatim needs -Processors — it runs the chain you give it, and you gave none."
+    }
+
+    $steps = [System.Collections.Generic.List[object]]::new()
     foreach ($entry in $Processors) {
         $step = ConvertTo-ProcessorStep $entry
         if (-not $procManifest.ContainsKey($step.Key)) {
@@ -236,33 +286,74 @@ if ($null -ne $Processors -and $Processors.Count -gt 0) {
         }
         $steps.Add($step)
     }
-}
-else {
-    # default chain
-    $steps.Add(@{ Key = 'rs.whitespace'; Config = @{} })
-    if ($Columns -contains 'content_meta') {
-        $steps.Add(@{ Key = 'rs.content_meta'; Config = @{} })
+
+    # file_read is a prologue, not an invariant to violate: without it there is no
+    # content and every chain silently yields nothing. Verbatim exists to break the
+    # canon's ORDER and ROUTING, not to run against unread files. Prepended unless
+    # the caller placed it themselves, which is how -Processors has always read.
+    if (@($steps | ForEach-Object Key) -notcontains 'file_read') {
+        $steps.Insert(0, @{ Key = 'file_read'; Config = @{} })
+    }
+    $ingestParams['Steps'] = @($steps)
+
+    # Advisories, and only here. Under the sequencer these are compiler guarantees:
+    # rs.content_meta lands last because its Group says so, and an omission is a
+    # request the caller made rather than an accident to warn about.
+    $resolvedKeys = @($steps | ForEach-Object Key)
+    if ($resolvedKeys -notcontains 'rs.whitespace') {
+        Write-Host "  caution: chain omits rs.whitespace — its pad-breaks op is what keeps the container codec's newline substitution regularly spaced. Fine if intentional." -ForegroundColor Yellow
+    }
+    $cmIdx = [array]::IndexOf($resolvedKeys, 'rs.content_meta')
+    if ($cmIdx -ge 0 -and $cmIdx -ne $resolvedKeys.Count - 1) {
+        Write-Host "  caution: rs.content_meta is not the last processor — its own contract calls for enrich-only TAIL placement, after every content mutator. Fine if intentional." -ForegroundColor Yellow
+    }
+    if (($Columns -contains 'content_meta') -and $resolvedKeys -notcontains 'rs.content_meta') {
+        Write-Host "  caution: Columns requests content_meta but no rs.content_meta step runs — that wire column will render empty." -ForegroundColor Yellow
     }
 }
+else {
+    if ($null -ne $Processors -and $Processors.Count -gt 0) {
+        throw "rs.core.user: -Processors is a literal chain and needs -RunVerbatim. To choose capabilities under the canon, use -IncludeProcessors."
+    }
 
-# Invariant cautions (non-fatal advisories)
-$resolvedKeys = @($steps | ForEach-Object Key)
-if ($resolvedKeys -notcontains 'rs.whitespace') {
-    Write-Host "  caution: chain omits rs.whitespace — its pad-breaks op is what keeps the container codec's newline substitution regularly spaced. Fine if intentional." -ForegroundColor Yellow
-}
-$cmIdx = [array]::IndexOf($resolvedKeys, 'rs.content_meta')
-if ($cmIdx -ge 0 -and $cmIdx -ne $resolvedKeys.Count - 1) {
-    Write-Host "  caution: rs.content_meta is not the last processor — its own contract calls for enrich-only TAIL placement, after every content mutator. Fine if intentional." -ForegroundColor Yellow
-}
-if (($Columns -contains 'content_meta') -and $resolvedKeys -notcontains 'rs.content_meta') {
-    Write-Host "  caution: Columns requests content_meta but no rs.content_meta step runs — that wire column will render empty." -ForegroundColor Yellow
+    $ingestParams['SequenceManifest'] = $SequenceManifest
+    $ingestParams['IncludeProcessors'] = if ($null -ne $IncludeProcessors) { [string[]]@($IncludeProcessors) } else { [string[]]@() }
 }
 
-$ingest = Invoke-Ingest -FilteredFsGraph $filtered -Manifest $procManifest -Steps @($steps) `
-    -ChainExecutorPath (Join-Path $v3 'processors\chain_executor.ps1') `
-    -SharedHelperPath (Join-Path $v3 'processors\bag_helpers.ps1')
+$ingest = Invoke-Ingest @ingestParams
 if (@($ingest.Errors).Count -gt 0) {
     throw "rs.core.user: ingest reported errors — $($ingest.Errors -join '; ')"
+}
+
+# What actually ran, per distinct chain — not one chain, because a routed slot
+# resolves differently per file class. Extensions are grouped by the chain they
+# took, so a reading agent can tell "this file was not stripped because no
+# stripper covers it" from "stripping was off this run".
+$chainEcho = @()
+if ($null -ne $ingest.Plan) {
+    $plan = $ingest.Plan
+
+    $byChain = @{}
+    foreach ($e in @($plan.Routing.Keys)) {
+        $id = [string]$plan.Routing[$e]
+        if (-not $byChain.ContainsKey($id)) { $byChain[$id] = [System.Collections.Generic.List[string]]::new() }
+        $byChain[$id].Add([string]$e)
+    }
+
+    $chainEcho = @(
+        foreach ($id in (@($plan.Variants.Keys) | Sort-Object)) {
+            $exts = @()
+            if ($byChain.ContainsKey($id)) { $exts = @($byChain[$id] | Sort-Object) }
+
+            [pscustomobject]@{
+                Extensions  = $exts
+                PassThrough = ($id -eq [string]$plan.DefaultVariant)
+                Steps       = @($plan.Variants[$id] | ForEach-Object {
+                        [pscustomobject]@{ Slot = $_.Slot; Processor = $_.Key }
+                    })
+            }
+        }
+    )
 }
 
 $runContext = [pscustomobject]@{
@@ -272,7 +363,9 @@ $runContext = [pscustomobject]@{
     ConfigEcho       = [pscustomobject]@{
         GlobSemantics = if ($null -ne $SelectionPatterns) { 'Selection' } else { 'Ignore' }
         Patterns      = $SelectionPatterns
-        Chain         = @($steps | ForEach-Object Key)
+        Mode          = if ($RunVerbatim) { 'Verbatim' } else { 'Sequenced' }
+        Requested     = if ($RunVerbatim) { @($Processors | ForEach-Object { if ($_ -is [string]) { $_ } else { $_.Key } }) } else { @($IncludeProcessors) }
+        Chains        = $chainEcho
         Columns       = $Columns
         ConfigSource  = $configSource
     }

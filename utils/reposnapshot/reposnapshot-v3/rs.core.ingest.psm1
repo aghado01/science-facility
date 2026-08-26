@@ -27,7 +27,7 @@ function Invoke-Ingest
         Output from Invoke-Membrane containing Graph and Skipped entries.
 
     .OUTPUTS
-        [PSCustomObject] @{ Results; Skipped; Errors; Warnings; Streams; Budget; Timing }
+        [PSCustomObject] @{ Results; Skipped; Errors; Warnings; Streams; Budget; Timing; Plan }
     #>
     [CmdletBinding()]
     param(
@@ -91,6 +91,7 @@ function Invoke-Ingest
                 Streams  = @()
                 Budget   = $null
                 Timing   = $null
+                Plan     = $null
             }
         }
 
@@ -135,6 +136,7 @@ function Invoke-Ingest
                 Streams  = @()
                 Budget   = $null
                 Timing   = $null
+                Plan     = $null
             }
         }
 
@@ -155,6 +157,9 @@ function Invoke-Ingest
             Streams  = @($result.Streams)
             Budget   = $result.Budget
             Timing   = $result.Timing
+            # Surfaced so the caller can report what actually ran: which distinct
+            # chains were compiled, and which extensions took each.
+            Plan     = $compiled.Plan
         }
     }
 }

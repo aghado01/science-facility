@@ -1,5 +1,5 @@
 {
-    "$comment": "rs.core.user.ps1 reads this file automatically when run with no -ConfigPath. Keys are the script's own PascalCase parameter names (see rs.core.user.ps1 -? or its .PARAMETER blocks) — any key here can still be overridden per-run with the matching CLI flag. Processors defaults defer to processors/configs/<Key>.json.",
+    "$comment": "rs.core.user.ps1 reads this file automatically when run with no -ConfigPath. Keys are the script's own PascalCase parameter names (see rs.core.user.ps1 -? or its .PARAMETER blocks) — any key here can still be overridden per-run with the matching CLI flag. IncludeProcessors names CAPABILITIES declared in processors/default_sequencer.json, as a set: the sequencer supplies order, the file_read prologue, and any capability a named one Requires. A routed capability (StripComments) resolves to a different processor per file extension, so planning compiles one chain per distinct resolution and each file takes the one its extension resolved to; a file no route claims still runs every other stage. Per-processor defaults live in processors/configs/<resolved-key>.json. To run a literal chain instead, in the order given and identically for every file, set RunVerbatim with Processors.",
     "Root": "D:/aghado01/science-facility/utils/reposnapshot/reposnapshot-v3",
     "OutRoot": null,
     "SelectionPatterns": [

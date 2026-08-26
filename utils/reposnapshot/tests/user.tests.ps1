@@ -116,9 +116,11 @@ try
     Assert-True ($rB.OutDir -ne $rC.OutDir -and (Test-Path $rB.TreePath) -and (Test-Path $rC.TreePath)) 'every run gets its own directory, collisions suffixed' "$($rB.RunStamp) / $($rC.RunStamp)"
 
     # -----------------------------------------------------------------------
-    Enter-Section '3. Selection + Processors'
+    Enter-Section '3. Selection + IncludeProcessors'
     # -----------------------------------------------------------------------
-    $r2 = & $userScript -Root $proj -OutRoot (Join-Path $tmp 'out2') -SelectionPatterns '*.ps1' -Processors 'rs.ps.strip', 'rs.whitespace' -PassThru -ConfigPath $emptyConfig 6>$null
+    # Capabilities, not processor files: StripComments routes to rs.ps.strip because
+    # these are .ps1. The assertion below is about the payload, not the surface.
+    $r2 = & $userScript -Root $proj -OutRoot (Join-Path $tmp 'out2') -SelectionPatterns '*.ps1' -IncludeProcessors 'StripComments', 'Whitespace' -PassThru -ConfigPath $emptyConfig 6>$null
     Assert-True ($r2.EntryCount -eq 2) 'Selection *.ps1: only the two scripts ingest' "entries $($r2.EntryCount)"
     $row = $null; $shardPath = $null
     foreach ($sr in $r2.Receipt.Shards)
@@ -143,7 +145,7 @@ try
 
     $out4 = Join-Path $tmp 'out4'
     $cfgPath = Join-Path $tmp 'config.json'
-    @{ Root = $proj4; OutRoot = $out4; SelectionPatterns = @('*.ps1'); Processors = @('rs.ps.strip', 'rs.whitespace') } | ConvertTo-Json | Set-Content -Path $cfgPath
+    @{ Root = $proj4; OutRoot = $out4; SelectionPatterns = @('*.ps1'); IncludeProcessors = @('StripComments', 'Whitespace') } | ConvertTo-Json | Set-Content -Path $cfgPath
 
     $r4 = & $userScript -ConfigPath $cfgPath 6>$null
     Assert-True ($r4.EntryCount -eq 2) 'bare invocation, config only: Selection *.ps1 from the config ingests a.ps1 + sub/b.ps1' "entries $($r4.EntryCount)"
@@ -170,7 +172,7 @@ try
     # -----------------------------------------------------------------------
     Enter-Section '5. Inline -Config'
     # -----------------------------------------------------------------------
-    $r6 = & $userScript -Config @{ Root = $proj4; OutRoot = $out4; SelectionPatterns = @('*.ps1'); Processors = @('rs.ps.strip', 'rs.whitespace') } 6>$null
+    $r6 = & $userScript -Config @{ Root = $proj4; OutRoot = $out4; SelectionPatterns = @('*.ps1'); IncludeProcessors = @('StripComments', 'Whitespace') } 6>$null
     Assert-True ($r6.EntryCount -eq 2) 'a hashtable passed to -Config drives a bare invocation, no file at all' "entries $($r6.EntryCount)"
 
     # a PSCustomObject (e.g. a ConvertFrom-Json result without -AsHashtable)
@@ -183,10 +185,10 @@ try
     Assert-True ($null -ne $threw -and $threw -like '*-Config or -ConfigPath, not both*') '-Config and -ConfigPath both explicit: refused, not silently resolved' $threw
 
     # -----------------------------------------------------------------------
-    Enter-Section '6. -Processors'
+    Enter-Section '6. -RunVerbatim: the literal chain'
     # -----------------------------------------------------------------------
     $out6 = Join-Path $tmp 'out6'
-    $r8 = & $userScript -Root $proj4 -OutRoot $out6 -SelectionPatterns '*.ps1' `
+    $r8 = & $userScript -Root $proj4 -OutRoot $out6 -SelectionPatterns '*.ps1' -RunVerbatim `
         -Processors 'rs.whitespace', @{ Key = 'rs.ps.strip'; Config = @{ Operations = @('line-comments') } } `
         -PassThru -ConfigPath $emptyConfig 6>$null
     Assert-True ($r8.EntryCount -eq 2) 'mixed bare-string + object chain: Selection still applies' "entries $($r8.EntryCount)"
@@ -199,18 +201,39 @@ try
     $span = [System.Text.Encoding]::UTF8.GetString([byte[]]$bytes[([int]$row.RowContentBegin)..([int]$row.RowContentEnd)])
     Assert-True (-not $span.Contains('strip me') -and $span.Contains('alpha')) 'the object entry''s own Config (Operations) took effect' $span
 
-    $threw = $null; try { & $userScript -Root $proj4 -Processors 'rs-nonexistent' -ConfigPath $emptyConfig 6>$null } catch { $threw = $_.Exception.Message }
+    $threw = $null; try { & $userScript -Root $proj4 -RunVerbatim -Processors 'rs-nonexistent' -ConfigPath $emptyConfig 6>$null } catch { $threw = $_.Exception.Message }
     Assert-True ($null -ne $threw -and $threw -like "*'rs-nonexistent'*Known:*") 'an unknown processor key fails fast, names the file it looked for' $threw
 
-    $threw = $null; try { & $userScript -Root $proj4 -Processors @{ Config = @{} } -ConfigPath $emptyConfig 6>$null } catch { $threw = $_.Exception.Message }
+    $threw = $null; try { & $userScript -Root $proj4 -RunVerbatim -Processors @{ Config = @{} } -ConfigPath $emptyConfig 6>$null } catch { $threw = $_.Exception.Message }
     Assert-True ($null -ne $threw -and $threw -like "*missing 'Key'*") 'a -Processors entry with no Key fails fast' $threw
 
     # rs.whitespace omitted deliberately — capture stream 6 (Write-Host) instead
     # of discarding it, to prove the caution is the mechanism actually printing
     # and not just source that never runs.
-    $combined = & $userScript -Root $proj4 -Processors 'rs.content_meta' -ConfigPath $emptyConfig 6>&1
+    $combined = & $userScript -Root $proj4 -RunVerbatim -Processors 'rs.content_meta' -ConfigPath $emptyConfig 6>&1
     $infoText = (@($combined | Where-Object { $_ -is [System.Management.Automation.InformationRecord] } | ForEach-Object { $_.MessageData.Message }) -join "`n")
     Assert-True ($infoText -like '*omits rs.whitespace*') 'a chain missing rs.whitespace prints a caution, not an error' $infoText
+
+    # -----------------------------------------------------------------------
+    Enter-Section '7. The two modes are not interchangeable'
+    # -----------------------------------------------------------------------
+    $threw = $null; try { & $userScript -Root $proj4 -Processors 'rs.whitespace' -ConfigPath $emptyConfig 6>$null } catch { $threw = $_.Exception.Message }
+    Assert-True ($null -ne $threw -and $threw -like '*needs -RunVerbatim*IncludeProcessors*') `
+        'a literal chain without -RunVerbatim is refused, and names the alternative' $threw
+
+    $threw = $null; try { & $userScript -Root $proj4 -RunVerbatim -ConfigPath $emptyConfig 6>$null } catch { $threw = $_.Exception.Message }
+    Assert-True ($null -ne $threw -and $threw -like '*needs -Processors*') `
+        '-RunVerbatim with no chain to run is refused' $threw
+
+    $threw = $null; try { & $userScript -Root $proj4 -IncludeProcessors 'Nonesuch' -ConfigPath $emptyConfig 6>$null } catch { $threw = $_.Exception.Message }
+    Assert-True ($null -ne $threw -and $threw -like '*sequencer entry*') `
+        'an unknown capability names the sequencer, not a filename' $threw
+
+    # Under the canon the cautions are compiler guarantees, so they stop being printed.
+    $quiet = & $userScript -Root $proj4 -IncludeProcessors 'ContentMetadata' -ConfigPath $emptyConfig 6>&1
+    $quietText = (@($quiet | Where-Object { $_ -is [System.Management.Automation.InformationRecord] } | ForEach-Object { $_.MessageData.Message }) -join "`n")
+    Assert-True ($quietText -notlike '*omits rs.whitespace*') `
+        'the same omission under the sequencer prints no caution — order and placement are guaranteed there' $quietText
 }
 catch
 {
