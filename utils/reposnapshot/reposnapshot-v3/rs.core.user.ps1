@@ -106,18 +106,15 @@ param(
 #region ConfigMerge
 # Resolution precedence: CLI Flags > Config (-Config or -ConfigPath) > Built-in Defaults.
 # See docs/user-cli-and-config.md for resolution and binding invariants.
-function Get-ConfigOverride ($Bound, $Cfg, [string]$Name, $Current)
-{
+function Get-ConfigOverride ($Bound, $Cfg, [string]$Name, $Current) {
     if ($Bound.ContainsKey($Name)) { return $Current }
     if ($Cfg.ContainsKey($Name) -and $null -ne $Cfg[$Name]) { return $Cfg[$Name] }
     return $Current
 }
 
-function ConvertTo-ConfigHashtable ($Value)
-{
+function ConvertTo-ConfigHashtable ($Value) {
     if ($Value -is [System.Collections.IDictionary]) { return $Value }
-    if ($Value -is [System.Management.Automation.PSCustomObject])
-    {
+    if ($Value -is [System.Management.Automation.PSCustomObject]) {
         $h = @{}
         foreach ($p in $Value.PSObject.Properties) { $h[$p.Name] = $p.Value }
         return $h
@@ -126,20 +123,16 @@ function ConvertTo-ConfigHashtable ($Value)
 }
 
 # Normalize a -Processors entry to @{ Key; Config }. Bare string defers to processors/configs/<Key>.json.
-function ConvertTo-ProcessorStep ($Entry)
-{
+function ConvertTo-ProcessorStep ($Entry) {
     if ($Entry -is [string]) { return @{ Key = $Entry; Config = @{} } }
     $h = if ($Entry -is [System.Management.Automation.PSCustomObject]) { ConvertTo-ConfigHashtable $Entry } else { $Entry }
-    if ($h -isnot [System.Collections.IDictionary])
-    {
+    if ($h -isnot [System.Collections.IDictionary]) {
         throw "rs.core.user: a -Processors entry must be a processor-key string or an object with Key/Config (got $($Entry.GetType().Name))."
     }
-    if (-not $h.ContainsKey('Key') -or [string]::IsNullOrWhiteSpace([string]$h['Key']))
-    {
+    if (-not $h.ContainsKey('Key') -or [string]::IsNullOrWhiteSpace([string]$h['Key'])) {
         throw "rs.core.user: a -Processors entry is missing 'Key'."
     }
-    $stepConfig = if ($h.ContainsKey('Config') -and $null -ne $h['Config'])
-    {
+    $stepConfig = if ($h.ContainsKey('Config') -and $null -ne $h['Config']) {
         if ($h['Config'] -is [System.Management.Automation.PSCustomObject]) { ConvertTo-ConfigHashtable $h['Config'] } else { $h['Config'] }
     }
     else { @{} }
@@ -152,44 +145,38 @@ if ($explicitConfig -and $explicitConfigPath) { throw "rs.core.user: pass -Confi
 
 $cfg = $null
 $configSource = $null
-if ($explicitConfig)
-{
+if ($explicitConfig) {
     $cfg = ConvertTo-ConfigHashtable $Config
     $configSource = '-Config (inline)'
 }
-elseif (-not (Test-Path -LiteralPath $ConfigPath -PathType Leaf))
-{
+elseif (-not (Test-Path -LiteralPath $ConfigPath -PathType Leaf)) {
     if ($explicitConfigPath) { throw "rs.core.user: -ConfigPath '$ConfigPath' does not exist." }
 }
-else
-{
+else {
     $cfg = Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json -AsHashtable
     $configSource = $ConfigPath
 }
 
-if ($null -ne $cfg)
-{
+if ($null -ne $cfg) {
     $b = $PSBoundParameters
-
-    $Root                = Get-ConfigOverride $b $cfg 'Root' $Root
-    $OutRoot             = Get-ConfigOverride $b $cfg 'OutRoot' $OutRoot
-    $SelectionPatterns   = Get-ConfigOverride $b $cfg 'SelectionPatterns' $SelectionPatterns
+    $Root = Get-ConfigOverride $b $cfg 'Root' $Root
+    $OutRoot = Get-ConfigOverride $b $cfg 'OutRoot' $OutRoot
+    $SelectionPatterns = Get-ConfigOverride $b $cfg 'SelectionPatterns' $SelectionPatterns
     if ($null -ne $SelectionPatterns) { $SelectionPatterns = [string[]]$SelectionPatterns }
-    $Columns             = [string[]](Get-ConfigOverride $b $cfg 'Columns' $Columns)
-    $Grouping            = [string](Get-ConfigOverride $b $cfg 'Grouping' $Grouping)
-    $GroupSort           = [string](Get-ConfigOverride $b $cfg 'GroupSort' $GroupSort)
-    $OrderStrict         = [bool](Get-ConfigOverride $b $cfg 'OrderStrict' $OrderStrict.IsPresent)
-    $PackObjective       = [string](Get-ConfigOverride $b $cfg 'PackObjective' $PackObjective)
-    $ShardQuotaBytes     = [long](Get-ConfigOverride $b $cfg 'ShardQuotaBytes' $ShardQuotaBytes)
+    $Columns = [string[]](Get-ConfigOverride $b $cfg 'Columns' $Columns)
+    $Grouping = [string](Get-ConfigOverride $b $cfg 'Grouping' $Grouping)
+    $GroupSort = [string](Get-ConfigOverride $b $cfg 'GroupSort' $GroupSort)
+    $OrderStrict = [bool](Get-ConfigOverride $b $cfg 'OrderStrict' $OrderStrict.IsPresent)
+    $PackObjective = [string](Get-ConfigOverride $b $cfg 'PackObjective' $PackObjective)
+    $ShardQuotaBytes = [long](Get-ConfigOverride $b $cfg 'ShardQuotaBytes' $ShardQuotaBytes)
     $ShardToleranceBytes = [long](Get-ConfigOverride $b $cfg 'ShardToleranceBytes' $ShardToleranceBytes)
-    $MaxFilesPerShard    = [int](Get-ConfigOverride $b $cfg 'MaxFilesPerShard' $MaxFilesPerShard)
-    $PassThru            = [bool](Get-ConfigOverride $b $cfg 'PassThru' $PassThru.IsPresent)
-    $Processors          = Get-ConfigOverride $b $cfg 'Processors' $Processors
+    $MaxFilesPerShard = [int](Get-ConfigOverride $b $cfg 'MaxFilesPerShard' $MaxFilesPerShard)
+    $PassThru = [bool](Get-ConfigOverride $b $cfg 'PassThru' $PassThru.IsPresent)
+    $Processors = Get-ConfigOverride $b $cfg 'Processors' $Processors
     if ($null -ne $Processors) { $Processors = @($Processors) }
 }
 
-if ([string]::IsNullOrEmpty($Root))
-{
+if ([string]::IsNullOrEmpty($Root)) {
     throw "rs.core.user: -Root is required — pass -Root, set `"Root`" in a -Config object, or set `"Root`" in the -ConfigPath file."
 }
 if (-not (Test-Path -LiteralPath $Root -PathType Container)) { throw "rs.core.user: Root '$Root' is not a directory." }
@@ -197,8 +184,7 @@ if (-not (Test-Path -LiteralPath $Root -PathType Container)) { throw "rs.core.us
 
 #region ModuleImports
 $v3 = $PSScriptRoot
-foreach ($m in 'crawler', 'membrane', 'colonel.v2', 'ingest', 'assemble', 'container', 'shards', 'serialize', 'manifest')
-{
+foreach ($m in 'crawler', 'membrane', 'colonel.v2', 'ingest', 'assemble', 'container', 'shards', 'serialize', 'manifest') {
     Import-Module (Join-Path $v3 "rs.core.$m.psm1") -Force -DisableNameChecking
 }
 #endregion
@@ -206,8 +192,7 @@ foreach ($m in 'crawler', 'membrane', 'colonel.v2', 'ingest', 'assemble', 'conta
 #region PathResolution
 $rootFull = (Resolve-Path $Root).Path.TrimEnd('\', '/')
 $leaf = Split-Path $rootFull -Leaf
-if ([string]::IsNullOrEmpty($OutRoot))
-{
+if ([string]::IsNullOrEmpty($OutRoot)) {
     $OutRoot = Join-Path $rootFull '.snapshot'
 }
 $outFull = [IO.Path]::GetFullPath($OutRoot)
@@ -221,12 +206,10 @@ $runStamp = Split-Path $outDir -Leaf
 
 #region CrawlAndMembrane
 $crawl = (New-FileSystemCrawler -RootPath $rootFull).Invoke()
-$compiled = if ($null -ne $SelectionPatterns -and $SelectionPatterns.Count -gt 0)
-{
+$compiled = if ($null -ne $SelectionPatterns -and $SelectionPatterns.Count -gt 0) {
     New-GlobCompiler -CrawlerGraph $crawl.Graph -GlobSemantics Selection -SelectionPatterns $SelectionPatterns
 }
-else
-{
+else {
     New-GlobCompiler -CrawlerGraph $crawl.Graph
 }
 $filtered = Invoke-Membrane -CompiledNodes $compiled.CompiledNodes -CrawlerGraph $crawl.Graph
@@ -236,8 +219,7 @@ $filtered = Invoke-Membrane -CompiledNodes $compiled.CompiledNodes -CrawlerGraph
 # Discover all processors/*.ps1 scripts for step validation.
 $procDir = Join-Path $v3 'processors'
 $procManifest = @{}
-foreach ($f in Get-ChildItem -LiteralPath $procDir -Filter '*.ps1' -File)
-{
+foreach ($f in Get-ChildItem -LiteralPath $procDir -Filter '*.ps1' -File) {
     if ($f.Name -in 'chain-executor.ps1', 'bag-helpers.ps1') { continue }
     $procManifest[[IO.Path]::GetFileNameWithoutExtension($f.Name)] = $f.FullName
 }
@@ -245,50 +227,41 @@ foreach ($f in Get-ChildItem -LiteralPath $procDir -Filter '*.ps1' -File)
 $steps = [System.Collections.Generic.List[object]]::new()
 $steps.Add(@{ Key = 'file-read'; Config = @{} })
 
-if ($null -ne $Processors -and $Processors.Count -gt 0)
-{
+if ($null -ne $Processors -and $Processors.Count -gt 0) {
     # explicit chain
-    foreach ($entry in $Processors)
-    {
+    foreach ($entry in $Processors) {
         $step = ConvertTo-ProcessorStep $entry
-        if (-not $procManifest.ContainsKey($step.Key))
-        {
+        if (-not $procManifest.ContainsKey($step.Key)) {
             throw "rs.core.user: -Processors names '$($step.Key)', which has no processors\$($step.Key).ps1. Known: $($procManifest.Keys -join ', ')."
         }
         $steps.Add($step)
     }
 }
-else
-{
+else {
     # default chain
     $steps.Add(@{ Key = 'rs-whitespace'; Config = @{} })
-    if ($Columns -contains 'content_meta')
-    {
+    if ($Columns -contains 'content_meta') {
         $steps.Add(@{ Key = 'rs-content_meta'; Config = @{} })
     }
 }
 
 # Invariant cautions (non-fatal advisories)
 $resolvedKeys = @($steps | ForEach-Object Key)
-if ($resolvedKeys -notcontains 'rs-whitespace')
-{
+if ($resolvedKeys -notcontains 'rs-whitespace') {
     Write-Host "  caution: chain omits rs-whitespace — its pad-breaks op is what keeps the container codec's newline substitution regularly spaced. Fine if intentional." -ForegroundColor Yellow
 }
 $cmIdx = [array]::IndexOf($resolvedKeys, 'rs-content_meta')
-if ($cmIdx -ge 0 -and $cmIdx -ne $resolvedKeys.Count - 1)
-{
+if ($cmIdx -ge 0 -and $cmIdx -ne $resolvedKeys.Count - 1) {
     Write-Host "  caution: rs-content_meta is not the last processor — its own contract calls for enrich-only TAIL placement, after every content mutator. Fine if intentional." -ForegroundColor Yellow
 }
-if (($Columns -contains 'content_meta') -and $resolvedKeys -notcontains 'rs-content_meta')
-{
+if (($Columns -contains 'content_meta') -and $resolvedKeys -notcontains 'rs-content_meta') {
     Write-Host "  caution: Columns requests content_meta but no rs-content_meta step runs — that wire column will render empty." -ForegroundColor Yellow
 }
 
 $ingest = Invoke-Ingest -FilteredFsGraph $filtered -Manifest $procManifest -Steps @($steps) `
     -ChainExecutorPath (Join-Path $v3 'processors\chain-executor.ps1') `
     -SharedHelperPath (Join-Path $v3 'processors\bag-helpers.ps1')
-if (@($ingest.Errors).Count -gt 0)
-{
+if (@($ingest.Errors).Count -gt 0) {
     throw "rs.core.user: ingest reported errors — $($ingest.Errors -join '; ')"
 }
 
@@ -323,8 +296,7 @@ $null = New-Manifest -Receipt $receipt -Shards $plan.Shards -Plan $plan.Plan -La
 #region Output
 Write-Host "reposnapshot: $($ir.Header.EntryCount) entries → $($receipt.ShardCount) shards, $($receipt.TotalBytes) bytes" -ForegroundColor Green
 Write-Host "  $outDir" -ForegroundColor DarkGray
-if ($plan.Plan.OversizedCount -gt 0)
-{
+if ($plan.Plan.OversizedCount -gt 0) {
     Write-Host "  $($plan.Plan.OversizedCount) oversized shard(s) — declared under Hazards in the tree" -ForegroundColor Yellow
 }
 
@@ -338,8 +310,7 @@ $result = [ordered]@{
     TotalBytes     = $receipt.TotalBytes
     OversizedCount = $plan.Plan.OversizedCount
 }
-if ($PassThru)
-{
+if ($PassThru) {
     $result['IR'] = $ir
     $result['Layout'] = $layout
     $result['Plan'] = $plan

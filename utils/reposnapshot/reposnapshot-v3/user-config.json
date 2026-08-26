@@ -1,6 +1,6 @@
 {
     "$comment": "rs.core.user.ps1 reads this file automatically when run with no -ConfigPath. Keys are the script's own PascalCase parameter names (see rs.core.user.ps1 -? or its .PARAMETER blocks) — any key here can still be overridden per-run with the matching CLI flag. Processors defaults defer to processors/configs/<Key>.json.",
-    "Root": null,
+    "Root": "D:/aghado01/science-facility/utils/reposnapshot/reposnapshot-v3",
     "OutRoot": null,
     "SelectionPatterns": [
         "*.ps1",
@@ -10,12 +10,10 @@
     "Processors": [
         "rs-psstrip",
         "rs-indent",
-        "rs-whitespace",
-        "rs-content_meta"
+        "rs-whitespace"
     ],
     "Columns": [
-        "gidx",
-        "content_meta"
+        "gidx"
     ],
     "ShardQuotaBytes": 65536,
     "ShardToleranceBytes": 4096,
