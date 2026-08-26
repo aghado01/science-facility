@@ -1,0 +1,22 @@
+{
+    "$comment": "Source of truth for canonical processor ordering and language routing; consumed by Compile-Plan, never at runtime. Spine ranks processor families and its array order is authoritative. Languages maps extensions (dot-less here, normalized to lowercase-with-dot on load) to file classes; a language is listed only if some processor claims it, and unclaimed extensions fall to the default variant. Processors classifies each processor by exactly one Stage, with Language qualification when that stage is a routed token ($-prefixed); this object's key order is incidental. Ordering among members sharing a (Stage, Language) partition would require an explicit Rank on each, and no partition is multi-member today. See docs/spine-and-routing.md.",
+    "Spine": [
+        "read",
+        "$strip",
+        "indent",
+        "whitespace",
+        "measure"
+    ],
+    "Languages": {
+        "powershell": [ "ps1", "psm1", "psd1" ],
+        "csharp": [ "cs", "csx" ]
+    },
+    "Processors": {
+        "file-read": { "Stage": "read" },
+        "rs.ps.strip": { "Stage": "$strip", "Language": "powershell" },
+        "rs.cs.strip": { "Stage": "$strip", "Language": "csharp" },
+        "rs-indent": { "Stage": "indent" },
+        "rs-whitespace": { "Stage": "whitespace" },
+        "rs-content_meta": { "Stage": "measure" }
+    }
+}

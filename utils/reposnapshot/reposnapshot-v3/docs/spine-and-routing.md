@@ -15,7 +15,7 @@ Correctness never depends on the canon; the canon exists so the nominal run is c
 
 ## The Registry Artifact
 
-One file, `processors/registry.json`, is the source of truth for canonical ordering and routing. It is normalized into three sections — **order is a spine fact, extensions are language facts, classification is a processor fact** — so each fact is declared exactly once:
+One file, `processors/processors.registry.json`, is the source of truth for canonical ordering and routing. It is normalized into three sections — **order is a spine fact, extensions are language facts, classification is a processor fact** — so each fact is declared exactly once:
 
 ```json
 {
@@ -156,7 +156,7 @@ Each step lands with its tests through `tests/run-all.ps1` before the next begin
 
 | Step | Work | Test gate |
 |---|---|---|
-| 1 | `processors/registry.json` (`Spine`/`Languages`/`Processors` sections; `$strip` members for powershell/csharp) + loader with normalization and hard-error validation | Malformed-file errors; extension normalization and one-language-per-extension; registry keys exist in manifest; stage/language cross-validation; rank required iff partition is multi-member; permuting `Processors` keys changes no compiled chain, while permuting `Spine` does |
+| 1 | `processors/processors.registry.json` (`Spine`/`Languages`/`Processors` sections; `$strip` members for powershell/csharp) + loader with normalization and hard-error validation | Malformed-file errors; extension normalization and one-language-per-extension; registry keys exist in manifest; stage/language cross-validation; rank required iff partition is multi-member; permuting `Processors` keys changes no compiled chain, while permuting `Spine` does |
 | 2 | `Compile-Plan` emits the family (`Variants`/`Routing`/union `Iss`/union `ProcessorKeys`) | Pure-function tests: mixed extension set → expected variant tuples; dense chains of differing lengths; default variant present; spine invariants (measure last, strip precedes whitespace); validate-all vs bind-present; completeness (manifest ⊆ registry) |
 | 3 | Colonel: third slice array, family marshal, worker lookup table | Index-stable envelope over mixed corpus; each item demonstrably ran its assigned chain (bag `Processing` trail) |
 | 4 | Caller surface: `-StripComments` → `$strip`; `-Processors` set semantics (stage enablement); `-RunVerbatim` retaining today's monolithic path; unregistered-processor hard error; caution retirement on canon path | End-to-end heterogeneous ingest (`.ps1`/`.cs`/`.md`); `-RunVerbatim` runs a literal out-of-canon chain and still prints its cautions |
