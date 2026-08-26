@@ -403,7 +403,9 @@ function Resolve-Routing
     .OUTPUTS
         [PSCustomObject] @{ ExtensionMap; Resolutions }
           ExtensionMap — extension -> variant key
-          Resolutions  — variant key -> @{ slot -> processor key }
+          Resolutions  — variant key -> ordered [PSCustomObject[]] @{ Slot; Key },
+                         in canon order. This list is the artifact; the key is a
+                         canonical form derived from it, for lookup only.
     #>
     param(
         [Parameter(Mandatory)] [pscustomobject]           $Sequence,
@@ -428,27 +430,30 @@ function Resolve-Routing
         $ext = '.' + ([string]$x).TrimStart('.').ToLowerInvariant()
         if ($extMap.ContainsKey($ext)) { continue }
 
-        $hits = @{}
-        $parts = [System.Collections.Generic.List[string]]::new()
+        # The resolution is an ORDERED LIST of (slot, implementation) pairs, in canon
+        # order — that is the artifact, and it stays a list. $routedSlots is already
+        # sorted by (Group, Rank), so appending preserves the canon.
+        $pairs = [System.Collections.Generic.List[object]]::new()
 
         foreach ($slot in $routedSlots)
         {
             # Occupancy is decided on the route records themselves; the flattened
-            # union only ever answers "claimed at all", which falls out of $parts.
+            # union only ever answers "claimed at all", which falls out of $pairs.
             $route = @($procs[$slot].Routes | Where-Object { $ext -in $_.Extensions })
             if ($route.Count -eq 0) { continue }
-            $hits[$slot] = $route[0].Key
-            $parts.Add($route[0].Key)
+            $pairs.Add([pscustomobject]@{ Slot = $slot; Key = $route[0].Key })
         }
 
-        # The key is an IDENTITY, not a name. It spells like a processor key only
-        # while one slot is routed; a second slot makes it a compound. Nothing may
-        # parse it, match on it, or display it as if it named a processor — read
-        # Resolutions for meaning. The separator is illegal in a filename, so two
-        # distinct tuples cannot join to the same string.
-        $variantKey = if ($parts.Count -eq 0) { 'default' } else { $parts -join '|' }
+        # The key is an IDENTITY DERIVED from that list — a canonical form for
+        # dictionary lookup and dedup, never the artifact itself. Nothing may parse
+        # it, match on it, or display it as if it named a processor; read the pairs.
+        # The separator is illegal in a filename, so no two distinct lists collapse
+        # onto one key.
+        $variantKey = 'default'
+        if ($pairs.Count -gt 0) { $variantKey = (@($pairs | ForEach-Object Key) -join '|') }
+
         $extMap[$ext] = $variantKey
-        if (-not $resolutions.ContainsKey($variantKey)) { $resolutions[$variantKey] = $hits }
+        if (-not $resolutions.ContainsKey($variantKey)) { $resolutions[$variantKey] = $pairs.ToArray() }
     }
 
     return [pscustomobject]@{
@@ -468,6 +473,9 @@ function Resolve-Variants
         slot, and splices out any slot that did not resolve — variants differ in
         length and carry no holes. Sorting is by (Group, Rank).
 
+    .PARAMETER Resolutions
+        Variant key -> ordered list of (Slot, Key) pairs, from Resolve-Routing.
+
     .OUTPUTS
         [hashtable] variant key -> [PSCustomObject[]] @{ Key; Slot; Config }
     #>
@@ -482,7 +490,7 @@ function Resolve-Variants
 
     foreach ($variantKey in $Resolutions.Keys)
     {
-        $hits = $Resolutions[$variantKey]
+        $pairs = @($Resolutions[$variantKey])
         $steps = [System.Collections.Generic.List[object]]::new()
 
         foreach ($slot in @($Enabled))
@@ -491,8 +499,10 @@ function Resolve-Variants
 
             if ($meta.IsRouted)
             {
-                if (-not $hits.ContainsKey($slot)) { continue }
-                $resolved = $hits[$slot]
+                # A routed slot this variant did not resolve is spliced out entirely.
+                $hit = @($pairs | Where-Object { $_.Slot -eq $slot })
+                if ($hit.Count -eq 0) { continue }
+                $resolved = $hit[0].Key
             }
             else { $resolved = $meta.Key }
 
