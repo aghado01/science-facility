@@ -519,7 +519,10 @@ function Compile-Plan
     #>
     param(
         [Parameter(Mandatory)] [hashtable]  $Manifest,
-        [Parameter(Mandatory)] [object[]]   $Steps,
+        [object[]]                          $Steps,
+        [string]                            $SequenceManifest,
+        [AllowEmptyCollection()][AllowNull()][string[]] $IncludeProcessors = @(),
+        [AllowEmptyCollection()][AllowNull()][string[]] $Extensions = @(),
         [Parameter(Mandatory)] [string]     $ChainExecutorPath,
         [string[]]                          $SharedHelperPath = @(),
         [IssPreset]                         $IssPreset = [IssPreset]::Core,
@@ -535,9 +538,9 @@ function Compile-Plan
         $errors.Add('Manifest is empty — no processors to load.')
         return [pscustomobject]@{ Plan = $null; Errors = $errors.ToArray(); Warnings = $warnings.ToArray() }
     }
-    if ($null -eq $Steps -or $Steps.Count -eq 0)
+    if (-not $SequenceManifest -and ($null -eq $Steps -or $Steps.Count -eq 0))
     {
-        $errors.Add('Steps array is empty — nothing to execute.')
+        $errors.Add('Neither SequenceManifest nor Steps was supplied — nothing to compile.')
         return [pscustomobject]@{ Plan = $null; Errors = $errors.ToArray(); Warnings = $warnings.ToArray() }
     }
     if (-not (Test-Path -LiteralPath $ChainExecutorPath))
@@ -546,15 +549,50 @@ function Compile-Plan
         return [pscustomobject]@{ Plan = $null; Errors = $errors.ToArray(); Warnings = $warnings.ToArray() }
     }
 
-    $referencedKeys = [System.Collections.Generic.HashSet[string]]::new()
-    foreach ($step in $Steps)
+    # Either the sequencer compiles a plan family, or a literal Steps list runs as a
+    # family of one. Everything downstream sees the same shape, so Invoke-Plan never
+    # learns which path produced it and grows no mode branch.
+    $variants = @{}
+    $routing = @{}
+
+    if ($SequenceManifest)
     {
-        if ([string]::IsNullOrWhiteSpace($step.Key))
+        try
         {
-            $errors.Add('A step has an empty or missing Key.')
-            continue
+            $sequence = Import-SequenceManifest -Path $SequenceManifest -Manifest $Manifest
+            $enabled = Resolve-EnabledSet -Sequence $sequence -IncludeProcessors $IncludeProcessors
+            $resolved = Resolve-Routing -Sequence $sequence -Enabled $enabled -Extensions $Extensions
+            $variants = Resolve-Variants -Sequence $sequence -Enabled $enabled -Resolutions $resolved.Resolutions
+            $routing = $resolved.ExtensionMap
         }
-        [void]$referencedKeys.Add($step.Key)
+        catch
+        {
+            $errors.Add($_.Exception.Message)
+            return [pscustomobject]@{ Plan = $null; Errors = $errors.ToArray(); Warnings = $warnings.ToArray() }
+        }
+    }
+    else
+    {
+        $variants['default'] = @($Steps)
+    }
+
+    $referencedKeys = [System.Collections.Generic.HashSet[string]]::new()
+    foreach ($vk in $variants.Keys)
+    {
+        foreach ($step in $variants[$vk])
+        {
+            if ([string]::IsNullOrWhiteSpace($step.Key))
+            {
+                $errors.Add('A step has an empty or missing Key.')
+                continue
+            }
+            [void]$referencedKeys.Add($step.Key)
+        }
+    }
+    if ($referencedKeys.Count -eq 0)
+    {
+        $errors.Add('No variant references a processor — nothing to execute.')
+        return [pscustomobject]@{ Plan = $null; Errors = $errors.ToArray(); Warnings = $warnings.ToArray() }
     }
 
     foreach ($key in $referencedKeys)
@@ -651,10 +689,27 @@ function Compile-Plan
         }
     }
 
-    # Bind steps to resolved Fn names and load external JSON configs
-    $boundSteps = foreach ($step in $Steps)
+    # Bind steps to resolved Fn names and load external JSON configs, once per variant.
+    # The loop body is variant-agnostic: it only ever sees one step at a time.
+    $boundVariants = @{}
+    foreach ($vk in $variants.Keys)
+    {
+    $boundSteps = foreach ($step in $variants[$vk])
     {
         $key = [string]$step.Key
+
+        # The slot a step fills is the sequencer's fact, not the processor's — a
+        # routed processor cannot know which capability it was chosen for. Carry it
+        # in the config so the Processing trail can name the capability that ran.
+        $slot = ''
+        if ($step -is [System.Collections.IDictionary])
+        {
+            if ($step.Contains('Slot')) { $slot = [string]$step['Slot'] }
+        }
+        elseif ($step.PSObject.Properties['Slot'])
+        {
+            $slot = [string]$step.PSObject.Properties['Slot'].Value
+        }
         $procPath = [string]$Manifest[$key]
         $procDir = if ($procPath) { [System.IO.Path]::GetDirectoryName($procPath) } else { '' }
         $cfgPath = if ($procDir) { Join-Path $procDir "configs\$key.json" } else { '' }
@@ -689,16 +744,28 @@ function Compile-Plan
             }
         }
 
+        if ($slot) { $effectiveConfig['Slot'] = $slot }
+
         [pscustomobject]@{
             Key    = $key
+            Slot   = $slot
             Fn     = [string]$validBodies[$key].Fn
             Config = $effectiveConfig
         }
     }
+        $boundVariants[$vk] = @($boundSteps)
+    }
+
+    # Legacy single-chain view, for callers still driving -Steps. Absent when the
+    # corpus resolved no default variant, which is correct: there is no one chain.
+    $legacySteps = @()
+    if ($boundVariants.ContainsKey('default')) { $legacySteps = @($boundVariants['default']) }
 
     return [pscustomobject]@{
         Plan     = [pscustomobject]@{
-            Steps         = @($boundSteps)
+            Variants      = $boundVariants
+            Routing       = $routing
+            Steps         = $legacySteps
             Iss           = $iss
             ProcessorKeys = @($referencedKeys)
         }

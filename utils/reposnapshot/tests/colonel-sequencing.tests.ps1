@@ -279,6 +279,75 @@ try
 
     Assert-True (($regroupedKeys -join ' > ') -eq 'file_read > rs.whitespace > rs.indent') `
         'swapping Rank swaps the compiled order' ($regroupedKeys -join ' > ')
+
+    # -----------------------------------------------------------------------
+    Enter-Section '7. Compile-Plan emits the family'
+    # -----------------------------------------------------------------------
+    $chainExec = Join-Path $procDir 'chain_executor.ps1'
+    $bagHelpers = Join-Path $procDir 'bag_helpers.ps1'
+    $seqPath = Join-Path $procDir 'default_sequencer.json'
+
+    $compiled = Compile-Plan -Manifest $manifest -SequenceManifest $seqPath `
+        -IncludeProcessors $allSlots -Extensions @('.ps1', '.cs', '.md') `
+        -ChainExecutorPath $chainExec -SharedHelperPath $bagHelpers
+
+    Assert-True (@($compiled.Errors).Count -eq 0) 'a mixed corpus compiles clean' ($compiled.Errors -join '; ')
+    Assert-True ($null -ne $compiled.Plan) 'a plan is produced'
+    Assert-True (@($compiled.Plan.Variants.Keys).Count -eq 3) 'three variants compiled' `
+        ((@($compiled.Plan.Variants.Keys) | Sort-Object) -join ', ')
+
+    $psChain = @($compiled.Plan.Variants['rs.ps.strip'] | ForEach-Object Key)
+    $defChain = @($compiled.Plan.Variants['default'] | ForEach-Object Key)
+    Assert-True (($psChain -join ' > ') -eq 'file_read > rs.ps.strip > rs.indent > rs.whitespace > rs.content_meta') `
+        'the powershell variant binds in canon order' ($psChain -join ' > ')
+    Assert-True ($defChain.Count -eq ($psChain.Count - 1)) 'the default variant is one step shorter'
+
+    Assert-True ($compiled.Plan.Routing['.ps1'] -eq 'rs.ps.strip' -and $compiled.Plan.Routing['.md'] -eq 'default') `
+        'Routing maps each extension onto its variant key'
+
+    $issKeys = (@($compiled.Plan.ProcessorKeys) | Sort-Object) -join ','
+    Assert-True ($issKeys -eq 'file_read,rs.content_meta,rs.cs.strip,rs.indent,rs.ps.strip,rs.whitespace') `
+        'the ISS registers the union across variants — both strippers' $issKeys
+
+    $stripStep = @($compiled.Plan.Variants['rs.ps.strip'] | Where-Object Key -eq 'rs.ps.strip')[0]
+    Assert-True ($stripStep.Slot -eq 'StripComments') 'a bound step reports the slot it filled'
+    Assert-True ($stripStep.Config['Slot'] -eq 'StripComments') 'the slot rides in config, for the Processing trail'
+    Assert-True ($stripStep.Fn -eq 'Invoke-rs.ps.strip') 'the bound Fn is the resolved processor, never the slot'
+
+    $csStep = @($compiled.Plan.Variants['rs.cs.strip'] | Where-Object Slot -eq 'StripComments')[0]
+    Assert-True ($csStep.Key -eq 'rs.cs.strip') 'the same slot resolves to a different processor per variant'
+
+    # An all-PowerShell corpus needs no default variant, so none is compiled.
+    $psOnlyPlan = Compile-Plan -Manifest $manifest -SequenceManifest $seqPath `
+        -IncludeProcessors $allSlots -Extensions @('.ps1', '.psm1') `
+        -ChainExecutorPath $chainExec -SharedHelperPath $bagHelpers
+    Assert-True ((@($psOnlyPlan.Plan.Variants.Keys) -join ',') -eq 'rs.ps.strip') `
+        'an all-PowerShell corpus compiles exactly one variant' (@($psOnlyPlan.Plan.Variants.Keys) -join ',')
+    Assert-True (@($psOnlyPlan.Plan.Steps).Count -eq 0) `
+        'and the legacy single-chain view is empty, because there is no one chain'
+
+    # -----------------------------------------------------------------------
+    Enter-Section '8. The literal-chain path is unchanged'
+    # -----------------------------------------------------------------------
+    $legacy = Compile-Plan -Manifest $manifest `
+        -Steps @(@{ Key = 'file_read'; Config = @{} }, @{ Key = 'rs.whitespace'; Config = @{} }) `
+        -ChainExecutorPath $chainExec -SharedHelperPath $bagHelpers
+
+    Assert-True (@($legacy.Errors).Count -eq 0) 'a literal Steps chain still compiles' ($legacy.Errors -join '; ')
+    Assert-True ((@($legacy.Plan.Steps | ForEach-Object Key) -join ' > ') -eq 'file_read > rs.whitespace') `
+        'Steps survives for callers that drive it'
+    Assert-True ((@($legacy.Plan.Variants.Keys) -join ',') -eq 'default') `
+        'a literal chain is a family of one, named default'
+    Assert-True ((@($legacy.Plan.Routing.Keys) -join ',') -eq '') 'a literal chain routes nothing'
+
+    $neither = Compile-Plan -Manifest $manifest -ChainExecutorPath $chainExec
+    Assert-True ((@($neither.Errors) -join ';') -match 'Neither SequenceManifest nor Steps') `
+        'supplying neither is a reported error, not a throw' (@($neither.Errors) -join ';')
+
+    $badSeq = Compile-Plan -Manifest $manifest -ChainExecutorPath $chainExec `
+        -SequenceManifest (Join-Path $fixtureRoot 'absent.json')
+    Assert-True ((@($badSeq.Errors) -join ';') -match 'not found') `
+        'an unreadable sequencer surfaces as Errors, not a throw' (@($badSeq.Errors) -join ';')
 }
 catch
 {
