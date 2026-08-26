@@ -94,6 +94,15 @@ function Invoke-Ingest
             }
         }
 
+        # The corpus's extension set is what the compiler routes against. Taken from
+        # the Extension the crawler stamped, never re-derived from the path.
+        $extSet = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+        foreach ($f in $eligible)
+        {
+            $p = $f.PSObject.Properties['Extension']
+            if ($p -and -not [string]::IsNullOrWhiteSpace([string]$p.Value)) { [void]$extSet.Add([string]$p.Value) }
+        }
+
         # Partition forwarded parameters
         $compileParams = @((Get-Command 'Compile-Plan').Parameters.Keys)
         $dispatchOnly = @((Get-Command 'Invoke-Plan').Parameters.Keys |
@@ -105,7 +114,12 @@ function Invoke-Ingest
         $dispatchSplat = Split-ForwardedParams -BoundParameters $PSBoundParameters `
             -OwnParams (@('FilteredFsGraph') + $compileParams)
 
-        # Stage 1: Compile colonel plan
+        # Stage 1: Compile colonel plan. Extensions is ingest's to supply — it is the
+        # only stage that has seen the whole eligible set — so it is never forwarded.
+        if (-not $compileSplat.ContainsKey('Extensions') -and $extSet.Count -gt 0)
+        {
+            $compileSplat['Extensions'] = @($extSet)
+        }
         $compiled = Compile-Plan @compileSplat
 
         foreach ($w in $compiled.Warnings) { $warnings.Add($w) }

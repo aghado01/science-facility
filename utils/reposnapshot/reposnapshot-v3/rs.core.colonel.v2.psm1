@@ -756,16 +756,10 @@ function Compile-Plan
         $boundVariants[$vk] = @($boundSteps)
     }
 
-    # Legacy single-chain view, for callers still driving -Steps. Absent when the
-    # corpus resolved no default variant, which is correct: there is no one chain.
-    $legacySteps = @()
-    if ($boundVariants.ContainsKey('default')) { $legacySteps = @($boundVariants['default']) }
-
     return [pscustomobject]@{
         Plan     = [pscustomobject]@{
             Variants      = $boundVariants
             Routing       = $routing
-            Steps         = $legacySteps
             Iss           = $iss
             ProcessorKeys = @($referencedKeys)
         }
@@ -857,6 +851,28 @@ function Invoke-Plan
     $timing = @{}
     $swTotal = [System.Diagnostics.Stopwatch]::StartNew()
 
+    # A plan with no variants would dispatch every item through an empty chain and
+    # return unprocessed content with no failure anywhere — the loudest possible bug
+    # rendered silent. Refuse it here, at the point of use.
+    $variantMap = @{}
+    $vProp = $Plan.PSObject.Properties['Variants']
+    if ($vProp -and $vProp.Value -is [System.Collections.IDictionary]) { $variantMap = $vProp.Value }
+    if ($variantMap.Count -eq 0)
+    {
+        return [pscustomobject]@{
+            Results  = [object[]]::new($Items.Count)
+            Errors   = @('Plan carries no compiled variants — nothing to dispatch.')
+            Warnings = $warnings.ToArray()
+            Streams  = @()
+            Budget   = $null
+            Timing   = [pscustomobject]@{ TotalMs = 0 }
+        }
+    }
+
+    $routingMap = @{}
+    $rProp = $Plan.PSObject.Properties['Routing']
+    if ($rProp -and $rProp.Value -is [System.Collections.IDictionary]) { $routingMap = $rProp.Value }
+
     # Budget resolution
     $budgetParams = @{
         ItemCount         = $Items.Count
@@ -883,19 +899,40 @@ function Invoke-Plan
         }
     }
 
-    # Slice items round-robin
+    # Slice items round-robin, carrying each item's variant key alongside. Round-robin
+    # stays the right shape under a family: every worker gets a representative mix, so
+    # cost-skew between variants never concentrates in one slice.
     $sliceItems = [System.Collections.Generic.List[object][]]::new($threads)
     $sliceIdxs = [System.Collections.Generic.List[int][]]::new($threads)
+    $sliceKeys = [System.Collections.Generic.List[string][]]::new($threads)
     for ($t = 0; $t -lt $threads; $t++)
     {
         $sliceItems[$t] = [System.Collections.Generic.List[object]]::new()
         $sliceIdxs[$t] = [System.Collections.Generic.List[int]]::new()
+        $sliceKeys[$t] = [System.Collections.Generic.List[string]]::new()
     }
     for ($i = 0; $i -lt $count; $i++)
     {
+        # Route on the Extension the crawler already stamped — measured at the point
+        # of authority, never re-derived here. A literal chain routes nothing, so
+        # every item falls to 'default', which is that chain.
+        $ext = ''
+        $extProp = $Items[$i].PSObject.Properties['Extension']
+        if ($extProp) { $ext = [string]$extProp.Value }
+
+        $vk = 'default'
+        if ($ext -and $routingMap.ContainsKey($ext)) { $vk = $routingMap[$ext] }
+
+        if (-not $variantMap.ContainsKey($vk))
+        {
+            $errors.Add("No compiled variant '$vk' for item $i (extension '$ext') — the plan does not cover this corpus.")
+            continue
+        }
+
         $slot = $i % $threads
         $sliceItems[$slot].Add($Items[$i])
         $sliceIdxs[$slot].Add($i)
+        $sliceKeys[$slot].Add($vk)
     }
 
     # Open RunspacePool
@@ -959,18 +996,23 @@ function Invoke-Plan
         param(
             [object[]]  $MyItems,
             [int[]]     $MyIdxs,
-            [object[]]  $PlanSteps,
+            [string[]]  $MyKeys,
+            [hashtable] $Family,
             [object[]]  $OrderedOut,
             [System.Collections.Concurrent.ConcurrentBag[string]] $ErrorBag
         )
 
-        $plan = @{ Steps = $PlanSteps }
+        # One plan object per variant, built once; per item this is a lookup, never a
+        # decision. The Family is shared by reference across every worker and is read
+        # only — total plan storage for a run is V chains, not N.
+        $plans = @{}
+        foreach ($k in $Family.Keys) { $plans[$k] = @{ Steps = $Family[$k] } }
 
         for ($i = 0; $i -lt $MyItems.Length; $i++)
         {
             $ceParams = @{
                 Item     = $MyItems[$i]
-                Plan     = $plan
+                Plan     = $plans[$MyKeys[$i]]
                 ErrorBag = $ErrorBag
                 Index    = $MyIdxs[$i]
             }
@@ -978,9 +1020,16 @@ function Invoke-Plan
         }
     }
 
-    $planStepsForWorker = @(
-        $Plan.Steps | ForEach-Object { @{ Key = $_.Key; Fn = $_.Fn; Config = $_.Config } }
-    )
+    # Marshal the family once, keeping the deliberate minimal step shape, and share
+    # the one object across every worker. In-process runspaces share the heap, so
+    # this passes by reference — workers must treat it as immutable.
+    $familyForWorkers = @{}
+    foreach ($vk in $variantMap.Keys)
+    {
+        $familyForWorkers[$vk] = @(
+            $variantMap[$vk] | ForEach-Object { @{ Key = $_.Key; Fn = $_.Fn; Config = $_.Config } }
+        )
+    }
 
     # Dispatch workers
     $workers = [System.Collections.Generic.List[hashtable]]::new($threads)
@@ -991,10 +1040,11 @@ function Invoke-Plan
         $slice = $sliceItems[$w].ToArray()
         if (-not $slice -or $slice.Length -eq 0) { continue }
         $idxs = $sliceIdxs[$w].ToArray()
+        $keys = $sliceKeys[$w].ToArray()
 
         $ps = [PowerShell]::Create()
         $cmd = $ps.AddScript($workerScript)
-        [void]$cmd.AddArgument($slice).AddArgument($idxs).AddArgument($planStepsForWorker).AddArgument($ordered).AddArgument($errors)
+        [void]$cmd.AddArgument($slice).AddArgument($idxs).AddArgument($keys).AddArgument($familyForWorkers).AddArgument($ordered).AddArgument($errors)
 
         $ps.RunspacePool = $pool
         $async = $ps.BeginInvoke()

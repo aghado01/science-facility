@@ -323,8 +323,8 @@ try
         -ChainExecutorPath $chainExec -SharedHelperPath $bagHelpers
     Assert-True ((@($psOnlyPlan.Plan.Variants.Keys) -join ',') -eq 'rs.ps.strip') `
         'an all-PowerShell corpus compiles exactly one variant' (@($psOnlyPlan.Plan.Variants.Keys) -join ',')
-    Assert-True (@($psOnlyPlan.Plan.Steps).Count -eq 0) `
-        'and the legacy single-chain view is empty, because there is no one chain'
+    Assert-True ($null -eq $psOnlyPlan.Plan.PSObject.Properties['Steps']) `
+        'the Plan carries no single-chain view at all — Variants is the only representation'
 
     # -----------------------------------------------------------------------
     Enter-Section '8. The literal-chain path is unchanged'
@@ -334,8 +334,8 @@ try
         -ChainExecutorPath $chainExec -SharedHelperPath $bagHelpers
 
     Assert-True (@($legacy.Errors).Count -eq 0) 'a literal Steps chain still compiles' ($legacy.Errors -join '; ')
-    Assert-True ((@($legacy.Plan.Steps | ForEach-Object Key) -join ' > ') -eq 'file_read > rs.whitespace') `
-        'Steps survives for callers that drive it'
+    Assert-True ((@($legacy.Plan.Variants['default'] | ForEach-Object Key) -join ' > ') -eq 'file_read > rs.whitespace') `
+        'the literal chain compiles verbatim, in the order given'
     Assert-True ((@($legacy.Plan.Variants.Keys) -join ',') -eq 'default') `
         'a literal chain is a family of one, named default'
     Assert-True ((@($legacy.Plan.Routing.Keys) -join ',') -eq '') 'a literal chain routes nothing'
