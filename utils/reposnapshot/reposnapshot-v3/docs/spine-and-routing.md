@@ -47,6 +47,7 @@ Loader rules:
 | Extensions | Dot-less in `Languages`; normalized to lowercase-with-dot on load. An extension maps to at most one language — routing must be a function. |
 | `Stage` values | Must appear in `Spine`. Token stages (`$`-prefixed) require `Language` on their members; fixed stages forbid it and have exactly one member. |
 | `Language` values | Must appear in `Languages`. A string or an array — a generic processor may serve several languages, still one stage. |
+| No phantom members | A language is listed in `Languages` only if some processor claims it; membership cannot be declared for a processor that does not exist. Extensions of unclaimed languages stay unmapped and fall to `default`. |
 | Registry validation | Every `Processors` key must exist in the processor manifest — validated unconditionally, even for entries no corpus file will use. |
 | Multi-step routes | Processors declaring the same (token, language) splice as consecutive peer steps in registry declaration order; the loader preserves entry order. |
 | Token discipline | Tokens (`$strip`, …) exist only as data read from this file — never as PowerShell string literals in source (double-quoted `"$strip"` interpolates to empty). |
@@ -74,7 +75,7 @@ Plan = {
 }
 ```
 
-- **File class = language.** `Languages` maps extensions to a class; unmapped extensions fall to `default`. **Variant identity** is the class's tuple of token resolutions — `.ps1` and `.psm1` share one compiled chain because they share a language. The family is bounded by tuples actually present in the corpus, not the product of the registry.
+- **File class = language.** `Languages` maps extensions to a class; unmapped extensions fall to `default`. **Variant identity** is the class's tuple of token resolutions, not the class name — `.ps1` and `.psm1` share one compiled chain because they share a language, and *distinct classes whose tuples coincide share one too* (a generic stripper claiming c/cpp/objc yields one variant, three extensions mapping into it). The family is bounded by tuples actually present in the corpus, not the product of the registry.
 - **The default variant always exists** and equals the spine minus every hole. An unrouted file gets no routed treatment but everything else in the same order — its chain is simply shorter. "Language without a processor yet" and "extension never heard of" are the same bucket, deliberately: adding a route later moves files out of the default with zero code diff.
 - **Validation vs binding are split**: the whole registry validates always (a broken entry for an absent language fails today, not on first encounter); only corpus-present variants are bound and registered into the ISS.
 - Per-variant chain checks ("measure is last", "chain omits whitespace") run per compiled variant — strictly more coverage than a single monolithic check.
