@@ -387,143 +387,152 @@ function Resolve-EnabledSet
     return @($wanted)
 }
 
-function Resolve-Routing
+# Private. Positional chain identity. NOT Compare-Object, which defaults to set
+# semantics — @('a','b') and @('b','a') compare equal there, so two chains with the
+# same processors in a different order would intern as one. That is safe only while
+# the canon fixes order, and leaning on an invariant maintained elsewhere is the
+# coupling this design keeps removing.
+function Test-SameChain
+{
+    param([object[]]$A, [object[]]$B)
+
+    $a = @($A)
+    $b = @($B)
+    if ($a.Count -ne $b.Count) { return $false }
+    for ($i = 0; $i -lt $a.Count; $i++)
+    {
+        if ($a[$i].Key -ne $b[$i].Key) { return $false }
+        if ($a[$i].Slot -ne $b[$i].Slot) { return $false }
+    }
+    return $true
+}
+
+function Resolve-Chain
 {
     <#
     .SYNOPSIS
-        Maps each corpus extension to the variant that will process it.
+        Compiles the dense step list one extension gets, in a single walk of the canon.
 
     .DESCRIPTION
-        The sequencer names no languages, so a file class IS its resolution tuple:
-        for each enabled routed slot, which route claims the extension. Extensions
-        that resolve identically therefore share one variant by construction, and an
-        extension no enabled route claims lands on 'default'. A variant is compiled
-        only if some corpus extension actually resolves to it.
+        Occupancy is tested at the slot where it matters, in the same pass that emits
+        the ordered steps: a routed slot no route claims is spliced out and leaves no
+        hole. There is no intermediate resolution to carry between passes, and no
+        identity to derive — the chain IS the answer.
+
+    .PARAMETER OrderedSlots
+        Enabled slots pre-sorted by (Group, Rank). Sorted once by the caller, because
+        the canon does not change between extensions.
 
     .OUTPUTS
-        [PSCustomObject] @{ ExtensionMap; Resolutions }
-          ExtensionMap — extension -> variant key
-          Resolutions  — variant key -> [ordered] slot -> implementation, in canon
-                         order. This map is the artifact; the key is a canonical
-                         form derived from it, for lookup and dedup only.
+        [PSCustomObject[]] @{ Key; Slot; Config }, in canon order
     #>
     param(
-        [Parameter(Mandatory)] [pscustomobject]           $Sequence,
-        [Parameter(Mandatory)] [string[]]                 $Enabled,
-        [AllowEmptyCollection()] [AllowNull()] [string[]] $Extensions = @()
+        [Parameter(Mandatory)] [pscustomobject]                      $Sequence,
+        [Parameter(Mandatory)] [AllowEmptyCollection()] [string[]]   $OrderedSlots,
+        [AllowNull()] [string]                                       $Extension
     )
 
     $procs = $Sequence.Processors
 
-    $routedSlots = @(
-        @($Enabled) |
-            Where-Object { $procs[$_].IsRouted } |
-            Sort-Object { $procs[$_].Group }, { $procs[$_].Rank }
+    $ext = ''
+    if (-not [string]::IsNullOrWhiteSpace($Extension))
+    {
+        $ext = '.' + ([string]$Extension).TrimStart('.').ToLowerInvariant()
+    }
+
+    $steps = foreach ($slot in @($OrderedSlots))
+    {
+        $meta = $procs[$slot]
+
+        if ($meta.IsRouted)
+        {
+            $hit = @($meta.Routes | Where-Object { $ext -in $_.Extensions })
+            if ($hit.Count -eq 0) { continue }
+            $key = $hit[0].Key
+        }
+        else { $key = $meta.Key }
+
+        [pscustomobject]@{ Key = $key; Slot = $slot; Config = @{} }
+    }
+
+    return @($steps)
+}
+
+function Resolve-Family
+{
+    <#
+    .SYNOPSIS
+        Compiles one chain per distinct resolution across the corpus extension set.
+
+    .DESCRIPTION
+        Interning is a CACHE over unique extensions, not a relation: extensions whose
+        chains compare equal share one entry, so .ps1/.psm1/.psd1 collapse because
+        their compiled chains agree — not because anything about them stringifies the
+        same. Ids are therefore opaque ordinals: nothing can parse them, and unlike a
+        guid they are stable across runs on the same corpus, which the payload's
+        determinism depends on.
+
+        DefaultVariant names the chain a file gets when no route claims it, and is
+        null when no corpus extension landed there — dispatch then reports an
+        unroutable item rather than inventing a chain for it.
+
+    .OUTPUTS
+        [PSCustomObject] @{ Variants; ExtensionMap; DefaultVariant }
+    #>
+    param(
+        [Parameter(Mandatory)] [pscustomobject]                       $Sequence,
+        [Parameter(Mandatory)] [string[]]                             $Enabled,
+        [AllowEmptyCollection()] [AllowNull()] [string[]]             $Extensions = @()
     )
 
+    $procs = $Sequence.Processors
+
+    # The canon, resolved once — not per extension.
+    $orderedSlots = @(@($Enabled) | Sort-Object { $procs[$_].Group }, { $procs[$_].Rank })
+
+    # Sorted, so ordinal ids are the same on every run over the same corpus.
+    $unique = @(
+        @($Extensions) |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+            ForEach-Object { '.' + ([string]$_).TrimStart('.').ToLowerInvariant() } |
+            Sort-Object -Unique
+    )
+
+    $variants = @{}
     $extMap = @{}
-    $resolutions = @{}
+    $next = 0
 
-    foreach ($x in @($Extensions))
+    foreach ($ext in $unique)
     {
-        if ([string]::IsNullOrWhiteSpace($x)) { continue }
-        $ext = '.' + ([string]$x).TrimStart('.').ToLowerInvariant()
-        if ($extMap.ContainsKey($ext)) { continue }
+        $chain = Resolve-Chain -Sequence $Sequence -OrderedSlots $orderedSlots -Extension $ext
 
-        # The resolution is an ORDERED MAP of slot -> implementation. It is read both
-        # ways — walked in canon order by the echo, and looked up by slot when
-        # compiling a variant — so it is an OrderedDictionary rather than a list
-        # (which would force a scan) or a hashtable (which would lose the order).
-        # $routedSlots is already sorted by (Group, Rank), so insertion is the canon.
-        $pairs = [ordered]@{}
-
-        foreach ($slot in $routedSlots)
+        $id = $null
+        foreach ($k in @($variants.Keys))
         {
-            # Occupancy is decided on the route records themselves; the flattened
-            # union only ever answers "claimed at all", which falls out of $pairs.
-            $route = @($procs[$slot].Routes | Where-Object { $ext -in $_.Extensions })
-            if ($route.Count -eq 0) { continue }
-            $pairs[$slot] = $route[0].Key
+            if (Test-SameChain $variants[$k] $chain) { $id = $k; break }
+        }
+        if ($null -eq $id)
+        {
+            $id = [string]$next
+            $next++
+            $variants[$id] = $chain
         }
 
-        # The key is an IDENTITY DERIVED from that map — a canonical form for
-        # dictionary lookup and dedup, never the artifact itself, because an
-        # OrderedDictionary hashes by reference and two equal resolutions must be one
-        # variant. Nothing may parse it, match on it, or display it as if it named a
-        # processor; read the pairs. The separator is illegal in a filename, so no two
-        # distinct resolutions collapse onto one key.
-        $variantKey = 'default'
-        if ($pairs.Count -gt 0) { $variantKey = (@($pairs.Values) -join '|') }
+        $extMap[$ext] = $id
+    }
 
-        $extMap[$ext] = $variantKey
-        if (-not $resolutions.ContainsKey($variantKey)) { $resolutions[$variantKey] = $pairs }
+    $bare = Resolve-Chain -Sequence $Sequence -OrderedSlots $orderedSlots -Extension ''
+    $defaultId = $null
+    foreach ($k in @($variants.Keys))
+    {
+        if (Test-SameChain $variants[$k] $bare) { $defaultId = $k; break }
     }
 
     return [pscustomobject]@{
-        ExtensionMap = $extMap
-        Resolutions  = $resolutions
+        Variants       = $variants
+        ExtensionMap   = $extMap
+        DefaultVariant = $defaultId
     }
-}
-
-function Resolve-Variants
-{
-    <#
-    .SYNOPSIS
-        Compiles one dense step list per variant.
-
-    .DESCRIPTION
-        Each variant walks the enabled set, takes its own resolution for every routed
-        slot, and splices out any slot that did not resolve — variants differ in
-        length and carry no holes. Sorting is by (Group, Rank).
-
-    .PARAMETER Resolutions
-        Variant key -> ordered slot -> implementation map, from Resolve-Routing.
-
-    .OUTPUTS
-        [hashtable] variant key -> [PSCustomObject[]] @{ Key; Slot; Config }
-    #>
-    param(
-        [Parameter(Mandatory)] [pscustomobject] $Sequence,
-        [Parameter(Mandatory)] [string[]]       $Enabled,
-        [Parameter(Mandatory)] [hashtable]      $Resolutions
-    )
-
-    $procs = $Sequence.Processors
-    $variants = @{}
-
-    foreach ($variantKey in $Resolutions.Keys)
-    {
-        $pairs = $Resolutions[$variantKey]
-        $steps = [System.Collections.Generic.List[object]]::new()
-
-        foreach ($slot in @($Enabled))
-        {
-            $meta = $procs[$slot]
-
-            if ($meta.IsRouted)
-            {
-                # A routed slot this variant did not resolve is spliced out entirely.
-                if (-not $pairs.Contains($slot)) { continue }
-                $resolved = [string]$pairs[$slot]
-            }
-            else { $resolved = $meta.Key }
-
-            $steps.Add([pscustomobject]@{
-                    Key   = $resolved
-                    Slot  = $slot
-                    Group = $meta.Group
-                    Rank  = $meta.Rank
-                })
-        }
-
-        $variants[$variantKey] = @(
-            $steps | Sort-Object Group, Rank | ForEach-Object {
-                [pscustomobject]@{ Key = $_.Key; Slot = $_.Slot; Config = @{} }
-            }
-        )
-    }
-
-    return $variants
 }
 #endregion
 
@@ -571,7 +580,7 @@ function Compile-Plan
     # learns which path produced it and grows no mode branch.
     $variants = @{}
     $routing = @{}
-    $resolutions = @{}
+    $defaultVariant = $null
 
     if ($SequenceManifest)
     {
@@ -579,10 +588,10 @@ function Compile-Plan
         {
             $sequence = Import-SequenceManifest -Path $SequenceManifest -Manifest $Manifest
             $enabled = Resolve-EnabledSet -Sequence $sequence -IncludeProcessors $IncludeProcessors
-            $resolved = Resolve-Routing -Sequence $sequence -Enabled $enabled -Extensions $Extensions
-            $variants = Resolve-Variants -Sequence $sequence -Enabled $enabled -Resolutions $resolved.Resolutions
-            $routing = $resolved.ExtensionMap
-            $resolutions = $resolved.Resolutions
+            $family = Resolve-Family -Sequence $sequence -Enabled $enabled -Extensions $Extensions
+            $variants = $family.Variants
+            $routing = $family.ExtensionMap
+            $defaultVariant = $family.DefaultVariant
         }
         catch
         {
@@ -592,7 +601,9 @@ function Compile-Plan
     }
     else
     {
-        $variants['default'] = @($Steps)
+        # A literal chain is a family of one that routes nothing, so every item takes it.
+        $variants['0'] = @($Steps)
+        $defaultVariant = '0'
     }
 
     $referencedKeys = [System.Collections.Generic.HashSet[string]]::new()
@@ -777,11 +788,11 @@ function Compile-Plan
 
     return [pscustomobject]@{
         Plan     = [pscustomobject]@{
-            Variants      = $boundVariants
-            Routing       = $routing
-            Resolutions   = $resolutions
-            Iss           = $iss
-            ProcessorKeys = @($referencedKeys)
+            Variants       = $boundVariants
+            Routing        = $routing
+            DefaultVariant = $defaultVariant
+            Iss            = $iss
+            ProcessorKeys  = @($referencedKeys)
         }
         Errors   = @()
         Warnings = $warnings.ToArray()
@@ -893,6 +904,10 @@ function Invoke-Plan
     $rProp = $Plan.PSObject.Properties['Routing']
     if ($rProp -and $rProp.Value -is [System.Collections.IDictionary]) { $routingMap = $rProp.Value }
 
+    $defaultVariant = ''
+    $dProp = $Plan.PSObject.Properties['DefaultVariant']
+    if ($dProp -and $null -ne $dProp.Value) { $defaultVariant = [string]$dProp.Value }
+
     # Budget resolution
     $budgetParams = @{
         ItemCount         = $Items.Count
@@ -940,12 +955,13 @@ function Invoke-Plan
         $extProp = $Items[$i].PSObject.Properties['Extension']
         if ($extProp) { $ext = [string]$extProp.Value }
 
-        $vk = 'default'
-        if ($ext -and $routingMap.ContainsKey($ext)) { $vk = $routingMap[$ext] }
+        $vk = ''
+        if ($ext -and $routingMap.ContainsKey($ext)) { $vk = [string]$routingMap[$ext] }
+        if (-not $vk) { $vk = $defaultVariant }
 
-        if (-not $variantMap.ContainsKey($vk))
+        if (-not $vk -or -not $variantMap.ContainsKey($vk))
         {
-            $errors.Add("No compiled variant '$vk' for item $i (extension '$ext') — the plan does not cover this corpus.")
+            $errors.Add("No compiled chain covers item $i (extension '$ext') — the plan does not cover this corpus.")
             continue
         }
 
@@ -1195,6 +1211,6 @@ Export-ModuleMember -Function @(
     'Build-Iss'
     'Import-SequenceManifest'
     'Resolve-EnabledSet'
-    'Resolve-Routing'
-    'Resolve-Variants'
+    'Resolve-Chain'
+    'Resolve-Family'
 )

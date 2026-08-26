@@ -206,47 +206,61 @@ try
         'naming an unregistered slot is a terminating error' 'RunVerbatim'
 
     # -----------------------------------------------------------------------
-    Enter-Section '4. Routing maps extensions onto variants by resolution tuple'
+    Enter-Section '4. One walk of the canon compiles the chain an extension gets'
     # -----------------------------------------------------------------------
-    $psOnly = Resolve-Routing -Sequence $shipped -Enabled $enabled -Extensions @('.ps1', '.psm1')
-    Assert-True (@($psOnly.Resolutions.Keys) -notcontains 'default') 'an all-PowerShell corpus compiles no default variant' `
-        "got $(@($psOnly.Resolutions.Keys) -join ', ')"
-    Assert-True ($psOnly.ExtensionMap['.ps1'] -eq $psOnly.ExtensionMap['.psm1']) 'sibling extensions share one variant'
-    Assert-True (@($psOnly.Resolutions.Keys).Count -eq 1) 'and that variant is compiled once'
+    $procs = $shipped.Processors
+    $ordered = @(@($enabled) | Sort-Object { $procs[$_].Group }, { $procs[$_].Rank })
 
-    $mixed = Resolve-Routing -Sequence $shipped -Enabled $enabled -Extensions @('ps1', '.cs', '.md', '.py')
-    Assert-True (@($mixed.Resolutions.Keys).Count -eq 3) 'ps/cs/md/py yields three variants' `
-        "got $(@($mixed.Resolutions.Keys) -join ', ')"
-    Assert-True ($mixed.ExtensionMap['.ps1'] -eq 'rs.ps.strip') 'variant key is the resolution itself'
-    Assert-True ($mixed.ExtensionMap['.md'] -eq 'default' -and $mixed.ExtensionMap['.py'] -eq 'default') `
-        'unclaimed extensions collapse onto one default variant'
-    Assert-True ($mixed.ExtensionMap.ContainsKey('.ps1')) 'dot-less input normalized on the way in'
+    $chainOf = { param($ext) @((Resolve-Chain -Sequence $shipped -OrderedSlots $ordered -Extension $ext) | ForEach-Object Key) -join ' > ' }
 
-    $noSlot = Resolve-Routing -Sequence $shipped -Enabled @('file_read', 'Whitespace') -Extensions @('.ps1', '.cs')
-    Assert-True ((@($noSlot.Resolutions.Keys) -join ',') -eq 'default') 'a disabled routed slot claims nothing' `
-        (@($noSlot.Resolutions.Keys) -join ',')
+    Assert-True ((& $chainOf '.ps1') -eq 'file_read > rs.ps.strip > rs.indent > rs.whitespace > rs.content_meta') `
+        'the powershell chain, in canon order' (& $chainOf '.ps1')
+    Assert-True ((& $chainOf '.cs') -eq 'file_read > rs.cs.strip > rs.indent > rs.whitespace > rs.content_meta') `
+        'the csharp chain swaps only the stripper' (& $chainOf '.cs')
+    Assert-True ((& $chainOf '.md') -eq 'file_read > rs.indent > rs.whitespace > rs.content_meta') `
+        'an unclaimed extension splices the routed slot out' (& $chainOf '.md')
+    Assert-True ((& $chainOf 'ps1') -eq (& $chainOf '.ps1')) 'dot-less input normalizes on the way in'
+    Assert-True ((& $chainOf '') -eq (& $chainOf '.md')) 'no extension resolves like an unclaimed one'
+
+    $steps = @(Resolve-Chain -Sequence $shipped -OrderedSlots $ordered -Extension '.ps1')
+    Assert-True ($steps[1].Slot -eq 'StripComments') 'a routed step reports the slot it filled'
+    Assert-True ($steps[2].Slot -eq 'Indentation') 'a fixed step reports its own slot'
+    Assert-True ($steps[0].Config -is [System.Collections.IDictionary]) 'steps carry a Config bag for the binder'
+    Assert-True (@($steps | ForEach-Object Key) -notcontains $null) 'no tombstone steps survive'
+
+    $noSlotOrdered = @(@('file_read', 'Whitespace') | Sort-Object { $procs[$_].Group }, { $procs[$_].Rank })
+    $noSlotChain = @((Resolve-Chain -Sequence $shipped -OrderedSlots $noSlotOrdered -Extension '.ps1') | ForEach-Object Key) -join ' > '
+    Assert-True ($noSlotChain -eq 'file_read > rs.whitespace') 'a disabled routed slot claims nothing' $noSlotChain
 
     # -----------------------------------------------------------------------
-    Enter-Section '5. Variants are dense, ordered, and differ in length'
+    Enter-Section '5. Interning is a cache over unique extensions'
     # -----------------------------------------------------------------------
-    $variants = Resolve-Variants -Sequence $shipped -Enabled $enabled -Resolutions $mixed.Resolutions
+    $psOnly = Resolve-Family -Sequence $shipped -Enabled $enabled -Extensions @('.ps1', '.psm1', '.psd1')
+    Assert-True (@($psOnly.Variants.Keys).Count -eq 1) `
+        'sibling extensions compile one chain, not three' (@($psOnly.Variants.Keys) -join ',')
+    Assert-True ($psOnly.ExtensionMap['.ps1'] -eq $psOnly.ExtensionMap['.psm1']) `
+        'because their chains agree, not because their names do'
+    Assert-True ($null -eq $psOnly.DefaultVariant) `
+        'an all-PowerShell corpus compiles no unrouted chain'
 
-    $psKeys = @($variants['rs.ps.strip'] | ForEach-Object Key)
-    $csKeys = @($variants['rs.cs.strip'] | ForEach-Object Key)
-    $defKeys = @($variants['default'] | ForEach-Object Key)
+    $mixed = Resolve-Family -Sequence $shipped -Enabled $enabled -Extensions @('ps1', '.cs', '.md', '.py')
+    Assert-True (@($mixed.Variants.Keys).Count -eq 3) 'ps/cs/md/py needs three chains' `
+        (@($mixed.Variants.Keys) -join ',')
+    Assert-True ($mixed.ExtensionMap['.md'] -eq $mixed.ExtensionMap['.py']) `
+        'two unclaimed extensions share the unrouted chain'
+    Assert-True ($mixed.DefaultVariant -eq $mixed.ExtensionMap['.md']) `
+        'and DefaultVariant names it'
 
-    Assert-True (($psKeys -join ' > ') -eq 'file_read > rs.ps.strip > rs.indent > rs.whitespace > rs.content_meta') `
-        'powershell chain in canon order' ($psKeys -join ' > ')
-    Assert-True (($csKeys -join ' > ') -eq 'file_read > rs.cs.strip > rs.indent > rs.whitespace > rs.content_meta') `
-        'csharp chain swaps only the stripper' ($csKeys -join ' > ')
-    Assert-True (($defKeys -join ' > ') -eq 'file_read > rs.indent > rs.whitespace > rs.content_meta') `
-        'unrouted class splices the slot out' ($defKeys -join ' > ')
-    Assert-True ($defKeys.Count -eq $psKeys.Count - 1) 'default chain is exactly one step shorter'
-    Assert-True ($defKeys -notcontains $null -and $defKeys -notcontains '') 'no tombstone steps survive'
+    # The id is opaque: it carries no meaning to read, only identity to compare.
+    Assert-True (@($mixed.Variants.Keys | Sort-Object) -join ',' -eq '0,1,2') `
+        'ids are ordinals, not labels' (@($mixed.Variants.Keys | Sort-Object) -join ',')
+    $again = Resolve-Family -Sequence $shipped -Enabled $enabled -Extensions @('.py', '.md', '.cs', 'ps1')
+    Assert-True ($again.ExtensionMap['.ps1'] -eq $mixed.ExtensionMap['.ps1']) `
+        'and stable across runs regardless of the order extensions arrive in'
 
-    Assert-True ($variants['rs.ps.strip'][1].Slot -eq 'StripComments') 'routed step reports the slot it filled'
-    Assert-True ($variants['rs.ps.strip'][2].Slot -eq 'Indentation') 'fixed step reports its own slot'
-    Assert-True ($variants['default'][0].Config -is [System.Collections.IDictionary]) 'steps carry a Config bag for the binder'
+    $mixedPs = @($mixed.Variants[$mixed.ExtensionMap['.ps1']] | ForEach-Object Key) -join ' > '
+    Assert-True ($mixedPs -eq 'file_read > rs.ps.strip > rs.indent > rs.whitespace > rs.content_meta') `
+        'the interned chain is the compiled chain' $mixedPs
 
     # -----------------------------------------------------------------------
     Enter-Section '6. Ordering is declared, never inferred from layout'
@@ -261,11 +275,10 @@ try
 
     $shuffledSeq = Import-Fixture $shuffled
     $shuffledEnabled = Resolve-EnabledSet -Sequence $shuffledSeq -IncludeProcessors $allSlots
-    $shuffledRouting = Resolve-Routing -Sequence $shuffledSeq -Enabled $shuffledEnabled -Extensions @('.ps1')
-    $shuffledVariants = Resolve-Variants -Sequence $shuffledSeq -Enabled $shuffledEnabled -Resolutions $shuffledRouting.Resolutions
-    $shuffledKeys = @($shuffledVariants['rs.ps.strip'] | ForEach-Object Key)
+    $shuffledFamily = Resolve-Family -Sequence $shuffledSeq -Enabled $shuffledEnabled -Extensions @('.ps1')
+    $shuffledKeys = @($shuffledFamily.Variants[$shuffledFamily.ExtensionMap['.ps1']] | ForEach-Object Key)
 
-    Assert-True (($shuffledKeys -join ' > ') -eq ($psKeys -join ' > ')) `
+    Assert-True (($shuffledKeys -join ' > ') -eq (& $chainOf '.ps1')) `
         'permuting Processors keys changes no compiled chain' ($shuffledKeys -join ' > ')
 
     $regrouped = New-BaseDoc
@@ -273,9 +286,8 @@ try
     $regrouped.Processors['Whitespace'].Rank = 1
     $regroupedSeq = Import-Fixture $regrouped
     $regroupedEnabled = Resolve-EnabledSet -Sequence $regroupedSeq -IncludeProcessors @('Indentation', 'Whitespace')
-    $regroupedRouting = Resolve-Routing -Sequence $regroupedSeq -Enabled $regroupedEnabled -Extensions @('.md')
-    $regroupedVariants = Resolve-Variants -Sequence $regroupedSeq -Enabled $regroupedEnabled -Resolutions $regroupedRouting.Resolutions
-    $regroupedKeys = @($regroupedVariants['default'] | ForEach-Object Key)
+    $regroupedFamily = Resolve-Family -Sequence $regroupedSeq -Enabled $regroupedEnabled -Extensions @('.md')
+    $regroupedKeys = @($regroupedFamily.Variants[$regroupedFamily.ExtensionMap['.md']] | ForEach-Object Key)
 
     Assert-True (($regroupedKeys -join ' > ') -eq 'file_read > rs.whitespace > rs.indent') `
         'swapping Rank swaps the compiled order' ($regroupedKeys -join ' > ')
@@ -296,45 +308,43 @@ try
     Assert-True (@($compiled.Plan.Variants.Keys).Count -eq 3) 'three variants compiled' `
         ((@($compiled.Plan.Variants.Keys) | Sort-Object) -join ', ')
 
-    $psChain = @($compiled.Plan.Variants['rs.ps.strip'] | ForEach-Object Key)
-    $defChain = @($compiled.Plan.Variants['default'] | ForEach-Object Key)
+    $psChain = @($compiled.Plan.Variants[$compiled.Plan.Routing['.ps1']] | ForEach-Object Key)
+    $defChain = @($compiled.Plan.Variants[$compiled.Plan.Routing['.md']] | ForEach-Object Key)
     Assert-True (($psChain -join ' > ') -eq 'file_read > rs.ps.strip > rs.indent > rs.whitespace > rs.content_meta') `
-        'the powershell variant binds in canon order' ($psChain -join ' > ')
-    Assert-True ($defChain.Count -eq ($psChain.Count - 1)) 'the default variant is one step shorter'
+        'the powershell chain binds in canon order' ($psChain -join ' > ')
+    Assert-True ($defChain.Count -eq ($psChain.Count - 1)) 'the unrouted chain is one step shorter'
 
-    Assert-True ($compiled.Plan.Routing['.ps1'] -eq 'rs.ps.strip' -and $compiled.Plan.Routing['.md'] -eq 'default') `
-        'Routing maps each extension onto its variant key'
+    Assert-True ($compiled.Plan.Routing['.ps1'] -ne $compiled.Plan.Routing['.md']) `
+        'Routing sends the two classes to different chains'
+    Assert-True ($compiled.Plan.DefaultVariant -eq $compiled.Plan.Routing['.md']) `
+        'DefaultVariant names the unrouted chain'
 
     $issKeys = (@($compiled.Plan.ProcessorKeys) | Sort-Object) -join ','
     Assert-True ($issKeys -eq 'file_read,rs.content_meta,rs.cs.strip,rs.indent,rs.ps.strip,rs.whitespace') `
         'the ISS registers the union across variants — both strippers' $issKeys
 
-    # Meaning is read from Resolutions — an ORDERED slot -> implementation map —
-    # never by parsing the variant key. It is walked in order and keyed by slot.
-    $psPairs = $compiled.Plan.Resolutions['rs.ps.strip']
-    Assert-True ((@($psPairs.Keys) -join ',') -eq 'StripComments') `
-        'the resolution is keyed by slot, in canon order' (@($psPairs.Keys) -join ',')
-    Assert-True ($psPairs['StripComments'] -eq 'rs.ps.strip') `
-        'and looks up the implementation directly, without a scan'
-    Assert-True ($psPairs -is [System.Collections.Specialized.OrderedDictionary]) `
-        'ordered, so canon order survives into the report'
-    Assert-True ($compiled.Plan.Resolutions['default'].Count -eq 0) `
-        'the default variant resolved no routed slot'
-
-    $stripStep = @($compiled.Plan.Variants['rs.ps.strip'] | Where-Object Key -eq 'rs.ps.strip')[0]
-    Assert-True ($stripStep.Slot -eq 'StripComments') 'a bound step reports the slot it filled'
+    # The chain carries the resolution itself: every step names the slot it fills
+    # alongside the implementation, so there is no parallel structure to consult.
+    $psSteps = @($compiled.Plan.Variants[$compiled.Plan.Routing['.ps1']])
+    $stripStep = @($psSteps | Where-Object Slot -eq 'StripComments')[0]
+    Assert-True ($stripStep.Key -eq 'rs.ps.strip') 'a bound step names slot and implementation together'
     Assert-True ($stripStep.Config['Slot'] -eq 'StripComments') 'the slot rides in config, for the Processing trail'
     Assert-True ($stripStep.Fn -eq 'Invoke-rs.ps.strip') 'the bound Fn is the resolved processor, never the slot'
 
-    $csStep = @($compiled.Plan.Variants['rs.cs.strip'] | Where-Object Slot -eq 'StripComments')[0]
-    Assert-True ($csStep.Key -eq 'rs.cs.strip') 'the same slot resolves to a different processor per variant'
+    $csSteps = @($compiled.Plan.Variants[$compiled.Plan.Routing['.cs']])
+    $csStep = @($csSteps | Where-Object Slot -eq 'StripComments')[0]
+    Assert-True ($csStep.Key -eq 'rs.cs.strip') 'the same slot resolves to a different processor per chain'
+    Assert-True (@($defChain | Where-Object { $_ -eq 'rs.ps.strip' -or $_ -eq 'rs.cs.strip' }).Count -eq 0) `
+        'and the unrouted chain carries neither'
 
     # An all-PowerShell corpus needs no default variant, so none is compiled.
     $psOnlyPlan = Compile-Plan -Manifest $manifest -SequenceManifest $seqPath `
         -IncludeProcessors $allSlots -Extensions @('.ps1', '.psm1') `
         -ChainExecutorPath $chainExec -SharedHelperPath $bagHelpers
-    Assert-True ((@($psOnlyPlan.Plan.Variants.Keys) -join ',') -eq 'rs.ps.strip') `
-        'an all-PowerShell corpus compiles exactly one variant' (@($psOnlyPlan.Plan.Variants.Keys) -join ',')
+    Assert-True (@($psOnlyPlan.Plan.Variants.Keys).Count -eq 1) `
+        'an all-PowerShell corpus compiles exactly one chain' (@($psOnlyPlan.Plan.Variants.Keys) -join ',')
+    Assert-True ($null -eq $psOnlyPlan.Plan.DefaultVariant) `
+        'and no unrouted chain, so an unroutable item is reported rather than guessed at'
     Assert-True ($null -eq $psOnlyPlan.Plan.PSObject.Properties['Steps']) `
         'the Plan carries no single-chain view at all — Variants is the only representation'
 
@@ -346,11 +356,11 @@ try
         -ChainExecutorPath $chainExec -SharedHelperPath $bagHelpers
 
     Assert-True (@($legacy.Errors).Count -eq 0) 'a literal Steps chain still compiles' ($legacy.Errors -join '; ')
-    Assert-True ((@($legacy.Plan.Variants['default'] | ForEach-Object Key) -join ' > ') -eq 'file_read > rs.whitespace') `
+    Assert-True ((@($legacy.Plan.Variants[$legacy.Plan.DefaultVariant] | ForEach-Object Key) -join ' > ') -eq 'file_read > rs.whitespace') `
         'the literal chain compiles verbatim, in the order given'
-    Assert-True ((@($legacy.Plan.Variants.Keys) -join ',') -eq 'default') `
-        'a literal chain is a family of one, named default'
-    Assert-True ((@($legacy.Plan.Routing.Keys) -join ',') -eq '') 'a literal chain routes nothing'
+    Assert-True (@($legacy.Plan.Variants.Keys).Count -eq 1) 'a literal chain is a family of one'
+    Assert-True ((@($legacy.Plan.Routing.Keys) -join ',') -eq '') `
+        'that routes nothing, so DefaultVariant is what every item takes'
 
     $neither = Compile-Plan -Manifest $manifest -ChainExecutorPath $chainExec
     Assert-True ((@($neither.Errors) -join ';') -match 'Neither SequenceManifest nor Steps') `
