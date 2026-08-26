@@ -236,12 +236,16 @@ try
     Enter-Section '5. Interning is a cache over unique extensions'
     # -----------------------------------------------------------------------
     $psOnly = Resolve-Family -Sequence $shipped -Enabled $enabled -Extensions @('.ps1', '.psm1', '.psd1')
-    Assert-True (@($psOnly.Variants.Keys).Count -eq 1) `
-        'sibling extensions compile one chain, not three' (@($psOnly.Variants.Keys) -join ',')
-    Assert-True ($psOnly.ExtensionMap['.ps1'] -eq $psOnly.ExtensionMap['.psm1']) `
-        'because their chains agree, not because their names do'
-    Assert-True ($null -eq $psOnly.DefaultVariant) `
-        'an all-PowerShell corpus compiles no unrouted chain'
+    Assert-True ($psOnly.ExtensionMap['.ps1'] -eq $psOnly.ExtensionMap['.psm1'] -and
+        $psOnly.ExtensionMap['.psm1'] -eq $psOnly.ExtensionMap['.psd1']) `
+        'sibling extensions share one chain — because their chains agree, not their names'
+    Assert-True (@($psOnly.Variants.Keys).Count -eq 2) `
+        'two chains: the shared PowerShell one, and pass-through' (@($psOnly.Variants.Keys) -join ',')
+    Assert-True ($null -ne $psOnly.DefaultVariant -and $psOnly.DefaultVariant -ne $psOnly.ExtensionMap['.ps1']) `
+        'pass-through is compiled even when every corpus extension is routed'
+    $bareChain = @($psOnly.Variants[$psOnly.DefaultVariant] | ForEach-Object Key) -join ' > '
+    Assert-True ($bareChain -eq 'file_read > rs.indent > rs.whitespace > rs.content_meta') `
+        'and it is the canon minus the routed slot, not an empty chain' $bareChain
 
     $mixed = Resolve-Family -Sequence $shipped -Enabled $enabled -Extensions @('ps1', '.cs', '.md', '.py')
     Assert-True (@($mixed.Variants.Keys).Count -eq 3) 'ps/cs/md/py needs three chains' `
@@ -341,10 +345,8 @@ try
     $psOnlyPlan = Compile-Plan -Manifest $manifest -SequenceManifest $seqPath `
         -IncludeProcessors $allSlots -Extensions @('.ps1', '.psm1') `
         -ChainExecutorPath $chainExec -SharedHelperPath $bagHelpers
-    Assert-True (@($psOnlyPlan.Plan.Variants.Keys).Count -eq 1) `
-        'an all-PowerShell corpus compiles exactly one chain' (@($psOnlyPlan.Plan.Variants.Keys) -join ',')
-    Assert-True ($null -eq $psOnlyPlan.Plan.DefaultVariant) `
-        'and no unrouted chain, so an unroutable item is reported rather than guessed at'
+    Assert-True ($null -ne $psOnlyPlan.Plan.DefaultVariant) `
+        'an all-PowerShell corpus still compiles pass-through, for files no route claims'
     Assert-True ($null -eq $psOnlyPlan.Plan.PSObject.Properties['Steps']) `
         'the Plan carries no single-chain view at all — Variants is the only representation'
 
@@ -438,6 +440,35 @@ try
     # The trail names the capability; provenance is not lost to it.
     Assert-True (@($run.Results[0].Processing | Where-Object Processor -eq 'Indentation').Implementation -eq 'rs.indent') `
         'a fixed slot reports its capability, with the implementation alongside'
+
+    # -----------------------------------------------------------------------
+    Enter-Section '10. A file no route claims passes through, it does not fail'
+    # -----------------------------------------------------------------------
+    # Requesting StripComments over a corpus means "strip where a stripper exists".
+    # A file with an extension no stripper covers — or with none at all, which is
+    # what a Makefile or a LICENSE looks like — still flows through the rest of the
+    # canon, one step shorter. Compiling only the routed chains would strand it.
+    $throughPlan = Compile-Plan -Manifest $manifest -SequenceManifest $seqPath `
+        -IncludeProcessors $allSlots -Extensions @('.ps1') `
+        -ChainExecutorPath $chainExec -SharedHelperPath $bagHelpers
+
+    $throughItems = @(
+        [pscustomobject]@{ AbsolutePath = (Join-Path $langRoot 'powershell\collapse.ps1'); RelativePath = 'collapse.ps1'; Extension = '.ps1' }
+        [pscustomobject]@{ AbsolutePath = (Join-Path $langRoot 'python\bench.py'); RelativePath = 'LICENSE'; Extension = '' }
+    )
+    $throughRun = Invoke-Plan -Items $throughItems -Plan $throughPlan.Plan -MaxWorkers 2
+
+    Assert-True (@($throughRun.Errors).Count -eq 0) `
+        'an extensionless file in a routed corpus is not an error' (@($throughRun.Errors) -join ' | ')
+    Assert-True ($null -ne $throughRun.Results[1]) 'it comes back processed, not null'
+
+    $throughSlots = @($throughRun.Results[1].Processing | ForEach-Object Processor)
+    Assert-True (($throughSlots -contains 'Indentation') -and ($throughSlots -contains 'Whitespace')) `
+        'having run every stage the canon still had for it' ($throughSlots -join ' > ')
+    Assert-True ($throughSlots -notcontains 'StripComments') `
+        'minus the one no route claimed'
+    Assert-True ($null -ne $throughRun.Results[1].PSObject.Properties['ContentMeta']) `
+        'and measured, like any other entry'
 }
 catch
 {

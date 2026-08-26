@@ -472,9 +472,11 @@ function Resolve-Family
         guid they are stable across runs on the same corpus, which the payload's
         determinism depends on.
 
-        DefaultVariant names the chain a file gets when no route claims it, and is
-        null when no corpus extension landed there — dispatch then reports an
-        unroutable item rather than inventing a chain for it.
+        DefaultVariant names the pass-through chain: the canon with every routed slot
+        spliced out. It is always compiled, because "no route claims this file" is an
+        expected outcome rather than a failure — an extension the strippers do not
+        cover, or a file with no extension at all, still flows through the rest of
+        the canon. An extension that resolves nothing interns onto it like any other.
 
     .OUTPUTS
         [PSCustomObject] @{ Variants; ExtensionMap; DefaultVariant }
@@ -502,6 +504,17 @@ function Resolve-Family
     $extMap = @{}
     $next = 0
 
+    # Pass-through, compiled first and always. A file no route claims — an unknown
+    # extension, or none at all — takes the canon with every routed slot spliced
+    # out. That is a VALID chain, one step shorter, not an error: requesting
+    # StripComments over a mixed corpus means "strip where a stripper exists", and
+    # everything else flows through unstripped. Pruning this when every corpus
+    # extension happens to be routed is a false economy that breaks the guarantee
+    # for extensionless files.
+    $defaultId = [string]$next
+    $next++
+    $variants[$defaultId] = Resolve-Chain -Sequence $Sequence -OrderedSlots $orderedSlots -Extension ''
+
     foreach ($ext in $unique)
     {
         $chain = Resolve-Chain -Sequence $Sequence -OrderedSlots $orderedSlots -Extension $ext
@@ -519,13 +532,6 @@ function Resolve-Family
         }
 
         $extMap[$ext] = $id
-    }
-
-    $bare = Resolve-Chain -Sequence $Sequence -OrderedSlots $orderedSlots -Extension ''
-    $defaultId = $null
-    foreach ($k in @($variants.Keys))
-    {
-        if (Test-SameChain $variants[$k] $bare) { $defaultId = $k; break }
     }
 
     return [pscustomobject]@{
