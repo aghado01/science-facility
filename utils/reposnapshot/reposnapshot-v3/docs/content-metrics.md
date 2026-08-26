@@ -1,6 +1,6 @@
 # Content Metrics & Statistics
 
-The `rs-content_meta.ps1` processor computes character, word, and information-theoretic metrics over processed string contents.
+The `rs.content_meta.ps1` processor computes character, word, and information-theoretic metrics over processed string contents.
 
 ## Metrics Model
 

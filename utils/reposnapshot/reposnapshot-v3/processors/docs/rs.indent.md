@@ -1,4 +1,4 @@
-# rs-indent.ps1
+# rs.indent.ps1
 
 ```powershell
 <#

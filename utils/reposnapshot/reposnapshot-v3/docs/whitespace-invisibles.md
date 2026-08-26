@@ -1,6 +1,6 @@
 # Whitespace Normalization & Invisible Code Points
 
-The code-lane whitespace processor (`rs-whitespace.ps1`) normalizes line breaks, Unicode invisibles, and layout whitespace.
+The code-lane whitespace processor (`rs.whitespace.ps1`) normalizes line breaks, Unicode invisibles, and layout whitespace.
 
 ## Operation Sequence
 

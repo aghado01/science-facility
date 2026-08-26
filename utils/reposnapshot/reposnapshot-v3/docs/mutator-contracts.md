@@ -17,4 +17,4 @@ Processors in `reposnapshot-v3/processors/` follow the harmonized content-mutato
    - Multiple passes through a mutator append records sequentially.
 4. **Early Termination (`_ChainHalt`)**:
    - Step processors signal pipeline halt by attaching `_ChainHalt = $true`.
-   - `chain-executor.ps1` detects the halt property, aborts remaining steps for that item, and returns the halted object for diagnostic routing.
+   - `chain_executor.ps1` detects the halt property, aborts remaining steps for that item, and returns the halted object for diagnostic routing.

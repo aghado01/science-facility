@@ -1,4 +1,4 @@
-# rs-whitespace.ps1
+# rs.whitespace.ps1
 
 ```powershell
 <#
@@ -7,7 +7,7 @@
 
 .DESCRIPTION
     Runs EARLY in the code-lane chain; its `lf` op provides LF-only content for
-    downstream stages (strippers, rs-indent, rs-content_meta, container codec).
+    downstream stages (strippers, rs.indent, rs.content_meta, container codec).
 
     ISS-load-safe: no #Requires, top-level param contract.
       - Item contract:  harmonized content mutator (consolidation 6d)

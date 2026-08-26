@@ -40,14 +40,14 @@ PowerShell re-evaluates `[ValidateSet]` and `[ValidateRange]` attributes upon va
 
 The `-Processors` parameter (or `"Processors"` array in configuration) accepts:
 - **Bare string keys** (e.g. `'rs.ps.strip'`): Automatically resolves defaults from `processors/configs/<Key>.json`.
-- **Step descriptor objects** (e.g. `@{ Key = 'rs-indent'; Config = @{ TargetUnit = 4 } }`): Merges caller overrides on top of the JSON defaults.
+- **Step descriptor objects** (e.g. `@{ Key = 'rs.indent'; Config = @{ TargetUnit = 4 } }`): Merges caller overrides on top of the JSON defaults.
 
 ### Chain Manifest & Guards
-1. **Manifest Discovery**: All `processors/*.ps1` files (excluding framework infrastructure `chain-executor.ps1` and `bag-helpers.ps1`) are registered at runtime. Any requested processor key lacking a script file fails fast with known alternatives.
+1. **Manifest Discovery**: All `processors/*.ps1` files (excluding framework infrastructure `chain_executor.ps1` and `bag_helpers.ps1`) are registered at runtime. Any requested processor key lacking a script file fails fast with known alternatives.
 2. **Invariants & Cautions**:
-   - **`rs-whitespace`**: Warns if omitted, as its `pad-breaks` op maintains standard token separation for the wire codec.
-   - **`rs-content_meta`**: Warns if placed anywhere other than the very tail of the mutator chain, preventing downstream mutators from invalidating computed line/char/word metrics.
-   - **`content_meta` Wire Request**: Warns if `content_meta` is enabled in `Columns` but `rs-content_meta` is not in the chain.
+   - **`rs.whitespace`**: Warns if omitted, as its `pad-breaks` op maintains standard token separation for the wire codec.
+   - **`rs.content_meta`**: Warns if placed anywhere other than the very tail of the mutator chain, preventing downstream mutators from invalidating computed line/char/word metrics.
+   - **`content_meta` Wire Request**: Warns if `content_meta` is enabled in `Columns` but `rs.content_meta` is not in the chain.
 
 ---
 

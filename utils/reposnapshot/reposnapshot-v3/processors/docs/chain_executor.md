@@ -1,4 +1,4 @@
-# chain-executor.ps1
+# chain_executor.ps1
 
 ```powershell
 <#
@@ -27,7 +27,7 @@
     _ChainHalt CONVENTION:
       Any step-processor may add a _ChainHalt property to its return object to
       signal early exit. Remaining steps are skipped; the item is returned as-is.
-      This protocol is owned entirely by chain-executor — step-processors only
+      This protocol is owned entirely by chain_executor — step-processors only
       set the property, they do not implement the skip logic.
 
     Plan shape expected:

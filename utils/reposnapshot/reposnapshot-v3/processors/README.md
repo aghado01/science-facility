@@ -47,13 +47,13 @@ All content-transforming processors adhere to the harmonized 6d mutator contract
 
 ### Copy-on-Mutate / Copy-on-Enrich (`Copy-Bag`)
 - Processors must **never mutate caller input references in-place**.
-- Output items are cloned with modifications using `Copy-Bag` from `bag-helpers.ps1`, ensuring pure functional data flow.
+- Output items are cloned with modifications using `Copy-Bag` from `bag_helpers.ps1`, ensuring pure functional data flow.
 
 ### Receipt Honesty & Processing Audits
 - When enabled via `Config.IncludeMeta = $true` (default), processors append a structured record to the item's `Processing` array:
   ```powershell
   @{
-      Processor  = 'rs-whitespace'
+      Processor  = 'rs.whitespace'
       Operations = @('lf', 'trim-trailing', 'max-blank-1', 'ensure-final-lf')
       Skipped    = @{ 'nfc' = 'AlreadyNormalized' }
   }
@@ -61,8 +61,8 @@ All content-transforming processors adhere to the harmonized 6d mutator contract
 - **Honest Reporting**: The `Operations` array must only list operations that *actually ran*. Skipped or declined operations are reported in the `Skipped` dictionary with an explicit reason.
 
 ### Early Exit Protocol (`_ChainHalt`)
-- If a processor encounters a terminal condition (e.g. binary/NUL content in `file-read.ps1` or an unrecoverable parse error), it sets `_ChainHalt = $true` on the returned bag.
-- `chain-executor.ps1` detects `_ChainHalt` and skips all subsequent pipeline steps, returning the item for diagnostic routing.
+- If a processor encounters a terminal condition (e.g. binary/NUL content in `file_read.ps1` or an unrecoverable parse error), it sets `_ChainHalt = $true` on the returned bag.
+- `chain_executor.ps1` detects `_ChainHalt` and skips all subsequent pipeline steps, returning the item for diagnostic routing.
 
 ---
 
@@ -72,9 +72,9 @@ Processors are categorized into four positional tiers:
 
 | Position Class | Role | Example |
 |---|---|---|
-| **Reader (Head)** | Consumes crawler descriptors; reads bytes from disk; attaches `Content` and `Encoding`; halts on binary/read failure. | [`file-read.ps1`](file-read.ps1) |
-| **Content Mutator** | Modifies text content (comment stripping, whitespace normalization, indentation); appends `Processing` audit metadata. | [`rs-whitespace.ps1`](rs-whitespace.ps1), [`rs.ps.strip.ps1`](rs.ps.strip.ps1), [`rs.cs.strip.ps1`](rs.cs.strip.ps1), [`rs-indent.ps1`](rs-indent.ps1) |
-| **Enricher (Tail)** | Read-only content inspection placed after *all* mutators; attaches invariant metadata statistics. | [`rs-content_meta.ps1`](rs-content_meta.ps1) |
+| **Reader (Head)** | Consumes crawler descriptors; reads bytes from disk; attaches `Content` and `Encoding`; halts on binary/read failure. | [`file_read.ps1`](file_read.ps1) |
+| **Content Mutator** | Modifies text content (comment stripping, whitespace normalization, indentation); appends `Processing` audit metadata. | [`rs.whitespace.ps1`](rs.whitespace.ps1), [`rs.ps.strip.ps1`](rs.ps.strip.ps1), [`rs.cs.strip.ps1`](rs.cs.strip.ps1), [`rs.indent.ps1`](rs.indent.ps1) |
+| **Enricher (Tail)** | Read-only content inspection placed after *all* mutators; attaches invariant metadata statistics. | [`rs.content_meta.ps1`](rs.content_meta.ps1) |
 | **Segmenting Parser** | Decomposes multi-turn documents into discrete exchange envelopes. | [`tp-perplexity.ps1`](tp-perplexity.ps1) |
 
 ---
@@ -84,14 +84,14 @@ Processors are categorized into four positional tiers:
 ```
 processors/
 ├── README.md               # Architecture invariants and standards (this document)
-├── chain-executor.ps1      # ISS runtime executor driving compiled processor plans
-├── bag-helpers.ps1         # ISS-registered shared functions (Resolve-BagContent, Copy-Bag)
-├── file-read.ps1           # Head reader processor
-├── rs-whitespace.ps1       # Whitespace normalizer
+├── chain_executor.ps1      # ISS runtime executor driving compiled processor plans
+├── bag_helpers.ps1         # ISS-registered shared functions (Resolve-BagContent, Copy-Bag)
+├── file_read.ps1           # Head reader processor
+├── rs.whitespace.ps1       # Whitespace normalizer
 ├── rs.ps.strip.ps1         # AST PowerShell comment stripper
 ├── rs.cs.strip.ps1         # Regex C# comment stripper
-├── rs-indent.ps1           # Code indentation normalizer
-├── rs-content_meta.ps1     # Tail content metrics processor
+├── rs.indent.ps1           # Code indentation normalizer
+├── rs.content_meta.ps1     # Tail content metrics processor
 ├── tp-perplexity.ps1       # Perplexity thread parser
 ├── configs/                # Externalized processor configuration schemas and profiles
 ├── docs/                   # Full reference docstrings for each processor script
@@ -103,7 +103,7 @@ processors/
 ## 5. Testing & Standalone Invocation
 
 When running processor tests outside of an active Colonel ISS:
-- Dot-source [`bag-helpers.ps1`](bag-helpers.ps1) and [`tests/_helpers.ps1`](tests/_helpers.ps1) prior to invoking individual processor scripts.
+- Dot-source [`bag_helpers.ps1`](bag_helpers.ps1) and [`tests/_helpers.ps1`](tests/_helpers.ps1) prior to invoking individual processor scripts.
 - Execute the test battery with:
   ```powershell
   Get-ChildItem processors/tests/*.tests.ps1 | ForEach-Object { & $_.FullName }

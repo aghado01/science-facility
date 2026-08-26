@@ -1,4 +1,4 @@
-# rs-content_meta.ps1
+# rs.content_meta.ps1
 
 ```powershell
 <#

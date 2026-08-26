@@ -20,7 +20,7 @@ $$\text{RowBytes} = \sum \text{ItemBytes} + (\text{ItemCount} - 1) + \text{Termi
 The content codec enforces the single-physical-line invariant by replacing newlines with the literal two-character token `\n`:
 
 - **Substitution**: Pure symbol substitution (`LF`, `CRLF`, `CR`, `NEL`, `LS`, `PS`, `VT`, `FF` $\to$ `\n`).
-- **Whitespace Separation**: Spacing around line marks (` \n `) is prepared upstream by the `pad-breaks` processor in `rs-whitespace.ps1`, preserving separation across symbol boundaries.
+- **Whitespace Separation**: Spacing around line marks (` \n `) is prepared upstream by the `pad-breaks` processor in `rs.whitespace.ps1`, preserving separation across symbol boundaries.
 - **Controls**: Strips non-tab C0 controls and DEL (`0x7F`). Tabs and backslashes are preserved literally.
 
 ## Layout Resolution & Invariance

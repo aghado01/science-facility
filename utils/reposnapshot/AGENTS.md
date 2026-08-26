@@ -46,7 +46,7 @@ Most confusion on this project is a category error between these:
 2. **Analysis-for-mutation** — code-analysis tools applied to *ingested
    materials as data* (rs.ps.strip's PS-AST comment stripping).
 3. **Analysis-for-enrichment** — metrics over processed content
-   (rs-content_meta, né rs-attributes — renamed 2026-08-17 after the psr
+   (rs.content_meta, né rs-attributes — renamed 2026-08-17 after the psr
    `content_meta` block it feeds) as a payload design feature for reader
    navigation.
 4. **Reader-directed guidance** — instruction prose shipped *with* the
@@ -277,14 +277,14 @@ rewriting history.
   Where the fleet stands (AST-audited 2026-08-04 — audit by parser, not grep:
   a first pass miscounted docstring mentions as calls): **provider-free**, and
   `Add-Member` is now **gone entirely**, absorbed into the shared
-  `processors/bag-helpers.ps1` (`Resolve-BagContent` / `Copy-Bag`, registered
+  `processors/bag_helpers.ps1` (`Resolve-BagContent` / `Copy-Bag`, registered
   into every worker runspace by `Compile-Plan -SharedHelperPath`). The clone is
   a single `[ordered]` cast, which also works under Bare where `Add-Member`
-  does not exist. `chain-executor.ps1` and `bag-helpers.ps1` use no cmdlets at
+  does not exist. `chain_executor.ps1` and `bag_helpers.ps1` use no cmdlets at
   all. What remains is four Utility calls: `Sort-Object` (rs.cs.strip,
-  rs.ps.strip), `ForEach-Object` (rs-whitespace — né format-ws, renamed
+  rs.ps.strip), `ForEach-Object` (rs.whitespace — né format-ws, renamed
   2026-08-17 to say its lane: code ingestion, not markdown — rs.ps.strip), `Where-Object`
-  (rs-indent, tp-perplexity), `Measure-Object` (rs-indent) — all with
+  (rs.indent, tp-perplexity), `Measure-Object` (rs.indent) — all with
   verified language-level equivalents, none load-bearing for stability
   (consolidation §E). Incidental debt, not structural dependency.
 

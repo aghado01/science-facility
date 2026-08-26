@@ -9,7 +9,7 @@ Colonel (`rs.core.colonel.v2.psm1`) compiles processing plans and manages worker
    - Validates that scripts declare a top-level `param(...)` block.
    - Enforces the `#Requires` prohibition: `#Requires` is rejected via `$ast.ScriptRequirements` because directives are inert when function bodies are loaded into an InitialSessionState.
    - Registers script bodies as `SessionStateFunctionEntry` instances.
-   - Registers shared helpers (`bag-helpers.ps1`) and the runtime engine (`chain-executor.ps1`).
+   - Registers shared helpers (`bag_helpers.ps1`) and the runtime engine (`chain_executor.ps1`).
    - Returns a frozen, immutable `Plan` object.
 
 2. **`Invoke-Plan`**:
