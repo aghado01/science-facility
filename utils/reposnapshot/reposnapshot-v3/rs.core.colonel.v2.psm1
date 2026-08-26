@@ -441,7 +441,12 @@ function Resolve-Routing
             $parts.Add($route[0].Key)
         }
 
-        $variantKey = if ($parts.Count -eq 0) { 'default' } else { $parts -join '+' }
+        # The key is an IDENTITY, not a name. It spells like a processor key only
+        # while one slot is routed; a second slot makes it a compound. Nothing may
+        # parse it, match on it, or display it as if it named a processor — read
+        # Resolutions for meaning. The separator is illegal in a filename, so two
+        # distinct tuples cannot join to the same string.
+        $variantKey = if ($parts.Count -eq 0) { 'default' } else { $parts -join '|' }
         $extMap[$ext] = $variantKey
         if (-not $resolutions.ContainsKey($variantKey)) { $resolutions[$variantKey] = $hits }
     }
@@ -554,6 +559,7 @@ function Compile-Plan
     # learns which path produced it and grows no mode branch.
     $variants = @{}
     $routing = @{}
+    $resolutions = @{}
 
     if ($SequenceManifest)
     {
@@ -564,6 +570,7 @@ function Compile-Plan
             $resolved = Resolve-Routing -Sequence $sequence -Enabled $enabled -Extensions $Extensions
             $variants = Resolve-Variants -Sequence $sequence -Enabled $enabled -Resolutions $resolved.Resolutions
             $routing = $resolved.ExtensionMap
+            $resolutions = $resolved.Resolutions
         }
         catch
         {
@@ -760,6 +767,7 @@ function Compile-Plan
         Plan     = [pscustomobject]@{
             Variants      = $boundVariants
             Routing       = $routing
+            Resolutions   = $resolutions
             Iss           = $iss
             ProcessorKeys = @($referencedKeys)
         }

@@ -309,6 +309,12 @@ try
     Assert-True ($issKeys -eq 'file_read,rs.content_meta,rs.cs.strip,rs.indent,rs.ps.strip,rs.whitespace') `
         'the ISS registers the union across variants — both strippers' $issKeys
 
+    # Meaning is read from Resolutions, never by parsing the variant key.
+    Assert-True ($compiled.Plan.Resolutions['rs.ps.strip']['StripComments'] -eq 'rs.ps.strip') `
+        'the Plan carries what each variant resolved, per slot'
+    Assert-True ($compiled.Plan.Resolutions['default'].Count -eq 0) `
+        'the default variant resolved no routed slot'
+
     $stripStep = @($compiled.Plan.Variants['rs.ps.strip'] | Where-Object Key -eq 'rs.ps.strip')[0]
     Assert-True ($stripStep.Slot -eq 'StripComments') 'a bound step reports the slot it filled'
     Assert-True ($stripStep.Config['Slot'] -eq 'StripComments') 'the slot rides in config, for the Processing trail'
