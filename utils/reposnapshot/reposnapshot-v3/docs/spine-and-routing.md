@@ -96,12 +96,14 @@ Routing resolves before `file-read` runs, so it can never depend on content (no 
 
 Callers **enable stages, never order them** — the routing instance of [stage-architecture.md](stage-architecture.md)'s "Config Selects, Implementation Owns Sequence". `-StripComments` enables `$strip`; position comes from the spine.
 
+This is [rs-whitespace](whitespace-invisibles.md)'s `Operations` model one scale up. There the caller lists which ops run and the sequence is fixed in source — `if ('pad-breaks' -in $ops)` blocks in declaration order, so array position never mattered. Here the caller lists which processors participate and the registry fixes their relative order. Selection is the caller's, sequence is the implementation's, at both scales.
+
 `-Processors` forks into two explicit modes:
 
 - **Set under canon** (default): the caller names participants; the compiler orders them by the spine. Array position is meaningless.
-- **Verbatim** (distinct flag, name TBD — `-OrderStrict` is taken by bin packing): the literal sequence runs as written, cautions only. This preserves reposnapshot as an instrument for deliberately violating its own invariants without letting a plain call do it by accident.
+- **Verbatim** (`-RunVerbatim`): the literal sequence runs as written on every file — no family compiled, no routing, today's monolithic path. Cautions only. This preserves reposnapshot as an instrument for deliberately violating its own invariants without letting a plain call do it by accident; because routing is bypassed, a language-specific processor in a verbatim chain runs on every file regardless of class, which is exactly what was asked for.
 
-Under the canon path, today's soft chain cautions become compiler guarantees and are no longer printed; under verbatim they remain as warnings.
+Under the canon path, today's soft chain cautions become compiler guarantees and are no longer printed; under `-RunVerbatim` they remain as warnings.
 
 ### Classification
 
@@ -114,7 +116,7 @@ The registry is keyed on processor keys, so classification *is* the entry:
 Consequences:
 
 - **Set-mode resolution**: naming a processor key enables its stage. For a routed stage this enables the token — routing still decides per file class, so `-Processors 'rs.ps.strip'` on a mixed corpus enables `$strip` wherever it resolves. `-StripComments` and naming a `Strip` member are the same operation spelled two ways.
-- **Unregistered processor named under canon mode** → hard error stating both fixes: register it in the spine, or run verbatim.
+- **Unregistered processor named under canon mode** → hard error stating both fixes: add a registry entry, or run `-RunVerbatim`. Deliberately harsher than rs-whitespace's unknown-op skip receipt — an unknown op has an obvious no-op fallback, an unplaceable processor does not, and running it at an arbitrary position would be worse than refusing.
 - **Unreferenced processor *file* on disk** → inert, not an error — a WIP processor can land in `processors/` without breaking runs. Completeness for the shipped set (manifest ⊆ registry keys) is a repo test, not a runtime check.
 - **Deferral is structural**: `processors/deferred/` sits outside the non-recursive manifest glob, so a parked processor (`tp-perplexity`, document-ingestion lineage) is invisible to manifest, registry, and completeness alike. Restoring the file to `processors/` is the re-activation gesture — plus a registry entry to run under canon.
 
@@ -151,5 +153,5 @@ Each step lands with its tests through `tests/run-all.ps1` before the next begin
 | 1 | `processors/registry.json` (`Spine`/`Languages`/`Processors` sections; `$strip` members for powershell/csharp) + loader with normalization and hard-error validation | Malformed-file errors; extension normalization and one-language-per-extension; registry keys exist in manifest; stage/language cross-validation |
 | 2 | `Compile-Plan` emits the family (`Variants`/`Routing`/union `Iss`/union `ProcessorKeys`) | Pure-function tests: mixed extension set → expected variant tuples; dense chains of differing lengths; default variant present; spine invariants (measure last, strip precedes whitespace); validate-all vs bind-present; completeness (manifest ⊆ registry) |
 | 3 | Colonel: third slice array, family marshal, worker lookup table | Index-stable envelope over mixed corpus; each item demonstrably ran its assigned chain (bag `Processing` trail) |
-| 4 | Caller surface: `-StripComments` → `$strip`; `-Processors` set semantics (stage enablement) + verbatim flag; unregistered-processor hard error; caution retirement on canon path | End-to-end heterogeneous ingest (`.ps1`/`.cs`/`.md`) |
+| 4 | Caller surface: `-StripComments` → `$strip`; `-Processors` set semantics (stage enablement); `-RunVerbatim` retaining today's monolithic path; unregistered-processor hard error; caution retirement on canon path | End-to-end heterogeneous ingest (`.ps1`/`.cs`/`.md`); `-RunVerbatim` runs a literal out-of-canon chain and still prints its cautions |
 | 5 | Per-variant ConfigEcho with token resolutions | Echo assertions in the e2e test |
