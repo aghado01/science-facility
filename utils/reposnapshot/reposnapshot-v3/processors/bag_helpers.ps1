@@ -146,3 +146,36 @@ function Resolve-ProcessorConfig
     return $effective
 }
 #endregion
+
+#region Resolve-ProcessorLabel
+function Resolve-ProcessorLabel
+{
+    <#
+    .SYNOPSIS
+        Resolves the name a Processing record reports for this pass.
+
+    .DESCRIPTION
+        A dispatched chain names the CAPABILITY the sequencer chose this processor to
+        fill — its slot — because that is the fact a reading agent needs: comments
+        were stripped, and StripComments says so whichever language implementation
+        ran. The implementation is not lost; it rides the same record as
+        Implementation, so per-entry provenance stays exact.
+
+        The slot arrives in config, injected by the compiler's bind loop, because a
+        routed processor cannot know which capability it was chosen for. A processor
+        invoked standalone has no slot and reports its own name.
+    #>
+    param(
+        [Parameter(Mandatory)] [string]$Implementation,
+        [hashtable]$Config = @{}
+    )
+
+    if ($null -ne $Config -and $Config.ContainsKey('Slot') -and
+        -not [string]::IsNullOrWhiteSpace([string]$Config['Slot']))
+    {
+        return [string]$Config['Slot']
+    }
+
+    return $Implementation
+}
+#endregion

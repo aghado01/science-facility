@@ -116,7 +116,11 @@ foreach ($requested in ($ops | Select-Object -Unique))
 #region Emit
 $record = if ($includeMeta)
 {
-    $fields = [ordered]@{ Processor = 'rs.whitespace'; Operations = @($ran) }
+    $fields = [ordered]@{
+        Processor      = (Resolve-ProcessorLabel -Implementation 'rs.whitespace' -Config $Config)
+        Implementation = 'rs.whitespace'
+        Operations     = @($ran)
+    }
     if ($skipped.Count) { $fields['Skipped'] = @($skipped) }
     [pscustomobject]$fields
 }

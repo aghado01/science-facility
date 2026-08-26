@@ -178,7 +178,12 @@ $t = $sb.ToString()
 # Copy-on-mutate return — harmonized content-mutator contract (6d)
 $record = if ($includeMeta)
 {
-    [pscustomobject]@{ Processor = 'rs.indent'; Operations = @($ops); Skipped = $skipped }
+    [pscustomobject]@{
+        Processor      = (Resolve-ProcessorLabel -Implementation 'rs.indent' -Config $Config)
+        Implementation = 'rs.indent'
+        Operations     = @($ops)
+        Skipped        = $skipped
+    }
 }
 else { $null }
 

@@ -348,6 +348,74 @@ try
         -SequenceManifest (Join-Path $fixtureRoot 'absent.json')
     Assert-True ((@($badSeq.Errors) -join ';') -match 'not found') `
         'an unreadable sequencer surfaces as Errors, not a throw' (@($badSeq.Errors) -join ';')
+
+    # -----------------------------------------------------------------------
+    Enter-Section '9. A heterogeneous corpus dispatches per file, in real runspaces'
+    # -----------------------------------------------------------------------
+    # The payoff, and the only place per-item routing is observable: four languages,
+    # two of them routed. Read back from the Processing trail each item carries home.
+    $langRoot = Join-Path $PSScriptRoot 'languages'
+    $specimens = @(
+        @{ Rel = 'powershell\collapse.ps1'; Ext = '.ps1' }
+        @{ Rel = 'csharp\GaussianManifold.cs'; Ext = '.cs' }
+        @{ Rel = 'python\bench.py'; Ext = '.py' }
+        @{ Rel = 'typescript\linter-ts.ts'; Ext = '.ts' }
+    )
+    $items = @(
+        foreach ($s in $specimens)
+        {
+            [pscustomobject]@{
+                AbsolutePath = (Join-Path $langRoot $s.Rel)
+                RelativePath = $s.Rel
+                Extension    = $s.Ext
+            }
+        }
+    )
+    Assert-True (@($items | Where-Object { Test-Path -LiteralPath $_.AbsolutePath }).Count -eq 4) `
+        'four language specimens are on disk'
+
+    $hetPlan = Compile-Plan -Manifest $manifest -SequenceManifest $seqPath `
+        -IncludeProcessors $allSlots -Extensions @($items | ForEach-Object Extension) `
+        -ChainExecutorPath $chainExec -SharedHelperPath $bagHelpers
+    Assert-True (@($hetPlan.Errors).Count -eq 0) 'the heterogeneous corpus compiles' ($hetPlan.Errors -join '; ')
+
+    $run = Invoke-Plan -Items $items -Plan $hetPlan.Plan -MaxWorkers 2
+    Assert-True (@($run.Errors).Count -eq 0) 'dispatch reports no errors' (@($run.Errors) -join '; ')
+    Assert-True (@($run.Results).Count -eq 4) 'every item came back'
+
+    $backRel = @($run.Results | ForEach-Object RelativePath)
+    Assert-True (($backRel -join ',') -eq ((@($items | ForEach-Object RelativePath)) -join ',')) `
+        'results stay index-stable across variants of differing length' ($backRel -join ',')
+
+    $trail = { param($r) @($r.Processing | ForEach-Object { "$($_.Processor):$($_.Implementation)" }) }
+    $psTrail = & $trail $run.Results[0]
+    $csTrail = & $trail $run.Results[1]
+    $pyTrail = & $trail $run.Results[2]
+    $tsTrail = & $trail $run.Results[3]
+
+    Assert-True ($psTrail -contains 'StripComments:rs.ps.strip') `
+        'the .ps1 ran the PowerShell stripper' ($psTrail -join ' > ')
+    Assert-True ($csTrail -contains 'StripComments:rs.cs.strip') `
+        'the .cs ran the C# stripper under the SAME slot — one capability, two implementations' ($csTrail -join ' > ')
+    Assert-True (@($run.Results[2].Processing | Where-Object Processor -eq 'StripComments').Count -eq 0) `
+        'the .py resolved no stripper, so the slot spliced out' ($pyTrail -join ' > ')
+    Assert-True (@($run.Results[3].Processing | Where-Object Processor -eq 'StripComments').Count -eq 0) `
+        'the .ts likewise' ($tsTrail -join ' > ')
+    Assert-True ($pyTrail.Count -eq ($psTrail.Count - 1)) `
+        'the unrouted chain is exactly one record shorter'
+
+    foreach ($r in $run.Results)
+    {
+        $slots = @($r.Processing | ForEach-Object Processor)
+        Assert-True (($slots -contains 'Indentation') -and ($slots -contains 'Whitespace')) `
+            "$($r.RelativePath): the fixed slots ran" ($slots -join ' > ')
+    }
+    Assert-True (@($run.Results | Where-Object { $null -ne $_.PSObject.Properties['ContentMeta'] }).Count -eq 4) `
+        'measurement ran on every variant'
+
+    # The trail names the capability; provenance is not lost to it.
+    Assert-True (@($run.Results[0].Processing | Where-Object Processor -eq 'Indentation').Implementation -eq 'rs.indent') `
+        'a fixed slot reports its capability, with the implementation alongside'
 }
 catch
 {

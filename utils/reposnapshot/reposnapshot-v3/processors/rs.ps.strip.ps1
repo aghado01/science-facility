@@ -420,8 +420,9 @@ if ($hsStore.Count -gt 0) {
 $recordObj = $null
 if ($includeMeta) {
     $record = [ordered]@{
-        Processor  = 'rs.ps.strip'
-        Operations = @($ops)
+        Processor      = (Resolve-ProcessorLabel -Implementation 'rs.ps.strip' -Config $Config)
+        Implementation = 'rs.ps.strip'
+        Operations     = @($ops)
     }
     if ($null -ne $parseErrors) { $record['ParseErrors'] = $parseErrors }
     if ($useFallback) { $record['FallbackMode'] = 'regex' }

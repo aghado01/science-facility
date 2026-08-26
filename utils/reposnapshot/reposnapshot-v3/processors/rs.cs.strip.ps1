@@ -217,6 +217,14 @@ $stripped = $sb.ToString()
 
 #region Emit
 # Copy-on-mutate return — harmonized content-mutator contract (6d)
-$record = if ($includeMeta) { [pscustomobject]@{ Processor = 'rs.cs.strip'; Operations = @($ops) } } else { $null }
+$record = if ($includeMeta)
+{
+    [pscustomobject]@{
+        Processor      = (Resolve-ProcessorLabel -Implementation 'rs.cs.strip' -Config $Config)
+        Implementation = 'rs.cs.strip'
+        Operations     = @($ops)
+    }
+}
+else { $null }
 return Copy-Bag -Item $Item -Resolved $bc -Content $stripped -Record $record
 #endregion
