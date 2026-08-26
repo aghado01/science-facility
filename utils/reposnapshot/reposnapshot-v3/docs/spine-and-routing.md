@@ -148,7 +148,7 @@ Any manifest structure that tabulates per-step data across files keys by variant
 7. Tokens exist only as data, never as PowerShell string literals.
 8. Each stage's postcondition states which byte accounting survives it (`SpanBytes` vs `SizeBytes` — see [content-metrics.md](content-metrics.md)); wherever line-ending canonicalization lands, this is stated, not discovered.
 9. Every processor is classified by its single registry entry — one stage, with language qualification when routed. `configs/` carries no ordering metadata; classification is structural.
-10. All ordering is explicit data — family rank in `Spine`, member rank in `Rank`. The registry file's own arrangement carries no semantics: sorting or regrouping it must never change a compiled chain.
+10. Ordering is declared, never inferred from layout. The `Spine` array's element order and any `Rank` values are authoritative — edit them and compiled chains change, exactly as intended. The `Processors` object's *key* order is not data: alphabetizing or regrouping those entries changes no chain.
 
 ## Implementation Sequence
 
@@ -156,7 +156,7 @@ Each step lands with its tests through `tests/run-all.ps1` before the next begin
 
 | Step | Work | Test gate |
 |---|---|---|
-| 1 | `processors/registry.json` (`Spine`/`Languages`/`Processors` sections; `$strip` members for powershell/csharp) + loader with normalization and hard-error validation | Malformed-file errors; extension normalization and one-language-per-extension; registry keys exist in manifest; stage/language cross-validation; rank required iff partition is multi-member; reordering the file changes no compiled chain |
+| 1 | `processors/registry.json` (`Spine`/`Languages`/`Processors` sections; `$strip` members for powershell/csharp) + loader with normalization and hard-error validation | Malformed-file errors; extension normalization and one-language-per-extension; registry keys exist in manifest; stage/language cross-validation; rank required iff partition is multi-member; permuting `Processors` keys changes no compiled chain, while permuting `Spine` does |
 | 2 | `Compile-Plan` emits the family (`Variants`/`Routing`/union `Iss`/union `ProcessorKeys`) | Pure-function tests: mixed extension set → expected variant tuples; dense chains of differing lengths; default variant present; spine invariants (measure last, strip precedes whitespace); validate-all vs bind-present; completeness (manifest ⊆ registry) |
 | 3 | Colonel: third slice array, family marshal, worker lookup table | Index-stable envelope over mixed corpus; each item demonstrably ran its assigned chain (bag `Processing` trail) |
 | 4 | Caller surface: `-StripComments` → `$strip`; `-Processors` set semantics (stage enablement); `-RunVerbatim` retaining today's monolithic path; unregistered-processor hard error; caution retirement on canon path | End-to-end heterogeneous ingest (`.ps1`/`.cs`/`.md`); `-RunVerbatim` runs a literal out-of-canon chain and still prints its cautions |
