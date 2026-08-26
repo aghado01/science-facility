@@ -1,6 +1,6 @@
 <#
 .LINK
-    docs/chain-executor.md
+    docs/chain_executor.md
 #>
 param(
     [object]    $Item,

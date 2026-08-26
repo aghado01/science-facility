@@ -87,7 +87,7 @@ try
         RunStamp         = '20260824_120000'
         Root             = 'X:/work/myproj'
         GeneratorVersion = 'reposnapshot-v3'
-        ConfigEcho       = [pscustomobject]@{ Grouping = 'Flat'; Chain = @('file-read') }
+        ConfigEcho       = [pscustomobject]@{ Grouping = 'Flat'; Chain = @('file_read') }
     }
     $treePath = Join-Path $outRoot 'fix_tree.md'
 

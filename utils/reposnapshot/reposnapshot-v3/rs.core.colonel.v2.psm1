@@ -14,7 +14,7 @@ Set-StrictMode -Version Latest
 .DESCRIPTION
     Two-call API surface:
       Compile-Plan: Validates processor scripts via AST, registers bodies and
-                    chain-executor into an InitialSessionState, returns a frozen Plan.
+                    chain_executor into an InitialSessionState, returns a frozen Plan.
       Invoke-Plan:  Slices items across a worker pool, executes chains via
                     Invoke-ChainExecutor, returns an index-stable envelope.
 
@@ -542,7 +542,7 @@ function Compile-Plan
     }
     if (-not (Test-Path -LiteralPath $ChainExecutorPath))
     {
-        $errors.Add("chain-executor script not found: $ChainExecutorPath")
+        $errors.Add("chain_executor script not found: $ChainExecutorPath")
         return [pscustomobject]@{ Plan = $null; Errors = $errors.ToArray(); Warnings = $warnings.ToArray() }
     }
 

@@ -1,7 +1,7 @@
 {
   "stage": "ingest",
   "module": "rs.core.ingest.psm1 — Invoke-Ingest(-FilteredFsGraph …) → Compile-Plan / Invoke-Plan (rs.core.colonel.v2)",
-  "$comment": "Flattens surviving descriptors out of membrane.out.Graph and dispatches each VERBATIM as $Item to the colonel chain. The chain's first processor is file-read (processors/file-read.ps1); every processor clones the item (Copy-Bag) and adds. out.bag is therefore membrane.out.file ∪ file-read's additions ∪ whatever else the chain attached — OPEN beyond the fields listed. Colonel's parameter surface is reflected (New-ForwardedParamDictionary), not restated here.",
+  "$comment": "Flattens surviving descriptors out of membrane.out.Graph and dispatches each VERBATIM as $Item to the colonel chain. The chain's first processor is file_read (processors/file_read.ps1); every processor clones the item (Copy-Bag) and adds. out.bag is therefore membrane.out.file ∪ file_read's additions ∪ whatever else the chain attached — OPEN beyond the fields listed. Colonel's parameter surface is reflected (New-ForwardedParamDictionary), not restated here.",
   "in": {
     "params": {
       "FilteredFsGraph": { "type": "object", "note": "membrane.out.result — @{ Graph; Skipped }; also accepts a bare Dictionary/array of nodes" },
@@ -11,7 +11,7 @@
       "Files": { "from": "membrane.out.node", "note": "the only node field ingest reads; node context is gone after flattening" }
     },
     "file": {
-      "AbsolutePath": { "from": "membrane.out.file", "note": "read by file-read (the only descriptor field the chain NEEDS)" },
+      "AbsolutePath": { "from": "membrane.out.file", "note": "read by file_read (the only descriptor field the chain NEEDS)" },
       "RelativePath": { "from": "membrane.out.file", "note": "passthrough" },
       "NodePath":     { "from": "membrane.out.file", "note": "passthrough" },
       "Extension":    { "from": "membrane.out.file", "note": "passthrough" },
@@ -44,9 +44,9 @@
       "LastWriteUtc": { "from": "membrane.out.file" },
       "CreationUtc":  { "from": "membrane.out.file" },
       "FsAttributes": { "from": "membrane.out.file" },
-      "Content":      { "type": "string", "origin": "file-read", "optional": true, "note": "decoded text; absent when ReadError is set; mutators replace it" },
-      "Encoding":     { "type": "string", "origin": "file-read", "optional": true, "note": "'UTF-8' — an asserted decode policy, not yet a measurement (decisions-ledger #28)" },
-      "ReadError":    { "type": "string", "origin": "file-read", "optional": true, "note": "BinaryOrNulContent | <exception message>; always paired with _ChainHalt" },
+      "Content":      { "type": "string", "origin": "file_read", "optional": true, "note": "decoded text; absent when ReadError is set; mutators replace it" },
+      "Encoding":     { "type": "string", "origin": "file_read", "optional": true, "note": "'UTF-8' — an asserted decode policy, not yet a measurement (decisions-ledger #28)" },
+      "ReadError":    { "type": "string", "origin": "file_read", "optional": true, "note": "BinaryOrNulContent | <exception message>; always paired with _ChainHalt" },
       "_ChainHalt":   { "type": "bool",   "origin": "chain",     "optional": true, "note": "set by any processor that halts the chain" },
       "…":            { "type": "open",   "note": "ContentMeta, Processing, Operations, … — anything a processor attaches" }
     },

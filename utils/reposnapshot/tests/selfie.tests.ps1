@@ -5,7 +5,7 @@ Set-StrictMode -Version Latest
 .SYNOPSIS
     The SELFIE fixture: the pipeline snapshots its own source. Root =
     reposnapshot-v3/, Selection semantics for *.ps1 / *.psm1 only, the real
-    ingest chain (file-read → rs-whitespace → rs.ps.strip → rs-content_meta),
+    ingest chain (file_read → rs.whitespace → rs.ps.strip → rs.content_meta),
     then the full export path to disk and back. PowerShell ingesting
     PowerShell — the standing conflation hotspot, exercised on purpose.
 
@@ -102,21 +102,21 @@ try
     # -----------------------------------------------------------------------
     $ingest = Invoke-Ingest -FilteredFsGraph $filtered `
         -Manifest @{
-        'file-read'       = (Join-Path $v3 'processors\file-read.ps1')
-        'rs-whitespace'   = (Join-Path $v3 'processors\rs-whitespace.ps1')
+        'file_read'       = (Join-Path $v3 'processors\file_read.ps1')
+        'rs.whitespace'   = (Join-Path $v3 'processors\rs.whitespace.ps1')
         'rs.ps.strip'     = (Join-Path $v3 'processors\rs.ps.strip.ps1')
-        'rs-content_meta' = (Join-Path $v3 'processors\rs-content_meta.ps1')
+        'rs.content_meta' = (Join-Path $v3 'processors\rs.content_meta.ps1')
     } `
         -Steps @(
-        @{ Key = 'file-read'; Config = @{} }
+        @{ Key = 'file_read'; Config = @{} }
         # strippers BEFORE whitespace, so max-blank-1 collapses the runs
         # stripping leaves behind; empty whitespace Config = processor defaults
         @{ Key = 'rs.ps.strip'; Config = @{ Operations = @('block-comments', 'doc-strings', 'comment-blocks', 'line-comments') } }
-        @{ Key = 'rs-whitespace'; Config = @{} }
-        @{ Key = 'rs-content_meta'; Config = @{} }
+        @{ Key = 'rs.whitespace'; Config = @{} }
+        @{ Key = 'rs.content_meta'; Config = @{} }
     ) `
-        -ChainExecutorPath (Join-Path $v3 'processors\chain-executor.ps1') `
-        -SharedHelperPath (Join-Path $v3 'processors\bag-helpers.ps1')
+        -ChainExecutorPath (Join-Path $v3 'processors\chain_executor.ps1') `
+        -SharedHelperPath (Join-Path $v3 'processors\bag_helpers.ps1')
     Assert-True (@($ingest.Errors).Count -eq 0) 'no compile/dispatch errors over the whole corpus' ($ingest.Errors -join '; ')
     Assert-True (@($ingest.Results).Count -eq $truth.Count) 'every survivor dispatched' "got $(@($ingest.Results).Count)"
 
@@ -181,7 +181,7 @@ try
         RunStamp         = 'selfie'
         Root             = $rootFull
         GeneratorVersion = 'reposnapshot-v3'
-        ConfigEcho       = [pscustomobject]@{ Grouping = 'ByFileType'; Chain = @('file-read', 'rs.ps.strip', 'rs-whitespace', 'rs-content_meta') }
+        ConfigEcho       = [pscustomobject]@{ Grouping = 'ByFileType'; Chain = @('file_read', 'rs.ps.strip', 'rs.whitespace', 'rs.content_meta') }
     }
     $tree = New-Manifest -Receipt $receipt -Shards $plan.Shards -Plan $plan.Plan -Layout $L -RunContext $runCtx -TreePath (Join-Path $outRoot 'selfie_tree.md')
     $treeText = [IO.File]::ReadAllText($tree.Path)

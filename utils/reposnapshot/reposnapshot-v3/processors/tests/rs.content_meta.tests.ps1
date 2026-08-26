@@ -3,7 +3,7 @@ Set-StrictMode -Version Latest
 
 <#
 .SYNOPSIS
-    Formal test harness for processors/rs-content_meta.ps1.
+    Formal test harness for processors/rs.content_meta.ps1.
 
 .DESCRIPTION
     Covers:
@@ -12,12 +12,12 @@ Set-StrictMode -Version Latest
       2. No-Content contract — pass-through unenriched (envelope-shaped item)
       3. Empty-content behavior — ContentMeta attached with zeroed metrics
       4. Copy-on-enrich — identity fields cloned, Content unmutated, caller's object untouched
-      5. Colonel dispatch — file-read → rs-content_meta chain in real runspaces
+      5. Colonel dispatch — file_read → rs.content_meta chain in real runspaces
 #>
 
 $procDir = Split-Path $PSScriptRoot -Parent
 $v3 = Split-Path $procDir -Parent
-$attrPath = Join-Path $procDir 'rs-content_meta.ps1'
+$attrPath = Join-Path $procDir 'rs.content_meta.ps1'
 
 # Shared ISS helpers
 . (Join-Path $PSScriptRoot '_helpers.ps1')
@@ -124,7 +124,7 @@ Assert-True ($rc.SizeBytes -eq 999 -and $rc.ContentMeta.CharCount -eq 5) `
 #endregion
 
 #region Test5_ColonelDispatch
-Enter-Section '5. Colonel dispatch (file-read → rs-content_meta)'
+Enter-Section '5. Colonel dispatch (file_read → rs.content_meta)'
 Import-Module (Join-Path $v3 'rs.core.colonel.v2.psm1') -Force -WarningAction SilentlyContinue
 
 $fixtureRoot = Join-Path ([IO.Path]::GetTempPath()) "rs-attr-test-$([guid]::NewGuid().ToString('N').Substring(0,8))"
@@ -135,10 +135,10 @@ Set-Content -Path $fixtureFile -Value ("# sample`n" + ('Write-Host "line" # trai
 try
 {
     $compiled = Compile-Plan `
-        -Manifest @{ 'file-read' = (Join-Path $procDir 'file-read.ps1'); 'rs-content_meta' = $attrPath } `
-        -Steps @(@{ Key = 'file-read'; Config = @{} }, @{ Key = 'rs-content_meta'; Config = @{} }) `
-        -ChainExecutorPath (Join-Path $procDir 'chain-executor.ps1') `
-            -SharedHelperPath (Join-Path $procDir 'bag-helpers.ps1')
+        -Manifest @{ 'file_read' = (Join-Path $procDir 'file_read.ps1'); 'rs.content_meta' = $attrPath } `
+        -Steps @(@{ Key = 'file_read'; Config = @{} }, @{ Key = 'rs.content_meta'; Config = @{} }) `
+        -ChainExecutorPath (Join-Path $procDir 'chain_executor.ps1') `
+            -SharedHelperPath (Join-Path $procDir 'bag_helpers.ps1')
     Assert-True (@($compiled.Errors).Count -eq 0) 'chain compiles' ($compiled.Errors -join '; ')
 
     $items = @([pscustomobject]@{
@@ -165,5 +165,5 @@ finally
 }
 #endregion
 
-Write-Host "`n═══ rs-content_meta.tests: $script:Passed passed, $script:Failed failed ═══" -ForegroundColor $(if ($script:Failed -eq 0) { 'Green' } else { 'Red' })
+Write-Host "`n═══ rs.content_meta.tests: $script:Passed passed, $script:Failed failed ═══" -ForegroundColor $(if ($script:Failed -eq 0) { 'Green' } else { 'Red' })
 if ($script:Failed -gt 0) { exit 1 }

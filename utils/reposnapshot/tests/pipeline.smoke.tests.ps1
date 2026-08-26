@@ -3,7 +3,7 @@ Set-StrictMode -Version Latest
 
 <#
 .SYNOPSIS
-    End-to-end pipeline smoke test: crawl → ignore → ingest → colonel(file-read).
+    End-to-end pipeline smoke test: crawl → ignore → ingest → colonel(file_read).
 
 .DESCRIPTION
     The harness plays admiral (build-against-absent-admiral rule — see
@@ -16,7 +16,7 @@ Set-StrictMode -Version Latest
          extension blacklist, no enrichment)
       3. Invoke-Ingest dispatches descriptor OBJECTS to colonel (the seam that
          was broken when Items were bare path strings)
-      4. file-read copy-on-enriches — all identity fields (incl. LastWriteUtc)
+      4. file_read copy-on-enriches — all identity fields (incl. LastWriteUtc)
          survive to Results; NUL-content guard _ChainHalts with ReadError
 
 .NOTES
@@ -101,10 +101,10 @@ try
     Enter-Section '4. Ingest → colonel (descriptor objects, not strings — the seam)'
     # -----------------------------------------------------------------------
     $ingest = Invoke-Ingest -FilteredFsGraph $filtered `
-        -Manifest @{ 'file-read' = (Join-Path $v3 'processors\file-read.ps1') } `
-        -Steps @(@{ Key = 'file-read'; Config = @{} }) `
-        -ChainExecutorPath (Join-Path $v3 'processors\chain-executor.ps1') `
-        -SharedHelperPath (Join-Path $v3 'processors\bag-helpers.ps1')
+        -Manifest @{ 'file_read' = (Join-Path $v3 'processors\file_read.ps1') } `
+        -Steps @(@{ Key = 'file_read'; Config = @{} }) `
+        -ChainExecutorPath (Join-Path $v3 'processors\chain_executor.ps1') `
+        -SharedHelperPath (Join-Path $v3 'processors\bag_helpers.ps1')
 
     Assert-True (@($ingest.Errors).Count -eq 0) 'no compile/dispatch errors' ($ingest.Errors -join '; ')
     Assert-True (@($ingest.Results).Count -eq 3) 'Results count = 3 eligible items' "got $(@($ingest.Results).Count)"
@@ -131,10 +131,10 @@ try
     {
         $splat = @{
             FilteredFsGraph   = $filtered
-            Manifest          = @{ 'file-read' = (Join-Path $v3 'processors\file-read.ps1') }
-            Steps             = @(@{ Key = 'file-read'; Config = @{} })
-            ChainExecutorPath = (Join-Path $v3 'processors\chain-executor.ps1')
-            SharedHelperPath  = (Join-Path $v3 'processors\bag-helpers.ps1')
+            Manifest          = @{ 'file_read' = (Join-Path $v3 'processors\file_read.ps1') }
+            Steps             = @(@{ Key = 'file_read'; Config = @{} })
+            ChainExecutorPath = (Join-Path $v3 'processors\chain_executor.ps1')
+            SharedHelperPath  = (Join-Path $v3 'processors\bag_helpers.ps1')
             $dispatchOnly.Name = $dispatchOnly.Value
         }
         $threw = $null
@@ -148,10 +148,10 @@ try
 
     # A compile-side param still reaches Compile-Plan (the split cuts both ways).
     $issRun = Invoke-Ingest -FilteredFsGraph $filtered `
-        -Manifest @{ 'file-read' = (Join-Path $v3 'processors\file-read.ps1') } `
-        -Steps @(@{ Key = 'file-read'; Config = @{} }) `
-        -ChainExecutorPath (Join-Path $v3 'processors\chain-executor.ps1') `
-        -SharedHelperPath (Join-Path $v3 'processors\bag-helpers.ps1') `
+        -Manifest @{ 'file_read' = (Join-Path $v3 'processors\file_read.ps1') } `
+        -Steps @(@{ Key = 'file_read'; Config = @{} }) `
+        -ChainExecutorPath (Join-Path $v3 'processors\chain_executor.ps1') `
+        -SharedHelperPath (Join-Path $v3 'processors\bag_helpers.ps1') `
         -IssPreset 'Core' -MaxWorkers 1
     Assert-True (@($issRun.Errors).Count -eq 0) 'compile-side and dispatch-side params coexist in one call' ($issRun.Errors -join '; ')
     Assert-True ($issRun.Budget.Threads -eq 1) 'dispatch-side value actually took effect (Threads = 1)'

@@ -16,16 +16,16 @@
 .PARAMETER SelectionPatterns
     When supplied, membrane runs Selection semantics. Default: Ignore semantics.
 .PARAMETER Processors
-    The ingest chain after file-read, as an ordered array. Each entry is
+    The ingest chain after file_read, as an ordered array. Each entry is
     either a bare processor-key string (which automatically defers to its
     processors/configs/<Key>.json default configuration) or an object
     { Key; Config } with specific overrides, e.g.:
-      @('rs.ps.strip', 'rs-whitespace', @{ Key = 'rs-indent'; Config = @{ TargetUnit = 4 } })
+      @('rs.ps.strip', 'rs.whitespace', @{ Key = 'rs.indent'; Config = @{ TargetUnit = 4 } })
     Key must name a processors\<Key>.ps1 file.
     Columns still separately controls what lands on the wire: a processor's
     fields only appear there if the matching column is also requested, and a
     requested column with no processor computing it renders empty.
-    A resolved chain missing rs-whitespace, or running rs-content_meta before
+    A resolved chain missing rs.whitespace, or running rs.content_meta before
     other content mutators, prints a caution (not an error) — pad-breaks
     spacing and content_meta's enrich-only-tail contract are established
     invariants of this format, not requirements enforced here.
@@ -79,10 +79,10 @@
     ./rs.core.user.ps1 -ConfigPath ./recipes/full-audit.json
 
 .EXAMPLE
-    ./rs.core.user.ps1 -Config @{ Root = '..\reposnapshot-v3'; Processors = @('rs.ps.strip', 'rs-whitespace') }
+    ./rs.core.user.ps1 -Config @{ Root = '..\reposnapshot-v3'; Processors = @('rs.ps.strip', 'rs.whitespace') }
 
 .EXAMPLE
-    ./rs.core.user.ps1 -Root ../reposnapshot-v3 -Processors 'rs-indent', 'rs-whitespace', 'rs-content_meta'
+    ./rs.core.user.ps1 -Root ../reposnapshot-v3 -Processors 'rs.indent', 'rs.whitespace', 'rs.content_meta'
 #>
 [CmdletBinding()]
 param(
@@ -220,12 +220,12 @@ $filtered = Invoke-Membrane -CompiledNodes $compiled.CompiledNodes -CrawlerGraph
 $procDir = Join-Path $v3 'processors'
 $procManifest = @{}
 foreach ($f in Get-ChildItem -LiteralPath $procDir -Filter '*.ps1' -File) {
-    if ($f.Name -in 'chain-executor.ps1', 'bag-helpers.ps1') { continue }
+    if ($f.Name -in 'chain_executor.ps1', 'bag_helpers.ps1') { continue }
     $procManifest[[IO.Path]::GetFileNameWithoutExtension($f.Name)] = $f.FullName
 }
 
 $steps = [System.Collections.Generic.List[object]]::new()
-$steps.Add(@{ Key = 'file-read'; Config = @{} })
+$steps.Add(@{ Key = 'file_read'; Config = @{} })
 
 if ($null -ne $Processors -and $Processors.Count -gt 0) {
     # explicit chain
@@ -239,28 +239,28 @@ if ($null -ne $Processors -and $Processors.Count -gt 0) {
 }
 else {
     # default chain
-    $steps.Add(@{ Key = 'rs-whitespace'; Config = @{} })
+    $steps.Add(@{ Key = 'rs.whitespace'; Config = @{} })
     if ($Columns -contains 'content_meta') {
-        $steps.Add(@{ Key = 'rs-content_meta'; Config = @{} })
+        $steps.Add(@{ Key = 'rs.content_meta'; Config = @{} })
     }
 }
 
 # Invariant cautions (non-fatal advisories)
 $resolvedKeys = @($steps | ForEach-Object Key)
-if ($resolvedKeys -notcontains 'rs-whitespace') {
-    Write-Host "  caution: chain omits rs-whitespace — its pad-breaks op is what keeps the container codec's newline substitution regularly spaced. Fine if intentional." -ForegroundColor Yellow
+if ($resolvedKeys -notcontains 'rs.whitespace') {
+    Write-Host "  caution: chain omits rs.whitespace — its pad-breaks op is what keeps the container codec's newline substitution regularly spaced. Fine if intentional." -ForegroundColor Yellow
 }
-$cmIdx = [array]::IndexOf($resolvedKeys, 'rs-content_meta')
+$cmIdx = [array]::IndexOf($resolvedKeys, 'rs.content_meta')
 if ($cmIdx -ge 0 -and $cmIdx -ne $resolvedKeys.Count - 1) {
-    Write-Host "  caution: rs-content_meta is not the last processor — its own contract calls for enrich-only TAIL placement, after every content mutator. Fine if intentional." -ForegroundColor Yellow
+    Write-Host "  caution: rs.content_meta is not the last processor — its own contract calls for enrich-only TAIL placement, after every content mutator. Fine if intentional." -ForegroundColor Yellow
 }
-if (($Columns -contains 'content_meta') -and $resolvedKeys -notcontains 'rs-content_meta') {
-    Write-Host "  caution: Columns requests content_meta but no rs-content_meta step runs — that wire column will render empty." -ForegroundColor Yellow
+if (($Columns -contains 'content_meta') -and $resolvedKeys -notcontains 'rs.content_meta') {
+    Write-Host "  caution: Columns requests content_meta but no rs.content_meta step runs — that wire column will render empty." -ForegroundColor Yellow
 }
 
 $ingest = Invoke-Ingest -FilteredFsGraph $filtered -Manifest $procManifest -Steps @($steps) `
-    -ChainExecutorPath (Join-Path $v3 'processors\chain-executor.ps1') `
-    -SharedHelperPath (Join-Path $v3 'processors\bag-helpers.ps1')
+    -ChainExecutorPath (Join-Path $v3 'processors\chain_executor.ps1') `
+    -SharedHelperPath (Join-Path $v3 'processors\bag_helpers.ps1')
 if (@($ingest.Errors).Count -gt 0) {
     throw "rs.core.user: ingest reported errors — $($ingest.Errors -join '; ')"
 }

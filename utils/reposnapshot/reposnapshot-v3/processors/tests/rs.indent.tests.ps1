@@ -3,7 +3,7 @@ Set-StrictMode -Version Latest
 
 <#
 .SYNOPSIS
-    Unit tests for processors/rs-indent.ps1.
+    Unit tests for processors/rs.indent.ps1.
 
 .DESCRIPTION
     Tests the processor directly (dot-invoked, not via colonel).
@@ -42,10 +42,10 @@ Set-StrictMode -Version Latest
 
 .NOTES
     Run from any directory:
-        & "$PSScriptRoot\rs-indent.tests.ps1"
+        & "$PSScriptRoot\rs.indent.tests.ps1"
 #>
 
-$processorPath = Join-Path $PSScriptRoot '..\rs-indent.ps1'
+$processorPath = Join-Path $PSScriptRoot '..\rs.indent.ps1'
 
 # Shared ISS helpers (Resolve-BagContent / Copy-Bag) — colonel registers these
 # into worker runspaces; dot-invocation here needs them loaded explicitly.
@@ -99,7 +99,7 @@ function Invoke-ProcessorRaw ([object]$Item, [hashtable]$Config = @{})
 #endregion
 
 Write-Host '============================================================' -ForegroundColor Yellow
-Write-Host ' rs-indent.tests.ps1' -ForegroundColor Yellow
+Write-Host ' rs.indent.tests.ps1' -ForegroundColor Yellow
 Write-Host '============================================================' -ForegroundColor Yellow
 
 # ============================================================
@@ -118,7 +118,7 @@ Assert-True ($r -is [pscustomobject]) 'hashtable input: cloned to pscustomobject
 Assert-Equal $r.Id 'id1' 'hashtable input: Id passed through'
 Assert-Equal $r.Path 'file.ps1' 'hashtable input: Path passed through'
 Assert-Equal $r.Content "hello`n  world" 'hashtable input: strip-common applied'
-Assert-Equal $r.Processing[0].Processor 'rs-indent' 'Processing record names the processor'
+Assert-Equal $r.Processing[0].Processor 'rs.indent' 'Processing record names the processor'
 
 $pso = [pscustomobject]@{ Content = $text; Id = 'id2'; Path = 'file.ps1' }
 $r = Invoke-Processor -Item $pso -Config @{ Operations = @('strip-common') }
@@ -133,7 +133,7 @@ $mdItem = [pscustomobject]@{ Content = "  hello`n    world"; Path = 'readme.md';
 $r = Invoke-Processor -Item $mdItem -Config @{ Operations = @('strip-common', 'min-indent') }
 Assert-True ($r.Processing[0].Skipped -eq $true) '.md extension: Skipped = $true on the Processing record'
 Assert-Equal $r.Content "  hello`n    world" '.md extension: text unchanged'
-Assert-Equal $r.Processing[0].Processor 'rs-indent' '.md extension: Processing record present'
+Assert-Equal $r.Processing[0].Processor 'rs.indent' '.md extension: Processing record present'
 
 foreach ($ext in @('.txt', '.json', '.yaml', '.xml', '.html'))
 {
@@ -371,7 +371,7 @@ Assert-Equal $rTp.Text "hello`n  world" 'Text-keyed bag: Text mutated in place'
 Assert-True ($null -eq $rTp.PSObject.Properties['Content']) 'Text-keyed bag: no Content key invented'
 Assert-Equal $rTp.Id 'p1' 'Text-keyed bag: Id passed through'
 
-# No-content bag → returned untouched (mirrors rs-content_meta's no-Content rule).
+# No-content bag → returned untouched (mirrors rs.content_meta's no-Content rule).
 $halted = [pscustomobject]@{ RelativePath = 'bin/x.dll'; SizeBytes = 9; ReadError = 'BinaryOrNulContent' }
 $rHalt = Invoke-Processor -Item $halted -Config @{ Operations = @('strip-common') }
 Assert-True ($null -eq $rHalt.PSObject.Properties['Content']) 'no-content bag: no phantom Content fabricated'
@@ -383,14 +383,14 @@ Assert-Equal $rHalt.ReadError 'BinaryOrNulContent' 'no-content bag: returned int
 $stack = [pscustomobject]@{ RelativePath = 'src/a.ps1'; Content = "foo`n`tbar`n`t`tbaz" }
 $p1 = Invoke-Processor -Item $stack -Config @{ Operations = @('detab') }
 $p2 = Invoke-Processor -Item $p1 -Config @{ Operations = @('strip-common', 'min-indent') }
-Assert-Equal $p2.Processing.Count 2 'two-pass stack: both rs-indent passes recorded'
+Assert-Equal $p2.Processing.Count 2 'two-pass stack: both rs.indent passes recorded'
 Assert-Equal $p2.Processing[0].Operations[0] 'detab' 'two-pass stack: first record keeps its own ops'
 Assert-Equal @($p2.Processing[1].Operations).Count 2 'two-pass stack: second record keeps its own ops'
 Assert-Equal $p2.RelativePath 'src/a.ps1' 'two-pass stack: identity survives both passes'
 
 # ============================================================
 # 22. Physical-line splitting (2026-08-24) — CRLF/CR/LF and exotic
-#     terminators (NEL, LS, PS, VT, FF), independent of rs-whitespace's lf
+#     terminators (NEL, LS, PS, VT, FF), independent of rs.whitespace's lf
 #     having run first; each terminator's original bytes are preserved.
 # ============================================================
 $NEL = [string][char]0x0085
@@ -425,21 +425,21 @@ $rFf = Invoke-Processor -Item ("a{0}`tb" -f $FF) -Config @{ Operations = @('deta
 Assert-Equal $rFf.Content ("a{0}  b" -f $FF) 'FF is a recognized line boundary'
 
 # Terminators are carried through VERBATIM, never folded to LF — folding
-# stays rs-whitespace's job. A mixed-terminator file keeps each kind as-is.
+# stays rs.whitespace's job. A mixed-terminator file keeps each kind as-is.
 $rMixed = Invoke-Processor -Item "a`r`nb`rc`nd" -Config @{ Operations = @('detab') }
-Assert-Equal $rMixed.Content "a`r`nb`rc`nd" 'mixed terminators: no folding — each kind preserved exactly (rs-indent does not own this)'
+Assert-Equal $rMixed.Content "a`r`nb`rc`nd" 'mixed terminators: no folding — each kind preserved exactly (rs.indent does not own this)'
 
 # min-indent reshapes LEADING depth correctly across CRLF-separated lines —
 # proves $depths indexing lines up with the terminator-preserving split.
 $rMi = Invoke-Processor -Item "a`r`n    b`r`n        c" -Config @{ Operations = @('min-indent') }
 Assert-Equal $rMi.Content "a`r`n  b`r`n    c" 'min-indent over CRLF-separated lines: depths correct, CRLF preserved'
 
-# The chain order this unblocks: rs-indent no longer needs rs-whitespace's lf
+# The chain order this unblocks: rs.indent no longer needs rs.whitespace's lf
 # to have run first. Reshape CRLF content directly, THEN fold — same result
-# as folding first, because rs-indent never touched the terminator bytes.
+# as folding first, because rs.indent never touched the terminator bytes.
 $raw = "function f {`r`n`t`t'x'`r`n}"
 $viaIndentFirst = Invoke-Processor -Item $raw -Config @{ Operations = @('min-indent') }
-Assert-Equal $viaIndentFirst.Content "function f {`r`n  'x'`r`n}" 'rs-indent runs correctly on RAW (un-folded) content — no dependency on lf having run first'
+Assert-Equal $viaIndentFirst.Content "function f {`r`n  'x'`r`n}" 'rs.indent runs correctly on RAW (un-folded) content — no dependency on lf having run first'
 
 # ============================================================
 # Summary

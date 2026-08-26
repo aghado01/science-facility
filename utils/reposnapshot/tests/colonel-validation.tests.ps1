@@ -21,7 +21,7 @@ Set-StrictMode -Version Latest
 #>
 
 $v3 = Join-Path $PSScriptRoot '..\reposnapshot-v3'
-$chainExec = Join-Path $v3 'processors\chain-executor.ps1'
+$chainExec = Join-Path $v3 'processors\chain_executor.ps1'
 
 # ---------------------------------------------------------------------------
 # Minimal assertion framework (house pattern — see colonel-dispatch.tests.ps1)
@@ -191,7 +191,7 @@ try
     $fleetOk = $true
     foreach ($proc in (Get-ChildItem (Join-Path $v3 'processors') -Filter '*.ps1'))
     {
-        if ($proc.Name -eq 'chain-executor.ps1') { continue }
+        if ($proc.Name -eq 'chain_executor.ps1') { continue }
         $r = Invoke-CompileOnly @{ 'p' = $proc.FullName } 'p'
         if ((@($r.Errors) -join ' ') -match 'Set-StrictMode|Set-PSDebug') { $fleetOk = $false }
     }

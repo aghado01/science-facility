@@ -4,15 +4,15 @@ Set-StrictMode -Version Latest
 <#
 .SYNOPSIS
     Content mutators inside a code-track chain: crawl → ignore →
-    ingest[file-read, rs-whitespace, rs.ps.strip, rs-content_meta] → assemble.
+    ingest[file_read, rs.whitespace, rs.ps.strip, rs.content_meta] → assemble.
 
 .DESCRIPTION
-    The regression for consolidation item 6d. Before harmonization, rs-whitespace
+    The regression for consolidation item 6d. Before harmonization, rs.whitespace
     and rs.ps.strip spoke the tp-era contract — they unpacked $Item.Text and
     REPLACED the bag with an Id/Path/Text envelope, so putting either one in a
     code-track chain destroyed the ItemDescriptor identity fields and assemble
     could not key an entry. That is why the golden validation ran a chain of
-    only [file-read, rs-content_meta] over normal-form content: content-transform
+    only [file_read, rs.content_meta] over normal-form content: content-transform
     parity was blocked, not merely untested.
 
     This suite asserts the capability 6d unblocked, end to end and through
@@ -24,7 +24,7 @@ Set-StrictMode -Version Latest
          envelope residue anywhere in the IR.
       2. Both mutations actually applied (the chain is doing work, not
          passing through): CRLF normalized + trailing whitespace gone by
-         rs-whitespace; comment kinds stripped and FrontMatter preserved by
+         rs.whitespace; comment kinds stripped and FrontMatter preserved by
          rs.ps.strip.
       3. The `Processing` trail is collated as an ORDINARY element — order is
          chain order, and Header.Elements declares it without assemble
@@ -92,7 +92,7 @@ function Get-Thing
     return `$x
 }
 "@
-# CRLF + trailing whitespace + trailing blank lines, so rs-whitespace has real work
+# CRLF + trailing whitespace + trailing blank lines, so rs.whitespace has real work
 $psSource = ($psSource -replace "`n", "`r`n") + "   `r`n`r`n`r`n`r`n"
 [IO.File]::WriteAllText((Join-Path $fixtureRoot 'src\thing.ps1'), $psSource, [System.Text.UTF8Encoding]::new($false))
 [IO.File]::WriteAllText((Join-Path $fixtureRoot 'src\plain.txt'), "just text`r`nsecond   line", [System.Text.UTF8Encoding]::new($false))
@@ -115,23 +115,23 @@ try
     $filtered = Invoke-Membrane -CompiledNodes $compiled.CompiledNodes -CrawlerGraph $crawl.Graph
 
     # The profile 6d unblocked: reader → whitespace mutator → language-specific
-    # mutator → enrich-only tail. Position doctrine: rs-content_meta LAST, after
+    # mutator → enrich-only tail. Position doctrine: rs.content_meta LAST, after
     # ALL content mutators (its metrics describe what the reader will receive).
     $ingest = Invoke-Ingest -FilteredFsGraph $filtered `
         -Manifest @{
-            'file-read'     = (Join-Path $v3 'processors\file-read.ps1')
-            'rs-whitespace' = (Join-Path $v3 'processors\rs-whitespace.ps1')
+            'file_read'     = (Join-Path $v3 'processors\file_read.ps1')
+            'rs.whitespace' = (Join-Path $v3 'processors\rs.whitespace.ps1')
             'rs.ps.strip'   = (Join-Path $v3 'processors\rs.ps.strip.ps1')
-            'rs-content_meta' = (Join-Path $v3 'processors\rs-content_meta.ps1')
+            'rs.content_meta' = (Join-Path $v3 'processors\rs.content_meta.ps1')
         } `
         -Steps @(
-            @{ Key = 'file-read'; Config = @{} }
-            @{ Key = 'rs-whitespace'; Config = @{ Operations = @('lf', 'trim-trailing', 'trim-doc') } }
+            @{ Key = 'file_read'; Config = @{} }
+            @{ Key = 'rs.whitespace'; Config = @{ Operations = @('lf', 'trim-trailing', 'trim-doc') } }
             @{ Key = 'rs.ps.strip'; Config = @{ Operations = @('block-comments', 'doc-strings', 'comment-blocks', 'line-comments') } }
-            @{ Key = 'rs-content_meta'; Config = @{} }
+            @{ Key = 'rs.content_meta'; Config = @{} }
         ) `
-        -ChainExecutorPath (Join-Path $v3 'processors\chain-executor.ps1') `
-        -SharedHelperPath (Join-Path $v3 'processors\bag-helpers.ps1')
+        -ChainExecutorPath (Join-Path $v3 'processors\chain_executor.ps1') `
+        -SharedHelperPath (Join-Path $v3 'processors\bag_helpers.ps1')
 
     Assert-True ($null -ne $ingest) 'ingest returned a dispatch envelope'
     Assert-True (@($ingest.Errors).Count -eq 0) 'no per-item dispatch errors' "errors: $(@($ingest.Errors) -join '; ')"
@@ -148,7 +148,7 @@ try
     # -----------------------------------------------------------------------
     Enter-Section '2. Identity survives the mutator chain (the 6d fault line)'
     # -----------------------------------------------------------------------
-    Assert-True ($entry.RelativePath -eq 'src/thing.ps1') 'RelativePath intact after rs-whitespace + rs.ps.strip'
+    Assert-True ($entry.RelativePath -eq 'src/thing.ps1') 'RelativePath intact after rs.whitespace + rs.ps.strip'
     Assert-True ($entry.NodePath -eq 'src/') 'NodePath intact'
     Assert-True ($entry.LastWriteUtc -is [datetime]) 'LastWriteUtc intact and still typed'
     Assert-True ($null -ne $entry.PSObject.Properties['Content']) 'Content key present (never renamed to Text)'
@@ -159,9 +159,9 @@ try
     # -----------------------------------------------------------------------
     Enter-Section '3. Both mutations actually applied'
     # -----------------------------------------------------------------------
-    Assert-True ($entry.Content -notmatch "`r") 'rs-whitespace: CRLF normalized to LF'
-    Assert-True ($entry.Content -notmatch '(?m)[ \t]+$') 'rs-whitespace: per-line trailing whitespace gone'
-    Assert-True ($entry.Content -notmatch '\n\s*$') 'rs-whitespace: trailing blank lines trimmed (trim-doc)'
+    Assert-True ($entry.Content -notmatch "`r") 'rs.whitespace: CRLF normalized to LF'
+    Assert-True ($entry.Content -notmatch '(?m)[ \t]+$') 'rs.whitespace: per-line trailing whitespace gone'
+    Assert-True ($entry.Content -notmatch '\n\s*$') 'rs.whitespace: trailing blank lines trimmed (trim-doc)'
     Assert-True ($entry.Content -notmatch 'a standalone comment') 'rs.ps.strip: CommentBlock stripped'
     Assert-True ($entry.Content -notmatch 'docstring') 'rs.ps.strip: DocString stripped'
     Assert-True ($entry.Content -match '(?m)^#Requires -Version 7\.0') 'rs.ps.strip: FrontMatter preserved under mutation'
@@ -173,7 +173,7 @@ try
     # -----------------------------------------------------------------------
     Assert-True ($null -ne $entry.PSObject.Properties['Processing']) 'Processing element present on the entry'
     Assert-True (@($entry.Processing).Count -eq 2) 'one record per mutator invocation' "got $(@($entry.Processing).Count)"
-    Assert-True ($entry.Processing[0].Processor -eq 'rs-whitespace') 'trail order[0] = rs-whitespace (chain order)'
+    Assert-True ($entry.Processing[0].Processor -eq 'rs.whitespace') 'trail order[0] = rs.whitespace (chain order)'
     Assert-True ($entry.Processing[1].Processor -eq 'rs.ps.strip') 'trail order[1] = rs.ps.strip'
     Assert-True (@($entry.Processing[0].Operations).Count -eq 3) 'first record carries its own resolved ops'
     Assert-True (@($entry.Processing[1].Operations).Count -eq 4) 'second record carries its own resolved ops'
@@ -204,19 +204,19 @@ try
     # silently degrade.
     $bareIngest = Invoke-Ingest -FilteredFsGraph $filtered `
         -Manifest @{
-            'file-read'     = (Join-Path $v3 'processors\file-read.ps1')
-            'rs-whitespace' = (Join-Path $v3 'processors\rs-whitespace.ps1')
+            'file_read'     = (Join-Path $v3 'processors\file_read.ps1')
+            'rs.whitespace' = (Join-Path $v3 'processors\rs.whitespace.ps1')
             'rs.ps.strip'   = (Join-Path $v3 'processors\rs.ps.strip.ps1')
-            'rs-content_meta' = (Join-Path $v3 'processors\rs-content_meta.ps1')
+            'rs.content_meta' = (Join-Path $v3 'processors\rs.content_meta.ps1')
         } `
         -Steps @(
-            @{ Key = 'file-read'; Config = @{} }
-            @{ Key = 'rs-whitespace'; Config = @{ Operations = @('lf', 'trim-trailing', 'trim-doc') } }
+            @{ Key = 'file_read'; Config = @{} }
+            @{ Key = 'rs.whitespace'; Config = @{ Operations = @('lf', 'trim-trailing', 'trim-doc') } }
             @{ Key = 'rs.ps.strip'; Config = @{ Operations = @('block-comments', 'doc-strings', 'comment-blocks', 'line-comments') } }
-            @{ Key = 'rs-content_meta'; Config = @{} }
+            @{ Key = 'rs.content_meta'; Config = @{} }
         ) `
-        -ChainExecutorPath (Join-Path $v3 'processors\chain-executor.ps1') `
-        -SharedHelperPath (Join-Path $v3 'processors\bag-helpers.ps1') `
+        -ChainExecutorPath (Join-Path $v3 'processors\chain_executor.ps1') `
+        -SharedHelperPath (Join-Path $v3 'processors\bag_helpers.ps1') `
         -IssPreset 'Bare' -MaxWorkers 1
 
     Assert-True (@($bareIngest.Errors).Count -eq 0) 'Bare: no dispatch errors' ($bareIngest.Errors -join '; ')
@@ -239,17 +239,17 @@ try
     # happens per item with no shared state.
     $serial = Invoke-Ingest -FilteredFsGraph $filtered `
         -Manifest @{
-            'file-read'  = (Join-Path $v3 'processors\file-read.ps1')
-            'rs-whitespace' = (Join-Path $v3 'processors\rs-whitespace.ps1')
+            'file_read'  = (Join-Path $v3 'processors\file_read.ps1')
+            'rs.whitespace' = (Join-Path $v3 'processors\rs.whitespace.ps1')
             'rs.ps.strip' = (Join-Path $v3 'processors\rs.ps.strip.ps1')
         } `
         -Steps @(
-            @{ Key = 'file-read'; Config = @{} }
-            @{ Key = 'rs-whitespace'; Config = @{ Operations = @('lf', 'trim-trailing', 'trim-doc') } }
+            @{ Key = 'file_read'; Config = @{} }
+            @{ Key = 'rs.whitespace'; Config = @{ Operations = @('lf', 'trim-trailing', 'trim-doc') } }
             @{ Key = 'rs.ps.strip'; Config = @{ Operations = @('block-comments', 'doc-strings', 'comment-blocks', 'line-comments') } }
         ) `
-        -ChainExecutorPath (Join-Path $v3 'processors\chain-executor.ps1') `
-        -SharedHelperPath (Join-Path $v3 'processors\bag-helpers.ps1') `
+        -ChainExecutorPath (Join-Path $v3 'processors\chain_executor.ps1') `
+        -SharedHelperPath (Join-Path $v3 'processors\bag_helpers.ps1') `
         -MaxWorkers 1
 
     Assert-True ($serial.Budget.Threads -eq 1) 'serial run used one worker'

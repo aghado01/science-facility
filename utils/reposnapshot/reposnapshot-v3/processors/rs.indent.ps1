@@ -1,6 +1,6 @@
 <#
 .LINK
-    docs/rs-indent.md
+    docs/rs.indent.md
 #>
 param(
     [Parameter(Position = 0)]
@@ -13,7 +13,7 @@ param(
 #region Config
 if ($Config.Count -eq 0 -or -not $Config.ContainsKey('Operations'))
 {
-    $Config = Resolve-ProcessorConfig -ProcessorName 'rs-indent' -CallerConfig $Config
+    $Config = Resolve-ProcessorConfig -ProcessorName 'rs.indent' -CallerConfig $Config
 }
 $ops = @($Config['Operations'])
 $includeMeta = if ($null -ne $Config['IncludeMeta']) { [bool]$Config['IncludeMeta'] } else { $true }
@@ -178,7 +178,7 @@ $t = $sb.ToString()
 # Copy-on-mutate return — harmonized content-mutator contract (6d)
 $record = if ($includeMeta)
 {
-    [pscustomobject]@{ Processor = 'rs-indent'; Operations = @($ops); Skipped = $skipped }
+    [pscustomobject]@{ Processor = 'rs.indent'; Operations = @($ops); Skipped = $skipped }
 }
 else { $null }
 

@@ -1,6 +1,6 @@
 <#
 .LINK
-    docs/bag-helpers.md
+    docs/bag_helpers.md
 #>
 
 #region Resolve-BagContent

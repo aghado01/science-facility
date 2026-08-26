@@ -1,6 +1,6 @@
 <#
 .LINK
-    docs/rs-content_meta.md
+    docs/rs.content_meta.md
 #>
 param($Item, $Config)
 

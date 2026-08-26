@@ -1,6 +1,6 @@
 <#
 .LINK
-    docs/file-read.md
+    docs/file_read.md
 #>
 param($Item, $Config)
 

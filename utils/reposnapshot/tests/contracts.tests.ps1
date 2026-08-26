@@ -109,12 +109,12 @@ try
     # -----------------------------------------------------------------------
     Enter-Section '1. Every contract parses and names its stage'
     # -----------------------------------------------------------------------
-    # *.contract.json, excluding rs-*.contract.json — contracts/ also holds
+    # *.contract.json, excluding rs.*.contract.json — contracts/ also holds
     # payload declarations (container.spec.jsonc, excluded by extension) and
-    # processor producer-contracts (rs-content_meta.contract.json and any
-    # future rs-* sibling), which declare { processor, in, out } rather than
+    # processor producer-contracts (rs.content_meta.contract.json and any
+    # future rs.* sibling), which declare { processor, in, out } rather than
     # { stage, in, out } and must not be parsed as a stage contract.
-    $files = @(Get-ChildItem -LiteralPath $schemaDir -Filter '*.contract.json' -Exclude 'rs-*.contract.json' | Sort-Object Name)
+    $files = @(Get-ChildItem -LiteralPath $schemaDir -Filter '*.contract.json' -Exclude 'rs.*.contract.json' | Sort-Object Name)
     Assert-True ($files.Count -ge 1) "contract files found under contracts/" "got $($files.Count)"
 
     $contracts = @{}

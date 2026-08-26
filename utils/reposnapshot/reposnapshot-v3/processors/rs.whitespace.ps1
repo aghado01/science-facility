@@ -1,6 +1,6 @@
 <#
 .LINK
-    docs/rs-whitespace.md
+    docs/rs.whitespace.md
 #>
 param(
     [Parameter(Position = 0)]
@@ -12,7 +12,7 @@ param(
 #region Config
 if ($Config.Count -eq 0 -or -not $Config.ContainsKey('Operations'))
 {
-    $Config = Resolve-ProcessorConfig -ProcessorName 'rs-whitespace' -CallerConfig $Config
+    $Config = Resolve-ProcessorConfig -ProcessorName 'rs.whitespace' -CallerConfig $Config
 }
 $ops = @($Config['Operations'])
 $includeMeta = if ($null -ne $Config['IncludeMeta']) { [bool]$Config['IncludeMeta'] } else { $true }
@@ -116,7 +116,7 @@ foreach ($requested in ($ops | Select-Object -Unique))
 #region Emit
 $record = if ($includeMeta)
 {
-    $fields = [ordered]@{ Processor = 'rs-whitespace'; Operations = @($ran) }
+    $fields = [ordered]@{ Processor = 'rs.whitespace'; Operations = @($ran) }
     if ($skipped.Count) { $fields['Skipped'] = @($skipped) }
     [pscustomobject]$fields
 }

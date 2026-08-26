@@ -24,8 +24,8 @@ Set-StrictMode -Version Latest
 #>
 
 $v3 = Join-Path $PSScriptRoot '..\reposnapshot-v3'
-$chainExec = Join-Path $v3 'processors\chain-executor.ps1'
-$bagHelpers = Join-Path $v3 'processors\bag-helpers.ps1'
+$chainExec = Join-Path $v3 'processors\chain_executor.ps1'
+$bagHelpers = Join-Path $v3 'processors\bag_helpers.ps1'
 
 # ---------------------------------------------------------------------------
 # Minimal assertion framework (house pattern)

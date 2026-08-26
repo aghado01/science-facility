@@ -5,7 +5,7 @@ Set-StrictMode -Version Latest
 .SYNOPSIS
     rs.core.container — psr layout resolution, content codec, header/row
     measure + render. Exercised against contracts/container.spec.jsonc (the real
-    declaration) and, for the value walk, a real rs-content_meta enrichment.
+    declaration) and, for the value walk, a real rs.content_meta enrichment.
 
 .DESCRIPTION
     The wire is the item model (ledger #49): a row is a list of items joined by
@@ -29,7 +29,7 @@ Set-StrictMode -Version Latest
          overflow; double formatting; empty markers; one physical line per row.
       5. Value walk (contracts check #5) — every enabled column/sub-field
          accessor in the layout resolves on an entry enriched by the REAL
-         rs-content_meta processor.
+         rs.content_meta processor.
 
 .NOTES
     Run from any directory:
@@ -143,7 +143,7 @@ try
     # -----------------------------------------------------------------------
     Assert-True ((ConvertTo-ContentSpan "a`r`nb`rc`nd") -eq 'a\nb\nc\nd') 'CRLF, CR, LF → the two-char mark, PURE substitution — no spacing logic in the encoder' (ConvertTo-ContentSpan "a`r`nb`rc`nd")
     Assert-True ((ConvertTo-ContentSpan "x`u{0085}y`u{2028}z`u{2029}w`u{000B}v`u{000C}u") -eq 'x\ny\nz\nw\nv\nu') 'NEL, LS, PS, VT, FF → the same mark'
-    Assert-True ((ConvertTo-ContentSpan "a`n`nb") -eq 'a\n\nb') 'consecutive terminators → adjacent marks, verbatim (spacing is rs-whitespace pad-breaks, upstream)' (ConvertTo-ContentSpan "a`n`nb")
+    Assert-True ((ConvertTo-ContentSpan "a`n`nb") -eq 'a\n\nb') 'consecutive terminators → adjacent marks, verbatim (spacing is rs.whitespace pad-breaks, upstream)' (ConvertTo-ContentSpan "a`n`nb")
     Assert-True ((ConvertTo-ContentSpan "a `n b") -eq 'a \n b') 'pad-breaks-prepared content encodes to the space-flanked wire — one symbol per terminator, nothing added'
     Assert-True ((Measure-ContentSpan "a `n`n b") -eq $utf8.GetByteCount('a \n\n b')) 'measure matches render on prepared content'
     Assert-True ((ConvertTo-ContentSpan 'C:\Users\me\n') -eq 'C:\Users\me\n') 'backslash never doubled; literal \n in source passes verbatim'
@@ -273,12 +273,12 @@ try
     Assert-True ((Measure-Row -Layout $L1 -Entry $entry) -eq (Build-Row -Layout $L1 -Entry $entry -Cursor 0 -GlobalIdx 9999).Bytes.Length) 'measure holds for any gidx value of the declared width'
 
     # -----------------------------------------------------------------------
-    Enter-Section '5. Value walk — every layout accessor resolves on a real rs-content_meta entry'
+    Enter-Section '5. Value walk — every layout accessor resolves on a real rs.content_meta entry'
     # -----------------------------------------------------------------------
     . (Join-Path $procDir 'tests\_helpers.ps1')
     $raw = [pscustomobject]@{ RelativePath = 'w/real.ps1'; NodePath = 'w/'; Content = "function f {`r`n  'x'`r`n}`r`n" }
-    $enriched = & (Join-Path $procDir 'rs-content_meta.ps1') $raw @{}
-    Assert-True ($null -ne $enriched.PSObject.Properties['ContentMeta']) 'rs-content_meta attached ContentMeta'
+    $enriched = & (Join-Path $procDir 'rs.content_meta.ps1') $raw @{}
+    Assert-True ($null -ne $enriched.PSObject.Properties['ContentMeta']) 'rs.content_meta attached ContentMeta'
 
     $Lall = Resolve-Layout -Header (New-Header 1 @{ ContentMeta = @(1, 1) }) -Columns gidx, content_meta `
         -MetaFields line_mean, num_chars, num_words, num_punct, ws_ratio, entropy

@@ -187,7 +187,7 @@ function Resolve-RefAccessor ([string]$Ref, [string]$SpecDir, [string]$Where)
         'assemble.contract.json'  { return 'entry.' + (@($segs[3..($segs.Count - 1)]) -join '.') }
         'shards.contract.json'    { return 'plan.'  + $segs[-1] }
         'container.contract.json' { return 'codec.' + $segs[-1] }
-        'rs-*.contract.json'      { return 'entry.' + (@($segs[1..($segs.Count - 1)]) -join '.') }
+        'rs.*.contract.json'      { return 'entry.' + (@($segs[1..($segs.Count - 1)]) -join '.') }
         default { throw "rs.core.container: '$Ref' at $Where points at $file, which has no accessor derivation." }
     }
 }

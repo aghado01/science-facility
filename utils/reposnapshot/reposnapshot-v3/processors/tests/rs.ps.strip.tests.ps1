@@ -494,7 +494,7 @@ Assert-True ($rTp.Text -notmatch '(?s)<#.*?#>') 'Text-keyed bag: Text mutated in
 Assert-True ($null -eq $rTp.PSObject.Properties['Content']) 'Text-keyed bag: no Content key invented'
 Assert-Equal $rTp.Id 'p1' 'Text-keyed bag: Id passed through'
 
-# No-content bag → returned untouched (mirrors rs-content_meta's no-Content rule).
+# No-content bag → returned untouched (mirrors rs.content_meta's no-Content rule).
 # A mutator must not fabricate an empty payload: assemble splits EmptyFile from
 # EmptiedByProcessing and routes empty content to Diagnostics.
 $halted = [pscustomobject]@{ RelativePath = 'bin/x.dll'; SizeBytes = 9; ReadError = 'BinaryOrNulContent' }
@@ -504,11 +504,11 @@ Assert-True ($null -eq $rHalt.PSObject.Properties['Processing']) 'no-content bag
 Assert-Equal $rHalt.ReadError 'BinaryOrNulContent' 'no-content bag: returned intact'
 
 # Chained mutators: the trail accumulates in chain order and identity survives.
-$fmt = Join-Path $PSScriptRoot '..\rs-whitespace.ps1'
+$fmt = Join-Path $PSScriptRoot '..\rs.whitespace.ps1'
 $step1 = & $fmt $descriptor @{ Operations = @('lf') }
 $step2 = Invoke-Processor -Item $step1
 Assert-Equal $step2.Processing.Count 2 'chain: two records accumulated'
-Assert-Equal $step2.Processing[0].Processor 'rs-whitespace' 'chain: order[0] = rs-whitespace'
+Assert-Equal $step2.Processing[0].Processor 'rs.whitespace' 'chain: order[0] = rs.whitespace'
 Assert-Equal $step2.Processing[1].Processor 'rs.ps.strip' 'chain: order[1] = rs.ps.strip'
 Assert-Equal $step2.Processing[1].Operations.Count 4 'chain: rs.ps.strip ops recorded'
 Assert-Equal $step2.RelativePath 'src/a.ps1' 'chain: identity survives cross-processor chain'

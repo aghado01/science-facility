@@ -42,7 +42,7 @@
 
 .EXAMPLE
     # What defaults does a processor declare?
-    Get-FunctionSignature -Path .\reposnapshot-v3\processors\rs-indent.ps1 | Format-FunctionSignature
+    Get-FunctionSignature -Path .\reposnapshot-v3\processors\rs.indent.ps1 | Format-FunctionSignature
 
 .EXAMPLE
     # Which params does the wrapper forward to each target? (the ingest split)
