@@ -49,6 +49,7 @@ $suitePaths = @(
     (Join-Path $PSScriptRoot 'crawler.tests.ps1')
     (Join-Path $PSScriptRoot 'membrane.tests.ps1')
     (Join-Path $PSScriptRoot 'pipeline.smoke.tests.ps1')
+    (Join-Path $PSScriptRoot 'colonel-sequencing.tests.ps1')
     (Join-Path $PSScriptRoot 'colonel-validation.tests.ps1')
     (Join-Path $PSScriptRoot 'colonel-dispatch.tests.ps1')
     (Join-Path $PSScriptRoot 'assemble.tests.ps1')

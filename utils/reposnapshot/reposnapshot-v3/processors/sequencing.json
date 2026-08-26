@@ -1,0 +1,48 @@
+{
+    "Processors": {
+        "file-read": { 
+            "Group": "1", 
+            "Rank": "0", 
+            "Default": true, 
+            "Requires": []
+        },
+        "$strip": { 
+            "Group": "2", 
+            "Rank": "0", 
+            "Default": false, 
+            "Requires": ["file-read"]
+        },
+        "rs-indent": { 
+            "Group": "3", 
+            "Rank": "1", 
+            "Default": false, 
+            "Requires": ["file-read"] 
+        },
+        "rs-whitespace": {
+            "Group": "3", 
+            "Rank": "2", 
+            "Default": false, 
+            "Requires": ["file-read"] 
+        },
+        "rs-content_meta": {
+            "Group": "4", 
+            "Rank": "0", 
+            "Default": false, 
+            "Requires": ["file-read"] 
+        }
+        
+    },
+    "Routing": {
+        "$strip": {
+            "powershell": {
+                "extensions": [ "ps1", "psm1", "psd1" ],
+                "processor" : "rs.ps.strip.ps1"
+            },
+            "csharp": {
+                "extensions": [ "cs", "csx" ],
+                "processor": "rs.cs.strip.ps1"
+            }
+        }
+    }
+
+}

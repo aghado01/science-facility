@@ -7,13 +7,15 @@
         "*.psm1",
         "!tests/"
     ],
-    "Processors": [
-        "rs.ps.strip",
+    "IncludeProcessors": [
+        "$strip",
         "rs-indent",
-        "rs-whitespace"
+        "rs-whitespace", 
+        "rs-content_meta"
     ],
     "Columns": [
-        "gidx"
+        "gidx", 
+        "content_meta"
     ],
     "ShardQuotaBytes": 65536,
     "ShardToleranceBytes": 4096,

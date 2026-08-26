@@ -127,6 +127,372 @@ function Build-Iss
 }
 #endregion
 
+#region Sequencing
+# Sequence-manifest resolution: enable -> route -> sort. The compiler is the only
+# component that reads this file; nothing below plan compilation branches on file
+# type. All four functions are pure over hashtables except the single read in
+# Import-SequenceManifest.
+
+function Import-SequenceManifest
+{
+    <#
+    .SYNOPSIS
+        Loads and validates the sequence manifest into a normalized structure.
+
+    .DESCRIPTION
+        Every declared convention is enforced here and every failure is terminating:
+        a malformed manifest is a stop, not a degraded run.
+
+    .OUTPUTS
+        [PSCustomObject] @{ Path; Processors; Routing; ExtensionMap }
+    #>
+    param(
+        [Parameter(Mandatory)] [string]    $Path,
+        [Parameter(Mandatory)] [hashtable] $Manifest
+    )
+
+    if (-not [System.IO.File]::Exists($Path))
+    {
+        throw "Import-SequenceManifest: sequence manifest not found: $Path"
+    }
+
+    try { $raw = ConvertFrom-Json -InputObject ([System.IO.File]::ReadAllText($Path)) -AsHashtable }
+    catch { throw "Import-SequenceManifest: '$Path' is not valid JSON — $($_.Exception.Message)" }
+
+    if ($null -eq $raw -or -not $raw.Contains('Processors') -or $raw['Processors'].Count -eq 0)
+    {
+        throw "Import-SequenceManifest: '$Path' declares no Processors."
+    }
+    $rawProcs = $raw['Processors']
+    $rawRouting = if ($raw.Contains('Routing') -and $null -ne $raw['Routing']) { $raw['Routing'] } else { @{} }
+
+    # Normalize entries; Group and Rank are ordinals, so they must parse as integers.
+    $procs = @{}
+    foreach ($key in $rawProcs.Keys)
+    {
+        $e = $rawProcs[$key]
+        if ($e -isnot [System.Collections.IDictionary])
+        {
+            throw "Import-SequenceManifest: entry '$key' is not an object."
+        }
+
+        $group = 0
+        $rank = 0
+        $gTxt = if ($e.Contains('Group')) { [string]$e['Group'] } else { '' }
+        $rTxt = if ($e.Contains('Rank')) { [string]$e['Rank'] } else { '' }
+        if (-not [int]::TryParse($gTxt, [ref]$group))
+        {
+            throw "Import-SequenceManifest: '$key' has a missing or non-integer Group ('$gTxt')."
+        }
+        if (-not [int]::TryParse($rTxt, [ref]$rank))
+        {
+            throw "Import-SequenceManifest: '$key' has a missing or non-integer Rank ('$rTxt')."
+        }
+
+        # Direct assignment, not an if-expression: a branch yielding an empty array
+        # emits nothing, and the variable would land as $null instead of @().
+        $requires = @()
+        if ($e.Contains('Requires') -and $null -ne $e['Requires']) { $requires = @([string[]]$e['Requires']) }
+
+        $procs[$key] = @{
+            Key      = $key
+            Group    = $group
+            Rank     = $rank
+            Default  = if ($e.Contains('Default')) { [bool]$e['Default'] } else { $false }
+            Requires = $requires
+            IsToken  = $key.StartsWith('$')
+        }
+    }
+
+    # A fixed key names its own processor file; a token names none and routes instead.
+    foreach ($key in $procs.Keys)
+    {
+        if ($procs[$key].IsToken)
+        {
+            if (-not $rawRouting.Contains($key))
+            {
+                throw "Import-SequenceManifest: token '$key' has no Routing table."
+            }
+        }
+        elseif (-not $Manifest.ContainsKey($key))
+        {
+            throw "Import-SequenceManifest: '$key' has no processors\$key.ps1 (known: $($Manifest.Keys -join ', '))."
+        }
+    }
+    foreach ($token in $rawRouting.Keys)
+    {
+        if (-not $procs.ContainsKey($token))
+        {
+            throw "Import-SequenceManifest: Routing declares '$token', which has no Processors entry."
+        }
+        if (-not $procs[$token].IsToken)
+        {
+            throw "Import-SequenceManifest: Routing declares '$token', which is not a token."
+        }
+    }
+
+    # Routes bind to real processor files; extensions normalize to the crawler's
+    # leading-dot form and must name at most one class across the whole manifest.
+    $routing = @{}
+    $extMap = @{}
+    foreach ($token in $rawRouting.Keys)
+    {
+        $langs = @{}
+        foreach ($lang in $rawRouting[$token].Keys)
+        {
+            $route = $rawRouting[$token][$lang]
+            if ($route -isnot [System.Collections.IDictionary] -or
+                -not $route.Contains('processor') -or
+                [string]::IsNullOrWhiteSpace([string]$route['processor']))
+            {
+                throw "Import-SequenceManifest: route $token/$lang names no processor."
+            }
+
+            $file = [string]$route['processor']
+            $rKey = [System.IO.Path]::GetFileNameWithoutExtension($file)
+            if (-not $Manifest.ContainsKey($rKey))
+            {
+                throw "Import-SequenceManifest: route $token/$lang names '$file', which has no processor in the manifest."
+            }
+            $onDisk = [System.IO.Path]::GetFileName([string]$Manifest[$rKey])
+            if ($onDisk -ne $file)
+            {
+                throw "Import-SequenceManifest: route $token/$lang names '$file', but the manifest holds '$onDisk'."
+            }
+
+            $exts = @()
+            if ($route.Contains('extensions') -and $null -ne $route['extensions']) { $exts = @($route['extensions']) }
+            if ($exts.Count -eq 0)
+            {
+                throw "Import-SequenceManifest: route $token/$lang declares no extensions."
+            }
+
+            $norm = [System.Collections.Generic.List[string]]::new()
+            foreach ($x in $exts)
+            {
+                $ext = '.' + ([string]$x).TrimStart('.').ToLowerInvariant()
+                if ($extMap.ContainsKey($ext) -and $extMap[$ext] -ne $lang)
+                {
+                    throw "Import-SequenceManifest: extension '$ext' maps to both '$($extMap[$ext])' and '$lang'; a file class must be unambiguous."
+                }
+                $extMap[$ext] = $lang
+                $norm.Add($ext)
+            }
+
+            $langs[$lang] = @{ Language = $lang; Extensions = $norm.ToArray(); Key = $rKey; File = $file }
+        }
+        $routing[$token] = $langs
+    }
+
+    # Rank 0 reserves a group for a single member; otherwise ranks separate co-applying members.
+    $byGroup = @{}
+    foreach ($key in $procs.Keys)
+    {
+        $g = $procs[$key].Group
+        if (-not $byGroup.ContainsKey($g)) { $byGroup[$g] = [System.Collections.Generic.List[string]]::new() }
+        $byGroup[$g].Add($key)
+    }
+    foreach ($g in $byGroup.Keys)
+    {
+        $members = @($byGroup[$g])
+        $solo = @($members | Where-Object { $procs[$_].Rank -eq 0 })
+        if ($solo.Count -gt 0 -and $members.Count -gt 1)
+        {
+            throw "Import-SequenceManifest: group $g holds $($members.Count) members ($($members -join ', ')) but '$($solo[0])' is Rank 0, which reserves the group for one member."
+        }
+        $ranks = @($members | ForEach-Object { $procs[$_].Rank })
+        if (@($ranks | Select-Object -Unique).Count -ne $ranks.Count)
+        {
+            throw "Import-SequenceManifest: group $g has duplicate Ranks among $($members -join ', ')."
+        }
+    }
+
+    # Requires drives enablement, not ordering — so every edge must point backward
+    # through the canon, or a dependency would be enabled and then run too late.
+    foreach ($key in $procs.Keys)
+    {
+        foreach ($req in $procs[$key].Requires)
+        {
+            if (-not $procs.ContainsKey($req))
+            {
+                throw "Import-SequenceManifest: '$key' requires '$req', which has no Processors entry."
+            }
+            $dep = $procs[$req]
+            $self = $procs[$key]
+            if ($dep.Group -gt $self.Group -or ($dep.Group -eq $self.Group -and $dep.Rank -ge $self.Rank))
+            {
+                throw "Import-SequenceManifest: '$key' (Group $($self.Group), Rank $($self.Rank)) requires '$req' (Group $($dep.Group), Rank $($dep.Rank)), which does not sort earlier."
+            }
+        }
+    }
+
+    return [pscustomobject]@{
+        Path         = $Path
+        Processors   = $procs
+        Routing      = $routing
+        ExtensionMap = $extMap
+    }
+}
+
+function Resolve-EnabledSet
+{
+    <#
+    .SYNOPSIS
+        Closes a requested processor set over Default entries and Requires edges.
+
+    .DESCRIPTION
+        IncludeProcessors is a set: array position carries no meaning, and ordering
+        is settled later by Group and Rank.
+
+    .OUTPUTS
+        [string[]] enabled sequence-manifest keys
+    #>
+    param(
+        [Parameter(Mandatory)] [pscustomobject]              $Sequence,
+        [AllowEmptyCollection()] [AllowNull()] [string[]]    $IncludeProcessors = @()
+    )
+
+    $procs = $Sequence.Processors
+    $wanted = [System.Collections.Generic.HashSet[string]]::new()
+
+    foreach ($k in @($IncludeProcessors))
+    {
+        if ([string]::IsNullOrWhiteSpace($k)) { continue }
+        if (-not $procs.ContainsKey($k))
+        {
+            throw "Resolve-EnabledSet: '$k' has no sequence-manifest entry. Add one, or supply the chain literally with -RunVerbatim."
+        }
+        [void]$wanted.Add($k)
+    }
+
+    foreach ($k in $procs.Keys)
+    {
+        if ($procs[$k].Default) { [void]$wanted.Add($k) }
+    }
+
+    do
+    {
+        $before = $wanted.Count
+        foreach ($k in @($wanted))
+        {
+            foreach ($r in $procs[$k].Requires) { [void]$wanted.Add($r) }
+        }
+    } while ($wanted.Count -gt $before)
+
+    return @($wanted)
+}
+
+function Resolve-Classes
+{
+    <#
+    .SYNOPSIS
+        Determines which file classes the corpus actually contains.
+
+    .DESCRIPTION
+        A class is a language named by an enabled token's routes whose extensions
+        appear in the corpus. 'default' joins the list only when some present
+        extension goes unclaimed, so an all-PowerShell run compiles no unused variant.
+
+    .OUTPUTS
+        [string[]] class names
+    #>
+    param(
+        [Parameter(Mandatory)] [pscustomobject]           $Sequence,
+        [Parameter(Mandatory)] [string[]]                 $Enabled,
+        [AllowEmptyCollection()] [AllowNull()] [string[]] $Extensions = @()
+    )
+
+    $present = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($x in @($Extensions))
+    {
+        if ([string]::IsNullOrWhiteSpace($x)) { continue }
+        [void]$present.Add('.' + ([string]$x).TrimStart('.').ToLowerInvariant())
+    }
+
+    $classes = [System.Collections.Generic.List[string]]::new()
+    $claimed = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+
+    foreach ($token in $Sequence.Routing.Keys)
+    {
+        if (@($Enabled) -notcontains $token) { continue }
+        foreach ($lang in $Sequence.Routing[$token].Keys)
+        {
+            $hit = $false
+            foreach ($ext in $Sequence.Routing[$token][$lang].Extensions)
+            {
+                if ($present.Contains($ext)) { $hit = $true; [void]$claimed.Add($ext) }
+            }
+            if ($hit -and -not $classes.Contains($lang)) { $classes.Add($lang) }
+        }
+    }
+
+    $unclaimed = $false
+    foreach ($ext in $present)
+    {
+        if (-not $claimed.Contains($ext)) { $unclaimed = $true; break }
+    }
+    if ($unclaimed -or $present.Count -eq 0) { $classes.Insert(0, 'default') }
+
+    return @($classes)
+}
+
+function Resolve-Variants
+{
+    <#
+    .SYNOPSIS
+        Compiles one dense step list per file class.
+
+    .DESCRIPTION
+        Each class walks the enabled set, resolves routed tokens against its own
+        routes, and splices out any token that does not resolve — variants differ
+        in length and carry no holes. Sorting is by (Group, Rank).
+
+    .OUTPUTS
+        [hashtable] class -> [PSCustomObject[]] @{ Key; Slot; Config }
+    #>
+    param(
+        [Parameter(Mandatory)] [pscustomobject] $Sequence,
+        [Parameter(Mandatory)] [string[]]       $Enabled,
+        [Parameter(Mandatory)] [string[]]       $Classes
+    )
+
+    $procs = $Sequence.Processors
+    $variants = @{}
+
+    foreach ($class in @($Classes))
+    {
+        $steps = [System.Collections.Generic.List[object]]::new()
+        foreach ($key in @($Enabled))
+        {
+            $meta = $procs[$key]
+            $resolved = $key
+
+            if ($meta.IsToken)
+            {
+                $table = $Sequence.Routing[$key]
+                if ($class -eq 'default' -or -not $table.ContainsKey($class)) { continue }
+                $resolved = $table[$class].Key
+            }
+
+            $steps.Add([pscustomobject]@{
+                    Key   = $resolved
+                    Slot  = $key
+                    Group = $meta.Group
+                    Rank  = $meta.Rank
+                })
+        }
+
+        $variants[$class] = @(
+            $steps | Sort-Object Group, Rank | ForEach-Object {
+                [pscustomobject]@{ Key = $_.Key; Slot = $_.Slot; Config = @{} }
+            }
+        )
+    }
+
+    return $variants
+}
+#endregion
+
 #region Compile-Plan
 function Compile-Plan
 {
@@ -673,4 +1039,8 @@ Export-ModuleMember -Function @(
     'Invoke-Plan'
     'New-RunspaceManager'
     'Build-Iss'
+    'Import-SequenceManifest'
+    'Resolve-EnabledSet'
+    'Resolve-Classes'
+    'Resolve-Variants'
 )
