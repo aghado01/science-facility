@@ -96,7 +96,12 @@ Routing resolves before `file-read` runs, so it can never depend on content (no 
 
 Callers **enable stages, never order them** — the routing instance of [stage-architecture.md](stage-architecture.md)'s "Config Selects, Implementation Owns Sequence". `-StripComments` enables `$strip`; position comes from the spine.
 
-This is [rs-whitespace](whitespace-invisibles.md)'s `Operations` model one scale up. There the caller lists which ops run and the sequence is fixed in source — `if ('pad-breaks' -in $ops)` blocks in declaration order, so array position never mattered. Here the caller lists which processors participate and the registry fixes their relative order. Selection is the caller's, sequence is the implementation's, at both scales.
+By analogy — to the selection/sequence split alone, not to the mechanism — this is [rs-whitespace](whitespace-invisibles.md)'s `Operations` model one scale up. There the caller lists which ops run and the sequence is fixed in source (`if ('pad-breaks' -in $ops)` blocks in declaration order), so array position never mattered. Here the caller lists which processors participate and the registry resolves order. Selection is the caller's, sequence is the implementation's, at both scales.
+
+The resolution itself is two-level, where rs-whitespace has a single flat sequence:
+
+- **Across families** — rank comes from `Spine`, which orders the families themselves; a member inherits its family's rank.
+- **Within a family** — order comes from registry declaration order among members, and binds only among members that *co-apply* to one file class. Two strippers for different languages never share a chain, so their relative registry order is moot; the ordering question is live only for multi-member routes (a language declaring both a stripper and a dedoc pass). Fixed families have exactly one member and no within-family question at all.
 
 `-Processors` forks into two explicit modes:
 
