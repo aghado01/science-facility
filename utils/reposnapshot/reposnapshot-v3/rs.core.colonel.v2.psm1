@@ -248,16 +248,13 @@ function Import-SequenceManifest
                 throw "Import-SequenceManifest: route $token/$lang names no processor."
             }
 
-            $file = [string]$route['processor']
-            $rKey = [System.IO.Path]::GetFileNameWithoutExtension($file)
+            # A route names a processor key, never a filename: the manifest derives
+            # its keys from the same on-disk stubs, so a correctly named processor
+            # cannot miss, and there is no second spelling to keep in agreement.
+            $rKey = [string]$route['processor']
             if (-not $Manifest.ContainsKey($rKey))
             {
-                throw "Import-SequenceManifest: route $token/$lang names '$file', which has no processor in the manifest."
-            }
-            $onDisk = [System.IO.Path]::GetFileName([string]$Manifest[$rKey])
-            if ($onDisk -ne $file)
-            {
-                throw "Import-SequenceManifest: route $token/$lang names '$file', but the manifest holds '$onDisk'."
+                throw "Import-SequenceManifest: route $token/$lang names '$rKey', which is not a processor key (known: $($Manifest.Keys -join ', '))."
             }
 
             $exts = @()
@@ -279,7 +276,7 @@ function Import-SequenceManifest
                 $norm.Add($ext)
             }
 
-            $langs[$lang] = @{ Language = $lang; Extensions = $norm.ToArray(); Key = $rKey; File = $file }
+            $langs[$lang] = @{ Language = $lang; Extensions = $norm.ToArray(); Key = $rKey }
         }
         $routing[$token] = $langs
     }

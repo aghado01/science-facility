@@ -36,11 +36,11 @@
         "$strip": {
             "powershell": {
                 "extensions": [ "ps1", "psm1", "psd1" ],
-                "processor" : "rs.ps.strip.ps1"
+                "processor" : "rs.ps.strip"
             },
             "csharp": {
                 "extensions": [ "cs", "csx" ],
-                "processor": "rs.cs.strip.ps1"
+                "processor": "rs.cs.strip"
             }
         }
     }

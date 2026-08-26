@@ -89,8 +89,8 @@ function New-BaseDoc
         }
         Routing    = [ordered]@{
             '$strip' = [ordered]@{
-                powershell = [ordered]@{ extensions = @('ps1', 'psm1', 'psd1'); processor = 'rs.ps.strip.ps1' }
-                csharp     = [ordered]@{ extensions = @('cs', 'csx'); processor = 'rs.cs.strip.ps1' }
+                powershell = [ordered]@{ extensions = @('ps1', 'psm1', 'psd1'); processor = 'rs.ps.strip' }
+                csharp     = [ordered]@{ extensions = @('cs', 'csx'); processor = 'rs.cs.strip' }
             }
         }
     }
@@ -149,16 +149,20 @@ try
     Assert-Throws { Import-Fixture $d } 'token without a Routing table rejected' 'no Routing table'
 
     $d = New-BaseDoc
-    $d.Routing['$parse'] = [ordered]@{ powershell = [ordered]@{ extensions = @('ps1'); processor = 'rs-indent.ps1' } }
+    $d.Routing['$parse'] = [ordered]@{ powershell = [ordered]@{ extensions = @('ps1'); processor = 'rs-indent' } }
     Assert-Throws { Import-Fixture $d } 'Routing for an undeclared token rejected' 'no Processors entry'
 
     $d = New-BaseDoc
-    $d.Routing['$strip'].csharp.processor = 'rs.cs.strip.cs'
-    Assert-Throws { Import-Fixture $d } 'route filename that disagrees with disk rejected' 'but the manifest holds'
+    $d.Routing['$strip'].csharp.processor = 'rs.cs.strip.ps1'
+    Assert-Throws { Import-Fixture $d } 'route naming a filename rather than a key rejected' 'not a processor key'
 
     $d = New-BaseDoc
-    $d.Routing['$strip'].csharp.processor = 'rs.no.such.ps1'
-    Assert-Throws { Import-Fixture $d } 'route naming an absent processor rejected' 'no processor in the manifest'
+    $d.Routing['$strip'].csharp.processor = 'rs.cs.strip.cs'
+    Assert-Throws { Import-Fixture $d } 'route naming a mistyped key rejected' 'not a processor key'
+
+    $d = New-BaseDoc
+    $d.Routing['$strip'].csharp.processor = 'rs.no.such'
+    Assert-Throws { Import-Fixture $d } 'route naming an absent processor rejected' 'not a processor key'
 
     $d = New-BaseDoc
     $d.Routing['$strip'].csharp.extensions = @()
