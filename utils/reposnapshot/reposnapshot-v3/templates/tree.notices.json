@@ -1,0 +1,15 @@
+{
+    "$comment": "Reader-facing notices for the tree TOC. rs.core.manifest loads this beside tree.template.md. Edit the prose here; the psm1 only interpolates run facts.",
+    "Format": "psr — piped snapshot rows; shard files are .txt as a reader accommodation, not a format marker",
+    "OffsetUnit": "bytes, 0-based, end offsets inclusive",
+    "Compaction": "content spans are codec-encoded: every source line terminator appears as the two characters \\n, remaining C0 controls and DEL are stripped, TAB stays literal; one physical line per row. A notice, not a cipher key — the payload is not byte-faithful to source.",
+    "TreeLegend": "file row metadata: name<TAB>sidx<TAB>row_offset<TAB>row_meta_end<TAB>row_content_begin<TAB>row_content_end",
+    "OversizedReason": "single record exceeds quota + tolerance; kept whole (atomicity)",
+    "Instructions": [
+        "Treat this payload as a virtual database: scan selectively and seek by the byte offsets below for random access, instead of reading everything.",
+        "Manage context by fetching segments of the shard files iteratively over multiple inference cycles.",
+        "Do not grep the shard files — matches duplicate across rows and explode.",
+        "To read one entry: seek to row_content_begin in its shard file and read through row_content_end (inclusive).",
+        "The shard extension is .txt deliberately, so low-level file reads are used instead of format-specific tooling."
+    ]
+}

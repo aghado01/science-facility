@@ -18,8 +18,8 @@ Set-StrictMode -Version Latest
       4. Payload block — tree leaf first, then every shard with files:N
          bytes:N (group tag when grouped).
       5. Hazards — an oversized shard is declared; absent section when none.
-      6. Provenance — RunContext verbatim; determinism — identical inputs →
-         identical bytes.
+      6. Provenance — RunContext scalars, not a nested JSON dump; Family →
+         Chains (unused pass-through omitted); determinism.
 #>
 
 $v3 = Join-Path $PSScriptRoot '..\reposnapshot-v3'
@@ -87,7 +87,10 @@ try
         RunStamp         = '20260824_120000'
         Root             = 'X:/work/myproj'
         GeneratorVersion = 'reposnapshot-v3'
-        ConfigEcho       = [pscustomobject]@{ Grouping = 'Flat'; Chain = @('file_read') }
+        GlobSemantics    = 'Ignore'
+        Mode             = 'Sequenced'
+        Columns          = @('rel', 'content')
+        ConfigSource     = 'test'
     }
     $treePath = Join-Path $outRoot 'fix_tree.md'
 
@@ -171,8 +174,48 @@ try
     # -----------------------------------------------------------------------
     Enter-Section '6. Provenance and determinism'
     # -----------------------------------------------------------------------
-    Assert-True ($text.Contains('- Root: X:/work/myproj') -and $text.Contains('- GeneratorVersion: reposnapshot-v3')) 'RunContext rendered verbatim — provenance is input, never hardcoded'
-    Assert-True ($text.Contains('"Grouping":"Flat"')) 'ConfigEcho survives as compact JSON'
+    Assert-True ($text.Contains('- Root: X:/work/myproj') -and $text.Contains('- GeneratorVersion: reposnapshot-v3')) 'RunContext rendered as template scalars — provenance is input, never hardcoded'
+    Assert-True ($text.Contains('- GlobSemantics: Ignore') -and $text.Contains('- Mode: Sequenced') -and $text.Contains('- Columns: rel, content') -and $text.Contains('- ConfigSource: test')) 'run facts are provenance lines, not a nested JSON dump'
+    Assert-True (-not $text.Contains('"Grouping":"Flat"') -and -not $text.Contains('## Chains')) 'no compact ConfigEcho dump; no Chains section without a family'
+
+    $family = [pscustomobject]@{
+        DefaultVariant = '0'
+        Routing        = @{ '.ps1' = '1' }
+        Variants       = @{
+            '0' = @(
+                [pscustomobject]@{ Key = 'file_read'; Slot = 'file_read' }
+                [pscustomobject]@{ Key = 'rs.whitespace'; Slot = 'Whitespace' }
+            )
+            '1' = @(
+                [pscustomobject]@{ Key = 'file_read'; Slot = 'file_read' }
+                [pscustomobject]@{ Key = 'rs.ps.strip'; Slot = 'StripComments' }
+                [pscustomobject]@{ Key = 'rs.whitespace'; Slot = 'Whitespace' }
+            )
+        }
+    }
+    $treeFam = Join-Path $outRoot 'fam\fix_tree.md'
+    New-Item -ItemType Directory -Path (Split-Path $treeFam) | Out-Null
+    $null = New-Manifest -Receipt $receipt -Shards $plan.Shards -Plan $plan.Plan -Layout $L -RunContext $runCtx -TreePath $treeFam -Family $family
+    $textFam = [IO.File]::ReadAllText($treeFam)
+    Assert-True ($textFam.Contains('## Chains') -and $textFam.Contains('`.ps1`: file_read → StripComments (rs.ps.strip) → Whitespace (rs.whitespace)')) 'family internment is a Chains section — slot (key) when they differ'
+    Assert-True (-not $textFam.Contains('all files:')) 'unused pass-through is omitted — it is plan bookkeeping, not a reader fact'
+
+    $verbatimFam = [pscustomobject]@{
+        DefaultVariant = '0'
+        Routing        = @{}
+        Variants       = @{
+            '0' = @(
+                [pscustomobject]@{ Key = 'file_read'; Slot = 'file_read' }
+                [pscustomobject]@{ Key = 'rs.ps.strip'; Slot = 'rs.ps.strip' }
+            )
+        }
+    }
+    $treeVer = Join-Path $outRoot 'ver\fix_tree.md'
+    New-Item -ItemType Directory -Path (Split-Path $treeVer) | Out-Null
+    $null = New-Manifest -Receipt $receipt -Shards $plan.Shards -Plan $plan.Plan -Layout $L -RunContext $runCtx -TreePath $treeVer -Family $verbatimFam
+    $textVer = [IO.File]::ReadAllText($treeVer)
+    Assert-True ($textVer.Contains('- all files: file_read → rs.ps.strip')) 'a family that routes nothing reports all files on the one chain'
+
     # same LEAF name (the tree names itself in its payload list), different dir
     New-Item -ItemType Directory -Path (Join-Path $outRoot 'again') | Out-Null
     $treeB = Join-Path $outRoot 'again\fix_tree.md'

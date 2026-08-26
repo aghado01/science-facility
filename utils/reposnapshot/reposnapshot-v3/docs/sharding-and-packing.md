@@ -17,6 +17,8 @@ Bins are sized against layout and quota boundaries:
   - **InBand**: Single record larger than $\text{Cap}_Q$ but fitting within $\text{Cap}_C$.
   - **Oversized (Pinned)**: Single record exceeding $\text{Cap}_C$. Allocated to its own dedicated overflow shard and excluded from general fill aggregates.
 
+Packing settings themselves are snapshot-global metadata. They are declared on the tree summary line (`Grouping`, `GroupSort`, `OrderStrict`, `ShardQuotaBytes`, `ShardToleranceBytes`). A shard file is header row + records only.
+
 ---
 
 ## 2. The 8-Stage Sharding Cascade

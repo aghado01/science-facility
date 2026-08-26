@@ -202,7 +202,8 @@ rewriting history.
   `schema/` -> `contracts/`.) `contracts/container.spec.jsonc` is the one
   non-contract in that folder: the **psr** container's admissible declaration,
   read by `rs.core.container`; the contracts suite globs `*.contract.json` and
-  skips it.
+  skips it. `templates/` is the tree TOC pattern and notices (`tree.template.md`,
+  `tree.notices.json`) — reader-facing data for `rs.core.manifest`, not a contract.
 - `issues/reposnapshot/` — design docs (`design/`, `briefs/`, `planning/`,
   `reports/`, `discussions/`, `archaeology/`). **Planning canon is the
   `planning/` triple**: `decisions.md` the settled calls, `roadmap.md` what is

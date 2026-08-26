@@ -106,7 +106,7 @@ Processor: StripComments    Implementation: rs.ps.strip
 
 That is the fact a reading agent needs — comments were stripped — and `StripComments` says so whichever language implementation ran, without losing per-entry provenance. The slot reaches the processor through its config, injected by the compiler's bind loop, because a routed processor cannot know which capability it was chosen for. A processor invoked standalone has no slot and reports its own name.
 
-`ConfigEcho` reports per chain, not one chain: the distinct chains, which extensions took each, whether a chain is pass-through, and each step's slot and processor. A single `Chain` field cannot describe a run where files took different chains.
+The tree's `## Chains` section (rendered by `New-Manifest` from the colonel family) reports per chain, not one chain: the distinct chains and which extensions took each, with `Slot (Key)` when the capability name and processor file differ. Unused pass-through is plan bookkeeping and is omitted. A single `Chain` field cannot describe a run where files took different chains.
 
 ## Invariants
 

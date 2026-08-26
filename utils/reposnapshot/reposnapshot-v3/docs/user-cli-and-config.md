@@ -36,18 +36,16 @@ PowerShell re-evaluates `[ValidateSet]` and `[ValidateRange]` attributes upon va
 
 ---
 
-## 3. Processor Chain Normalization
+## 3. Processor Chain Selection
 
-The `-Processors` parameter (or `"Processors"` array in configuration) accepts:
-- **Bare string keys** (e.g. `'rs.ps.strip'`): Automatically resolves defaults from `processors/configs/<Key>.json`.
-- **Step descriptor objects** (e.g. `@{ Key = 'rs.indent'; Config = @{ TargetUnit = 4 } }`): Merges caller overrides on top of the JSON defaults.
+Two modes, not interchangeable. The model is [Sequencing & Routing](sequencing-and-routing.md).
 
-### Chain Manifest & Guards
-1. **Manifest Discovery**: All `processors/*.ps1` files (excluding framework infrastructure `chain_executor.ps1` and `bag_helpers.ps1`) are registered at runtime. Any requested processor key lacking a script file fails fast with known alternatives.
-2. **Invariants & Cautions**:
-   - **`rs.whitespace`**: Warns if omitted, as its `pad-breaks` op maintains standard token separation for the wire codec.
-   - **`rs.content_meta`**: Warns if placed anywhere other than the very tail of the mutator chain, preventing downstream mutators from invalidating computed line/char/word metrics.
-   - **`content_meta` Wire Request**: Warns if `content_meta` is enabled in `Columns` but `rs.content_meta` is not in the chain.
+- **Canon (default):** `-IncludeProcessors` (or `"IncludeProcessors"` in configuration) is a **set** of sequencer slots — `StripComments`, `Indentation`, `Whitespace`, `ContentMetadata`. Array position carries no meaning; `Group`/`Rank` in `processors/default_sequencer.json` own order. `file_read` arrives via `Default` / `Requires`. A routed slot resolves per file extension; a file no route claims still runs every other stage.
+- **Verbatim:** `-RunVerbatim -Processors` is a literal ordered list of processor **files** (stems, e.g. `rs.ps.strip`), identically for every file, with nothing routed. `-Processors` without `-RunVerbatim` is refused, and `-RunVerbatim` without `-Processors` is refused.
+
+A `-Processors` entry is either a bare string key (defaults from `processors/configs/<Key>.json`) or `@{ Key; Config }`. All `processors/*.ps1` files except `chain_executor.ps1` and `bag_helpers.ps1` are registered at runtime; an unknown key fails fast.
+
+The three chain cautions (`rs.whitespace` omitted, `rs.content_meta` not last, `Columns` requests `content_meta` with no measuring step) print **only** under verbatim. Under the sequencer they are compiler guarantees.
 
 ---
 

@@ -103,7 +103,7 @@
     ./rs.core.user.ps1 -Root ../reposnapshot-v3 -SelectionPatterns '*.ps1','*.psm1'
 
 .EXAMPLE
-    ./rs.core.user.ps1 -ConfigPath ./recipes/full-audit.json
+  &  ./rs.core.user.ps1 -ConfigPath './user-config.json'
 
 .EXAMPLE
     ./rs.core.user.ps1 -Config @{ Root = '..\reposnapshot-v3'; IncludeProcessors = @('StripComments', 'Whitespace') }
@@ -325,50 +325,18 @@ if (@($ingest.Errors).Count -gt 0) {
     throw "rs.core.user: ingest reported errors — $($ingest.Errors -join '; ')"
 }
 
-# What actually ran, per distinct chain — not one chain, because a routed slot
-# resolves differently per file class. Extensions are grouped by the chain they
-# took, so a reading agent can tell "this file was not stripped because no
-# stripper covers it" from "stripping was off this run".
-$chainEcho = @()
-if ($null -ne $ingest.Plan) {
-    $plan = $ingest.Plan
-
-    $byChain = @{}
-    foreach ($e in @($plan.Routing.Keys)) {
-        $id = [string]$plan.Routing[$e]
-        if (-not $byChain.ContainsKey($id)) { $byChain[$id] = [System.Collections.Generic.List[string]]::new() }
-        $byChain[$id].Add([string]$e)
-    }
-
-    $chainEcho = @(
-        foreach ($id in (@($plan.Variants.Keys) | Sort-Object)) {
-            $exts = @()
-            if ($byChain.ContainsKey($id)) { $exts = @($byChain[$id] | Sort-Object) }
-
-            [pscustomobject]@{
-                Extensions  = $exts
-                PassThrough = ($id -eq [string]$plan.DefaultVariant)
-                Steps       = @($plan.Variants[$id] | ForEach-Object {
-                        [pscustomobject]@{ Slot = $_.Slot; Processor = $_.Key }
-                    })
-            }
-        }
-    )
-}
-
+# Run facts only. Internment and packing settings are rendered by New-Manifest
+# from the colonel family and the shard plan — user does not join them here.
 $runContext = [pscustomobject]@{
     RunStamp         = $runStamp
     Root             = ($rootFull -replace '\\', '/')
     GeneratorVersion = 'reposnapshot-v3'
-    ConfigEcho       = [pscustomobject]@{
-        GlobSemantics = if ($null -ne $SelectionPatterns) { 'Selection' } else { 'Ignore' }
-        Patterns      = $SelectionPatterns
-        Mode          = if ($RunVerbatim) { 'Verbatim' } else { 'Sequenced' }
-        Requested     = if ($RunVerbatim) { @($Processors | ForEach-Object { if ($_ -is [string]) { $_ } else { $_.Key } }) } else { @($IncludeProcessors) }
-        Chains        = $chainEcho
-        Columns       = $Columns
-        ConfigSource  = $configSource
-    }
+    GlobSemantics    = if ($null -ne $SelectionPatterns) { 'Selection' } else { 'Ignore' }
+    Patterns         = $SelectionPatterns
+    Mode             = if ($RunVerbatim) { 'Verbatim' } else { 'Sequenced' }
+    Requested        = if ($RunVerbatim) { @($Processors | ForEach-Object { if ($_ -is [string]) { $_ } else { $_.Key } }) } else { @($IncludeProcessors) }
+    Columns          = $Columns
+    ConfigSource     = $configSource
 }
 $ir = Invoke-Assemble -DispatchOutput $ingest -RunContext $runContext
 #endregion
@@ -383,7 +351,7 @@ $null = [IO.Directory]::CreateDirectory($outDir)
 $receipt = Invoke-Serialize -Plan $plan -Entries $ir.Entries -Layout $layout -OutDir $outDir
 $treePath = Join-Path $outDir "${leaf}_tree.md"
 $null = New-Manifest -Receipt $receipt -Shards $plan.Shards -Plan $plan.Plan -Layout $layout `
-    -RunContext $runContext -TreePath $treePath
+    -RunContext $runContext -TreePath $treePath -Family $ingest.Plan
 #endregion
 
 #region Output

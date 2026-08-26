@@ -1,12 +1,13 @@
 {
   "stage": "manifest",
-  "module": "rs.core.manifest.psm1 — New-Manifest(-Receipt -Shards -Plan -Layout -RunContext -TreePath [-InstructionSet]) → tree. Builds the TOC model from three small in-memory objects and renders the tree file. LANDED 2026-08-24: pure formatter over precomputed facts — offsets/lengths verbatim from the receipt, classes/groups from the plan shards (joined by Key, PlannedSizeBytes cross-checked against ByteLength), header row verbatim from the layout, provenance from RunContext; every payload-manifest declaration (#8 offset unit, #16 compaction notice, #17 encoding, oversized hazards, format identity) is a model field. Template engine kept from the LTS port; the LTS-shaped model builders replaced (rs.lts.template.ps1 at root serves LTS — airgap #3 holds, nothing imports across). tests/manifest.tests.ps1 (23).",
-  "$comment": "Export phase 3 — the payload's declarations to the reader. Consumes the RECEIPT (measured offsets and byte lengths — only the writer knows), the PLAN (keys, groups, classes, oversized flags — reader hazards), and the LAYOUT (ColumnHeader from the resolved header row, not a hardcoded string). RunContext supplies provenance (RunStamp, Root, GeneratorVersion, ConfigEcho) as an opaque param, the assemble pattern — admiral has no contract yet, so its fields cannot be `from` targets. Every declaration the payload-manifest-ledger says a reader is owed (#8 offsets need their unit, #16 compaction notice, oversized-shard hazard, format identity) is a MODEL FIELD here so it is checkable, not prose. Writes exactly one file (the tree). Nothing flows back.",
+  "module": "rs.core.manifest.psm1 — New-Manifest(-Receipt -Shards -Plan -Layout -RunContext -TreePath [-Family] [-InstructionSet]) → tree. Poor-man's template engine: templates/tree.template.md is the document pattern, templates/tree.notices.json is canned reader prose; the psm1 interpolates run facts. LANDED 2026-08-24 as a formatter; 2026-08-26 split template/notices from code, provenance as scalars, Chains from the colonel family (unused pass-through omitted). Packing settings are tree-global (SummaryLine); shards are header row + records only. tests/manifest.tests.ps1 (27).",
+  "$comment": "Export phase 3 — the payload's declarations to the reader. Consumes the RECEIPT (measured offsets and byte lengths — only the writer knows), the PLAN (keys, groups, classes, oversized flags — reader hazards), and the LAYOUT (ColumnHeader from the resolved header row, not a hardcoded string). RunContext supplies provenance scalars (RunStamp, Root, GeneratorVersion, glob/mode/columns/config source). Family (colonel plan) is optional and becomes the Chains section. Notices/instructions are data, not hardcoded in the psm1. Writes exactly one file (the tree). Nothing flows back.",
   "in": {
     "params": {
-      "RunContext":     { "type": "object", "note": "provenance and config echo — RunStamp, Root, GeneratorVersion, ConfigEcho — read for SummaryLine / provenance lines; never hardcoded (LTS hardcoded `module`, wrongly)" },
+      "RunContext":     { "type": "object", "note": "provenance scalars — RunStamp, Root, GeneratorVersion, GlobSemantics, Patterns, Mode, Requested, Columns, ConfigSource — interpolated into the template; never dumped as nested JSON" },
       "TreePath":       { "type": "path",   "note": "<ShardStem>_tree.md beside the shards" },
-      "InstructionSet": { "type": "string", "optional": true, "note": "reader-directed guidance block to include (tree Instructions; the planned cognitive stdlib) — prose as functional machinery" }
+      "Family":         { "type": "object", "optional": true, "note": "colonel plan (Variants, Routing/ExtensionMap, DefaultVariant) — formatted as ## Chains; unused pass-through omitted" },
+      "InstructionSet": { "type": "string", "optional": true, "note": "overrides templates/tree.notices.json Instructions when supplied" }
     },
     "receipt": {
       "Shards":     { "from": "serialize.out.receipt", "note": "the payload lines and every row's offsets" },
@@ -56,17 +57,18 @@
     },
     "model": {
       "Title":         { "type": "string",   "note": "'<ShardStem>_s*.txt'" },
-      "Format":        { "from": "container.out.layout", "note": "'psr' — plus the accommodation note (files are .txt so tools read them whole)" },
+      "Format":        { "type": "string",   "note": "from templates/tree.notices.json — 'psr' plus the accommodation note (files are .txt so tools read them whole)" },
       "SummaryLine":   { "type": "string",   "note": "Grouping | GroupSort | OrderStrict | ShardQuotaBytes | ShardToleranceBytes | Created | Shards — from plan + RunContext, never preformatted upstream" },
       "PayloadLines":  { "type": "string[]", "note": "tree file first, then one line per shard: leaf name, files:N, bytes:N, group" },
-      "Instructions":  { "type": "string[]", "note": "reader-directed guidance (virtual-database framing; seek by offsets; do not grep)" },
+      "Instructions":  { "type": "string[]", "note": "from templates/tree.notices.json unless -InstructionSet overrides" },
       "ColumnHeader":  { "type": "string",   "note": "tree row metadata legend AND the psr header row verbatim (layout.HeaderRowText)" },
-      "OffsetUnit":    { "type": "string",   "note": "'bytes, 0-based, end offsets inclusive' — payload-manifest-ledger #8, stated not implied" },
-      "Encoding":      { "from": "serialize.out.receipt", "note": "'utf-8' (no BOM, LF) — ledger #17" },
-      "Compaction":    { "type": "string",   "note": "the notice (not a cipher key): content is codec-encoded, one physical line per row, line breaks encoded — payload-manifest-ledger #16" },
+      "OffsetUnit":    { "type": "string",   "note": "from templates/tree.notices.json — payload-manifest-ledger #8" },
+      "Encoding":      { "from": "serialize.out.receipt", "note": "'utf-8'; template appends no-BOM / LF — ledger #17" },
+      "Compaction":    { "type": "string",   "note": "from templates/tree.notices.json — payload-manifest-ledger #16" },
       "Hazards":       { "type": "hazard[]", "note": "one per oversized shard; empty when none — the reader's 'every shard ≤ ceiling except these'" },
       "TocTree":       { "type": "string",   "note": "rendered tree: name<TAB>shard_index<TAB>row_offset<TAB>row_meta_end<TAB>row_content_begin<TAB>row_content_end, from receipt rows" },
-      "Provenance":    { "type": "object",   "note": "RunStamp, Root, GeneratorVersion, ConfigEcho — from RunContext verbatim" }
+      "Provenance":    { "type": "object",   "note": "RunContext object kept on the model; the tree renders flattened scalars, not a JSON dump" },
+      "Chains":        { "type": "object[]", "note": "from Format-FamilyChains; empty when -Family is omitted" }
     },
     "hazard": {
       "Key":        { "type": "string" },

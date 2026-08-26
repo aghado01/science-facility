@@ -13,7 +13,7 @@ Set-StrictMode -Version Latest
       2. The output convention — default OutRoot is <grandparent>/<leaf>
          (sibling of the project, named after the root); output inside the
          root is refused; same-second reruns get suffixed run dirs.
-      3. Selection + Processors — only matching files ingest; comments are gone
+      3. Selection + IncludeProcessors — only matching files ingest; comments are gone
          from the payload (verified by seeking the written bytes).
       4. Config file — -ConfigPath drives a bare invocation; an explicit CLI
          arg still beats it; a bad enum value or a missing explicit path
@@ -21,9 +21,10 @@ Set-StrictMode -Version Latest
       5. Inline -Config — a hashtable and a PSCustomObject both drive a bare
          invocation with no file at all; -Config and -ConfigPath together
          (both explicit) is refused rather than silently picking one.
-      6. -Processors — a mixed bare-string/object chain runs rs.ps.strip with
-         its own Config; an unknown key or a Key-less entry fails fast;
-         omitting rs.whitespace prints a caution.
+      6. -RunVerbatim — a mixed bare-string/object -Processors chain runs
+         rs.ps.strip with its own Config; an unknown key or a Key-less entry
+         fails fast; omitting rs.whitespace prints a caution. Only this mode
+         prints the chain cautions; -Processors without -RunVerbatim is refused.
 
 .NOTES
     rs.core.user.ps1 auto-discovers reposnapshot-v3/user-config.json by
@@ -97,6 +98,9 @@ try
     Assert-True ($sum -eq $r.TotalBytes) 'summary TotalBytes == bytes on disk'
     $tree = Get-Content -Raw $r.TreePath
     Assert-True ($tree.Contains('a.ps1') -and $tree.Contains('b.ps1') -and $tree.Contains('- RunStamp: ' + $r.RunStamp)) 'tree declares the rows and this run''s stamp'
+    Assert-True ($tree.Contains('Grouping:') -and $tree.Contains('ShardQuotaBytes:')) 'packing settings are tree-global metadata'
+    Assert-True ($tree.Contains('## Chains') -and $tree.Contains('`.ps1`') -and $tree.Contains('`.md`')) 'internment is a Chains section, not a ConfigEcho dump'
+    Assert-True (-not $tree.Contains('"Chains":')) 'user does not dump internment as compact JSON'
 
     # -----------------------------------------------------------------------
     Enter-Section '2. The output convention — .snapshot/ under the tree'

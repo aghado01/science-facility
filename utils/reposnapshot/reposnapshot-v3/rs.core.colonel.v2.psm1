@@ -128,10 +128,11 @@ function Build-Iss
 #endregion
 
 #region Sequencing
-# Sequence-manifest resolution: enable -> route -> sort. The compiler is the only
-# component that reads this file; nothing below plan compilation branches on file
-# type. All four functions are pure over hashtables except the single read in
-# Import-SequenceManifest.
+# Sequencer resolution: enable, then one occupancy walk per extension, interned
+# as a family. The compiler is the only component that reads the sequencer;
+# nothing below plan compilation branches on file type. Import-SequenceManifest,
+# Resolve-EnabledSet, Resolve-Chain, and Resolve-Family are pure over hashtables
+# except the single read in Import-SequenceManifest.
 
 # Private. Binds a declared filename to the on-disk inventory, returning the stub
 # the manifest is keyed by. Catches both an absent processor and a right-stem /
@@ -170,7 +171,7 @@ function Import-SequenceManifest
         a malformed manifest is a stop, not a degraded run.
 
     .OUTPUTS
-        [PSCustomObject] @{ Path; Processors; Routing; ExtensionMap }
+        [PSCustomObject] @{ Path; Processors }
     #>
     param(
         [Parameter(Mandatory)] [string]    $Path,
@@ -955,8 +956,8 @@ function Invoke-Plan
     for ($i = 0; $i -lt $count; $i++)
     {
         # Route on the Extension the crawler already stamped — measured at the point
-        # of authority, never re-derived here. A literal chain routes nothing, so
-        # every item falls to 'default', which is that chain.
+        # of authority, never re-derived here. A miss (unknown extension, none at
+        # all, or a literal chain that routes nothing) falls to DefaultVariant.
         $ext = ''
         $extProp = $Items[$i].PSObject.Properties['Extension']
         if ($extProp) { $ext = [string]$extProp.Value }

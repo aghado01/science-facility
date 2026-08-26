@@ -3,16 +3,16 @@ Set-StrictMode -Version Latest
 
 <#
 .SYNOPSIS
-    Sequencer resolution tests for rs.core.colonel.v2 (enable → route → sort).
+    Sequencer resolution tests for rs.core.colonel.v2 (enable → chain → intern).
 
 .DESCRIPTION
-    Covers the four resolvers that turn processors/default_sequencer.json into a
+    Covers the resolvers that turn processors/default_sequencer.json into a
     plan family:
       1. Import-SequenceManifest loads the shipped sequencer and normalizes it
       2. Declared conventions are enforced, each as a terminating error
       3. Resolve-EnabledSet treats IncludeProcessors as a set and closes Requires
-      4. Resolve-Routing maps extensions onto variants by resolution tuple
-      5. Resolve-Variants emits dense per-variant chains ordered by (Group, Rank)
+      4. Resolve-Chain compiles one dense chain per extension in a single walk
+      5. Resolve-Family interns those chains over unique extensions
       6. Processors key order is incidental; Group and Rank are authoritative
 
 .NOTES
@@ -341,7 +341,6 @@ try
     Assert-True (@($defChain | Where-Object { $_ -eq 'rs.ps.strip' -or $_ -eq 'rs.cs.strip' }).Count -eq 0) `
         'and the unrouted chain carries neither'
 
-    # An all-PowerShell corpus needs no default variant, so none is compiled.
     $psOnlyPlan = Compile-Plan -Manifest $manifest -SequenceManifest $seqPath `
         -IncludeProcessors $allSlots -Extensions @('.ps1', '.psm1') `
         -ChainExecutorPath $chainExec -SharedHelperPath $bagHelpers

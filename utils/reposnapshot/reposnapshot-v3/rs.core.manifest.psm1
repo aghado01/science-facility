@@ -8,52 +8,19 @@ using namespace System.Text
     RepoSnapshot V3 manifest — export phase: renders table-of-contents manifest file.
 
 .DESCRIPTION
-    Builds the TOC model from the serializer receipt, sharding plan, layout, and
-    RunContext, and renders the manifest markdown document via a lightweight template engine.
+    Poor-man's template engine for the tree TOC. The document pattern lives in
+    templates/tree.template.md; canned reader notices live in
+    templates/tree.notices.json. New-Manifest interpolates run facts (receipt,
+    packing plan, layout header, RunContext scalars, optional colonel family)
+    into that pattern. Shards carry only the header row and records; packing
+    settings and internment are tree-global metadata.
 
     See docs/serialize-and-manifest.md for manifest structure and declaration fields.
 #>
 
 $script:Utf8 = [UTF8Encoding]::new($false)
-
-#region TreeTemplate
-$script:TreeTemplate = @'
-# Tree Manifest TOC for Snapshot: `{{Title}}`
-
-{{SummaryLine}}
-
-Payload:
-{{#each PayloadLines}}{{this}}
-{{/each}}
-## Declarations
-
-- Format: {{Format}}
-- Offsets: {{OffsetUnit}}
-- Encoding: {{Encoding}}
-- Compaction: {{Compaction}}
-- Header row (first line of every shard, byte-identical): `{{ColumnHeader}}`
-{{#if Hazards}}
-Hazards — these shards exceed quota + tolerance and must be read whole; every
-other shard is within the ceiling:
-{{#each Hazards}}- `{{Key}}` {{ByteLength}} bytes — {{Reason}}
-{{/each}}{{/if}}
-## Instructions
-
-{{#each Instructions}}{{this}}
-{{/each}}
-## Tree for `{{TreeLabel}}`
-
-```
-{{TreeLegend}}
-{{TocTree}}
-```
-
-## Provenance
-
-{{#each ProvenanceLines}}{{this}}
-{{/each}}
-'@
-#endregion
+$script:TreeTemplatePath = Join-Path $PSScriptRoot 'templates/tree.template.md'
+$script:TreeNoticesPath = Join-Path $PSScriptRoot 'templates/tree.notices.json'
 
 #region Engine
 function Resolve-TemplateValue
@@ -191,12 +158,121 @@ function Build-TocTree
 }
 #endregion
 
+#region TreeData
+function Get-TreeNotices
+{
+    if (-not [IO.File]::Exists($script:TreeNoticesPath))
+    {
+        throw "New-Manifest: notices file not found: $script:TreeNoticesPath"
+    }
+    $raw = [IO.File]::ReadAllText($script:TreeNoticesPath)
+    $n = ConvertFrom-Json -InputObject $raw -AsHashtable
+    if ($null -eq $n) { throw "New-Manifest: '$script:TreeNoticesPath' is empty." }
+    return $n
+}
+
+function Get-TreeTemplate
+{
+    if (-not [IO.File]::Exists($script:TreeTemplatePath))
+    {
+        throw "New-Manifest: tree template not found: $script:TreeTemplatePath"
+    }
+    return [IO.File]::ReadAllText($script:TreeTemplatePath)
+}
+
+function Get-ContextText ([object]$RunContext, [string]$Name)
+{
+    $p = $RunContext.PSObject.Properties[$Name]
+    if ($null -eq $p)
+    {
+        $echo = $RunContext.PSObject.Properties['ConfigEcho']
+        if ($null -ne $echo -and $null -ne $echo.Value)
+        {
+            $p = $echo.Value.PSObject.Properties[$Name]
+        }
+    }
+    if ($null -eq $p -or $null -eq $p.Value) { return '' }
+    $v = $p.Value
+    if ($v -is [System.Collections.IEnumerable] -and $v -isnot [string])
+    {
+        return (@($v | ForEach-Object { [string]$_ } | Where-Object { $_ }) -join ', ')
+    }
+    return [string]$v
+}
+
+# Reader-facing chain lines from the colonel family. Unused pass-through (compiled
+# spare, no corpus extension interned onto it) is omitted — that is plan
+# bookkeeping, not something a tree reader needs. Occupancy is the Routing map;
+# this only groups extensions that actually took a chain.
+function Format-FamilyChains
+{
+    param([Parameter(Mandatory)] [pscustomobject]$Family)
+
+    $variants = @{}
+    $vProp = $Family.PSObject.Properties['Variants']
+    if ($vProp -and $vProp.Value -is [System.Collections.IDictionary]) { $variants = $vProp.Value }
+    if ($variants.Count -eq 0) { return @() }
+
+    $routing = @{}
+    foreach ($name in @('Routing', 'ExtensionMap'))
+    {
+        $rProp = $Family.PSObject.Properties[$name]
+        if ($rProp -and $rProp.Value -is [System.Collections.IDictionary] -and $rProp.Value.Count -gt 0)
+        {
+            $routing = $rProp.Value
+            break
+        }
+    }
+
+    $defaultId = ''
+    $dProp = $Family.PSObject.Properties['DefaultVariant']
+    if ($dProp -and $null -ne $dProp.Value) { $defaultId = [string]$dProp.Value }
+
+    $byId = @{}
+    foreach ($ext in @($routing.Keys))
+    {
+        $id = [string]$routing[$ext]
+        if (-not $byId.ContainsKey($id)) { $byId[$id] = [List[string]]::new() }
+        $byId[$id].Add([string]$ext)
+    }
+
+    $lines = [List[object]]::new()
+    foreach ($id in (@($variants.Keys) | Sort-Object))
+    {
+        $sid = [string]$id
+        $exts = @()
+        if ($byId.ContainsKey($sid)) { $exts = @($byId[$sid] | Sort-Object) }
+
+        if ($exts.Count -eq 0 -and $routing.Count -gt 0 -and $sid -eq $defaultId) { continue }
+
+        $steps = @(
+            foreach ($step in @($variants[$id]))
+            {
+                $key = [string]$step.Key
+                $slot = ''
+                if ($step.PSObject.Properties['Slot']) { $slot = [string]$step.Slot }
+                if ($slot -and $slot -ne $key) { "$slot ($key)" } else { $key }
+            }
+        )
+
+        $head = if ($exts.Count -gt 0)
+        { (@($exts | ForEach-Object { "``$_``" }) -join ' ') }
+        else { 'all files' }
+
+        $lines.Add([pscustomobject]@{ Line = "${head}: $($steps -join ' → ')" })
+    }
+    return $lines.ToArray()
+}
+#endregion
+
 #region New-Manifest
 function New-Manifest
 {
     <#
     .SYNOPSIS
-        Builds and writes the tree manifest markdown artifact.
+        Builds and writes the tree manifest markdown artifact. Template and
+        notices are data; this function interpolates receipt, packing plan,
+        layout, RunContext, and optional colonel family.
     #>
     [CmdletBinding()]
     param(
@@ -206,11 +282,16 @@ function New-Manifest
         [Parameter(Mandatory)] [PSCustomObject]$Layout,
         [Parameter(Mandatory)] [PSCustomObject]$RunContext,
         [Parameter(Mandatory)] [string]$TreePath,
+        [object]$Family = $null,
         [string[]]$InstructionSet = $null
     )
 
     if ($null -eq $Receipt.PSObject.Properties['Shards']) { throw "New-Manifest: -Receipt lacks Shards — pass serialize.out.receipt." }
     if ($null -eq $Layout.PSObject.Properties['HeaderRowText']) { throw "New-Manifest: -Layout lacks HeaderRowText — pass container.out.layout." }
+
+    $notices = Get-TreeNotices
+    $instructions = if ($null -ne $InstructionSet) { @($InstructionSet) } else { @($notices['Instructions']) }
+    $oversizedReason = [string]$notices['OversizedReason']
 
     $planByKey = @{}
     foreach ($s in $Shards) { $planByKey[[string]$s.Key] = $s }
@@ -251,20 +332,9 @@ function New-Manifest
             $hazards.Add([pscustomobject]@{
                     Key        = $sr.Key
                     ByteLength = $sr.ByteLength
-                    Reason     = 'single record exceeds quota + tolerance; kept whole (atomicity)'
+                    Reason     = $oversizedReason
                 })
         }
-    }
-
-    $instructions = if ($null -ne $InstructionSet) { @($InstructionSet) } else
-    {
-        @(
-            'Treat this payload as a virtual database: scan selectively and seek by the byte offsets below for random access, instead of reading everything.'
-            'Manage context by fetching segments of the shard files iteratively over multiple inference cycles.'
-            'Do not grep the shard files — matches duplicate across rows and explode.'
-            'To read one entry: seek to row_content_begin in its shard file and read through row_content_end (inclusive).'
-            'The shard extension is .txt deliberately, so low-level file reads are used instead of format-specific tooling.'
-        )
     }
 
     $rows = [List[object]]::new()
@@ -289,34 +359,37 @@ function New-Manifest
         $rootName = Split-Path (([string]$p.Value).TrimEnd('/', '\')) -Leaf
     }
 
-    $provLines = [List[string]]::new()
-    foreach ($prop in $RunContext.PSObject.Properties)
-    {
-        $v = $prop.Value
-        $rendered = if ($v -is [string] -or $v -is [ValueType]) { [string]$v }
-        else { ($v | ConvertTo-Json -Depth 5 -Compress) }
-        $provLines.Add("- $($prop.Name): $rendered")
-    }
+    $chains = @()
+    if ($null -ne $Family) { $chains = @(Format-FamilyChains -Family $Family) }
 
     $model = [pscustomobject]@{
-        Title           = $title
-        Format          = 'psr — piped snapshot rows; shard files are .txt as a reader accommodation, not a format marker'
-        SummaryLine     = $summary
-        PayloadLines    = $payload.ToArray()
-        Instructions    = $instructions
-        ColumnHeader    = [string]$Layout.HeaderRowText
-        OffsetUnit      = 'bytes, 0-based, end offsets inclusive'
-        Encoding        = "$($Receipt.Encoding) — no BOM; LF record terminator"
-        Compaction      = 'content spans are codec-encoded: every source line terminator appears as the two characters \n, remaining C0 controls and DEL are stripped, TAB stays literal; one physical line per row. A notice, not a cipher key — the payload is not byte-faithful to source.'
-        Hazards         = $hazards.ToArray()
-        TocTree         = (Build-TocTree -RootName $rootName -Rows $rows.ToArray())
-        Provenance      = $RunContext
-        TreeLabel       = $title
-        TreeLegend      = 'file row metadata: name<TAB>sidx<TAB>row_offset<TAB>row_meta_end<TAB>row_content_begin<TAB>row_content_end'
-        ProvenanceLines = $provLines.ToArray()
+        Title            = $title
+        Format           = [string]$notices['Format']
+        SummaryLine      = $summary
+        PayloadLines     = $payload.ToArray()
+        Instructions     = $instructions
+        ColumnHeader     = [string]$Layout.HeaderRowText
+        OffsetUnit       = [string]$notices['OffsetUnit']
+        Encoding         = [string]$Receipt.Encoding
+        Compaction       = [string]$notices['Compaction']
+        Hazards          = $hazards.ToArray()
+        TocTree          = (Build-TocTree -RootName $rootName -Rows $rows.ToArray())
+        Provenance       = $RunContext
+        TreeLabel        = $title
+        TreeLegend       = [string]$notices['TreeLegend']
+        RunStamp         = (Get-ContextText $RunContext 'RunStamp')
+        Root             = (Get-ContextText $RunContext 'Root')
+        GeneratorVersion = (Get-ContextText $RunContext 'GeneratorVersion')
+        GlobSemantics    = (Get-ContextText $RunContext 'GlobSemantics')
+        PatternsLine     = (Get-ContextText $RunContext 'Patterns')
+        Mode             = (Get-ContextText $RunContext 'Mode')
+        RequestedLine    = (Get-ContextText $RunContext 'Requested')
+        ColumnsLine      = (Get-ContextText $RunContext 'Columns')
+        ConfigSource     = (Get-ContextText $RunContext 'ConfigSource')
+        Chains           = $chains
     }
 
-    $text = (Expand-Template -Template $script:TreeTemplate -Model $model).TrimEnd() + "`n"
+    $text = (Expand-Template -Template (Get-TreeTemplate) -Model $model).TrimEnd() + "`n"
     $text = $text -replace "`r`n", "`n"
     [IO.File]::WriteAllBytes($TreePath, $script:Utf8.GetBytes($text))
 
