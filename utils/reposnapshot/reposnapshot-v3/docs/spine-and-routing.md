@@ -37,7 +37,7 @@ One file, `processors/registry.json`, is the source of truth for canonical order
 
 `Spine` ids name **processor families** in their prescribed rank order — read before everything, measurement after every mutation. A family is either fixed (exactly one member) or language-routed (a `$` token); the rank order is a property of the family, so strippers for any language occupy the same slot in otherwise equivalent chains.
 
-`Processors` is keyed on processor keys — the same keyspace as the manifest and `configs/<key>.json` — so **exactly-once holds by construction** (one entry, one `Stage`) and **completeness is a set comparison**. Routes are **derived**, not declared: the `$strip` members for `powershell` are the processors whose entries declare that pair, in registry declaration order. Registry entries carry classification only, never config; `configs/` stays at exactly one file per processor key.
+`Processors` is keyed on processor keys — the same keyspace as the manifest and `configs/<key>.json` — so **exactly-once holds by construction** (one entry, one `Stage`) and **completeness is a set comparison**. Routes are **derived**, not declared: the `$strip` members for `powershell` are the processors whose entries declare that pair. Registry entries carry classification only, never config; `configs/` stays at exactly one file per processor key.
 
 Loader rules:
 
@@ -49,7 +49,7 @@ Loader rules:
 | `Language` values | Must appear in `Languages`. A string or an array — a generic processor may serve several languages, still one stage. |
 | No phantom members | A language is listed in `Languages` only if some processor claims it; membership cannot be declared for a processor that does not exist. Extensions of unclaimed languages stay unmapped and fall to `default`. |
 | Registry validation | Every `Processors` key must exist in the processor manifest — validated unconditionally, even for entries no corpus file will use. |
-| Multi-step routes | Processors declaring the same (token, language) splice as consecutive peer steps in registry declaration order; the loader preserves entry order. |
+| Within-partition rank | Ordering inside a family binds only within a (stage, language) **partition**. A single-member partition takes no `Rank`, and declaring one is an error; a multi-member partition requires an explicit unique `Rank` on every member and hard-errors until supplied. File position is never consulted. No partition is multi-member today, so no `Rank` appears in the shipped registry. |
 | Token discipline | Tokens (`$strip`, …) exist only as data read from this file — never as PowerShell string literals in source (double-quoted `"$strip"` interpolates to empty). |
 
 ## Compilation: The Plan Family
@@ -101,7 +101,7 @@ By analogy — to the selection/sequence split alone, not to the mechanism — t
 The resolution itself is two-level, where rs-whitespace has a single flat sequence:
 
 - **Across families** — rank comes from `Spine`, which orders the families themselves; a member inherits its family's rank.
-- **Within a family** — order comes from registry declaration order among members, and binds only among members that *co-apply* to one file class. Two strippers for different languages never share a chain, so their relative registry order is moot; the ordering question is live only for multi-member routes (a language declaring both a stripper and a dedoc pass). Fixed families have exactly one member and no within-family question at all.
+- **Within a family** — order binds only among members that *co-apply* to one file class, i.e. share a (stage, language) partition, and comes from an explicit `Rank`. `$strip` therefore has **no internal ordinality**: its members are partitioned by language and never co-exist in a chain. The question goes live the first time one language declares two members (a stripper plus a dedoc pass), at which point the loader refuses the registry until ranks are supplied. Fixed families have exactly one member and no within-family question at all.
 
 `-Processors` forks into two explicit modes:
 
@@ -148,6 +148,7 @@ Any manifest structure that tabulates per-step data across files keys by variant
 7. Tokens exist only as data, never as PowerShell string literals.
 8. Each stage's postcondition states which byte accounting survives it (`SpanBytes` vs `SizeBytes` — see [content-metrics.md](content-metrics.md)); wherever line-ending canonicalization lands, this is stated, not discovered.
 9. Every processor is classified by its single registry entry — one stage, with language qualification when routed. `configs/` carries no ordering metadata; classification is structural.
+10. All ordering is explicit data — family rank in `Spine`, member rank in `Rank`. The registry file's own arrangement carries no semantics: sorting or regrouping it must never change a compiled chain.
 
 ## Implementation Sequence
 
@@ -155,7 +156,7 @@ Each step lands with its tests through `tests/run-all.ps1` before the next begin
 
 | Step | Work | Test gate |
 |---|---|---|
-| 1 | `processors/registry.json` (`Spine`/`Languages`/`Processors` sections; `$strip` members for powershell/csharp) + loader with normalization and hard-error validation | Malformed-file errors; extension normalization and one-language-per-extension; registry keys exist in manifest; stage/language cross-validation |
+| 1 | `processors/registry.json` (`Spine`/`Languages`/`Processors` sections; `$strip` members for powershell/csharp) + loader with normalization and hard-error validation | Malformed-file errors; extension normalization and one-language-per-extension; registry keys exist in manifest; stage/language cross-validation; rank required iff partition is multi-member; reordering the file changes no compiled chain |
 | 2 | `Compile-Plan` emits the family (`Variants`/`Routing`/union `Iss`/union `ProcessorKeys`) | Pure-function tests: mixed extension set → expected variant tuples; dense chains of differing lengths; default variant present; spine invariants (measure last, strip precedes whitespace); validate-all vs bind-present; completeness (manifest ⊆ registry) |
 | 3 | Colonel: third slice array, family marshal, worker lookup table | Index-stable envelope over mixed corpus; each item demonstrably ran its assigned chain (bag `Processing` trail) |
 | 4 | Caller surface: `-StripComments` → `$strip`; `-Processors` set semantics (stage enablement); `-RunVerbatim` retaining today's monolithic path; unregistered-processor hard error; caution retirement on canon path | End-to-end heterogeneous ingest (`.ps1`/`.cs`/`.md`); `-RunVerbatim` runs a literal out-of-canon chain and still prints its cautions |
