@@ -26,8 +26,8 @@ One file, `processors/registry.json`, is the source of truth for canonical order
   },
   "Processors": {
     "file-read":       { "Stage": "read" },
-    "rs-psstrip":      { "Stage": "$strip", "Language": "powershell" },
-    "rs-csstrip":      { "Stage": "$strip", "Language": "csharp" },
+    "rs.ps.strip":     { "Stage": "$strip", "Language": "powershell" },
+    "rs.cs.strip":     { "Stage": "$strip", "Language": "csharp" },
     "rs-indent":       { "Stage": "indent" },
     "rs-whitespace":   { "Stage": "whitespace" },
     "rs-content_meta": { "Stage": "measure" }
@@ -59,7 +59,7 @@ Example — heterogeneous ingest of `.py`, `.ps1`, `.ts` with `$strip` enabled a
 
 | Variant | Chain |
 |---|---|
-| `powershell` | `file-read → rs-psstrip → rs-indent → rs-whitespace → rs-content_meta` |
+| `powershell` | `file-read → rs.ps.strip → rs-indent → rs-whitespace → rs-content_meta` |
 | `python` | `file-read → rs.py.strip → rs-indent → rs-whitespace → rs-content_meta` |
 | `default` (ts, everything unrouted) | `file-read → rs-indent → rs-whitespace → rs-content_meta` |
 
@@ -112,7 +112,7 @@ The registry is keyed on processor keys, so classification *is* the entry:
 
 Consequences:
 
-- **Set-mode resolution**: naming a processor key enables its stage. For a routed stage this enables the token — routing still decides per file class, so `-Processors 'rs-psstrip'` on a mixed corpus enables `$strip` wherever it resolves. `-StripComments` and naming a `Strip` member are the same operation spelled two ways.
+- **Set-mode resolution**: naming a processor key enables its stage. For a routed stage this enables the token — routing still decides per file class, so `-Processors 'rs.ps.strip'` on a mixed corpus enables `$strip` wherever it resolves. `-StripComments` and naming a `Strip` member are the same operation spelled two ways.
 - **Unregistered processor named under canon mode** → hard error stating both fixes: register it in the spine, or run verbatim.
 - **Unreferenced processor *file* on disk** → inert, not an error — a WIP processor can land in `processors/` without breaking runs. Completeness for the shipped set (manifest ⊆ registry keys) is a repo test, not a runtime check.
 - **Deferral is structural**: `processors/deferred/` sits outside the non-recursive manifest glob, so a parked processor (`tp-perplexity`, document-ingestion lineage) is invisible to manifest, registry, and completeness alike. Restoring the file to `processors/` is the re-activation gesture — plus a registry entry to run under canon.
@@ -123,7 +123,7 @@ Tokens are the unit of report. Per-variant ConfigEcho must keep three stories di
 
 | Story | Echo |
 |---|---|
-| Routed and resolved | `$strip → rs-psstrip` |
+| Routed and resolved | `$strip → rs.ps.strip` |
 | Enabled but unresolved for this class | `$strip → ∅` (stripping was *on*; no resolver existed — e.g. TypeScript comments present for this reason, not because stripping was off) |
 | Stage disabled for the run | stage absent from every variant |
 

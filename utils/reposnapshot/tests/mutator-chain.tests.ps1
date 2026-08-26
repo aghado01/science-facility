@@ -4,11 +4,11 @@ Set-StrictMode -Version Latest
 <#
 .SYNOPSIS
     Content mutators inside a code-track chain: crawl → ignore →
-    ingest[file-read, rs-whitespace, rs-psstrip, rs-content_meta] → assemble.
+    ingest[file-read, rs-whitespace, rs.ps.strip, rs-content_meta] → assemble.
 
 .DESCRIPTION
     The regression for consolidation item 6d. Before harmonization, rs-whitespace
-    and rs-psstrip spoke the tp-era contract — they unpacked $Item.Text and
+    and rs.ps.strip spoke the tp-era contract — they unpacked $Item.Text and
     REPLACED the bag with an Id/Path/Text envelope, so putting either one in a
     code-track chain destroyed the ItemDescriptor identity fields and assemble
     could not key an entry. That is why the golden validation ran a chain of
@@ -25,7 +25,7 @@ Set-StrictMode -Version Latest
       2. Both mutations actually applied (the chain is doing work, not
          passing through): CRLF normalized + trailing whitespace gone by
          rs-whitespace; comment kinds stripped and FrontMatter preserved by
-         rs-psstrip.
+         rs.ps.strip.
       3. The `Processing` trail is collated as an ORDINARY element — order is
          chain order, and Header.Elements declares it without assemble
          knowing the element exists (open element model, zero per-element
@@ -121,13 +121,13 @@ try
         -Manifest @{
             'file-read'     = (Join-Path $v3 'processors\file-read.ps1')
             'rs-whitespace' = (Join-Path $v3 'processors\rs-whitespace.ps1')
-            'rs-psstrip'    = (Join-Path $v3 'processors\rs-psstrip.ps1')
+            'rs.ps.strip'   = (Join-Path $v3 'processors\rs.ps.strip.ps1')
             'rs-content_meta' = (Join-Path $v3 'processors\rs-content_meta.ps1')
         } `
         -Steps @(
             @{ Key = 'file-read'; Config = @{} }
             @{ Key = 'rs-whitespace'; Config = @{ Operations = @('lf', 'trim-trailing', 'trim-doc') } }
-            @{ Key = 'rs-psstrip'; Config = @{ Operations = @('block-comments', 'doc-strings', 'comment-blocks', 'line-comments') } }
+            @{ Key = 'rs.ps.strip'; Config = @{ Operations = @('block-comments', 'doc-strings', 'comment-blocks', 'line-comments') } }
             @{ Key = 'rs-content_meta'; Config = @{} }
         ) `
         -ChainExecutorPath (Join-Path $v3 'processors\chain-executor.ps1') `
@@ -148,7 +148,7 @@ try
     # -----------------------------------------------------------------------
     Enter-Section '2. Identity survives the mutator chain (the 6d fault line)'
     # -----------------------------------------------------------------------
-    Assert-True ($entry.RelativePath -eq 'src/thing.ps1') 'RelativePath intact after rs-whitespace + rs-psstrip'
+    Assert-True ($entry.RelativePath -eq 'src/thing.ps1') 'RelativePath intact after rs-whitespace + rs.ps.strip'
     Assert-True ($entry.NodePath -eq 'src/') 'NodePath intact'
     Assert-True ($entry.LastWriteUtc -is [datetime]) 'LastWriteUtc intact and still typed'
     Assert-True ($null -ne $entry.PSObject.Properties['Content']) 'Content key present (never renamed to Text)'
@@ -162,10 +162,10 @@ try
     Assert-True ($entry.Content -notmatch "`r") 'rs-whitespace: CRLF normalized to LF'
     Assert-True ($entry.Content -notmatch '(?m)[ \t]+$') 'rs-whitespace: per-line trailing whitespace gone'
     Assert-True ($entry.Content -notmatch '\n\s*$') 'rs-whitespace: trailing blank lines trimmed (trim-doc)'
-    Assert-True ($entry.Content -notmatch 'a standalone comment') 'rs-psstrip: CommentBlock stripped'
-    Assert-True ($entry.Content -notmatch 'docstring') 'rs-psstrip: DocString stripped'
-    Assert-True ($entry.Content -match '(?m)^#Requires -Version 7\.0') 'rs-psstrip: FrontMatter preserved under mutation'
-    Assert-True ($entry.Content -match 'inline kept') 'rs-psstrip: InlineComment kept (not in the op set)'
+    Assert-True ($entry.Content -notmatch 'a standalone comment') 'rs.ps.strip: CommentBlock stripped'
+    Assert-True ($entry.Content -notmatch 'docstring') 'rs.ps.strip: DocString stripped'
+    Assert-True ($entry.Content -match '(?m)^#Requires -Version 7\.0') 'rs.ps.strip: FrontMatter preserved under mutation'
+    Assert-True ($entry.Content -match 'inline kept') 'rs.ps.strip: InlineComment kept (not in the op set)'
     Assert-True ($entry.Content -match 'function Get-Thing') 'code preserved through both mutators'
 
     # -----------------------------------------------------------------------
@@ -174,7 +174,7 @@ try
     Assert-True ($null -ne $entry.PSObject.Properties['Processing']) 'Processing element present on the entry'
     Assert-True (@($entry.Processing).Count -eq 2) 'one record per mutator invocation' "got $(@($entry.Processing).Count)"
     Assert-True ($entry.Processing[0].Processor -eq 'rs-whitespace') 'trail order[0] = rs-whitespace (chain order)'
-    Assert-True ($entry.Processing[1].Processor -eq 'rs-psstrip') 'trail order[1] = rs-psstrip'
+    Assert-True ($entry.Processing[1].Processor -eq 'rs.ps.strip') 'trail order[1] = rs.ps.strip'
     Assert-True (@($entry.Processing[0].Operations).Count -eq 3) 'first record carries its own resolved ops'
     Assert-True (@($entry.Processing[1].Operations).Count -eq 4) 'second record carries its own resolved ops'
     Assert-True ($null -eq $entry.Processing[1].PSObject.Properties['ParseErrors']) 'clean parse: no ParseErrors on the record'
@@ -206,13 +206,13 @@ try
         -Manifest @{
             'file-read'     = (Join-Path $v3 'processors\file-read.ps1')
             'rs-whitespace' = (Join-Path $v3 'processors\rs-whitespace.ps1')
-            'rs-psstrip'    = (Join-Path $v3 'processors\rs-psstrip.ps1')
+            'rs.ps.strip'   = (Join-Path $v3 'processors\rs.ps.strip.ps1')
             'rs-content_meta' = (Join-Path $v3 'processors\rs-content_meta.ps1')
         } `
         -Steps @(
             @{ Key = 'file-read'; Config = @{} }
             @{ Key = 'rs-whitespace'; Config = @{ Operations = @('lf', 'trim-trailing', 'trim-doc') } }
-            @{ Key = 'rs-psstrip'; Config = @{ Operations = @('block-comments', 'doc-strings', 'comment-blocks', 'line-comments') } }
+            @{ Key = 'rs.ps.strip'; Config = @{ Operations = @('block-comments', 'doc-strings', 'comment-blocks', 'line-comments') } }
             @{ Key = 'rs-content_meta'; Config = @{} }
         ) `
         -ChainExecutorPath (Join-Path $v3 'processors\chain-executor.ps1') `
@@ -241,12 +241,12 @@ try
         -Manifest @{
             'file-read'  = (Join-Path $v3 'processors\file-read.ps1')
             'rs-whitespace' = (Join-Path $v3 'processors\rs-whitespace.ps1')
-            'rs-psstrip' = (Join-Path $v3 'processors\rs-psstrip.ps1')
+            'rs.ps.strip' = (Join-Path $v3 'processors\rs.ps.strip.ps1')
         } `
         -Steps @(
             @{ Key = 'file-read'; Config = @{} }
             @{ Key = 'rs-whitespace'; Config = @{ Operations = @('lf', 'trim-trailing', 'trim-doc') } }
-            @{ Key = 'rs-psstrip'; Config = @{ Operations = @('block-comments', 'doc-strings', 'comment-blocks', 'line-comments') } }
+            @{ Key = 'rs.ps.strip'; Config = @{ Operations = @('block-comments', 'doc-strings', 'comment-blocks', 'line-comments') } }
         ) `
         -ChainExecutorPath (Join-Path $v3 'processors\chain-executor.ps1') `
         -SharedHelperPath (Join-Path $v3 'processors\bag-helpers.ps1') `

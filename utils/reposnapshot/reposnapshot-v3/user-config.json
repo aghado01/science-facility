@@ -8,7 +8,7 @@
         "!tests/"
     ],
     "Processors": [
-        "rs-psstrip",
+        "rs.ps.strip",
         "rs-indent",
         "rs-whitespace"
     ],

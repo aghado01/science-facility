@@ -2,7 +2,7 @@
 # Pester tests for Normalize-FileContent -StripComments string-literal safety.
 #
 # Acceptance coverage for issues/lts-stripcomments-string-corruption.md:
-#   - Round-trip: rs-psstrip.ps1 regex literals (the angle-hash block pattern)
+#   - Round-trip: rs.ps.strip.ps1 regex literals (the angle-hash block pattern)
 #     survive intact.
 #   - Span-deletion: a string-embedded block-comment opener with no closer in the
 #     same literal must not pair with a later closer and delete real code.
@@ -21,10 +21,10 @@ BeforeAll {
 
 Describe 'Normalize-FileContent -StripComments: PowerShell (tokenizer path)' {
 
-    It 'round-trips rs-psstrip.ps1: every [regex]::new literal survives intact' {
-        $srcPath = Join-Path $PSScriptRoot '..\reposnapshot-v3\processors\rs-psstrip.ps1'
+    It 'round-trips rs.ps.strip.ps1: every [regex]::new literal survives intact' {
+        $srcPath = Join-Path $PSScriptRoot '..\reposnapshot-v3\processors\rs.ps.strip.ps1'
         $src = Get-Content -Raw $srcPath
-        $out = Normalize-FileContent -Content $src -RelPath 'processors/rs-psstrip.ps1' -StripComments $true
+        $out = Normalize-FileContent -Content $src -RelPath 'processors/rs.ps.strip.ps1' -StripComments $true
 
         # Dynamic: pull each single-quoted [regex]::new pattern from source and
         # require it verbatim in the normalized output.

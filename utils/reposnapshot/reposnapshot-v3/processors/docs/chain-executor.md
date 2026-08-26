@@ -34,7 +34,7 @@
       $Plan.Steps — ordered array of:
         @{ Key = [string]; Fn = [string]; Config = [hashtable] }
       Key    — processor identity (for diagnostics)
-      Fn     — resolved function name available in this runspace (e.g. 'Invoke-rs-psstrip')
+      Fn     — resolved function name available in this runspace (e.g. 'Invoke-rs.ps.strip')
       Config — per-step params passed as second argument to the processor
 #>
 ```

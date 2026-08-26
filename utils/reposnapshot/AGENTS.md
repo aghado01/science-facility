@@ -44,7 +44,7 @@ Most confusion on this project is a category error between these:
 1. **Self-validation** — the pipeline analyzes its *own* components
    (colonel rejects `#Requires` in processor scripts; runspace/ISS reasons).
 2. **Analysis-for-mutation** — code-analysis tools applied to *ingested
-   materials as data* (rs-psstrip's PS-AST comment stripping).
+   materials as data* (rs.ps.strip's PS-AST comment stripping).
 3. **Analysis-for-enrichment** — metrics over processed content
    (rs-content_meta, né rs-attributes — renamed 2026-08-17 after the psr
    `content_meta` block it feeds) as a payload design feature for reader
@@ -281,9 +281,9 @@ rewriting history.
   into every worker runspace by `Compile-Plan -SharedHelperPath`). The clone is
   a single `[ordered]` cast, which also works under Bare where `Add-Member`
   does not exist. `chain-executor.ps1` and `bag-helpers.ps1` use no cmdlets at
-  all. What remains is four Utility calls: `Sort-Object` (rs-csstrip,
-  rs-psstrip), `ForEach-Object` (rs-whitespace — né format-ws, renamed
-  2026-08-17 to say its lane: code ingestion, not markdown — rs-psstrip), `Where-Object`
+  all. What remains is four Utility calls: `Sort-Object` (rs.cs.strip,
+  rs.ps.strip), `ForEach-Object` (rs-whitespace — né format-ws, renamed
+  2026-08-17 to say its lane: code ingestion, not markdown — rs.ps.strip), `Where-Object`
   (rs-indent, tp-perplexity), `Measure-Object` (rs-indent) — all with
   verified language-level equivalents, none load-bearing for stability
   (consolidation §E). Incidental debt, not structural dependency.

@@ -20,7 +20,7 @@
     either a bare processor-key string (which automatically defers to its
     processors/configs/<Key>.json default configuration) or an object
     { Key; Config } with specific overrides, e.g.:
-      @('rs-psstrip', 'rs-whitespace', @{ Key = 'rs-indent'; Config = @{ TargetUnit = 4 } })
+      @('rs.ps.strip', 'rs-whitespace', @{ Key = 'rs-indent'; Config = @{ TargetUnit = 4 } })
     Key must name a processors\<Key>.ps1 file.
     Columns still separately controls what lands on the wire: a processor's
     fields only appear there if the matching column is also requested, and a
@@ -79,7 +79,7 @@
     ./rs.core.user.ps1 -ConfigPath ./recipes/full-audit.json
 
 .EXAMPLE
-    ./rs.core.user.ps1 -Config @{ Root = '..\reposnapshot-v3'; Processors = @('rs-psstrip', 'rs-whitespace') }
+    ./rs.core.user.ps1 -Config @{ Root = '..\reposnapshot-v3'; Processors = @('rs.ps.strip', 'rs-whitespace') }
 
 .EXAMPLE
     ./rs.core.user.ps1 -Root ../reposnapshot-v3 -Processors 'rs-indent', 'rs-whitespace', 'rs-content_meta'

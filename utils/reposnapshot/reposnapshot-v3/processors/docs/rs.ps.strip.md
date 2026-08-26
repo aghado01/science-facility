@@ -1,4 +1,4 @@
-# rs-psstrip.ps1
+# rs.ps.strip.ps1
 
 ```powershell
 <#

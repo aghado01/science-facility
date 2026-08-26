@@ -1,6 +1,6 @@
 <#
 .LINK
-    docs/rs-psstrip.md
+    docs/rs.ps.strip.md
 #>
 param(
     [Parameter(Position = 0)]
@@ -56,7 +56,7 @@ function _SplitCommentPopulation {
 #region Config
 if ($Config.Count -eq 0 -or -not $Config.ContainsKey('Operations'))
 {
-    $Config = Resolve-ProcessorConfig -ProcessorName 'rs-psstrip' -CallerConfig $Config
+    $Config = Resolve-ProcessorConfig -ProcessorName 'rs.ps.strip' -CallerConfig $Config
 }
 $ops = @($Config['Operations'])
 $includeMeta = if ($null -ne $Config['IncludeMeta']) { [bool]$Config['IncludeMeta'] } else { $true }
@@ -420,7 +420,7 @@ if ($hsStore.Count -gt 0) {
 $recordObj = $null
 if ($includeMeta) {
     $record = [ordered]@{
-        Processor  = 'rs-psstrip'
+        Processor  = 'rs.ps.strip'
         Operations = @($ops)
     }
     if ($null -ne $parseErrors) { $record['ParseErrors'] = $parseErrors }

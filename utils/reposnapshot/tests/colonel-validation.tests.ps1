@@ -7,8 +7,8 @@ Set-StrictMode -Version Latest
 
 .DESCRIPTION
     Covers the body-only processor contract after the AST fix:
-      1. Interior helper functions are ACCEPTED — tp-perplexity (real file,
-         contains `function _MaskByRegex`) compiles into a plan
+      1. Interior helper functions are ACCEPTED — rs.ps.strip (real file,
+         contains `function _SplitCommentPopulation`) compiles into a plan
       2. Outer-function-wrapper scripts are REJECTED (no top-level param block)
       3. Scripts without any param block are REJECTED
       4. #Requires directives are still REJECTED
@@ -139,11 +139,11 @@ try
     Import-Module (Join-Path $v3 'rs.core.colonel.v2.psm1') -Force -WarningAction SilentlyContinue
 
     # -----------------------------------------------------------------------
-    Enter-Section '1. Interior helpers accepted — tp-perplexity compiles'
+    Enter-Section '1. Interior helpers accepted — rs.ps.strip compiles'
     # -----------------------------------------------------------------------
-    $tp = Invoke-CompileOnly @{ 'tp-perplexity' = (Join-Path $v3 'processors\tp-perplexity.ps1') } 'tp-perplexity'
-    Assert-True (@($tp.Errors).Count -eq 0) 'tp-perplexity (has _MaskByRegex) compiles clean' ($tp.Errors -join '; ')
-    Assert-True ($null -ne $tp.Plan) 'plan produced'
+    $psStrip = Invoke-CompileOnly @{ 'rs.ps.strip' = (Join-Path $v3 'processors\rs.ps.strip.ps1') } 'rs.ps.strip'
+    Assert-True (@($psStrip.Errors).Count -eq 0) 'rs.ps.strip (has _SplitCommentPopulation) compiles clean' ($psStrip.Errors -join '; ')
+    Assert-True ($null -ne $psStrip.Plan) 'plan produced'
 
     # -----------------------------------------------------------------------
     Enter-Section '2. Outer wrapper rejected'

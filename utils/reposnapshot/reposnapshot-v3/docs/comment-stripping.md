@@ -1,8 +1,8 @@
 # Comment Stripping & AST Partitioning
 
-Language-specific processors (`rs-psstrip.ps1` and `rs-csstrip.ps1`) strip comment tokens while preserving source code semantics.
+Language-specific processors (`rs.ps.strip.ps1` and `rs.cs.strip.ps1`) strip comment tokens while preserving source code semantics.
 
-## PowerShell Stripper (`rs-psstrip.ps1`)
+## PowerShell Stripper (`rs.ps.strip.ps1`)
 
 ### Parse-Boundary Partitioning
 
@@ -22,6 +22,6 @@ Language-specific processors (`rs-psstrip.ps1` and `rs-csstrip.ps1`) strip comme
 
 The AST tokenizer executes even when syntax errors exist. Regex fallback engages only when unterminated here-strings swallow the tail of the file. Here-strings are masked with private-use characters during fallback processing.
 
-## C# Stripper (`rs-csstrip.ps1`)
+## C# Stripper (`rs.cs.strip.ps1`)
 
 Uses regex-based span classification for `/* ... */`, `///` doc strings, `//` standalone lines/blocks, and `//` trailing comments.

@@ -1,4 +1,4 @@
-# rs-csstrip.ps1
+# rs.cs.strip.ps1
 
 ```powershell
 <#
@@ -9,7 +9,7 @@
     Classifies C# comment tokens into six kinds and strips the requested kinds
     based on the Config.Operations array.
 
-    Unlike rs-psstrip.ps1, this processor is regex-only — no native C# AST is
+    Unlike rs.ps.strip.ps1, this processor is regex-only — no native C# AST is
     available from PowerShell. Known limitation: // and /* tokens that appear
     inside string literals (including verbatim @"..." strings) may be incorrectly
     treated as comments.

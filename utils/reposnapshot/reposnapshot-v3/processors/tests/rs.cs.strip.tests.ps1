@@ -3,7 +3,7 @@ Set-StrictMode -Version Latest
 
 <#
 .SYNOPSIS
-    Unit tests for processors/rs-csstrip.ps1.
+    Unit tests for processors/rs.cs.strip.ps1.
 
 .DESCRIPTION
     Tests the processor directly (dot-invoked) to isolate behavior from dispatcher mechanics.
@@ -20,7 +20,7 @@ Set-StrictMode -Version Latest
      10. Harmonized content-mutator contract (6d)
 #>
 
-$processorPath = Join-Path $PSScriptRoot '..\rs-csstrip.ps1'
+$processorPath = Join-Path $PSScriptRoot '..\rs.cs.strip.ps1'
 
 # Shared ISS helpers
 . (Join-Path $PSScriptRoot '_helpers.ps1')
@@ -89,7 +89,7 @@ public class Foo
 #endregion
 
 Write-Host '============================================================' -ForegroundColor Yellow
-Write-Host ' rs-csstrip.tests.ps1' -ForegroundColor Yellow
+Write-Host ' rs.cs.strip.tests.ps1' -ForegroundColor Yellow
 Write-Host '============================================================' -ForegroundColor Yellow
 
 #region Test1_ItemUnpacking
@@ -105,7 +105,7 @@ Assert-True ($rHash -is [pscustomobject]) 'Hashtable item: cloned to pscustomobj
 Assert-True ($rPsco -is [pscustomobject]) 'PSCustomObject item: returns pscustomobject'
 Assert-Equal $rPsco.Id 'p1' 'PSCustomObject item: Id propagated'
 Assert-Equal $rPsco.Path 'y.cs' 'PSCustomObject item: Path propagated'
-Assert-Equal $rPsco.Processing[0].Processor 'rs-csstrip' 'Processing record names the processor'
+Assert-Equal $rPsco.Processing[0].Processor 'rs.cs.strip' 'Processing record names the processor'
 #endregion
 
 #region Test2_DefaultOps
@@ -270,7 +270,7 @@ $step1 = & $fmt $descriptor @{ Operations = @('lf') }
 $step2 = Invoke-Processor -Item $step1
 Assert-Equal $step2.Processing.Count 2 'chain: two records accumulated'
 Assert-Equal $step2.Processing[0].Processor 'rs-whitespace' 'chain: order[0] = rs-whitespace'
-Assert-Equal $step2.Processing[1].Processor 'rs-csstrip' 'chain: order[1] = rs-csstrip'
+Assert-Equal $step2.Processing[1].Processor 'rs.cs.strip' 'chain: order[1] = rs.cs.strip'
 Assert-Equal $step2.RelativePath 'src/Foo.cs' 'chain: identity survives cross-processor chain'
 Assert-True ($step2.Content -notmatch 'standalone block') 'chain: both mutations applied'
 #endregion

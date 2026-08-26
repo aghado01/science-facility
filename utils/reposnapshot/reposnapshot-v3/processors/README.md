@@ -73,7 +73,7 @@ Processors are categorized into four positional tiers:
 | Position Class | Role | Example |
 |---|---|---|
 | **Reader (Head)** | Consumes crawler descriptors; reads bytes from disk; attaches `Content` and `Encoding`; halts on binary/read failure. | [`file-read.ps1`](file-read.ps1) |
-| **Content Mutator** | Modifies text content (comment stripping, whitespace normalization, indentation); appends `Processing` audit metadata. | [`rs-whitespace.ps1`](rs-whitespace.ps1), [`rs-psstrip.ps1`](rs-psstrip.ps1), [`rs-csstrip.ps1`](rs-csstrip.ps1), [`rs-indent.ps1`](rs-indent.ps1) |
+| **Content Mutator** | Modifies text content (comment stripping, whitespace normalization, indentation); appends `Processing` audit metadata. | [`rs-whitespace.ps1`](rs-whitespace.ps1), [`rs.ps.strip.ps1`](rs.ps.strip.ps1), [`rs.cs.strip.ps1`](rs.cs.strip.ps1), [`rs-indent.ps1`](rs-indent.ps1) |
 | **Enricher (Tail)** | Read-only content inspection placed after *all* mutators; attaches invariant metadata statistics. | [`rs-content_meta.ps1`](rs-content_meta.ps1) |
 | **Segmenting Parser** | Decomposes multi-turn documents into discrete exchange envelopes. | [`tp-perplexity.ps1`](tp-perplexity.ps1) |
 
@@ -88,8 +88,8 @@ processors/
 ├── bag-helpers.ps1         # ISS-registered shared functions (Resolve-BagContent, Copy-Bag)
 ├── file-read.ps1           # Head reader processor
 ├── rs-whitespace.ps1       # Whitespace normalizer
-├── rs-psstrip.ps1          # AST PowerShell comment stripper
-├── rs-csstrip.ps1          # Regex C# comment stripper
+├── rs.ps.strip.ps1         # AST PowerShell comment stripper
+├── rs.cs.strip.ps1         # Regex C# comment stripper
 ├── rs-indent.ps1           # Code indentation normalizer
 ├── rs-content_meta.ps1     # Tail content metrics processor
 ├── tp-perplexity.ps1       # Perplexity thread parser

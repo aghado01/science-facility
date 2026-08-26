@@ -24,7 +24,7 @@
                    processor in processors/ is this shape (the colonel body-only
                    contract), so it must be first-class here.
       Function     including nested interior helpers, legitimate since the
-                   colonel AST-validation fix (rs-psstrip/_SplitCommentPopulation).
+                   colonel AST-validation fix (rs.ps.strip/_SplitCommentPopulation).
       ClassMethod  the stage classes (FileSystemCrawler, GlobCompiler,
                    RunspaceManager) live as PowerShell classes.
 

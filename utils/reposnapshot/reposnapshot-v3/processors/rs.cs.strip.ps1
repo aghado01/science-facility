@@ -1,6 +1,6 @@
 <#
 .LINK
-    docs/rs-csstrip.md
+    docs/rs.cs.strip.md
 #>
 param(
     [Parameter(Position = 0)]
@@ -13,7 +13,7 @@ param(
 #region Config
 if ($Config.Count -eq 0 -or -not $Config.ContainsKey('Operations'))
 {
-    $Config = Resolve-ProcessorConfig -ProcessorName 'rs-csstrip' -CallerConfig $Config
+    $Config = Resolve-ProcessorConfig -ProcessorName 'rs.cs.strip' -CallerConfig $Config
 }
 $ops = @($Config['Operations'])
 $includeMeta = if ($null -ne $Config['IncludeMeta']) { [bool]$Config['IncludeMeta'] } else { $true }
@@ -217,6 +217,6 @@ $stripped = $sb.ToString()
 
 #region Emit
 # Copy-on-mutate return — harmonized content-mutator contract (6d)
-$record = if ($includeMeta) { [pscustomobject]@{ Processor = 'rs-csstrip'; Operations = @($ops) } } else { $null }
+$record = if ($includeMeta) { [pscustomobject]@{ Processor = 'rs.cs.strip'; Operations = @($ops) } } else { $null }
 return Copy-Bag -Item $Item -Resolved $bc -Content $stripped -Record $record
 #endregion

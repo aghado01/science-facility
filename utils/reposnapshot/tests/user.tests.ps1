@@ -21,7 +21,7 @@ Set-StrictMode -Version Latest
       5. Inline -Config — a hashtable and a PSCustomObject both drive a bare
          invocation with no file at all; -Config and -ConfigPath together
          (both explicit) is refused rather than silently picking one.
-      6. -Processors — a mixed bare-string/object chain runs rs-psstrip with
+      6. -Processors — a mixed bare-string/object chain runs rs.ps.strip with
          its own Config; an unknown key or a Key-less entry fails fast;
          omitting rs-whitespace prints a caution.
 
@@ -118,7 +118,7 @@ try
     # -----------------------------------------------------------------------
     Enter-Section '3. Selection + Processors'
     # -----------------------------------------------------------------------
-    $r2 = & $userScript -Root $proj -OutRoot (Join-Path $tmp 'out2') -SelectionPatterns '*.ps1' -Processors 'rs-psstrip', 'rs-whitespace' -PassThru -ConfigPath $emptyConfig 6>$null
+    $r2 = & $userScript -Root $proj -OutRoot (Join-Path $tmp 'out2') -SelectionPatterns '*.ps1' -Processors 'rs.ps.strip', 'rs-whitespace' -PassThru -ConfigPath $emptyConfig 6>$null
     Assert-True ($r2.EntryCount -eq 2) 'Selection *.ps1: only the two scripts ingest' "entries $($r2.EntryCount)"
     $row = $null; $shardPath = $null
     foreach ($sr in $r2.Receipt.Shards)
@@ -143,7 +143,7 @@ try
 
     $out4 = Join-Path $tmp 'out4'
     $cfgPath = Join-Path $tmp 'config.json'
-    @{ Root = $proj4; OutRoot = $out4; SelectionPatterns = @('*.ps1'); Processors = @('rs-psstrip', 'rs-whitespace') } | ConvertTo-Json | Set-Content -Path $cfgPath
+    @{ Root = $proj4; OutRoot = $out4; SelectionPatterns = @('*.ps1'); Processors = @('rs.ps.strip', 'rs-whitespace') } | ConvertTo-Json | Set-Content -Path $cfgPath
 
     $r4 = & $userScript -ConfigPath $cfgPath 6>$null
     Assert-True ($r4.EntryCount -eq 2) 'bare invocation, config only: Selection *.ps1 from the config ingests a.ps1 + sub/b.ps1' "entries $($r4.EntryCount)"
@@ -170,7 +170,7 @@ try
     # -----------------------------------------------------------------------
     Enter-Section '5. Inline -Config'
     # -----------------------------------------------------------------------
-    $r6 = & $userScript -Config @{ Root = $proj4; OutRoot = $out4; SelectionPatterns = @('*.ps1'); Processors = @('rs-psstrip', 'rs-whitespace') } 6>$null
+    $r6 = & $userScript -Config @{ Root = $proj4; OutRoot = $out4; SelectionPatterns = @('*.ps1'); Processors = @('rs.ps.strip', 'rs-whitespace') } 6>$null
     Assert-True ($r6.EntryCount -eq 2) 'a hashtable passed to -Config drives a bare invocation, no file at all' "entries $($r6.EntryCount)"
 
     # a PSCustomObject (e.g. a ConvertFrom-Json result without -AsHashtable)
@@ -187,7 +187,7 @@ try
     # -----------------------------------------------------------------------
     $out6 = Join-Path $tmp 'out6'
     $r8 = & $userScript -Root $proj4 -OutRoot $out6 -SelectionPatterns '*.ps1' `
-        -Processors 'rs-whitespace', @{ Key = 'rs-psstrip'; Config = @{ Operations = @('line-comments') } } `
+        -Processors 'rs-whitespace', @{ Key = 'rs.ps.strip'; Config = @{ Operations = @('line-comments') } } `
         -PassThru -ConfigPath $emptyConfig 6>$null
     Assert-True ($r8.EntryCount -eq 2) 'mixed bare-string + object chain: Selection still applies' "entries $($r8.EntryCount)"
     $row = $null; $shardPath = $null

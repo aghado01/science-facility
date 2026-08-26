@@ -39,7 +39,7 @@ PowerShell re-evaluates `[ValidateSet]` and `[ValidateRange]` attributes upon va
 ## 3. Processor Chain Normalization
 
 The `-Processors` parameter (or `"Processors"` array in configuration) accepts:
-- **Bare string keys** (e.g. `'rs-psstrip'`): Automatically resolves defaults from `processors/configs/<Key>.json`.
+- **Bare string keys** (e.g. `'rs.ps.strip'`): Automatically resolves defaults from `processors/configs/<Key>.json`.
 - **Step descriptor objects** (e.g. `@{ Key = 'rs-indent'; Config = @{ TargetUnit = 4 } }`): Merges caller overrides on top of the JSON defaults.
 
 ### Chain Manifest & Guards

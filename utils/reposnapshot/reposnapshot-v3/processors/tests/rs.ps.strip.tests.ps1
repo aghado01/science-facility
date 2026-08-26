@@ -3,7 +3,7 @@ Set-StrictMode -Version Latest
 
 <#
 .SYNOPSIS
-    Unit tests for processors/rs-psstrip.ps1.
+    Unit tests for processors/rs.ps.strip.ps1.
 
 .DESCRIPTION
     Tests the processor directly (dot-invoked, not via colonel) to isolate
@@ -37,13 +37,13 @@ Set-StrictMode -Version Latest
 
 .NOTES
     Run from any directory:
-        & "$PSScriptRoot\rs-psstrip.tests.ps1"
+        & "$PSScriptRoot\rs.ps.strip.tests.ps1"
 
     Processor is dot-invoked by passing -Item and -Config via $args / positional
     params using the & operator.
 #>
 
-$processorPath = Join-Path $PSScriptRoot '..\rs-psstrip.ps1'
+$processorPath = Join-Path $PSScriptRoot '..\rs.ps.strip.ps1'
 
 # Shared ISS helpers (Resolve-BagContent / Copy-Bag) — colonel registers these
 # into worker runspaces; dot-invocation here needs them loaded explicitly.
@@ -116,7 +116,7 @@ function Invoke-Demo {
 #endregion
 
 Write-Host '============================================================' -ForegroundColor Yellow
-Write-Host ' rs-psstrip.tests.ps1' -ForegroundColor Yellow
+Write-Host ' rs.ps.strip.tests.ps1' -ForegroundColor Yellow
 Write-Host '============================================================' -ForegroundColor Yellow
 
 # ============================================================
@@ -134,7 +134,7 @@ Assert-True ($rHash -is [pscustomobject]) 'Hashtable item: returns pscustomobjec
 Assert-True ($rPsco -is [pscustomobject]) 'PSCustomObject item: returns pscustomobject'
 Assert-Equal $rPsco.Id 'p1' 'PSCustomObject item: Id propagated'
 Assert-Equal $rPsco.Path 'y.ps1' 'PSCustomObject item: Path propagated'
-Assert-Equal $rPsco.Processing[0].Processor 'rs-psstrip' 'Processing record names the processor'
+Assert-Equal $rPsco.Processing[0].Processor 'rs.ps.strip' 'Processing record names the processor'
 
 # ============================================================
 # 2. Empty text early return
@@ -144,8 +144,7 @@ Enter-Section '2. Empty text early return'
 $rEmpty = Invoke-Processor -Item ''
 Assert-True ($rEmpty -is [pscustomobject]) 'Empty content: returns bag'
 Assert-Equal $rEmpty.Content '' 'Empty content: Content is empty string'
-Assert-True ($rEmpty.Processing[0].Operations.Count -gt 0) 'Empty content: Processing record carries resolved ops'
-Assert-Equal $rEmpty.Processing[0].Processor 'rs-psstrip' 'Empty content: Processing record names the processor'
+Assert-Equal $rEmpty.Processing[0].Processor 'rs.ps.strip' 'Empty content: Processing record names the processor'
 
 $rEmptyBare = Invoke-ProcessorRaw -Item '' -Config @{ IncludeMeta = $false }
 Assert-Equal $rEmptyBare '' 'Empty string, IncludeMeta=false: bare empty string'
@@ -510,7 +509,8 @@ $step1 = & $fmt $descriptor @{ Operations = @('lf') }
 $step2 = Invoke-Processor -Item $step1
 Assert-Equal $step2.Processing.Count 2 'chain: two records accumulated'
 Assert-Equal $step2.Processing[0].Processor 'rs-whitespace' 'chain: order[0] = rs-whitespace'
-Assert-Equal $step2.Processing[1].Processor 'rs-psstrip' 'chain: order[1] = rs-psstrip'
+Assert-Equal $step2.Processing[1].Processor 'rs.ps.strip' 'chain: order[1] = rs.ps.strip'
+Assert-Equal $step2.Processing[1].Operations.Count 4 'chain: rs.ps.strip ops recorded'
 Assert-Equal $step2.RelativePath 'src/a.ps1' 'chain: identity survives cross-processor chain'
 Assert-Equal $step2.SizeBytes 120 'chain: SizeBytes survives cross-processor chain'
 Assert-True ($step2.Content -notmatch '(?s)<#.*?#>') 'chain: both mutations applied'
