@@ -8,10 +8,10 @@
         "!tests/"
     ],
     "IncludeProcessors": [
-        "$strip",
-        "rs-indent",
-        "rs-whitespace", 
-        "rs-content_meta"
+        "StripComments",
+        "rs_indent",
+        "rs_whitespace", 
+        "rs_content_meta"
     ],
     "Columns": [
         "gidx", 
