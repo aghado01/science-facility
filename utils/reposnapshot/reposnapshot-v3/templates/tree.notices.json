@@ -6,10 +6,10 @@
     "TreeLegend": "file row metadata: name<TAB>sidx<TAB>row_offset<TAB>row_meta_end<TAB>row_content_begin<TAB>row_content_end",
     "OversizedReason": "single record exceeds quota + tolerance; kept whole (atomicity)",
     "Instructions": [
-        "Treat this payload as a virtual database: scan selectively and seek by the byte offsets below for random access, instead of reading everything.",
+        "Treat this payload as a virtual database:" , 
         "Manage context by fetching segments of the shard files iteratively over multiple inference cycles.",
-        "Do not grep the shard files — matches duplicate across rows and explode.",
         "To read one entry: seek to row_content_begin in its shard file and read through row_content_end (inclusive).",
+        "Never grep the shard files indiscriminately due to context flood hazard", 
         "The shard extension is .txt deliberately, so low-level file reads are used instead of format-specific tooling."
     ]
 }
