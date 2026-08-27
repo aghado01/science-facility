@@ -7,6 +7,16 @@ never as standing claims, and never hand-copied from prose.
 Rulings live in [decisions.md](decisions.md); what remains lives in
 [roadmap.md](roadmap.md).
 
+- **2026-08-27 — `rs.content_meta` Fields config; producer owns the wire
+  block**: `processors/configs/rs.content_meta.json` lists in-memory `Fields`
+  to compute (default = admitted default-on set: CharCount, WordCount,
+  WhitespaceRatio, Entropy, LineStats). Empty Fields attaches nothing.
+  `Resolve-Layout` omits the `content_meta` column when Header.Elements has
+  no ContentMeta — Columns naming it does not write an empty block.
+  Sub-fields on the wire are admitted ∩ computed (`-Entry` derivation);
+  `SpanBytes` stays on the element, not the wire. Gzip only runs when
+  CompressionRatio is in Fields.
+
 - **2026-08-27 — `rs.content_meta` single-pass scan**: counts / entropy /
   whitespace / line stats are one C# walk compiled once per AppDomain
   (Roslyn emit, not `Add-Type` — Bare ISS has no cmdlets; type-exists guard,

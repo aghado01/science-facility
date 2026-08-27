@@ -53,6 +53,15 @@ function Invoke-Attr ([object]$Item, [hashtable]$Config = @{})
 {
     & $attrPath $Item $Config
 }
+
+$allFields = @(
+    'CharCount', 'WordCount', 'PunctuationCount', 'UniqueChars',
+    'Entropy', 'CompressionRatio', 'WhitespaceRatio', 'LineStats'
+)
+function Invoke-AttrAll ([object]$Item)
+{
+    Invoke-Attr $Item @{ Fields = $allFields }
+}
 #endregion
 
 #region Test0_BareCompile
@@ -87,7 +96,7 @@ catch
 Enter-Section '2. Metric parity (LTS formulas)'
 # Content "aaaa`nbb": 7 chars (a×4, LF, b×2), 2 words, 3 unique chars,
 # entropy ≈ 1.3788, ws ratio ≈ 0.1429, lines 'aaaa'(4) 'bb'(2): mean 3, median 4
-$r = Invoke-Attr ([pscustomobject]@{ RelativePath = 'x.txt'; Content = "aaaa`nbb" })
+$r = Invoke-AttrAll ([pscustomobject]@{ RelativePath = 'x.txt'; Content = "aaaa`nbb" })
 $a = $r.ContentMeta
 Assert-True ($a.SpanBytes -eq 7) 'SpanBytes = 7 (ASCII: bytes == chars)' "got $($a.SpanBytes)"
 Assert-True ($a.CharCount -eq 7) 'CharCount = 7' "got $($a.CharCount)"
@@ -102,18 +111,18 @@ Assert-True ($a.LineStats.Median -eq 4) 'LineStats.Median = 4 (LTS upper-median 
 Assert-True ($a.LineStats.StdDev -eq 1) 'LineStats.StdDev = 1' "got $($a.LineStats.StdDev)"
 Assert-True ($a.LineStats.Max -eq 4) 'LineStats.Max = 4'
 
-$r2 = Invoke-Attr ([pscustomobject]@{ Content = 'aabb' })
+$r2 = Invoke-AttrAll ([pscustomobject]@{ Content = 'aabb' })
 Assert-True ($r2.ContentMeta.Entropy -eq 1.0) 'Entropy("aabb") = 1.0 exactly'
 
-$r3 = Invoke-Attr ([pscustomobject]@{ Content = 'a,b.' })
+$r3 = Invoke-AttrAll ([pscustomobject]@{ Content = 'a,b.' })
 Assert-True ($r3.ContentMeta.PunctuationCount -eq 2) 'PunctuationCount("a,b.") = 2'
 
-$rm = Invoke-Attr ([pscustomobject]@{ Content = 'héllo' })
+$rm = Invoke-AttrAll ([pscustomobject]@{ Content = 'héllo' })
 Assert-True ($rm.ContentMeta.CharCount -eq 5 -and $rm.ContentMeta.SpanBytes -eq 6) `
     'multibyte: CharCount 5 vs SpanBytes 6 (UTF-8 é)' "chars=$($rm.ContentMeta.CharCount) span=$($rm.ContentMeta.SpanBytes)"
 
 $big = 'a' * 300
-$r4 = Invoke-Attr ([pscustomobject]@{ Content = $big })
+$r4 = Invoke-AttrAll ([pscustomobject]@{ Content = $big })
 Assert-True ($r4.ContentMeta.CompressionRatio -lt 1.0 -and $r4.ContentMeta.CompressionRatio -gt 0) `
     'CompressionRatio < 1 for repetitive >100-char content' "got $($r4.ContentMeta.CompressionRatio)"
 
@@ -121,12 +130,12 @@ Assert-True ($r4.ContentMeta.CompressionRatio -lt 1.0 -and $r4.ContentMeta.Compr
 # is a rewrite, not a new formula.
 foreach ($sample in @('x y z', '  a  b  ', "a`n", '   '))
 {
-    $got = (Invoke-Attr ([pscustomobject]@{ Content = $sample })).ContentMeta.WordCount
+    $got = (Invoke-AttrAll ([pscustomobject]@{ Content = $sample })).ContentMeta.WordCount
     $expect = @($sample -split '\s+').Count
     Assert-True ($got -eq $expect) `
         "WordCount split-parity '$($sample -replace "`n", '\n')'" "got $got expect $expect"
 }
-Assert-True ((Invoke-Attr ([pscustomobject]@{ Content = 'x y z' })).ContentMeta.WhitespaceRatio -eq 0.4) `
+Assert-True ((Invoke-AttrAll ([pscustomobject]@{ Content = 'x y z' })).ContentMeta.WhitespaceRatio -eq 0.4) `
     'WhitespaceRatio("x y z") = 0.4 (2 spaces / 5)'
 #endregion
 
@@ -140,7 +149,7 @@ Assert-True ($re.Id -eq 'thread-1' -and $re.Exchanges.Count -eq 3) 'envelope pro
 
 #region Test3_EmptyContent
 Enter-Section '4. Empty content'
-$rz = Invoke-Attr ([pscustomobject]@{ RelativePath = 'empty.txt'; Content = '' })
+$rz = Invoke-AttrAll ([pscustomobject]@{ RelativePath = 'empty.txt'; Content = '' })
 $az = $rz.ContentMeta
 Assert-True ($null -ne $az) 'empty string still gets ContentMeta'
 Assert-True ($az.SpanBytes -eq 0 -and $az.CharCount -eq 0 -and $az.WordCount -eq 0 -and $az.Entropy -eq 0) 'zeroed count metrics (incl. SpanBytes)'
@@ -165,6 +174,30 @@ Assert-True ($rc.SizeBytes -eq 999 -and $rc.ContentMeta.CharCount -eq 5) `
     'provenance split: SizeBytes (on-disk) vs ContentMeta.CharCount (processed)'
 #endregion
 
+#region Test4b_FieldsGating
+Enter-Section '5b. Fields config gates what is computed'
+$def = Invoke-Attr ([pscustomobject]@{ Content = 'a,b.' * 40 })
+Assert-True ($null -ne $def.ContentMeta.CharCount) 'default Fields includes CharCount'
+Assert-True ($null -eq $def.ContentMeta.PSObject.Properties['PunctuationCount']) `
+    'default Fields omits PunctuationCount'
+Assert-True ($null -eq $def.ContentMeta.PSObject.Properties['CompressionRatio']) `
+    'default Fields omits CompressionRatio (no gzip)'
+Assert-True ($null -ne $def.ContentMeta.SpanBytes) 'SpanBytes is always attached'
+
+$only = Invoke-Attr ([pscustomobject]@{ Content = 'aaaa' }) @{ Fields = @('CharCount') }
+Assert-True ($only.ContentMeta.CharCount -eq 4) 'Fields=CharCount computes CharCount'
+Assert-True ($null -eq $only.ContentMeta.PSObject.Properties['WordCount']) '…and does not attach WordCount'
+Assert-True ($null -eq $only.ContentMeta.PSObject.Properties['LineStats']) '…nor LineStats'
+Assert-True ($null -ne $only.ContentMeta.SpanBytes) '…SpanBytes still present'
+
+$none = Invoke-Attr ([pscustomobject]@{ Content = 'aaaa' }) @{ Fields = @() }
+Assert-True ($null -eq $none.PSObject.Properties['ContentMeta']) 'empty Fields: no ContentMeta attached'
+
+$threw = $null
+try { Invoke-Attr ([pscustomobject]@{ Content = 'x' }) @{ Fields = @('Nope') } | Out-Null } catch { $threw = $_.Exception.Message }
+Assert-True ($null -ne $threw -and $threw -like '*unknown Fields*') 'unknown Fields name throws' $threw
+#endregion
+
 #region Test5_ColonelDispatch
 Enter-Section '6. Colonel dispatch (file_read → rs.content_meta)'
 Import-Module (Join-Path $v3 'rs.core.colonel.v2.psm1') -Force -WarningAction SilentlyContinue
@@ -178,7 +211,7 @@ try
 {
     $compiled = Compile-Plan `
         -Manifest @{ 'file_read' = (Join-Path $procDir 'file_read.ps1'); 'rs.content_meta' = $attrPath } `
-        -Steps @(@{ Key = 'file_read'; Config = @{} }, @{ Key = 'rs.content_meta'; Config = @{} }) `
+        -Steps @(@{ Key = 'file_read'; Config = @{} }, @{ Key = 'rs.content_meta'; Config = @{ Fields = $allFields } }) `
         -ChainExecutorPath (Join-Path $procDir 'chain_executor.ps1') `
             -SharedHelperPath (Join-Path $procDir 'bag_helpers.ps1')
     Assert-True (@($compiled.Errors).Count -eq 0) 'chain compiles' ($compiled.Errors -join '; ')

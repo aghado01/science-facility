@@ -96,6 +96,9 @@ try
     Assert-True ((Test-Path $r.TreePath) -and (Split-Path $r.TreePath -Leaf) -eq 'proj_tree.md') 'tree manifest beside the shards'
     $sum = ($shardFiles | Measure-Object -Sum Length).Sum
     Assert-True ($sum -eq $r.TotalBytes) 'summary TotalBytes == bytes on disk'
+    $shardHdr = Get-Content -LiteralPath $shardFiles[0].FullName -TotalCount 1
+    Assert-True ($shardHdr -notlike '*content_meta*') 'content_meta column omitted when the processor did not run (overrides Columns)' $shardHdr
+    Assert-True ($shardHdr -like 'gidx:*') 'gidx still written (default Columns minus the omitted block)' $shardHdr
     $tree = Get-Content -Raw $r.TreePath
     Assert-True ($tree.Contains('a.ps1') -and $tree.Contains('b.ps1') -and $tree.Contains('- RunStamp: ' + $r.RunStamp)) 'tree declares the rows and this run''s stamp'
     Assert-True ($tree.Contains('Grouping:') -and $tree.Contains('ShardQuotaBytes:')) 'packing settings are tree-global metadata'
@@ -238,6 +241,15 @@ try
     $quietText = (@($quiet | Where-Object { $_ -is [System.Management.Automation.InformationRecord] } | ForEach-Object { $_.MessageData.Message }) -join "`n")
     Assert-True ($quietText -notlike '*omits rs.whitespace*') `
         'the same omission under the sequencer prints no caution — order and placement are guaranteed there' $quietText
+
+    $cmOn = & $userScript -Root $proj4 -IncludeProcessors 'ContentMetadata' -Columns gidx, content_meta `
+        -OutRoot (Join-Path $tmp 'cm-on') -PassThru -ConfigPath $emptyConfig 6>$null
+    Assert-True (@($cmOn.Layout.Columns | ForEach-Object Name) -contains 'content_meta') `
+        'ContentMetadata on → content_meta column is written'
+    $cmCol = @($cmOn.Layout.Columns | Where-Object Name -eq 'content_meta')[0]
+    $cmNames = @($cmCol.Fields | ForEach-Object Name) -join ','
+    Assert-True ($cmNames -eq 'line_mean,num_chars,num_words,ws_ratio,entropy') `
+        'default Fields ∩ admitted set is the default-on wire block' $cmNames
 }
 catch
 {

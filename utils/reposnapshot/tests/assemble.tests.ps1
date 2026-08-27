@@ -243,7 +243,7 @@ try
             'file_read'     = (Join-Path $v3 'processors\file_read.ps1')
             'rs.content_meta' = (Join-Path $v3 'processors\rs.content_meta.ps1')
         } `
-        -Steps @(@{ Key = 'file_read'; Config = @{} }, @{ Key = 'rs.content_meta'; Config = @{} }) `
+        -Steps @(@{ Key = 'file_read'; Config = @{} }, @{ Key = 'rs.content_meta'; Config = @{ Fields = @('CharCount', 'WordCount', 'PunctuationCount', 'UniqueChars', 'Entropy', 'CompressionRatio', 'WhitespaceRatio', 'LineStats') } }) `
         -ChainExecutorPath (Join-Path $v3 'processors\chain_executor.ps1') `
         -SharedHelperPath (Join-Path $v3 'processors\bag_helpers.ps1')
 

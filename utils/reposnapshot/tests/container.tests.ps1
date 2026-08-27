@@ -15,7 +15,7 @@ Set-StrictMode -Version Latest
 
     Sections:
       1. Resolve-Layout — required-only default; optional columns; widths from
-         EntryCount; admissibility; MetaFields val_rank order/default; presence
+         occupancy override (no ContentMeta → column omitted); MetaFields val_rank order/default; presence
          warning; the two order invariants (content last, content_bytes before
          it); the $ref crosswalk yielding accessors.
       2. Codec — ConvertTo-ContentSpan SPEC rules 1–4; Measure-ContentSpan == UTF-8 width
@@ -103,10 +103,22 @@ try
     $cb = @($L1.Columns | Where-Object Name -eq 'content_bytes')[0]
     Assert-True ($cb.Source -eq 'codec.bytes') 'content_bytes accessor derived from the container $ref'
 
-    $L2 = Resolve-Layout -Header (New-Header 7) -Columns content_meta -MetaFields entropy, num_chars, line_mean -WarningAction SilentlyContinue
+    $L2 = Resolve-Layout -Header (New-Header 7 @{ ContentMeta = @(7, 7) }) -Columns content_meta -MetaFields entropy, num_chars, line_mean
     $m2 = @($L2.Columns | Where-Object Name -eq 'content_meta')[0]
     Assert-True (@($m2.Fields | ForEach-Object Name) -join ',' -eq 'line_mean,num_chars,entropy') 'MetaFields rendered in val_rank order regardless of request order' (@($m2.Fields | ForEach-Object Name) -join ',')
     Assert-True ($L2.IdxWidth -eq 0 -and $L2.HeaderRowText -notlike 'gidx*') 'gidx off unless requested'
+
+    $Lderived = Resolve-Layout -Header $h -Columns content_meta -Entry ([pscustomobject]@{
+            ContentMeta = [pscustomobject]@{ CharCount = 3; Entropy = 1.0 }
+        })
+    $md = @($Lderived.Columns | Where-Object Name -eq 'content_meta')[0]
+    Assert-True (@($md.Fields | ForEach-Object Name) -join ',' -eq 'num_chars,entropy') `
+        'Entry-derived MetaFields = admitted ∩ computed (val_rank order)' (@($md.Fields | ForEach-Object Name) -join ',')
+    $LspanOnly = Resolve-Layout -Header $h -Columns content_meta -Entry ([pscustomobject]@{
+            ContentMeta = [pscustomobject]@{ SpanBytes = 7 }
+        })
+    Assert-True (-not $LspanOnly.HeaderRowText.Contains('content_meta')) `
+        'SpanBytes-only ContentMeta admits no wire sub-fields → column omitted' $LspanOnly.HeaderRowText
 
     $Lw = Resolve-Layout -Header (New-Header 0) -Columns gidx
     Assert-True ($Lw.IdxWidth -eq 1) 'EntryCount 0 → gidx width 1 (never 0)'
@@ -122,11 +134,11 @@ try
     $threw = $null; try { Resolve-Layout -Header $h -Columns content_meta -MetaFields num_chars, bogus | Out-Null } catch { $threw = $_.Exception.Message }
     Assert-True ($null -ne $threw -and $threw -like '*not admissible*') 'inadmissible content_meta sub-field throws' $threw
 
-    # presence warning — never decides the layout
+    # producer override — absence of ContentMeta omits the column, even if named
     $warn = @()
     $Lp = Resolve-Layout -Header (New-Header 5) -Columns content_meta -WarningVariable warn -WarningAction SilentlyContinue
-    Assert-True ($warn.Count -eq 1 -and $warn[0] -like '*no ContentMeta*') 'content_meta on, no ContentMeta in Elements → one warning' ($warn -join ' / ')
-    Assert-True ($Lp.HeaderRowText.Contains('content_meta: [')) '…and the block is still in the layout'
+    Assert-True ($warn.Count -eq 0) 'content_meta named, no ContentMeta in Elements → no warning' ($warn -join ' / ')
+    Assert-True (-not $Lp.HeaderRowText.Contains('content_meta')) '…and the block is omitted from the layout' $Lp.HeaderRowText
     $warn = @()
     Resolve-Layout -Header (New-Header 5 @{ ContentMeta = @(3, 5) }) -Columns content_meta -WarningVariable warn -WarningAction SilentlyContinue | Out-Null
     Assert-True ($warn.Count -eq 1 -and $warn[0] -like '*3 of 5*') 'partial presence → one warning naming the counts' ($warn -join ' / ')
@@ -277,7 +289,9 @@ try
     # -----------------------------------------------------------------------
     . (Join-Path $procDir 'tests\_helpers.ps1')
     $raw = [pscustomobject]@{ RelativePath = 'w/real.ps1'; NodePath = 'w/'; Content = "function f {`r`n  'x'`r`n}`r`n" }
-    $enriched = & (Join-Path $procDir 'rs.content_meta.ps1') $raw @{}
+    $enriched = & (Join-Path $procDir 'rs.content_meta.ps1') $raw @{
+        Fields = @('CharCount', 'WordCount', 'PunctuationCount', 'UniqueChars', 'Entropy', 'CompressionRatio', 'WhitespaceRatio', 'LineStats')
+    }
     Assert-True ($null -ne $enriched.PSObject.Properties['ContentMeta']) 'rs.content_meta attached ContentMeta'
 
     $Lall = Resolve-Layout -Header (New-Header 1 @{ ContentMeta = @(1, 1) }) -Columns gidx, content_meta `

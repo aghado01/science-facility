@@ -59,7 +59,8 @@
     Path to the sequencer declaring the canon and its routes. Defaults to
     processors/default_sequencer.json.
 .PARAMETER Columns
-    Active psr wire columns (default: gidx, content_meta).
+    Active psr wire columns (default: gidx, content_meta). content_meta is
+    omitted at layout if rs.content_meta did not run, even when named here.
 .PARAMETER Grouping
     Sharding partition mode: 'Flat', 'ByFileType', or 'ByRootDirectory'.
 .PARAMETER GroupSort

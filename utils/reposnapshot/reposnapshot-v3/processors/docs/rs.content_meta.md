@@ -36,8 +36,6 @@
       - Intended Colonel IssPreset floor: Bare
       - Required IssModules: none
 
-.PARAMETER Item
-    String, hashtable, or pscustomobject descriptor carrying Content.
     CONFIG:
       Fields: string[]  in-memory metric names to compute and attach.
         Default (processors/configs/rs.content_meta.json): CharCount, WordCount,
@@ -54,6 +52,8 @@
       Fields ∩ the admitted set in container.spec.jsonc. Columns naming
       content_meta without this processor is omitted, not rendered empty.
 
+.PARAMETER Item
+    String, hashtable, or pscustomobject descriptor carrying Content.
 .PARAMETER Config
     Hashtable. Fields: string[] of in-memory metric names (see CONFIG).
 #>
