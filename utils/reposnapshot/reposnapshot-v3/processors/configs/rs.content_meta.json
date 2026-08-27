@@ -1,0 +1,9 @@
+{
+    "Fields": [
+        "CharCount",
+        "WordCount",
+        "WhitespaceRatio",
+        "Entropy",
+        "LineStats"
+    ]
+}

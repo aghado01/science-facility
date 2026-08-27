@@ -7,6 +7,16 @@ never as standing claims, and never hand-copied from prose.
 Rulings live in [decisions.md](decisions.md); what remains lives in
 [roadmap.md](roadmap.md).
 
+- **2026-08-27 — `rs.content_meta` single-pass scan**: counts / entropy /
+  whitespace / line stats are one C# walk compiled once per AppDomain
+  (Roslyn emit, not `Add-Type` — Bare ISS has no cmdlets; type-exists guard,
+  never per file). UTF-8 `GetBytes` is reused for `SpanBytes` and the gzip
+  proxy; gzip is `CompressionLevel.Fastest` with `leaveOpen` (Kolmogorov
+  proxy — tests still pin the >100-char gate and that repetitive content
+  compresses, not a ratio). Formulas unchanged: WordCount remains
+  `-split '\s+'` including leading/trailing empties; punctuation /
+  whitespace stay `\p{P}` / `\s` via `Char.IsPunctuation` / `IsWhiteSpace`.
+
 - **2026-08-27 — JS / TS / Python regex strippers (mask lens)**: `rs.js.strip`,
   `rs.ts.strip`, `rs.py.strip` land as routed `StripComments` implementations.
   Literals are length-and-newline-preserving masked (U+0001 scratch lens);

@@ -30,9 +30,11 @@
     every other stage; its chain is simply one step shorter. Requesting
     StripComments over a mixed corpus means "strip where a stripper exists".
 
-    Columns still separately controls what lands on the wire: a processor's
-    fields only appear there if the matching column is also requested, and a
-    requested column with no processor computing it renders empty.
+    Columns still separately controls optional wire columns (gidx, content_meta),
+    except content_meta: that block is written only when rs.content_meta actually
+    ran. Columns naming it without the processor is omitted, not rendered empty.
+    Which content_meta sub-fields appear is the processor Fields list intersected
+    with the admitted set in container.spec.jsonc.
 .PARAMETER RunVerbatim
     Runs a literal chain instead of compiling from the sequencer: -Processors is
     taken as an ordered list, in the order given, identically for every file, and
@@ -309,7 +311,7 @@ if ($RunVerbatim) {
         Write-Host "  caution: rs.content_meta is not the last processor — its own contract calls for enrich-only TAIL placement, after every content mutator. Fine if intentional." -ForegroundColor Yellow
     }
     if (($Columns -contains 'content_meta') -and $resolvedKeys -notcontains 'rs.content_meta') {
-        Write-Host "  caution: Columns requests content_meta but no rs.content_meta step runs — that wire column will render empty." -ForegroundColor Yellow
+        Write-Host "  caution: Columns requested content_meta but no rs.content_meta step runs — the column is omitted, not written empty." -ForegroundColor Yellow
     }
 }
 else {
@@ -343,7 +345,11 @@ $ir = Invoke-Assemble -DispatchOutput $ingest -RunContext $runContext
 #endregion
 
 #region ShardAndSerialize
-$layout = Resolve-Layout -Header $ir.Header -Columns $Columns
+$sample = if (@($ir.Entries).Count -gt 0) { $ir.Entries[0] } else { $null }
+$layout = Resolve-Layout -Header $ir.Header -Columns $Columns -Entry $sample
+$effectiveColumns = @($layout.Columns | ForEach-Object Name | Where-Object { $_ -notin @('path', 'content_bytes', 'content') })
+$runContext.Columns = $effectiveColumns
+if ($null -ne $ir.Header.PSObject.Properties['Columns']) { $ir.Header.Columns = $effectiveColumns }
 $plan = New-ShardPlan -Entries $ir.Entries -Layout $layout -Grouping $Grouping -GroupSort $GroupSort `
     -OrderStrict:$OrderStrict -PackObjective $PackObjective -ShardQuotaBytes $ShardQuotaBytes `
     -ShardToleranceBytes $ShardToleranceBytes -MaxFilesPerShard $MaxFilesPerShard -ShardStem $leaf

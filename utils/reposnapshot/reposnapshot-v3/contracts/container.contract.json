@@ -7,11 +7,12 @@
       "Header":      { "type": "object",   "note": "assemble.out.header — EntryCount and Elements are read (see in.header)" },
       "Declaration": { "type": "path",     "optional": true, "note": "contracts/container.spec.jsonc (default: beside the module). Admissible column superset, framing constants, types, wire-name map. READ BY CODE." },
       "Columns":     { "type": "string[]", "optional": true, "note": "optional columns to enable: gidx, content_meta. Required columns (path, content_bytes, content) cannot be disabled; naming one is a no-op, naming an inadmissible one throws" },
-      "MetaFields":  { "type": "string[]", "optional": true, "note": "content_meta sub-fields on, in container.spec.jsonc order; default = its $default_on set. Inadmissible name throws" }
+      "MetaFields":  { "type": "string[]", "optional": true, "note": "content_meta sub-fields on, in container.spec.jsonc order; default = its default-on set UNLESS -Entry carries ContentMeta, in which case admitted ∩ computed. Inadmissible name throws" },
+      "Entry":       { "type": "object",   "optional": true, "note": "sample IR entry used to derive MetaFields from the ContentMeta the processor actually attached" }
     },
     "header": {
       "EntryCount": { "from": "assemble.out.header", "note": "→ IdxWidth = digits(EntryCount) when gidx is on; the bound known before packing that keeps rows measurable (ledger #46)" },
-      "Elements":   { "from": "assemble.out.header", "note": "presence counts per element — used only to WARN when an enabled column's source is absent on some entries (those rows render the empty marker); never decides the layout" }
+      "Elements":   { "from": "assemble.out.header", "note": "presence counts per element. Absence of ContentMeta OMITS the content_meta column even if Columns named it (producer override). Partial presence still warns; those rows render the empty marker." }
     }
   },
   "out": {

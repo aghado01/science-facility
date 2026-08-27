@@ -9,11 +9,11 @@
         "!tests/",
         "!hashish/",
         "!archivory/",
+        "!repo-audit/",
         "!user-repl/",
-        "!viz/",        
-        "!test-harness/",        
-        "!viz-core/",        
-        "!repo-audit/"
+        "!test-harness/",  
+        "!viz-core/",          
+        "!viz/"            
     ],
     "IncludeProcessors": [
         "StripComments",

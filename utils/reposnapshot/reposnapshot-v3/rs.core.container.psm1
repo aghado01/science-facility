@@ -197,6 +197,21 @@ function Resolve-RefAccessor ([string]$Ref, [string]$SpecDir, [string]$Where)
         default { throw "rs.core.container: '$Ref' at $Where points at $file, which declares no processor and no stage with an accessor derivation." }
     }
 }
+
+function Get-ComputedMetaFields ([object]$Entry, [hashtable]$SubReg, [string[]]$Admissible, [string]$SpecDir)
+{
+    # Admitted wire names whose $ref source is present on the sample ContentMeta.
+    # 0 is a computed value; only a missing property drops the field.
+    $out = [List[string]]::new()
+    foreach ($fname in $Admissible)
+    {
+        $accessor = Resolve-RefAccessor ([string]$SubReg[$fname].val.'$ref') $SpecDir "content_meta.$fname"
+        if ($accessor -notlike 'entry.*') { continue }
+        $val = Resolve-EntryPath $Entry ($accessor.Substring(6) -split '\.')
+        if ($null -ne $val) { $out.Add($fname) }
+    }
+    return $out.ToArray()
+}
 #endregion
 
 #region Resolve-Layout
@@ -216,7 +231,13 @@ function Resolve-Layout
         Optional columns to enable (e.g. gidx, content_meta).
 
     .PARAMETER MetaFields
-        content_meta sub-fields to enable.
+        content_meta sub-fields to enable. Null = spec default-on set, unless
+        -Entry is supplied and carries ContentMeta: then the admitted sub-fields
+        whose source is present on that element (computed ∩ admitted).
+
+    .PARAMETER Entry
+        Optional sample IR entry. When ContentMeta is attached, used to derive
+        which admitted sub-fields were actually computed (processor Fields).
 
     .OUTPUTS
         [PSCustomObject] layout description.
@@ -226,7 +247,8 @@ function Resolve-Layout
         [Parameter(Mandatory)] [object]$Header,
         [string]$Declaration = $script:DeclarationPath,
         [string[]]$Columns = @(),
-        [string[]]$MetaFields = $null
+        [string[]]$MetaFields = $null,
+        [object]$Entry = $null
     )
 
     if (-not (Test-Path -LiteralPath $Declaration)) { throw "Resolve-Layout: declaration not found: $Declaration" }
@@ -277,16 +299,33 @@ function Resolve-Layout
         $fields = $null; $enclosure = $null; $valSeparator = $null
         if ([string]$c.record_type -eq 'array')
         {
+            # Producer override: no ContentMeta element → the block is not written,
+            # even if Columns named it. Partial occupancy still enables the column.
+            $elOcc = Get-Prop (Get-Prop $Header 'Elements') 'ContentMeta'
+            if ($null -eq $elOcc) { continue }
+
             $metaOn = $true
             $enclosure = [PSCustomObject]@{ Start = [string]$c.record_val_enclosure.start; End = [string]$c.record_val_enclosure.end }
             $valSeparator = [string]$c.val_separator
             $subReg = $c.properties
             $admissible = @($subReg.Keys | Where-Object { $_ -notlike '$*' } | Sort-Object { [int]$subReg[$_].val_rank })
-            $wanted = if ($null -eq $MetaFields) { @($admissible | Where-Object { [bool]$subReg[$_]['default'] }) } else { @($MetaFields) }
+            if ($null -ne $MetaFields)
+            {
+                $wanted = @($MetaFields)
+            }
+            elseif ($null -ne (Get-Prop $Entry 'ContentMeta'))
+            {
+                $wanted = @(Get-ComputedMetaFields $Entry $subReg $admissible $specDir)
+            }
+            else
+            {
+                $wanted = @($admissible | Where-Object { [bool]$subReg[$_]['default'] })
+            }
             foreach ($mf in $wanted)
             {
                 if ($mf -notin $admissible) { throw "Resolve-Layout: content_meta sub-field '$mf' is not admissible — container.spec.jsonc declares: $($admissible -join ', ')" }
             }
+            if ($wanted.Count -eq 0) { $metaOn = $false; continue }
             $fl = [List[object]]::new()
             foreach ($fname in $admissible)
             {
@@ -349,17 +388,9 @@ function Resolve-Layout
 
     if ($metaOn)
     {
-        $el = Get-Prop $Header 'Elements'
-        $cm = Get-Prop $el 'ContentMeta'
-        if ($null -eq $cm)
-        {
-            Write-Warning "Resolve-Layout: content_meta is enabled but Header.Elements declares no ContentMeta."
-        }
-        else
-        {
-            $count = [long](Get-Prop $cm 'Count'); $total = [long](Get-Prop $cm 'Total')
-            if ($count -lt $total) { Write-Warning "Resolve-Layout: ContentMeta present on $count of $total entries." }
-        }
+        $cm = Get-Prop (Get-Prop $Header 'Elements') 'ContentMeta'
+        $count = [long](Get-Prop $cm 'Count'); $total = [long](Get-Prop $cm 'Total')
+        if ($count -lt $total) { Write-Warning "Resolve-Layout: ContentMeta present on $count of $total entries." }
     }
 
     return [PSCustomObject]@{

@@ -45,7 +45,7 @@ Two modes, not interchangeable. The model is [Sequencing & Routing](sequencing-a
 
 A `-Processors` entry is either a bare string key (defaults from `processors/configs/<Key>.json`) or `@{ Key; Config }`. All `processors/*.ps1` files except `chain_executor.ps1` and `bag_helpers.ps1` are registered at runtime; an unknown key fails fast.
 
-The three chain cautions (`rs.whitespace` omitted, `rs.content_meta` not last, `Columns` requests `content_meta` with no measuring step) print **only** under verbatim. Under the sequencer they are compiler guarantees.
+The three chain cautions (`rs.whitespace` omitted, `rs.content_meta` not last, `Columns` named `content_meta` with no measuring step — that column is omitted) print **only** under verbatim. Under the sequencer they are compiler guarantees, except the content_meta omission which still applies: default Columns may name `content_meta`, but the block is not written unless `ContentMetadata` ran.
 
 ---
 

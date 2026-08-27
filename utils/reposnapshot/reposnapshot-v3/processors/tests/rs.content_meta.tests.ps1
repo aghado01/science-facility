@@ -7,12 +7,14 @@ Set-StrictMode -Version Latest
 
 .DESCRIPTION
     Covers:
-      1. Direct-invocation metric parity (LTS formulas: counts, entropy,
+      1. Bare ISS colonel dispatch — Roslyn compile with no Add-Type cmdlet
+         (must run before parent Invoke-Attr, which would otherwise load the type)
+      2. Direct-invocation metric parity (LTS formulas: counts, entropy,
          whitespace ratio, line stats incl. upper-median quirk, compression gate)
-      2. No-Content contract — pass-through unenriched (envelope-shaped item)
-      3. Empty-content behavior — ContentMeta attached with zeroed metrics
-      4. Copy-on-enrich — identity fields cloned, Content unmutated, caller's object untouched
-      5. Colonel dispatch — file_read → rs.content_meta chain in real runspaces
+      3. No-Content contract — pass-through unenriched (envelope-shaped item)
+      4. Empty-content behavior — ContentMeta attached with zeroed metrics
+      5. Copy-on-enrich — identity fields cloned, Content unmutated, caller's object untouched
+      6. Core colonel dispatch — file_read → rs.content_meta chain in real runspaces
 #>
 
 $procDir = Split-Path $PSScriptRoot -Parent
@@ -53,8 +55,36 @@ function Invoke-Attr ([object]$Item, [hashtable]$Config = @{})
 }
 #endregion
 
+#region Test0_BareCompile
+Enter-Section '1. Bare ISS compile (no Add-Type)'
+# Must run before any parent-runspace Invoke-Attr: that would load the type
+# into the AppDomain and mask a Bare-only compile failure.
+Import-Module (Join-Path $v3 'rs.core.colonel.v2.psm1') -Force -WarningAction SilentlyContinue
+try
+{
+    $barePlan = Compile-Plan `
+        -Manifest @{ 'rs.content_meta' = $attrPath } `
+        -Steps @(@{ Key = 'rs.content_meta'; Config = @{} }) `
+        -ChainExecutorPath (Join-Path $procDir 'chain_executor.ps1') `
+        -SharedHelperPath (Join-Path $procDir 'bag_helpers.ps1') `
+        -IssPreset Bare
+    Assert-True (@($barePlan.Errors).Count -eq 0) 'Bare chain compiles' ($barePlan.Errors -join '; ')
+    $bareRun = Invoke-Plan -Items @(
+        [pscustomobject]@{ RelativePath = 'x.txt'; Content = "aaaa`nbb" }
+    ) -Plan $barePlan.Plan -MaxWorkers 1
+    Assert-True (@($bareRun.Errors).Count -eq 0) 'Bare dispatch clean' ($bareRun.Errors -join '; ')
+    $ba = $bareRun.Results[0].ContentMeta
+    Assert-True ($ba.WordCount -eq 2 -and $ba.Entropy -eq 1.3788 -and $ba.LineStats.Median -eq 4) `
+        'Bare worker matches LTS formulas' "words=$($ba.WordCount) H=$($ba.Entropy) med=$($ba.LineStats.Median)"
+}
+catch
+{
+    Assert-True $false "SUITE ABORTED: $($_.Exception.Message)" $_.ScriptStackTrace
+}
+#endregion
+
 #region Test1_MetricParity
-Enter-Section '1. Metric parity (LTS formulas)'
+Enter-Section '2. Metric parity (LTS formulas)'
 # Content "aaaa`nbb": 7 chars (a×4, LF, b×2), 2 words, 3 unique chars,
 # entropy ≈ 1.3788, ws ratio ≈ 0.1429, lines 'aaaa'(4) 'bb'(2): mean 3, median 4
 $r = Invoke-Attr ([pscustomobject]@{ RelativePath = 'x.txt'; Content = "aaaa`nbb" })
@@ -86,10 +116,22 @@ $big = 'a' * 300
 $r4 = Invoke-Attr ([pscustomobject]@{ Content = $big })
 Assert-True ($r4.ContentMeta.CompressionRatio -lt 1.0 -and $r4.ContentMeta.CompressionRatio -gt 0) `
     'CompressionRatio < 1 for repetitive >100-char content' "got $($r4.ContentMeta.CompressionRatio)"
+
+# WordCount must keep -split '\s+' (leading/trailing empties). The native pass
+# is a rewrite, not a new formula.
+foreach ($sample in @('x y z', '  a  b  ', "a`n", '   '))
+{
+    $got = (Invoke-Attr ([pscustomobject]@{ Content = $sample })).ContentMeta.WordCount
+    $expect = @($sample -split '\s+').Count
+    Assert-True ($got -eq $expect) `
+        "WordCount split-parity '$($sample -replace "`n", '\n')'" "got $got expect $expect"
+}
+Assert-True ((Invoke-Attr ([pscustomobject]@{ Content = 'x y z' })).ContentMeta.WhitespaceRatio -eq 0.4) `
+    'WhitespaceRatio("x y z") = 0.4 (2 spaces / 5)'
 #endregion
 
 #region Test2_NoContent
-Enter-Section '2. No-Content contract'
+Enter-Section '3. No-Content contract'
 $envelope = [pscustomobject]@{ Id = 'thread-1'; Path = 't.md'; Exchanges = @(1, 2, 3) }
 $re = Invoke-Attr $envelope
 Assert-True ($null -eq $re.PSObject.Properties['ContentMeta']) 'envelope passes through unenriched'
@@ -97,7 +139,7 @@ Assert-True ($re.Id -eq 'thread-1' -and $re.Exchanges.Count -eq 3) 'envelope pro
 #endregion
 
 #region Test3_EmptyContent
-Enter-Section '3. Empty content'
+Enter-Section '4. Empty content'
 $rz = Invoke-Attr ([pscustomobject]@{ RelativePath = 'empty.txt'; Content = '' })
 $az = $rz.ContentMeta
 Assert-True ($null -ne $az) 'empty string still gets ContentMeta'
@@ -107,7 +149,7 @@ Assert-True ($az.LineStats.Mean -eq 0 -and $az.LineStats.Max -eq 0) 'zeroed line
 #endregion
 
 #region Test4_CopyOnEnrich
-Enter-Section '4. Copy-on-enrich'
+Enter-Section '5. Copy-on-enrich'
 $src = [pscustomobject]@{
     AbsolutePath = 'C:/repo/a.ps1'; RelativePath = 'a.ps1'; NodePath = ''
     SizeBytes = 999; LastWriteUtc = [datetime]::UtcNow; Content = 'x y z'
@@ -124,7 +166,7 @@ Assert-True ($rc.SizeBytes -eq 999 -and $rc.ContentMeta.CharCount -eq 5) `
 #endregion
 
 #region Test5_ColonelDispatch
-Enter-Section '5. Colonel dispatch (file_read → rs.content_meta)'
+Enter-Section '6. Colonel dispatch (file_read → rs.content_meta)'
 Import-Module (Join-Path $v3 'rs.core.colonel.v2.psm1') -Force -WarningAction SilentlyContinue
 
 $fixtureRoot = Join-Path ([IO.Path]::GetTempPath()) "rs-attr-test-$([guid]::NewGuid().ToString('N').Substring(0,8))"
