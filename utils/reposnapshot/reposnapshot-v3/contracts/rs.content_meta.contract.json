@@ -14,13 +14,13 @@
       "WordCount":        { "type": "int" },
       "PunctuationCount": { "type": "int",    "note": "count, not ratio — no PunctuationRatio is emitted; add it here first if the wire wants one" },
       "UniqueChars":      { "type": "int",    "note": "distinct characters; emitted, currently not admitted on the wire (sub-field removed 2026-08-18, re-admissible)" },
-      "Entropy":          { "type": "double", "note": "Shannon entropy over characters, rounded to 4" },
-      "CompressionRatio": { "type": "double", "note": "gzip Fastest length / UTF-8 byte length, rounded to 4; computed only for content > 100 chars, else 1.0 (deliberate non-parity with the LTS defect that always reported 0). Kolmogorov proxy — tests pin the gate and that repetitive content compresses, not a ratio. Not admitted on the wire until the metric is trusted" },
-      "WhitespaceRatio":  { "type": "double", "note": "whitespace chars / CharCount, rounded to 4; 0.0 when CharCount is 0" },
+      "Entropy":          { "type": "double", "note": "Shannon entropy over characters, rounded to Config.Digits" },
+      "CompressionRatio": { "type": "double", "note": "gzip Fastest length / UTF-8 byte length, rounded to Config.Digits; computed only for content > 100 chars, else 1.0 (deliberate non-parity with the LTS defect that always reported 0). Kolmogorov proxy — tests pin the gate and that repetitive content compresses, not a ratio. Not admitted on the wire until the metric is trusted" },
+      "WhitespaceRatio":  { "type": "double", "note": "whitespace chars / CharCount, rounded to Config.Digits; 0.0 when CharCount is 0" },
       "LineStats": {
-        "Mean":   { "type": "double", "note": "mean line length in characters, rounded to 2" },
+        "Mean":   { "type": "double", "note": "mean line length in characters, rounded to Config.Digits" },
         "Median": { "type": "double", "note": "median line length" },
-        "StdDev": { "type": "double", "note": "population standard deviation of line length, rounded to 2" },
+        "StdDev": { "type": "double", "note": "population standard deviation of line length, rounded to Config.Digits" },
         "Max":    { "type": "int",    "note": "longest line in characters" }
       }
     }

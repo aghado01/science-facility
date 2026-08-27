@@ -243,7 +243,7 @@ try
             'file_read'     = (Join-Path $v3 'processors\file_read.ps1')
             'rs.content_meta' = (Join-Path $v3 'processors\rs.content_meta.ps1')
         } `
-        -Steps @(@{ Key = 'file_read'; Config = @{} }, @{ Key = 'rs.content_meta'; Config = @{ Fields = @('CharCount', 'WordCount', 'PunctuationCount', 'UniqueChars', 'Entropy', 'CompressionRatio', 'WhitespaceRatio', 'LineStats') } }) `
+        -Steps @(@{ Key = 'file_read'; Config = @{} }, @{ Key = 'rs.content_meta'; Config = @{ Fields = @('CharCount', 'WordCount', 'PunctuationCount', 'UniqueChars', 'Entropy', 'CompressionRatio', 'WhitespaceRatio', 'LineStats'); Digits = 4 } }) `
         -ChainExecutorPath (Join-Path $v3 'processors\chain_executor.ps1') `
         -SharedHelperPath (Join-Path $v3 'processors\bag_helpers.ps1')
 
@@ -272,10 +272,13 @@ try
         if ($a.WordCount -ne $l.attributes.word_count) { $wordOk = $false }
         if ($a.Entropy -ne $l.attributes.entropy) { $entOk = $false }
         if ($a.WhitespaceRatio -ne $l.attributes.whitespace_ratio) { $wsOk = $false }
-        if ($a.LineStats.Mean -ne $l.attributes.line_stats.mean -or
-            $a.LineStats.Median -ne $l.attributes.line_stats.median -or
-            $a.LineStats.StdDev -ne $l.attributes.line_stats.std_dev -or
-            $a.LineStats.Max -ne $l.attributes.line_stats.max) { $lsOk = $false }
+        # LTS rounded LineStats.mean/std_dev to 2 while entropy/ws used 4.
+        # v3 unifies on Config.Digits (4 here for entropy parity); Median/Max
+        # are ints. Re-round the floats to 2 to compare the same quantity.
+        if ($a.LineStats.Median -ne $l.attributes.line_stats.median -or
+            $a.LineStats.Max -ne $l.attributes.line_stats.max -or
+            [Math]::Round($a.LineStats.Mean, 2) -ne $l.attributes.line_stats.mean -or
+            [Math]::Round($a.LineStats.StdDev, 2) -ne $l.attributes.line_stats.std_dev) { $lsOk = $false }
         if ($a.SpanBytes -ne $l.attributes.size_bytes) { $spanOk = $false }
         # Known delta: LTS compression_ratio defect (0 when >100 chars; 1 gated)
         $ltsCr = [double]$l.attributes.compression_ratio

@@ -2,14 +2,20 @@
     "$comment": "Reader-facing notices for the tree TOC. rs.core.manifest loads this beside tree.template.md. Edit the prose here; the psm1 only interpolates run facts.",
     "Format": "psr — piped snapshot rows; shard files are .txt as a reader accommodation, not a format marker",
     "OffsetUnit": "bytes, 0-based, end offsets inclusive",
-    "Compaction": "content spans are codec-encoded: every source line terminator appears as the two characters \\n, remaining C0 controls and DEL are stripped, TAB stays literal; one physical line per row. A notice, not a cipher key — the payload is not byte-faithful to source.",
-    "TreeLegend": "file row metadata: name<TAB>sidx<TAB>row_offset<TAB>row_meta_end<TAB>row_content_begin<TAB>row_content_end",
-    "OversizedReason": "single record exceeds quota + tolerance; kept whole (atomicity)",
+    "Formatting": "Pipe-separated values; LF newlines; Normalized indentation; BOM, C0 controls and DEL are stripped", 
+    "Compaction": "To ensure single physical lines per row and avoid tokenization boundary effects, normalized LF newlines are encoded with ` \n `", 
+    "TreeLegend": "name sidx    row_offset  row_meta_end    row_content_begin   row_content_end",
     "Instructions": [
-        "Treat this payload as a virtual database:" , 
-        "Manage context by fetching segments of the shard files iteratively over multiple inference cycles.",
-        "To read one entry: seek to row_content_begin in its shard file and read through row_content_end (inclusive).",
-        "Never grep the shard files indiscriminately due to context flood hazard", 
-        "The shard extension is .txt deliberately, so low-level file reads are used instead of format-specific tooling."
-    ]
+        "This is an index manifest of a selective and curated repository snapshot with payload shard files in a custom pipe-separated, LF-delimited container format.", 
+        "- This manifest includes shard-local 0-based inclusive byte offsets and span widths of each content block in the rows.",
+        "- Each shard file contains a header row as the first line, which contains the schema and datatypes of the data rows.",
+        "- Payload files are `.txt` in order to ensure consistent file read access across providers and tools.",
+        "- Rows are single physical lines, and are normalized/sanitized for high SNR and focused analysis.",
+        "- Rows are addressed by relative path to Snapshot Root, and each item is assigned a global index (gidx).", 
+        "- Consume payload data responsibly and in manageable batches over successive inference cycles.", 
+        "- Use row-level metadata to seek, inform planning and targeted, well-budgeted consumption per cycle.",
+        "- Prefer console-based CLI commands for interactive exploration and consumption.",
+        "- Never grep the shard files indiscriminately due to context flood hazard" 
+    ],
+    "OversizedReason": "single record exceeds quota + tolerance; kept whole (atomicity)"
 }

@@ -1,10 +1,11 @@
 # Tree Manifest TOC for Snapshot: `{{Title}}`
-
 {{SummaryLine}}
-Root: {{Root}}
+Snapshot Root: {{Root}}
 
 {{#each Instructions}}{{this}}
 {{/each}}
+{{Formatting}}
+{{Compaction}}
 ## Tree for `{{TreeLabel}}`
 
 Payload:

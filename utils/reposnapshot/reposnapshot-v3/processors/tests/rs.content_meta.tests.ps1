@@ -60,7 +60,7 @@ $allFields = @(
 )
 function Invoke-AttrAll ([object]$Item)
 {
-    Invoke-Attr $Item @{ Fields = $allFields }
+    Invoke-Attr $Item @{ Fields = $allFields; Digits = 4 }
 }
 #endregion
 
@@ -73,7 +73,7 @@ try
 {
     $barePlan = Compile-Plan `
         -Manifest @{ 'rs.content_meta' = $attrPath } `
-        -Steps @(@{ Key = 'rs.content_meta'; Config = @{} }) `
+        -Steps @(@{ Key = 'rs.content_meta'; Config = @{ Digits = 4 } }) `
         -ChainExecutorPath (Join-Path $procDir 'chain_executor.ps1') `
         -SharedHelperPath (Join-Path $procDir 'bag_helpers.ps1') `
         -IssPreset Bare
@@ -196,6 +196,13 @@ Assert-True ($null -eq $none.PSObject.Properties['ContentMeta']) 'empty Fields: 
 $threw = $null
 try { Invoke-Attr ([pscustomobject]@{ Content = 'x' }) @{ Fields = @('Nope') } | Out-Null } catch { $threw = $_.Exception.Message }
 Assert-True ($null -ne $threw -and $threw -like '*unknown Fields*') 'unknown Fields name throws' $threw
+
+$d2 = Invoke-Attr ([pscustomobject]@{ Content = "aaaa`nbb" })
+Assert-True ($d2.ContentMeta.Entropy -eq 1.38) 'default Digits=2 rounds Entropy to 1.38' "got $($d2.ContentMeta.Entropy)"
+Assert-True ($d2.ContentMeta.WhitespaceRatio -eq 0.14) 'default Digits=2 rounds WhitespaceRatio to 0.14' "got $($d2.ContentMeta.WhitespaceRatio)"
+$threw = $null
+try { Invoke-Attr ([pscustomobject]@{ Content = 'x' }) @{ Fields = @('CharCount'); Digits = -1 } | Out-Null } catch { $threw = $_.Exception.Message }
+Assert-True ($null -ne $threw -and $threw -like '*Digits must be*') 'Digits out of range throws' $threw
 #endregion
 
 #region Test5_ColonelDispatch
@@ -211,7 +218,7 @@ try
 {
     $compiled = Compile-Plan `
         -Manifest @{ 'file_read' = (Join-Path $procDir 'file_read.ps1'); 'rs.content_meta' = $attrPath } `
-        -Steps @(@{ Key = 'file_read'; Config = @{} }, @{ Key = 'rs.content_meta'; Config = @{ Fields = $allFields } }) `
+        -Steps @(@{ Key = 'file_read'; Config = @{} }, @{ Key = 'rs.content_meta'; Config = @{ Fields = $allFields; Digits = 4 } }) `
         -ChainExecutorPath (Join-Path $procDir 'chain_executor.ps1') `
             -SharedHelperPath (Join-Path $procDir 'bag_helpers.ps1')
     Assert-True (@($compiled.Errors).Count -eq 0) 'chain compiles' ($compiled.Errors -join '; ')

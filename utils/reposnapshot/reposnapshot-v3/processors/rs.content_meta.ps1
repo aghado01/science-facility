@@ -16,7 +16,9 @@ $content = [string]$Item.Content
 
 #region Config
 if ($null -eq $Config) { $Config = @{} }
-if ($Config.Count -eq 0 -or -not $Config.ContainsKey('Fields'))
+# Colonel already merged processors/configs/<key>.json into Config. Reloading
+# via Resolve-ProcessorConfig needs $PSScriptRoot, which is empty in ISS.
+if ((-not $Config.ContainsKey('Fields') -or -not $Config.ContainsKey('Digits')) -and $PSScriptRoot)
 {
     $Config = Resolve-ProcessorConfig -ProcessorName 'rs.content_meta' -CallerConfig $Config
 }
@@ -35,6 +37,12 @@ foreach ($f in $fields)
 # Empty Fields: processor is in the chain but computes nothing — do not attach
 # ContentMeta, so downstream occupancy omits the wire block.
 if ($fields.Count -eq 0) { return $Item }
+
+$digits = if ($Config.ContainsKey('Digits') -and $null -ne $Config['Digits']) { [int]$Config['Digits'] } else { 2 }
+if ($digits -lt 0 -or $digits -gt 15)
+{
+    throw "rs.content_meta: Digits must be 0..15 (got $digits)."
+}
 
 $want = @{}
 foreach ($f in $fields) { $want[$f] = $true }
@@ -109,7 +117,7 @@ namespace Rs.ContentMeta {
                 }
             }
             st.UniqueChars = unique;
-            st.Entropy = Math.Round(entropy, 4);
+            st.Entropy = entropy;
 
             int lineCount = lens.Count;
             double sum = 0;
@@ -122,9 +130,9 @@ namespace Rs.ContentMeta {
                 double d = lens[i] - mean;
                 varSum += d * d;
             }
-            st.LineMean = Math.Round(mean, 2);
+            st.LineMean = mean;
             st.LineMedian = sorted[sorted.Length / 2];
-            st.LineStdDev = Math.Round(Math.Sqrt(varSum / lineCount), 2);
+            st.LineStdDev = Math.Sqrt(varSum / lineCount);
             st.LineMax = sorted[sorted.Length - 1];
             return st;
         }
@@ -200,13 +208,13 @@ if ($want.ContainsKey('UniqueChars'))
 }
 if ($want.ContainsKey('Entropy'))
 {
-    $meta['Entropy'] = if ($null -ne $scan) { $scan.Entropy } else { 0.0 }
+    $meta['Entropy'] = if ($null -ne $scan) { [Math]::Round($scan.Entropy, $digits) } else { 0.0 }
 }
 if ($want.ContainsKey('WhitespaceRatio'))
 {
     $meta['WhitespaceRatio'] = if ($null -ne $scan -and $charCount -gt 0)
     {
-        [Math]::Round($scan.WsCount / $charCount, 4)
+        [Math]::Round($scan.WsCount / $charCount, $digits)
     }
     else { 0.0 }
 }
@@ -215,9 +223,9 @@ if ($want.ContainsKey('LineStats'))
     $meta['LineStats'] = if ($null -ne $scan)
     {
         [PSCustomObject]@{
-            Mean   = $scan.LineMean
+            Mean   = [Math]::Round($scan.LineMean, $digits)
             Median = $scan.LineMedian
-            StdDev = $scan.LineStdDev
+            StdDev = [Math]::Round($scan.LineStdDev, $digits)
             Max    = $scan.LineMax
         }
     }
@@ -235,7 +243,7 @@ if ($needGzip)
                 $ms, [System.IO.Compression.CompressionLevel]::Fastest, $true)
             $gz.Write($bytes, 0, $bytes.Length)
             $gz.Dispose()
-            $compressionRatio = [Math]::Round($ms.Length / $bytes.Length, 2)
+            $compressionRatio = [Math]::Round($ms.Length / $bytes.Length, $digits)
             $ms.Dispose()
         }
         catch { }

@@ -7,6 +7,14 @@ never as standing claims, and never hand-copied from prose.
 Rulings live in [decisions.md](decisions.md); what remains lives in
 [roadmap.md](roadmap.md).
 
+- **2026-08-27 — `rs.content_meta` `Digits`**: floating metrics (Entropy,
+  WhitespaceRatio, CompressionRatio, LineStats.Mean/StdDev) round to
+  `Config.Digits` (default **2** in `processors/configs/rs.content_meta.json`,
+  valid 0..15). The C# scan returns unrounded doubles; one `[Math]::Round`
+  at attach. LTS-parity suites pass `Digits = 4`. LTS itself mixed 4
+  (entropy/ws) with 2 (LineStats floats); Digits unifies them. Wire print
+  width remains container `double_precision` (still 4) — a different layer.
+
 - **2026-08-27 — `rs.content_meta` Fields config; producer owns the wire
   block**: `processors/configs/rs.content_meta.json` lists in-memory `Fields`
   to compute (default = admitted default-on set: CharCount, WordCount,

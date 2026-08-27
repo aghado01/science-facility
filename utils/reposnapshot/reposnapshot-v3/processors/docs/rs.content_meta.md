@@ -43,8 +43,11 @@
         SpanBytes is always attached when ContentMeta is (not a Fields toggle;
         not a wire sub-field). Empty Fields: no ContentMeta (downstream omits
         the wire block). Unknown name throws.
-        Known: CharCount, WordCount, PunctuationCount, UniqueChars, Entropy,
-        CompressionRatio, WhitespaceRatio, LineStats.
+      Digits: int  decimal places for every floating metric (Entropy,
+        WhitespaceRatio, CompressionRatio, LineStats.Mean/StdDev). Default 2
+        in processors/configs/rs.content_meta.json. Valid 0..15. Integers
+        (counts, median, max) are not rounded. LTS mixed 4 (entropy/ws) with
+        2 (LineStats floats); Digits is the single knob.
 
     WIRE:
       The content_meta column is written only when this processor ran
@@ -55,6 +58,6 @@
 .PARAMETER Item
     String, hashtable, or pscustomobject descriptor carrying Content.
 .PARAMETER Config
-    Hashtable. Fields: string[] of in-memory metric names (see CONFIG).
+    Hashtable. Fields: string[] of in-memory metric names; Digits: int decimal places (see CONFIG).
 #>
 ```
