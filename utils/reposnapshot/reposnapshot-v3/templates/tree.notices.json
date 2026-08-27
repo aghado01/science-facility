@@ -9,7 +9,7 @@
         "This is an index manifest of a selective and curated repository snapshot with payload shard files in a custom pipe-separated, LF-delimited container format.", 
         "- This manifest includes shard-local 0-based inclusive byte offsets and span widths of each content block in the rows.",
         "- Each shard file contains a header row as the first line, which contains the schema and datatypes of the data rows.",
-        "- Payload files are `.txt` in order to ensure consistent file read access across providers and tools.",
+        "- `.txt` payload files are listed below, found in the same directory as this manifest.",
         "- Rows are single physical lines, and are normalized/sanitized for high SNR and focused analysis.",
         "- Rows are addressed by relative path to Snapshot Root, and each item is assigned a global index (gidx).", 
         "- Consume payload data responsibly and in manageable batches over successive inference cycles.", 

@@ -881,7 +881,7 @@ function Invoke-Plan
         [nullable[int]]                         $MaxWorkers = $null,
         [int]                                   $ReservedCores = 2,
         [int]                                   $MinItemsPerWorker = 4,
-        [int]                                   $WaitTimeoutMs = 60000
+        [int]                                   $WaitTimeoutMs = 90000
     )
 
     $errors = [System.Collections.Concurrent.ConcurrentBag[string]]::new()
@@ -1164,7 +1164,7 @@ class RunspaceManager
     [nullable[int]]  $MaxWorkers = $null
     [int]            $ReservedCores = 2
     [int]            $MinItemsPerWorker = 4
-    [int]            $WaitTimeoutMs = 60000
+    [int]            $WaitTimeoutMs = 90000
 
     RunspaceManager([pscustomobject]$plan)
     {
@@ -1198,7 +1198,7 @@ function New-RunspaceManager
         [nullable[int]]                         $MaxWorkers = $null,
         [int]                                   $ReservedCores = 2,
         [int]                                   $MinItemsPerWorker = 4,
-        [int]                                   $WaitTimeoutMs = 60000
+        [int]                                   $WaitTimeoutMs = 90000
     )
 
     $mgr = [RunspaceManager]::new($Plan)

@@ -7,6 +7,10 @@ never as standing claims, and never hand-copied from prose.
 Rulings live in [decisions.md](decisions.md); what remains lives in
 [roadmap.md](roadmap.md).
 
+- **2026-08-27 — colonel `WaitTimeoutMs` default 90s**: shared-pool wall
+  clock ceiling `60000` → `90000` (`Invoke-Plan`, `RunspaceManager`,
+  `New-RunspaceManager`).
+
 - **2026-08-27 — tree model `Formatting`**: `New-Manifest` copies
   `tree.notices.json` `Formatting` onto the interpolation model (same
   path as Compaction). `{{Formatting}}` in `tree.template.md` now fills.
