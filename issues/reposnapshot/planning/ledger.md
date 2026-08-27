@@ -7,6 +7,13 @@ never as standing claims, and never hand-copied from prose.
 Rulings live in [decisions.md](decisions.md); what remains lives in
 [roadmap.md](roadmap.md).
 
+- **2026-08-26 — tree TOC: template + notices are data; packing/internment are
+  tree-global**: `New-Manifest` loads `templates/tree.template.md` and
+  `templates/tree.notices.json` and interpolates run facts. Shards stay header
+  row + records. Packing settings live on the tree summary line. Colonel family
+  becomes a `## Chains` section (unused pass-through omitted). `rs.core.user`
+  pencils scalars only — no compact ConfigEcho dump.
+
 - **2026-08-24 — `rs.core.serialize` landed (`Invoke-Serialize`)**: export phase 2:
   the only stage that writes shard files (header + rows via container
   `Build-HeaderRow` / `Build-Row`). Bytes pre-encoded from container (canonical
