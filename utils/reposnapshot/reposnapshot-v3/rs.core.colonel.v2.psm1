@@ -1,11 +1,10 @@
+#Requires -Version 7.6
+
 using namespace System
 using namespace System.Collections.Concurrent
 using namespace System.Management.Automation
 using namespace System.Management.Automation.Runspaces
 using namespace System.Threading
-
-#Requires -Version 7.6
-Set-StrictMode -Version Latest
 
 <#
 .SYNOPSIS

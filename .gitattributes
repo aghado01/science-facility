@@ -1,0 +1,67 @@
+* text=auto eol=lf
+
+*.md        text eol=lf diff=markdown
+*.txt       text eol=lf
+*.csv       text eol=lf
+*.xml       text eol=lf
+*.svg       text eol=lf
+*.toml      text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+
+# PowerShell
+*.ps1       text eol=lf
+*.psm1      text eol=lf
+*.psd1      text eol=lf
+
+# Python
+*.py        text eol=lf diff=python
+
+# C# and MSBuild
+*.cs        text eol=lf diff=csharp
+*.csproj    text eol=lf
+*.props     text eol=lf
+*.targets   text eol=lf
+*.sln       text eol=lf
+
+# JavaScript / TypeScript
+*.js        text eol=lf
+*.mjs       text eol=lf
+*.ts        text eol=lf
+*.tsx       text eol=lf
+
+# Repository metadata and editor config
+.gitignore          text eol=lf
+.gitattributes      text eol=lf
+.copilotignore      text eol=lf
+*.code-workspace    text eol=lf
+LICENSE             text eol=lf
+
+
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.gif       binary
+*.pdf       binary
+*.gz        binary
+*.zip       binary
+*.tar       binary
+*.dll       binary
+*.exe       binary
+*.pyc       binary
+
+*.jidx      binary
+
+
+*.jsonl                             -text
+*.json                              -text
+
+*.ts    whitespace=trailing-space,blank-at-eol,blank-at-eof
+*.tsx   whitespace=trailing-space,blank-at-eol,blank-at-eof
+*.js    whitespace=trailing-space,blank-at-eol,blank-at-eof
+*.py    whitespace=trailing-space,blank-at-eol,blank-at-eof
+*.cs    whitespace=trailing-space,blank-at-eol,blank-at-eof
+*.ps1   whitespace=trailing-space,blank-at-eol,blank-at-eof
+
+*.min.js    -whitespace
+*.g.cs      -whitespace
