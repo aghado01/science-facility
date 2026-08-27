@@ -23,6 +23,11 @@
     Destination for the Markdown artifact. Defaults to $env:JSO_EXPORT_DIR,
     then D:\aghado01\.discussion.
 
+.PARAMETER LeafSegmentId
+    Optional physical rollout-segment UUID. Use only to resolve a genuine tie
+    between canonical graph leaves; normal exports select the unique leaf with
+    the greatest cumulative logical ordinal.
+
 .PARAMETER Exclude
     Components omitted from Markdown only. The exchanges IR always retains the
     normalized records. Pass @() to render everything.
@@ -42,6 +47,8 @@ param(
     [string]$ThreadId = $env:CODEX_THREAD_ID,
 
     [string]$MarkdownDir,
+
+    [string]$LeafSegmentId,
 
     [string]$WorkingDir,
 
@@ -92,6 +99,7 @@ if ([string]::IsNullOrWhiteSpace($MarkdownDir))
 
 $result = Invoke-CodexThreadExport `
     -ThreadId $ThreadId `
+    -LeafSegmentId $LeafSegmentId `
     -WorkingDir $WorkingDir `
     -RunStamp $RunStamp `
     -MarkdownDir $MarkdownDir `
@@ -111,6 +119,7 @@ return [pscustomobject]@{
     ExchangesPath = $result.ExchangesPath
     ThreadId      = $result.ThreadId
     RolloutPath   = $result.RolloutPath
+    SelectedSegmentId = $result.SelectedSegmentId
     WorkingDir    = $result.WorkingDir
     RunStamp      = $result.RunStamp
     RunDir        = $result.RunDir

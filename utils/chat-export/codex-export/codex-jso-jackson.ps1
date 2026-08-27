@@ -160,18 +160,312 @@ function script:Get-CodexSessionMeta
     return $null
 }
 
+function script:ConvertTo-CodexNonNegativeInt64
+{
+    param(
+        [object]$Value,
+        [Parameter(Mandatory)]
+        [string]$Label
+    )
+
+    $text = if ($null -eq $Value)
+    {
+        ''
+    }
+    else
+    {
+        [Convert]::ToString($Value, [Globalization.CultureInfo]::InvariantCulture)
+    }
+    [long]$parsed = 0
+    $valid = [long]::TryParse(
+        $text,
+        [Globalization.NumberStyles]::Integer,
+        [Globalization.CultureInfo]::InvariantCulture,
+        [ref]$parsed)
+    if (-not $valid -or $parsed -lt 0)
+    {
+        throw "$Label must be a non-negative 64-bit integer; got '$text'."
+    }
+    return $parsed
+}
+
+function script:Get-CodexJsonlNewlineStats
+{
+    param(
+        [Parameter(Mandatory)]
+        [string]$Path,
+
+        [AllowNull()]
+        [Nullable[long]]$ByteLength = $null
+    )
+
+    $share = [System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete
+    $fs = [System.IO.FileStream]::new(
+        $Path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, $share)
+    try
+    {
+        [long]$sourceLength = $fs.Length
+        [long]$scanLength = if ($null -eq $ByteLength)
+        {
+            $sourceLength
+        }
+        else
+        {
+            [long]$ByteLength
+        }
+        if ($scanLength -gt $sourceLength)
+        {
+            throw ("Codex rollout span requests $scanLength bytes, but the source " +
+                "contains only $sourceLength bytes: $Path")
+        }
+
+        [byte[]]$buffer = [byte[]]::new(1048576)
+        [long]$remaining = $scanLength
+        [long]$scanned = 0
+        [long]$newlineCount = 0
+        [long]$previousNewlineOffset = 0
+        [long]$lastNewlineOffset = 0
+        [int]$lastByte = -1
+
+        while ($remaining -gt 0)
+        {
+            $wanted = [int][Math]::Min([long]$buffer.Length, $remaining)
+            $read = $fs.Read($buffer, 0, $wanted)
+            if ($read -le 0)
+            {
+                throw "Codex rollout changed while reading its byte span: $Path"
+            }
+
+            $searchFrom = 0
+            while ($searchFrom -lt $read)
+            {
+                $index = [Array]::IndexOf[byte](
+                    $buffer, [byte]0x0A, $searchFrom, $read - $searchFrom)
+                if ($index -lt 0) { break }
+                $previousNewlineOffset = $lastNewlineOffset
+                $lastNewlineOffset = $scanned + $index + 1
+                $newlineCount++
+                $searchFrom = $index + 1
+            }
+
+            $lastByte = [int]$buffer[$read - 1]
+            $scanned += $read
+            $remaining -= $read
+        }
+
+        return [pscustomobject]@{
+            SourceLength          = $sourceLength
+            ScannedByteLength     = $scanLength
+            NewlineCount          = $newlineCount
+            PreviousNewlineOffset = $previousNewlineOffset
+            LastNewlineOffset     = $lastNewlineOffset
+            LastByte              = $lastByte
+        }
+    }
+    finally { $fs.Dispose() }
+}
+
+function script:Read-CodexByteRange
+{
+    param(
+        [Parameter(Mandatory)]
+        [string]$Path,
+
+        [Parameter(Mandatory)]
+        [long]$Offset,
+
+        [Parameter(Mandatory)]
+        [long]$Length
+    )
+
+    if ($Length -gt [int]::MaxValue)
+    {
+        throw "Codex JSONL record exceeds the supported in-memory size: $Length bytes."
+    }
+
+    $share = [System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete
+    $fs = [System.IO.FileStream]::new(
+        $Path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, $share)
+    try
+    {
+        if ($Offset + $Length -gt $fs.Length)
+        {
+            throw "Codex rollout changed while reading its final record: $Path"
+        }
+        $fs.Position = $Offset
+        [byte[]]$bytes = [byte[]]::new([int]$Length)
+        $readTotal = 0
+        while ($readTotal -lt $bytes.Length)
+        {
+            $read = $fs.Read($bytes, $readTotal, $bytes.Length - $readTotal)
+            if ($read -le 0)
+            {
+                throw "Codex rollout changed while reading its final record: $Path"
+            }
+            $readTotal += $read
+        }
+        return $bytes
+    }
+    finally { $fs.Dispose() }
+}
+
+function script:Get-CodexJsonlExtent
+{
+    param(
+        [Parameter(Mandatory)]
+        [string]$Path
+    )
+
+    $stats = script:Get-CodexJsonlNewlineStats -Path $Path
+    if ($stats.SourceLength -eq 0)
+    {
+        return [pscustomobject]@{
+            SourceLength             = [long]0
+            CompleteByteLength       = [long]0
+            RecordCount              = [long]0
+            NeedsTerminatingNewline  = $false
+            TailDropped              = $false
+        }
+    }
+
+    $endsWithNewline = $stats.LastNewlineOffset -eq $stats.SourceLength
+    [long]$recordStart = if ($endsWithNewline)
+    {
+        $stats.PreviousNewlineOffset
+    }
+    else
+    {
+        $stats.LastNewlineOffset
+    }
+    [long]$recordEnd = if ($endsWithNewline)
+    {
+        $stats.SourceLength - 1
+    }
+    else
+    {
+        $stats.SourceLength
+    }
+    [long]$recordLength = $recordEnd - $recordStart
+    $recordBytes = script:Read-CodexByteRange `
+        -Path $Path -Offset $recordStart -Length $recordLength
+    $encoding = [System.Text.UTF8Encoding]::new($false, $true)
+    try
+    {
+        $recordText = $encoding.GetString($recordBytes).Trim()
+    }
+    catch
+    {
+        $recordText = $null
+    }
+
+    $validFinalRecord = $false
+    if (-not [string]::IsNullOrWhiteSpace($recordText))
+    {
+        try
+        {
+            $document = [System.Text.Json.JsonDocument]::Parse($recordText)
+            $document.Dispose()
+            $validFinalRecord = $true
+        }
+        catch { $validFinalRecord = $false }
+    }
+
+    if ($validFinalRecord)
+    {
+        return [pscustomobject]@{
+            SourceLength             = [long]$stats.SourceLength
+            CompleteByteLength       = [long]$stats.SourceLength
+            RecordCount              = [long]($stats.NewlineCount + $(if ($endsWithNewline) { 0 } else { 1 }))
+            NeedsTerminatingNewline  = -not $endsWithNewline
+            TailDropped              = $false
+        }
+    }
+
+    [long]$completeLength = $recordStart
+    [long]$completeRecords = if ($endsWithNewline)
+    {
+        [Math]::Max(0, $stats.NewlineCount - 1)
+    }
+    else
+    {
+        $stats.NewlineCount
+    }
+    return [pscustomobject]@{
+        SourceLength             = [long]$stats.SourceLength
+        CompleteByteLength       = $completeLength
+        RecordCount              = $completeRecords
+        NeedsTerminatingNewline  = $false
+        TailDropped              = -not [string]::IsNullOrWhiteSpace($recordText)
+    }
+}
+
+function script:Get-CodexPrefixInfo
+{
+    param(
+        [Parameter(Mandatory)]
+        [string]$Path,
+
+        [Parameter(Mandatory)]
+        [long]$ByteLength
+    )
+
+    $stats = script:Get-CodexJsonlNewlineStats -Path $Path -ByteLength $ByteLength
+    if ($ByteLength -gt 0 -and $stats.LastByte -ne 0x0A)
+    {
+        throw ("Codex history_base byte offset $ByteLength does not end on a " +
+            "JSONL record boundary: $Path")
+    }
+    return [pscustomobject]@{
+        ByteLength  = $ByteLength
+        RecordCount = [long]$stats.NewlineCount
+    }
+}
+
+function script:Get-CodexPhysicalSegmentId
+{
+    param(
+        [Parameter(Mandatory)]
+        [string]$Path,
+
+        [Parameter(Mandatory)]
+        [string]$ThreadId
+    )
+
+    $uuidAtom = '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
+    $escapedThreadId = [regex]::Escape($ThreadId)
+    $match = [regex]::Match(
+        [System.IO.Path]::GetFileName($Path),
+        "-$escapedThreadId(?:_(?<segment>$uuidAtom))?\.jsonl$",
+        [Text.RegularExpressions.RegexOptions]::IgnoreCase)
+    if (-not $match.Success) { return $null }
+    if ($match.Groups['segment'].Success)
+    {
+        return $match.Groups['segment'].Value.ToLowerInvariant()
+    }
+    return $ThreadId.ToLowerInvariant()
+}
+
 function Resolve-CodexThreadPath
 {
     <#
     .SYNOPSIS
-        Locate an active or archived Codex rollout from its thread id.
+        Resolve a logical Codex thread into its canonical rollout-segment chain.
+    .DESCRIPTION
+        Newer Codex runtimes can split one logical thread across physical JSONL
+        rollouts. A child session_meta.history_base names its predecessor and
+        the exact byte prefix retained from it. This resolver follows those
+        links backward, validates every prefix/ordinal boundary, and returns a
+        manifest while retaining RolloutPath as the selected leaf for callers
+        written against the earlier single-file contract.
     #>
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
         [string]$ThreadId,
 
-        [string]$CodexHome
+        [string]$CodexHome,
+
+        [string]$LeafSegmentId
     )
 
     $uuidPattern = '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
@@ -179,19 +473,29 @@ function Resolve-CodexThreadPath
     {
         throw "Malformed Codex thread id: '$ThreadId'. Expected an 8-4-4-4-12 UUID."
     }
+    $ThreadId = $ThreadId.ToLowerInvariant()
+    if (-not [string]::IsNullOrWhiteSpace($LeafSegmentId))
+    {
+        if ($LeafSegmentId -notmatch $uuidPattern)
+        {
+            throw "Malformed Codex leaf segment id: '$LeafSegmentId'. Expected an 8-4-4-4-12 UUID."
+        }
+        $LeafSegmentId = $LeafSegmentId.ToLowerInvariant()
+    }
 
     $resolvedHome = Get-CodexHome -CodexHome $CodexHome
     $sessionsDir = [System.IO.Path]::Combine($resolvedHome, 'sessions')
     $archivedDir = [System.IO.Path]::Combine($resolvedHome, 'archived_sessions')
-    $pattern = "*-$ThreadId.jsonl"
-    $hits = [System.Collections.Generic.List[string]]::new()
+    $pattern = "*-$ThreadId*.jsonl"
+    $hits = [System.Collections.Generic.HashSet[string]]::new(
+        [StringComparer]::OrdinalIgnoreCase)
 
     if ([System.IO.Directory]::Exists($sessionsDir))
     {
         foreach ($path in [System.IO.Directory]::GetFiles(
                 $sessionsDir, $pattern, [System.IO.SearchOption]::AllDirectories))
         {
-            [void]$hits.Add($path)
+            [void]$hits.Add([System.IO.Path]::GetFullPath($path))
         }
     }
     if ([System.IO.Directory]::Exists($archivedDir))
@@ -199,49 +503,249 @@ function Resolve-CodexThreadPath
         foreach ($path in [System.IO.Directory]::GetFiles(
                 $archivedDir, $pattern, [System.IO.SearchOption]::TopDirectoryOnly))
         {
-            [void]$hits.Add($path)
+            [void]$hits.Add([System.IO.Path]::GetFullPath($path))
         }
-    }
-
-    if ($hits.Count -eq 0)
-    {
-        throw "No Codex rollout found for thread $ThreadId under $resolvedHome."
-    }
-    if ($hits.Count -gt 1)
-    {
-        throw ("Ambiguous Codex thread $ThreadId; found $($hits.Count) rollouts:`n  " +
-            ($hits -join "`n  "))
-    }
-
-    $rolloutPath = $hits[0]
-    $meta = script:Get-CodexSessionMeta -Path $rolloutPath
-    if ($null -eq $meta)
-    {
-        throw "The rollout has no leading session_meta record: $rolloutPath"
-    }
-    if ($meta.id -and [string]$meta.id -ne $ThreadId)
-    {
-        throw "Rollout metadata id '$($meta.id)' does not match requested thread '$ThreadId'."
     }
 
     $archivedPrefix = [System.IO.Path]::GetFullPath($archivedDir).TrimEnd(
         [System.IO.Path]::DirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
-    $isArchived = [System.IO.Path]::GetFullPath($rolloutPath).StartsWith(
-        $archivedPrefix, [StringComparison]::OrdinalIgnoreCase)
+    $candidates = [System.Collections.Generic.List[object]]::new()
+    foreach ($path in @($hits | Sort-Object))
+    {
+        $segmentId = script:Get-CodexPhysicalSegmentId -Path $path -ThreadId $ThreadId
+        if ([string]::IsNullOrWhiteSpace($segmentId)) { continue }
 
+        $meta = script:Get-CodexSessionMeta -Path $path
+        if ($null -eq $meta)
+        {
+            throw "The rollout has no leading session_meta record: $path"
+        }
+        if ([string]$meta.id -ne $ThreadId)
+        {
+            throw "Rollout metadata id '$($meta.id)' does not match requested thread '$ThreadId': $path"
+        }
+
+        $predecessorId = $null
+        [long]$baseOrdinal = 0
+        [long]$baseByteOffset = 0
+        if ($null -ne $meta.history_base)
+        {
+            $history = $meta.history_base
+            $required = @('thread_id', 'end_ordinal_exclusive', 'end_byte_offset')
+            foreach ($propertyName in $required)
+            {
+                if ($history.PSObject.Properties.Name -notcontains $propertyName)
+                {
+                    throw "Codex history_base is missing '$propertyName': $path"
+                }
+            }
+            $predecessorId = ([string]$history.thread_id).ToLowerInvariant()
+            if ($predecessorId -notmatch $uuidPattern)
+            {
+                throw "Codex history_base.thread_id is malformed in $path."
+            }
+            $baseOrdinal = script:ConvertTo-CodexNonNegativeInt64 `
+                -Value $history.end_ordinal_exclusive `
+                -Label "history_base.end_ordinal_exclusive in $path"
+            $baseByteOffset = script:ConvertTo-CodexNonNegativeInt64 `
+                -Value $history.end_byte_offset `
+                -Label "history_base.end_byte_offset in $path"
+        }
+
+        $extent = script:Get-CodexJsonlExtent -Path $path
+        [void]$candidates.Add([pscustomobject]@{
+            ThreadId              = $ThreadId
+            SegmentId             = $segmentId
+            Path                  = $path
+            IsArchived            = [System.IO.Path]::GetFullPath($path).StartsWith(
+                $archivedPrefix, [StringComparison]::OrdinalIgnoreCase)
+            Meta                  = $meta
+            PredecessorSegmentId  = $predecessorId
+            BaseOrdinal           = $baseOrdinal
+            BaseByteOffset        = $baseByteOffset
+            EffectiveEndOrdinal   = $baseOrdinal + [long]$extent.RecordCount
+            Extent                = $extent
+        })
+    }
+
+    if ($candidates.Count -eq 0)
+    {
+        throw "No Codex rollout found for thread $ThreadId under $resolvedHome."
+    }
+
+    $candidateById = [System.Collections.Generic.Dictionary[string, object]]::new(
+        [StringComparer]::OrdinalIgnoreCase)
+    foreach ($candidate in $candidates)
+    {
+        if ($candidateById.ContainsKey($candidate.SegmentId))
+        {
+            throw ("Duplicate Codex physical segment id '$($candidate.SegmentId)':`n  " +
+                "$($candidateById[$candidate.SegmentId].Path)`n  $($candidate.Path)")
+        }
+        $candidateById.Add($candidate.SegmentId, $candidate)
+    }
+
+    $referencedIds = [System.Collections.Generic.HashSet[string]]::new(
+        [StringComparer]::OrdinalIgnoreCase)
+    foreach ($candidate in $candidates)
+    {
+        if (-not [string]::IsNullOrWhiteSpace($candidate.PredecessorSegmentId))
+        {
+            [void]$referencedIds.Add($candidate.PredecessorSegmentId)
+        }
+    }
+    $leaves = @($candidates | Where-Object {
+            -not $referencedIds.Contains($_.SegmentId)
+        })
+    if ($leaves.Count -eq 0)
+    {
+        throw "Codex rollout graph for thread $ThreadId has no leaf; the history_base links contain a cycle."
+    }
+
+    $selected = $null
+    $selectionReason = $null
+    if (-not [string]::IsNullOrWhiteSpace($LeafSegmentId))
+    {
+        $matches = @($leaves | Where-Object { $_.SegmentId -eq $LeafSegmentId })
+        if ($matches.Count -ne 1)
+        {
+            throw "Codex leaf segment '$LeafSegmentId' was not found among the leaves for thread $ThreadId."
+        }
+        $selected = $matches[0]
+        $selectionReason = 'explicit-leaf-segment-id'
+    }
+    elseif ($leaves.Count -eq 1)
+    {
+        $selected = $leaves[0]
+        $selectionReason = 'unique-graph-leaf'
+    }
+    else
+    {
+        [long]$maximumOrdinal = ($leaves |
+            Measure-Object -Property EffectiveEndOrdinal -Maximum).Maximum
+        $maximumLeaves = @($leaves | Where-Object {
+                $_.EffectiveEndOrdinal -eq $maximumOrdinal
+            })
+        if ($maximumLeaves.Count -ne 1)
+        {
+            $descriptions = $maximumLeaves | ForEach-Object {
+                "segment=$($_.SegmentId) ordinal=$($_.EffectiveEndOrdinal) path=$($_.Path)"
+            }
+            throw ("Ambiguous Codex thread $ThreadId; multiple leaves end at cumulative " +
+                "ordinal $maximumOrdinal. Supply -LeafSegmentId explicitly:`n  " +
+                ($descriptions -join "`n  "))
+        }
+        $selected = $maximumLeaves[0]
+        $selectionReason = 'greatest-cumulative-ordinal'
+    }
+
+    $reverseChain = [System.Collections.Generic.List[object]]::new()
+    $visited = [System.Collections.Generic.HashSet[string]]::new(
+        [StringComparer]::OrdinalIgnoreCase)
+    $cursor = $selected
+    while ($null -ne $cursor)
+    {
+        if (-not $visited.Add($cursor.SegmentId))
+        {
+            throw "Cycle detected while resolving Codex physical segment '$($cursor.SegmentId)'."
+        }
+        [void]$reverseChain.Add($cursor)
+        if ([string]::IsNullOrWhiteSpace($cursor.PredecessorSegmentId)) { break }
+        if (-not $candidateById.ContainsKey($cursor.PredecessorSegmentId))
+        {
+            throw ("Codex physical segment '$($cursor.SegmentId)' references missing " +
+                "predecessor '$($cursor.PredecessorSegmentId)'.")
+        }
+        $cursor = $candidateById[$cursor.PredecessorSegmentId]
+    }
+    $chain = $reverseChain.ToArray()
+    [Array]::Reverse($chain)
+
+    $spans = [System.Collections.Generic.List[object]]::new()
+    [long]$cumulativeOrdinal = 0
+    for ($index = 0; $index -lt $chain.Count; $index++)
+    {
+        $segment = $chain[$index]
+        if ([long]$segment.BaseOrdinal -ne $cumulativeOrdinal)
+        {
+            throw ("Codex cumulative ordinal mismatch at segment '$($segment.SegmentId)': " +
+                "history_base declares $($segment.BaseOrdinal), reconstructed $cumulativeOrdinal.")
+        }
+
+        $isLeaf = $index -eq ($chain.Count - 1)
+        if ($isLeaf)
+        {
+            $includedByteLength = [long]$segment.Extent.CompleteByteLength
+            $includedRecordCount = [long]$segment.Extent.RecordCount
+            $needsTerminatingNewline = [bool]$segment.Extent.NeedsTerminatingNewline
+            $tailDropped = [bool]$segment.Extent.TailDropped
+        }
+        else
+        {
+            $child = $chain[$index + 1]
+            $prefix = script:Get-CodexPrefixInfo `
+                -Path $segment.Path `
+                -ByteLength ([long]$child.BaseByteOffset)
+            $includedByteLength = [long]$prefix.ByteLength
+            $includedRecordCount = [long]$prefix.RecordCount
+            $needsTerminatingNewline = $false
+            $tailDropped = $false
+            [long]$expectedLocalRecords = [long]$child.BaseOrdinal - $cumulativeOrdinal
+            if ($includedRecordCount -ne $expectedLocalRecords)
+            {
+                throw ("Codex history_base ordinal mismatch between '$($segment.SegmentId)' " +
+                    "and '$($child.SegmentId)': byte prefix contains $includedRecordCount " +
+                    "records, metadata declares $expectedLocalRecords.")
+            }
+        }
+
+        [long]$discardedRecords = [Math]::Max(
+            0, [long]$segment.Extent.RecordCount - $includedRecordCount)
+        [long]$discardedBytes = [Math]::Max(
+            0, [long]$segment.Extent.SourceLength - $includedByteLength)
+        [void]$spans.Add([pscustomobject]@{
+            SegmentId               = $segment.SegmentId
+            Path                    = $segment.Path
+            IsArchived              = $segment.IsArchived
+            IsLeaf                  = $isLeaf
+            PredecessorSegmentId    = $segment.PredecessorSegmentId
+            BaseOrdinal             = [long]$segment.BaseOrdinal
+            IncludedByteLength      = $includedByteLength
+            IncludedRecordCount     = $includedRecordCount
+            EffectiveEndOrdinal     = $cumulativeOrdinal + $includedRecordCount
+            SourceByteLength        = [long]$segment.Extent.SourceLength
+            SourceRecordCount       = [long]$segment.Extent.RecordCount
+            DiscardedByteCount      = $discardedBytes
+            DiscardedRecordCount    = $discardedRecords
+            NeedsTerminatingNewline = $needsTerminatingNewline
+            TailDropped             = $tailDropped
+            CliVersion              = [string]$segment.Meta.cli_version
+        })
+        $cumulativeOrdinal += $includedRecordCount
+    }
+
+    $selectedMeta = $selected.Meta
     return [pscustomobject]@{
-        ThreadId      = $ThreadId
-        RolloutPath   = $rolloutPath
-        IsArchived    = $isArchived
-        CodexHome     = $resolvedHome
-        CreatedAt     = script:ConvertTo-CodexIsoTimestamp $meta.timestamp
-        Cwd           = [string]$meta.cwd
-        Originator    = [string]$meta.originator
-        CliVersion    = [string]$meta.cli_version
-        ModelProvider = [string]$meta.model_provider
-        Source        = $meta.source
-        SessionId     = [string]$meta.session_id
-        ThreadSource  = [string]$meta.thread_source
+        ThreadId          = $ThreadId
+        RolloutPath       = $selected.Path
+        RolloutPaths      = @($spans | ForEach-Object { $_.Path })
+        IsArchived        = $selected.IsArchived
+        CodexHome         = $resolvedHome
+        CreatedAt         = script:ConvertTo-CodexIsoTimestamp $selectedMeta.timestamp
+        Cwd               = [string]$selectedMeta.cwd
+        Originator        = [string]$selectedMeta.originator
+        CliVersion        = [string]$selectedMeta.cli_version
+        ModelProvider     = [string]$selectedMeta.model_provider
+        Source            = $selectedMeta.source
+        SessionId         = [string]$selectedMeta.session_id
+        ThreadSource      = [string]$selectedMeta.thread_source
+        CandidateCount    = $candidates.Count
+        SegmentCount      = $spans.Count
+        Fragmented        = $spans.Count -gt 1
+        SelectedSegmentId = $selected.SegmentId
+        SelectionReason   = $selectionReason
+        EffectiveRecords  = $cumulativeOrdinal
+        Segments          = $spans.ToArray()
     }
 }
 
@@ -350,6 +854,190 @@ function New-CodexJsonlSnapshot
         LineCount    = $idx.LineCount
         TailDropped  = $tailDropped
         SourcePath   = $SourcePath
+    }
+}
+
+function script:Copy-CodexFilePrefix
+{
+    param(
+        [Parameter(Mandatory)]
+        [string]$Path,
+
+        [Parameter(Mandatory)]
+        [System.IO.Stream]$Destination,
+
+        [Parameter(Mandatory)]
+        [long]$ByteLength
+    )
+
+    $share = [System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete
+    $source = [System.IO.FileStream]::new(
+        $Path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, $share)
+    try
+    {
+        if ($ByteLength -gt $source.Length)
+        {
+            throw ("Codex rollout span requests $ByteLength bytes, but the source " +
+                "contains only $($source.Length) bytes: $Path")
+        }
+        [byte[]]$buffer = [byte[]]::new(1048576)
+        [long]$remaining = $ByteLength
+        while ($remaining -gt 0)
+        {
+            $wanted = [int][Math]::Min([long]$buffer.Length, $remaining)
+            $read = $source.Read($buffer, 0, $wanted)
+            if ($read -le 0)
+            {
+                throw "Codex rollout changed while copying its canonical span: $Path"
+            }
+            $Destination.Write($buffer, 0, $read)
+            $remaining -= $read
+        }
+    }
+    finally { $source.Dispose() }
+}
+
+function New-CodexThreadSnapshot
+{
+    <#
+    .SYNOPSIS
+        Materialize one canonical JSONL snapshot from a resolved segment chain.
+    .DESCRIPTION
+        Ancestors contribute only the byte prefixes named by their children.
+        The selected leaf contributes every complete record visible at snapshot
+        time. The resulting file can be consumed by the existing exchange parser
+        exactly like the earlier single-rollout snapshot.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [object]$Resolution,
+
+        [Parameter(Mandatory)]
+        [string]$WorkingDir,
+
+        [string]$FileName
+    )
+
+    $segments = @($Resolution.Segments)
+    if ($segments.Count -eq 0)
+    {
+        throw 'The Codex thread resolution contains no canonical segments.'
+    }
+    [void][System.IO.Directory]::CreateDirectory($WorkingDir)
+    if ([string]::IsNullOrWhiteSpace($FileName))
+    {
+        $FileName = "rollout-$($Resolution.ThreadId).jsonl"
+    }
+
+    $snapshotPath = [System.IO.Path]::Combine($WorkingDir, $FileName)
+    $indexPath = [System.IO.Path]::ChangeExtension($snapshotPath, '.jidx')
+    $destination = [System.IO.FileStream]::new(
+        $snapshotPath, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write)
+    $materialized = [System.Collections.Generic.List[object]]::new()
+    [long]$includedRecords = 0
+    [long]$discardedRecords = 0
+    [long]$discardedBytes = 0
+    $tailDropped = $false
+
+    try
+    {
+        for ($index = 0; $index -lt $segments.Count; $index++)
+        {
+            $segment = $segments[$index]
+            if ([long]$segment.BaseOrdinal -ne $includedRecords)
+            {
+                throw ("Codex segment manifest changed before snapshot at " +
+                    "'$($segment.SegmentId)': expected base ordinal $includedRecords, " +
+                    "got $($segment.BaseOrdinal).")
+            }
+
+            $extent = script:Get-CodexJsonlExtent -Path $segment.Path
+            if ([bool]$segment.IsLeaf)
+            {
+                [long]$byteLength = $extent.CompleteByteLength
+                [long]$recordCount = $extent.RecordCount
+                $needsTerminatingNewline = [bool]$extent.NeedsTerminatingNewline
+                $segmentTailDropped = [bool]$extent.TailDropped
+            }
+            else
+            {
+                [long]$byteLength = $segment.IncludedByteLength
+                $prefix = script:Get-CodexPrefixInfo `
+                    -Path $segment.Path `
+                    -ByteLength $byteLength
+                [long]$recordCount = $prefix.RecordCount
+                $needsTerminatingNewline = $false
+                $segmentTailDropped = $false
+                if ($recordCount -ne [long]$segment.IncludedRecordCount)
+                {
+                    throw ("Codex ancestor prefix changed before snapshot for " +
+                        "'$($segment.SegmentId)'.")
+                }
+            }
+
+            script:Copy-CodexFilePrefix `
+                -Path $segment.Path `
+                -Destination $destination `
+                -ByteLength $byteLength
+            if ($needsTerminatingNewline)
+            {
+                $destination.WriteByte(0x0A)
+            }
+
+            [long]$segmentDiscardedRecords = [Math]::Max(
+                0, [long]$extent.RecordCount - $recordCount)
+            [long]$segmentDiscardedBytes = [Math]::Max(
+                0, [long]$extent.SourceLength - $byteLength)
+            [void]$materialized.Add([pscustomobject]@{
+                SegmentId               = $segment.SegmentId
+                Path                    = $segment.Path
+                IsArchived              = $segment.IsArchived
+                IsLeaf                  = $segment.IsLeaf
+                PredecessorSegmentId    = $segment.PredecessorSegmentId
+                BaseOrdinal             = [long]$segment.BaseOrdinal
+                IncludedByteLength      = $byteLength
+                IncludedRecordCount     = $recordCount
+                EffectiveEndOrdinal     = $includedRecords + $recordCount
+                SourceByteLength        = [long]$extent.SourceLength
+                SourceRecordCount       = [long]$extent.RecordCount
+                DiscardedByteCount      = $segmentDiscardedBytes
+                DiscardedRecordCount    = $segmentDiscardedRecords
+                NeedsTerminatingNewline = $needsTerminatingNewline
+                TailDropped             = $segmentTailDropped
+                CliVersion              = $segment.CliVersion
+            })
+
+            $includedRecords += $recordCount
+            $discardedRecords += $segmentDiscardedRecords
+            $discardedBytes += $segmentDiscardedBytes
+            if ([bool]$segment.IsLeaf) { $tailDropped = $segmentTailDropped }
+        }
+    }
+    finally { $destination.Dispose() }
+
+    $idx = [JsonlIndex]::Build($snapshotPath, $indexPath)
+    if ([long]$idx.LineCount -ne $includedRecords)
+    {
+        throw ("Canonical Codex snapshot index contains $($idx.LineCount) records; " +
+            "the segment manifest reconstructed $includedRecords.")
+    }
+
+    return [pscustomobject]@{
+        SnapshotPath      = $snapshotPath
+        IndexPath         = $indexPath
+        LineCount         = [long]$idx.LineCount
+        TailDropped       = $tailDropped
+        SourcePath        = $Resolution.RolloutPath
+        SourcePaths       = @($materialized | ForEach-Object { $_.Path })
+        CandidateCount    = [int]$Resolution.CandidateCount
+        SegmentCount      = $materialized.Count
+        Fragmented        = $materialized.Count -gt 1
+        SelectedSegmentId = [string]$Resolution.SelectedSegmentId
+        SelectionReason   = [string]$Resolution.SelectionReason
+        DiscardedRecords  = $discardedRecords
+        DiscardedBytes    = $discardedBytes
+        Segments          = $materialized.ToArray()
     }
 }
 

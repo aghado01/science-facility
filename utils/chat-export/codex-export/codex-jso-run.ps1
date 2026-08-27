@@ -1,7 +1,7 @@
 # codex-jso-run.ps1 — Minimal single-thread Codex export pipeline
 #
 # Pipeline:
-#   Resolve rollout -> snapshot -> exchange envelopes -> Markdown
+#   Resolve rollout chain -> canonical snapshot -> exchange envelopes -> Markdown
 
 $ErrorActionPreference = 'Stop'
 
@@ -16,6 +16,7 @@ function Invoke-CodexThreadExport
         [string]$ThreadId,
 
         [string]$CodexHome,
+        [string]$LeafSegmentId,
         [string]$WorkingDir,
         [string]$RunStamp,
 
@@ -49,7 +50,10 @@ function Invoke-CodexThreadExport
     )
 
     $timer = [Diagnostics.Stopwatch]::StartNew()
-    $resolved = Resolve-CodexThreadPath -ThreadId $ThreadId -CodexHome $CodexHome
+    $resolved = Resolve-CodexThreadPath `
+        -ThreadId $ThreadId `
+        -CodexHome $CodexHome `
+        -LeafSegmentId $LeafSegmentId
 
     if ([string]::IsNullOrWhiteSpace($WorkingDir))
     {
@@ -71,8 +75,8 @@ function Invoke-CodexThreadExport
     [void][System.IO.Directory]::CreateDirectory($runDir)
 
     $rawDir = [System.IO.Path]::Combine($runDir, 'raw')
-    $snapshot = New-CodexJsonlSnapshot `
-        -SourcePath $resolved.RolloutPath `
+    $snapshot = New-CodexThreadSnapshot `
+        -Resolution $resolved `
         -WorkingDir $rawDir `
         -FileName "rollout-$ThreadId.jsonl"
 
@@ -87,9 +91,16 @@ function Invoke-CodexThreadExport
         -OutputPrefix $OutputPrefix
 
     $stats = [pscustomobject]@{
-        SourceRecords = $snapshot.LineCount
-        ExchangeCount = $exchangeResult.ExchangeCount
-        TailDropped   = $snapshot.TailDropped
+        SourceRecords    = $snapshot.LineCount
+        ExchangeCount    = $exchangeResult.ExchangeCount
+        TailDropped      = $snapshot.TailDropped
+        CandidateCount   = $snapshot.CandidateCount
+        SegmentCount     = $snapshot.SegmentCount
+        Fragmented       = $snapshot.Fragmented
+        SelectedSegmentId = $snapshot.SelectedSegmentId
+        SelectionReason  = $snapshot.SelectionReason
+        DiscardedRecords = $snapshot.DiscardedRecords
+        DiscardedBytes   = $snapshot.DiscardedBytes
     }
 
     if ($RunThrough -eq 'Exchanges')
@@ -101,6 +112,9 @@ function Invoke-CodexThreadExport
             RunStamp      = $RunStamp
             RunDir        = $runDir
             RolloutPath   = $resolved.RolloutPath
+            RolloutPaths  = $resolved.RolloutPaths
+            SelectedSegmentId = $resolved.SelectedSegmentId
+            SegmentManifest = $snapshot.Segments
             SnapshotPath  = $snapshot.SnapshotPath
             ExchangesPath = $exchangeResult.ExchangesPath
             MarkdownPath  = $null
@@ -147,6 +161,9 @@ function Invoke-CodexThreadExport
         RunStamp      = $RunStamp
         RunDir        = $runDir
         RolloutPath   = $resolved.RolloutPath
+        RolloutPaths  = $resolved.RolloutPaths
+        SelectedSegmentId = $resolved.SelectedSegmentId
+        SegmentManifest = $snapshot.Segments
         SnapshotPath  = $snapshot.SnapshotPath
         ExchangesPath = $exchangeResult.ExchangesPath
         MarkdownPath  = $resolvedMarkdownPath

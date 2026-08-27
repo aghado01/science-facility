@@ -24,7 +24,10 @@ Correctness never depends on the canon. The canon exists so the nominal run is c
     "StripComments":   { "Group": 2, "Rank": 0, "Requires": ["file_read"],
                          "Routing": [
                            { "File": "rs.ps.strip.ps1", "Extensions": ["ps1","psm1","psd1"] },
-                           { "File": "rs.cs.strip.ps1", "Extensions": ["cs","csx"] }
+                           { "File": "rs.cs.strip.ps1", "Extensions": ["cs","csx"] },
+                           { "File": "rs.js.strip.ps1", "Extensions": ["js","mjs","cjs","jsx"] },
+                           { "File": "rs.ts.strip.ps1", "Extensions": ["ts","mts","cts","tsx"] },
+                           { "File": "rs.py.strip.ps1", "Extensions": ["py","pyw","pyi"] }
                          ] },
     "Indentation":     { "Group": 3, "Rank": 1, "Requires": ["file_read"], "File": "rs.indent.ps1" },
     "Whitespace":      { "Group": 3, "Rank": 2, "Requires": ["file_read"], "File": "rs.whitespace.ps1" },
@@ -62,14 +65,18 @@ Every one of these is terminating. A malformed sequencer is a stop, not a degrad
 Ids are **opaque ordinals**. Nothing may parse, match on, or display them as if they named a processor; the chain carries meaning, since every step names the `Slot` it fills beside the `Key` that filled it. Ordinals rather than guids because the payload's determinism is asserted elsewhere — the same corpus must intern identically on every run.
 
 ```
-6 extensions  →  3 chains
+extensions  →  interned chains
 
-  chain[0]  len=4   file_read > rs.indent > rs.whitespace > rs.content_meta
-  chain[1]  len=5   file_read > rs.cs.strip > rs.indent > rs.whitespace > rs.content_meta
-  chain[2]  len=5   file_read > rs.ps.strip > rs.indent > rs.whitespace > rs.content_meta
+  pass-through  len=4   file_read > rs.indent > rs.whitespace > rs.content_meta
+  csharp        len=5   file_read > rs.cs.strip > …
+  powershell    len=5   file_read > rs.ps.strip > …
+  javascript    len=5   file_read > rs.js.strip > …
+  typescript    len=5   file_read > rs.ts.strip > …
+  python        len=5   file_read > rs.py.strip > …
 
-  .ps1 .psm1 → chain[2]      .cs → chain[1]      .md .py .ts → chain[0]
-  no extension / unknown     → chain[0]
+  .ps1 .psm1 → powershell      .cs → csharp      .js/.mjs → javascript
+  .ts/.tsx → typescript        .py → python      .md .rs → pass-through
+  no extension / unknown     → pass-through
 ```
 
 ### Pass-through is a chain, not a failure

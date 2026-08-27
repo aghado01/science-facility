@@ -7,6 +7,18 @@ never as standing claims, and never hand-copied from prose.
 Rulings live in [decisions.md](decisions.md); what remains lives in
 [roadmap.md](roadmap.md).
 
+- **2026-08-27 — JS / TS / Python regex strippers (mask lens)**: `rs.js.strip`,
+  `rs.ts.strip`, `rs.py.strip` land as routed `StripComments` implementations.
+  Literals are length-and-newline-preserving masked (U+0001 scratch lens);
+  comment classification is the `rs.cs.strip` span walk on the lens; spans
+  apply to the original so the payload never carries mask tokens. TS keeps
+  `/// <reference|amd-|ts-...>` as FrontMatter. Python keeps shebang and
+  PEP 263 cookies; statement-position triples are DocString. Sequencer routes
+  `.js/.mjs/.cjs/.jsx`, `.ts/.mts/.cts/.tsx`, `.py/.pyw/.pyi`. Suites:
+  `processors/tests/rs.{js,ts,py}.strip.tests.ps1` against fixtures plus
+  `tests/languages/{javascript,typescript,python}`. Battery at this landing:
+  **27 suites · 1660 passed · 0 failed**.
+
 - **2026-08-26 — tree TOC: template + notices are data; packing/internment are
   tree-global**: `New-Manifest` loads `templates/tree.template.md` and
   `templates/tree.notices.json` and interpolates run facts. Shards stay header

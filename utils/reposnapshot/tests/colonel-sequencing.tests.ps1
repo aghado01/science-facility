@@ -126,7 +126,7 @@ try
     Assert-True ($shipped.Processors['file_read'].Default) 'file_read is Default'
     Assert-True (@($shipped.Processors['file_read'].Requires).Count -eq 0) 'an absent Requires normalizes to empty, not null'
     Assert-True ($shipped.Processors['Whitespace'].Rank -eq 2) 'Rank parsed as 2'
-    Assert-True (@($shipped.Processors['StripComments'].Routes).Count -eq 2) 'two routes under StripComments'
+    Assert-True (@($shipped.Processors['StripComments'].Routes).Count -eq 5) 'five routes under StripComments'
     Assert-True ($shipped.Processors['StripComments'].Routes[0].Extensions -contains '.ps1') 'extensions normalize to leading dot'
     Assert-True ($shipped.Processors['StripComments'].Routes[0].Key -eq 'rs.ps.strip') 'route binds to its processor key'
 
@@ -247,10 +247,10 @@ try
     Assert-True ($bareChain -eq 'file_read > rs.indent > rs.whitespace > rs.content_meta') `
         'and it is the canon minus the routed slot, not an empty chain' $bareChain
 
-    $mixed = Resolve-Family -Sequence $shipped -Enabled $enabled -Extensions @('ps1', '.cs', '.md', '.py')
-    Assert-True (@($mixed.Variants.Keys).Count -eq 3) 'ps/cs/md/py needs three chains' `
+    $mixed = Resolve-Family -Sequence $shipped -Enabled $enabled -Extensions @('ps1', '.cs', '.md', '.rs')
+    Assert-True (@($mixed.Variants.Keys).Count -eq 3) 'ps/cs/md/rs needs three chains' `
         (@($mixed.Variants.Keys) -join ',')
-    Assert-True ($mixed.ExtensionMap['.md'] -eq $mixed.ExtensionMap['.py']) `
+    Assert-True ($mixed.ExtensionMap['.md'] -eq $mixed.ExtensionMap['.rs']) `
         'two unclaimed extensions share the unrouted chain'
     Assert-True ($mixed.DefaultVariant -eq $mixed.ExtensionMap['.md']) `
         'and DefaultVariant names it'
@@ -258,7 +258,7 @@ try
     # The id is opaque: it carries no meaning to read, only identity to compare.
     Assert-True (@($mixed.Variants.Keys | Sort-Object) -join ',' -eq '0,1,2') `
         'ids are ordinals, not labels' (@($mixed.Variants.Keys | Sort-Object) -join ',')
-    $again = Resolve-Family -Sequence $shipped -Enabled $enabled -Extensions @('.py', '.md', '.cs', 'ps1')
+    $again = Resolve-Family -Sequence $shipped -Enabled $enabled -Extensions @('.rs', '.md', '.cs', 'ps1')
     Assert-True ($again.ExtensionMap['.ps1'] -eq $mixed.ExtensionMap['.ps1']) `
         'and stable across runs regardless of the order extensions arrive in'
 
@@ -375,14 +375,16 @@ try
     # -----------------------------------------------------------------------
     Enter-Section '9. A heterogeneous corpus dispatches per file, in real runspaces'
     # -----------------------------------------------------------------------
-    # The payoff, and the only place per-item routing is observable: four languages,
-    # two of them routed. Read back from the Processing trail each item carries home.
+    # The payoff, and the only place per-item routing is observable: six languages,
+    # five of them routed. Read back from the Processing trail each item carries home.
     $langRoot = Join-Path $PSScriptRoot 'languages'
     $specimens = @(
         @{ Rel = 'powershell\collapse.ps1'; Ext = '.ps1' }
         @{ Rel = 'csharp\GaussianManifold.cs'; Ext = '.cs' }
         @{ Rel = 'python\bench.py'; Ext = '.py' }
         @{ Rel = 'typescript\linter-ts.ts'; Ext = '.ts' }
+        @{ Rel = 'javascript\md-lint.js'; Ext = '.js' }
+        @{ Rel = 'rust\password.rs'; Ext = '.rs' }
     )
     $items = @(
         foreach ($s in $specimens)
@@ -394,8 +396,8 @@ try
             }
         }
     )
-    Assert-True (@($items | Where-Object { Test-Path -LiteralPath $_.AbsolutePath }).Count -eq 4) `
-        'four language specimens are on disk'
+    Assert-True (@($items | Where-Object { Test-Path -LiteralPath $_.AbsolutePath }).Count -eq 6) `
+        'six language specimens are on disk'
 
     $hetPlan = Compile-Plan -Manifest $manifest -SequenceManifest $seqPath `
         -IncludeProcessors $allSlots -Extensions @($items | ForEach-Object Extension) `
@@ -404,7 +406,7 @@ try
 
     $run = Invoke-Plan -Items $items -Plan $hetPlan.Plan -MaxWorkers 2
     Assert-True (@($run.Errors).Count -eq 0) 'dispatch reports no errors' (@($run.Errors) -join '; ')
-    Assert-True (@($run.Results).Count -eq 4) 'every item came back'
+    Assert-True (@($run.Results).Count -eq 6) 'every item came back'
 
     $backRel = @($run.Results | ForEach-Object RelativePath)
     Assert-True (($backRel -join ',') -eq ((@($items | ForEach-Object RelativePath)) -join ',')) `
@@ -415,16 +417,22 @@ try
     $csTrail = & $trail $run.Results[1]
     $pyTrail = & $trail $run.Results[2]
     $tsTrail = & $trail $run.Results[3]
+    $jsTrail = & $trail $run.Results[4]
+    $rsTrail = & $trail $run.Results[5]
 
     Assert-True ($psTrail -contains 'StripComments:rs.ps.strip') `
         'the .ps1 ran the PowerShell stripper' ($psTrail -join ' > ')
     Assert-True ($csTrail -contains 'StripComments:rs.cs.strip') `
-        'the .cs ran the C# stripper under the SAME slot — one capability, two implementations' ($csTrail -join ' > ')
-    Assert-True (@($run.Results[2].Processing | Where-Object Processor -eq 'StripComments').Count -eq 0) `
-        'the .py resolved no stripper, so the slot spliced out' ($pyTrail -join ' > ')
-    Assert-True (@($run.Results[3].Processing | Where-Object Processor -eq 'StripComments').Count -eq 0) `
-        'the .ts likewise' ($tsTrail -join ' > ')
-    Assert-True ($pyTrail.Count -eq ($psTrail.Count - 1)) `
+        'the .cs ran the C# stripper under the SAME slot — one capability, five implementations' ($csTrail -join ' > ')
+    Assert-True ($pyTrail -contains 'StripComments:rs.py.strip') `
+        'the .py ran the Python stripper' ($pyTrail -join ' > ')
+    Assert-True ($tsTrail -contains 'StripComments:rs.ts.strip') `
+        'the .ts ran the TypeScript stripper' ($tsTrail -join ' > ')
+    Assert-True ($jsTrail -contains 'StripComments:rs.js.strip') `
+        'the .js ran the JavaScript stripper' ($jsTrail -join ' > ')
+    Assert-True (@($run.Results[5].Processing | Where-Object Processor -eq 'StripComments').Count -eq 0) `
+        'the .rs resolved no stripper, so the slot spliced out' ($rsTrail -join ' > ')
+    Assert-True ($rsTrail.Count -eq ($psTrail.Count - 1)) `
         'the unrouted chain is exactly one record shorter'
 
     foreach ($r in $run.Results)
@@ -433,7 +441,7 @@ try
         Assert-True (($slots -contains 'Indentation') -and ($slots -contains 'Whitespace')) `
             "$($r.RelativePath): the fixed slots ran" ($slots -join ' > ')
     }
-    Assert-True (@($run.Results | Where-Object { $null -ne $_.PSObject.Properties['ContentMeta'] }).Count -eq 4) `
+    Assert-True (@($run.Results | Where-Object { $null -ne $_.PSObject.Properties['ContentMeta'] }).Count -eq 6) `
         'measurement ran on every variant'
 
     # The trail names the capability; provenance is not lost to it.

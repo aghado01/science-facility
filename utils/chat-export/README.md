@@ -90,6 +90,7 @@ Regression checks:
 
 ```powershell
 & "D:\aghado01\science-facility\utils\chat-export\tests\claude-export.tests.ps1"
+& "D:\aghado01\science-facility\utils\chat-export\tests\codex-export.tests.ps1"
 & "D:\aghado01\science-facility\utils\chat-export\tests\grok-export.tests.ps1"
 & "D:\aghado01\science-facility\utils\chat-export\tests\markdown-whitespace.tests.ps1"
 & "D:\aghado01\science-facility\utils\chat-export\tests\forensic-pair.tests.ps1"

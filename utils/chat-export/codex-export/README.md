@@ -164,12 +164,31 @@ Codex rollouts are resolved from:
 
 ```text
 %CODEX_HOME%\sessions\YYYY\MM\DD\rollout-*-<thread-id>.jsonl
+%CODEX_HOME%\sessions\YYYY\MM\DD\rollout-*-<thread-id>_<segment-id>.jsonl
 %CODEX_HOME%\archived_sessions\rollout-*-<thread-id>.jsonl
+%CODEX_HOME%\archived_sessions\rollout-*-<thread-id>_<segment-id>.jsonl
 ```
 
-When `CODEX_HOME` is unset, `%USERPROFILE%\.codex` is used. Active rollouts are
+All filename candidates must carry the requested logical id in their leading
+`session_meta`. A suffixed UUID is the physical segment id. When a segment has
+`session_meta.history_base`, its `thread_id` names the predecessor segment and
+its byte offset and cumulative ordinal define the exact retained predecessor
+prefix. The resolver moonwalks those links and concatenates only the committed
+prefixes; abandoned or replayed ancestor tails are not exported.
+
+If several graph leaves exist, the unique leaf with the greatest cumulative
+logical ordinal is selected. Equal leaves fail explicitly instead of falling
+back to file size or modification time; `-LeafSegmentId` is available as an
+explicit override. Missing predecessors, cycles, offsets between records, and
+cumulative-ordinal mismatches also fail before rendering.
+
+When `CODEX_HOME` is unset, `%USERPROFILE%\.codex` is used. The selected leaf is
 snapshotted with read/write/delete sharing and an incomplete final JSON line is
-dropped if the snapshot races a write.
+dropped if the snapshot races a write. Export results retain `RolloutPath` as
+the leaf-path compatibility field. Library results also report `RolloutPaths`,
+`SelectedSegmentId`, and `SegmentManifest`; the agent-facing wrapper returns the
+selected segment and concise fragmentation/discarded-tail stats without dumping
+the full manifest.
 
 The export is a snapshot. If invoked during an active response, the current
 exchange may correctly have `_status: "in_progress"` and will contain only

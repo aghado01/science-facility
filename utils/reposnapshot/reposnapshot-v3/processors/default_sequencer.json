@@ -9,7 +9,10 @@
     "Requires": ["file_read"],
     "Routing": [
         { "File": "rs.ps.strip.ps1", "Extensions": ["ps1", "psm1", "psd1"] },
-        { "File": "rs.cs.strip.ps1", "Extensions": ["cs", "csx"] }
+        { "File": "rs.cs.strip.ps1", "Extensions": ["cs", "csx"] },
+        { "File": "rs.js.strip.ps1", "Extensions": ["js", "mjs", "cjs", "jsx"] },
+        { "File": "rs.ts.strip.ps1", "Extensions": ["ts", "mts", "cts", "tsx"] },
+        { "File": "rs.py.strip.ps1", "Extensions": ["py", "pyw", "pyi"] }
     ]
     }, 
       "Indentation": {

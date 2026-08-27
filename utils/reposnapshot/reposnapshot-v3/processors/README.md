@@ -73,7 +73,7 @@ Processors are categorized into four positional tiers:
 | Position Class | Role | Example |
 |---|---|---|
 | **Reader (Head)** | Consumes crawler descriptors; reads bytes from disk; attaches `Content` and `Encoding`; halts on binary/read failure. | [`file_read.ps1`](file_read.ps1) |
-| **Content Mutator** | Modifies text content (comment stripping, whitespace normalization, indentation); appends `Processing` audit metadata. | [`rs.whitespace.ps1`](rs.whitespace.ps1), [`rs.ps.strip.ps1`](rs.ps.strip.ps1), [`rs.cs.strip.ps1`](rs.cs.strip.ps1), [`rs.indent.ps1`](rs.indent.ps1) |
+| **Content Mutator** | Modifies text content (comment stripping, whitespace normalization, indentation); appends `Processing` audit metadata. | [`rs.whitespace.ps1`](rs.whitespace.ps1), [`rs.ps.strip.ps1`](rs.ps.strip.ps1), [`rs.cs.strip.ps1`](rs.cs.strip.ps1), [`rs.js.strip.ps1`](rs.js.strip.ps1), [`rs.ts.strip.ps1`](rs.ts.strip.ps1), [`rs.py.strip.ps1`](rs.py.strip.ps1), [`rs.indent.ps1`](rs.indent.ps1) |
 | **Enricher (Tail)** | Read-only content inspection placed after *all* mutators; attaches invariant metadata statistics. | [`rs.content_meta.ps1`](rs.content_meta.ps1) |
 | **Segmenting Parser** | Decomposes multi-turn documents into discrete exchange envelopes. | [`tp-perplexity.ps1`](tp-perplexity.ps1) |
 
@@ -90,6 +90,9 @@ processors/
 ├── rs.whitespace.ps1       # Whitespace normalizer
 ├── rs.ps.strip.ps1         # AST PowerShell comment stripper
 ├── rs.cs.strip.ps1         # Regex C# comment stripper
+├── rs.js.strip.ps1         # Regex JS comment stripper (mask lens)
+├── rs.ts.strip.ps1         # Regex TS comment stripper (mask lens + triple-slash FrontMatter)
+├── rs.py.strip.ps1         # Regex Python comment stripper (mask lens)
 ├── rs.indent.ps1           # Code indentation normalizer
 ├── rs.content_meta.ps1     # Tail content metrics processor
 ├── tp-perplexity.ps1       # Perplexity thread parser
