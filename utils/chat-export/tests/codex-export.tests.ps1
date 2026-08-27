@@ -318,6 +318,50 @@ try
     Assert-Equal $result.RolloutPaths.Count 3 'runner exposes all canonical source paths'
     Assert-True ([System.IO.File]::Exists($result.MarkdownPath)) 'fragmented export writes Markdown'
     Assert-True ([System.IO.File]::Exists($result.SnapshotPath)) 'fragmented export writes canonical snapshot'
+    $validatedFreeze = Assert-ChatFrozenSourceContract -FrozenSource $result.FrozenSource
+    Assert-Equal $validatedFreeze.SnapshotPath $result.SnapshotPath `
+        'Codex runner returns the shared frozen-source contract'
+    Assert-Equal $validatedFreeze.SourceCount 3 `
+        'fragmented frozen source reports all physical inputs'
+
+    $canonicalExchanges = @(Get-CodexExchanges `
+            -SnapshotPath $result.SnapshotPath `
+            -ThreadId $threadId)
+    $sharedExchangeResult = Export-ChatExchanges `
+        -Exchanges $canonicalExchanges `
+        -WorkingDir (Join-Path $temporaryRoot 'shared-exchange-writer') `
+        -Identity $threadId `
+        -OutputPrefix 'fixture'
+    Assert-Equal `
+        (Get-FileHash -LiteralPath $sharedExchangeResult.ExchangesPath -Algorithm SHA256).Hash `
+        (Get-FileHash -LiteralPath $result.ExchangesPath -Algorithm SHA256).Hash `
+        'Codex compatibility exchange writer is byte-identical to shared'
+
+    [string]$codexMarkdown = ConvertTo-CodexMarkdown `
+        -ExchangesJsonlPath $result.ExchangesPath `
+        -Format Structural `
+        -Exclude @() `
+        -MaxToolInputLength $null `
+        -NormalizeWhitespace:$false
+    [string]$sharedMarkdown = ConvertTo-ChatMarkdown `
+        -ExchangesJsonlPath $result.ExchangesPath `
+        -Provider codex `
+        -AssistantLabel Codex `
+        -IdentityKind Thread `
+        -Format Structural `
+        -Exclude @() `
+        -MaxToolInputLength $null `
+        -NormalizeWhitespace:$false
+    $stableCodexMarkdown = [regex]::Replace(
+        $codexMarkdown, '(?m)^exported_at:.*$', 'exported_at: <dynamic>')
+    $stableSharedMarkdown = [regex]::Replace(
+        $sharedMarkdown, '(?m)^exported_at:.*$', 'exported_at: <dynamic>')
+    Assert-Equal $stableCodexMarkdown $stableSharedMarkdown `
+        'Codex compatibility renderer delegates exactly to shared'
+    Assert-True ($sharedMarkdown.Contains("thread_id: $threadId")) `
+        'shared Codex renderer uses thread identity frontmatter'
+    Assert-True (-not $sharedMarkdown.Contains("session_id: $threadId")) `
+        'shared Codex renderer does not relabel the thread as a session'
 
     $snapshotText = [System.IO.File]::ReadAllText($result.SnapshotPath)
     Assert-True (-not $snapshotText.Contains('orphan bootstrap')) 'orphan bootstrap is excluded'
@@ -356,6 +400,20 @@ try
     Assert-Equal $single.Stats.SegmentCount 1 'single rollout remains one segment'
     Assert-True (-not $single.Stats.Fragmented) 'single rollout is not fragmented'
     Assert-True $single.Stats.TailDropped 'single rollout drops incomplete active tail'
+    $legacySnapshot = New-CodexJsonlSnapshot `
+        -SourcePath $tailPath `
+        -WorkingDir (Join-Path $temporaryRoot 'legacy-single-snapshot')
+    Assert-Equal $legacySnapshot.LineCount 6 `
+        'Codex single-file compatibility shim delegates to shared snapshot'
+    Assert-Equal $legacySnapshot.SourceCount 1 `
+        'shared single-file snapshot reports one source'
+    Assert-True (-not $legacySnapshot.Fragmented) `
+        'shared single-file snapshot reports no fragmentation'
+
+    Assert-ThrowsLike `
+        -Action { Assert-ChatFrozenSourceContract -FrozenSource ([pscustomobject]@{}) } `
+        -Pattern "missing required property 'SnapshotPath'" `
+        -Label 'frozen-source contract rejects incomplete provider results'
 
     # Missing predecessors fail only after a leaf is selected; no unrelated
     # rollout is silently substituted.

@@ -3,13 +3,12 @@
 # Minimal pipeline:
 #   rollout JSONL -> stable snapshot -> exchange envelopes JSONL + .jidx
 #
-# This is a sibling implementation to claude-export. It reuses only the
-# schema-agnostic jso-jackson primitives and does not load or modify the
-# Claude-specific exporter.
+# Provider-specific rollout resolution and parsing live here. Generic JSONL
+# snapshot, exchange I/O, run/path, and frozen-source contracts live in shared.
 
 $ErrorActionPreference = 'Stop'
 
-. "$PSScriptRoot\..\..\jso-jackson\jso-jackson.ps1"
+. "$PSScriptRoot\..\shared\jsonl.ps1"
 
 function Get-CodexHome
 {
@@ -61,12 +60,7 @@ function script:ConvertFrom-CodexJsonString
 {
     param([object]$Value)
 
-    if ($null -eq $Value) { return $null }
-    if ($Value -isnot [string]) { return $Value }
-    if ([string]::IsNullOrWhiteSpace($Value)) { return $Value }
-
-    try { return ($Value | ConvertFrom-Json -Depth 100 -NoEnumerate) }
-    catch { return $Value }
+    return ConvertFrom-ChatJsonString -Value $Value
 }
 
 function script:Get-CodexMessageText
@@ -774,87 +768,10 @@ function New-CodexJsonlSnapshot
     {
         throw "Codex rollout not found: $SourcePath"
     }
-    [void][System.IO.Directory]::CreateDirectory($WorkingDir)
-    if ([string]::IsNullOrWhiteSpace($FileName))
-    {
-        $FileName = [System.IO.Path]::GetFileName($SourcePath)
-    }
-
-    $snapshotPath = [System.IO.Path]::Combine($WorkingDir, $FileName)
-    $indexPath = [System.IO.Path]::ChangeExtension($snapshotPath, '.jidx')
-    $encoding = [System.Text.UTF8Encoding]::new($false)
-    $share = [System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete
-    $lineCount = 0
-    $lastLine = $null
-
-    $srcFs = [System.IO.FileStream]::new(
-        $SourcePath, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, $share)
-    $srcReader = [System.IO.StreamReader]::new($srcFs, $encoding)
-    $dstFs = [System.IO.FileStream]::new(
-        $snapshotPath, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write)
-
-    try
-    {
-        while ($null -ne ($line = $srcReader.ReadLine()))
-        {
-            $trimmed = $line.Trim()
-            if ($trimmed.Length -eq 0) { continue }
-            $bytes = $encoding.GetBytes($trimmed)
-            $dstFs.Write($bytes, 0, $bytes.Length)
-            $dstFs.WriteByte(0x0A)
-            $lineCount++
-            $lastLine = $trimmed
-        }
-    }
-    finally
-    {
-        $dstFs.Dispose()
-        $srcReader.Dispose()
-        $srcFs.Dispose()
-    }
-
-    $tailDropped = $false
-    if ($lastLine)
-    {
-        try
-        {
-            $tailDocument = [System.Text.Json.JsonDocument]::Parse($lastLine)
-            $tailDocument.Dispose()
-        }
-        catch
-        {
-            $tailDropped = $true
-            $lineCount--
-            $truncFs = [System.IO.FileStream]::new(
-                $snapshotPath,
-                [System.IO.FileMode]::Open,
-                [System.IO.FileAccess]::ReadWrite)
-            try
-            {
-                [long]$newLength = 0
-                for ([long]$position = $truncFs.Length - 2; $position -ge 0; $position--)
-                {
-                    $truncFs.Position = $position
-                    if ($truncFs.ReadByte() -eq 0x0A)
-                    {
-                        $newLength = $position + 1
-                        break
-                    }
-                }
-                $truncFs.SetLength($newLength)
-            }
-            finally { $truncFs.Dispose() }
-        }
-    }
-
-    $idx = [JsonlIndex]::Build($snapshotPath, $indexPath)
-    return [pscustomobject]@{
-        SnapshotPath = $snapshotPath
-        IndexPath    = $indexPath
-        LineCount    = $idx.LineCount
-        TailDropped  = $tailDropped
-        SourcePath   = $SourcePath
-    }
+    return New-ChatJsonlSnapshot `
+        -SourcePath $SourcePath `
+        -WorkingDir $WorkingDir `
+        -FileName $FileName
 }
 
 function script:Copy-CodexFilePrefix
@@ -1023,13 +940,14 @@ function New-CodexThreadSnapshot
             "the segment manifest reconstructed $includedRecords.")
     }
 
-    return [pscustomobject]@{
+    $result = [pscustomobject]@{
         SnapshotPath      = $snapshotPath
         IndexPath         = $indexPath
         LineCount         = [long]$idx.LineCount
         TailDropped       = $tailDropped
         SourcePath        = $Resolution.RolloutPath
         SourcePaths       = @($materialized | ForEach-Object { $_.Path })
+        SourceCount       = $materialized.Count
         CandidateCount    = [int]$Resolution.CandidateCount
         SegmentCount      = $materialized.Count
         Fragmented        = $materialized.Count -gt 1
@@ -1039,6 +957,7 @@ function New-CodexThreadSnapshot
         DiscardedBytes    = $discardedBytes
         Segments          = $materialized.ToArray()
     }
+    return Assert-ChatFrozenSourceContract -FrozenSource $result
 }
 
 function script:New-CodexToolCallAtomic
@@ -1409,30 +1328,9 @@ function Export-CodexExchanges
         [string]$OutputPrefix = 'thread'
     )
 
-    $exchangeDir = [System.IO.Path]::Combine($WorkingDir, 'exchanges')
-    [void][System.IO.Directory]::CreateDirectory($exchangeDir)
-    $path = [System.IO.Path]::Combine(
-        $exchangeDir, "$OutputPrefix-$ThreadId.jsonl")
-    $encoding = [System.Text.UTF8Encoding]::new($false)
-    $fs = [System.IO.FileStream]::new(
-        $path, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write)
-    try
-    {
-        foreach ($exchange in $Exchanges)
-        {
-            $json = ConvertTo-CanonicalJson -InputObject $exchange -Compress
-            $bytes = $encoding.GetBytes($json)
-            $fs.Write($bytes, 0, $bytes.Length)
-            $fs.WriteByte(0x0A)
-        }
-    }
-    finally { $fs.Dispose() }
-
-    $indexPath = [System.IO.Path]::ChangeExtension($path, '.jidx')
-    $idx = [JsonlIndex]::Build($path, $indexPath)
-    return [pscustomobject]@{
-        ExchangesPath = $path
-        IndexPath     = $indexPath
-        ExchangeCount = $idx.LineCount
-    }
+    return Export-ChatExchanges `
+        -Exchanges $Exchanges `
+        -WorkingDir $WorkingDir `
+        -Identity $ThreadId `
+        -OutputPrefix $OutputPrefix
 }

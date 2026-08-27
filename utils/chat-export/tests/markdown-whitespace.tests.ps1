@@ -213,7 +213,8 @@ try
         -FunctionName 'ConvertTo-ClaudeMarkdownV2'
     Assert-NormalizationParameterContract `
         -Path "$PSScriptRoot\..\codex-export\codex-jso-markdown.ps1" `
-        -FunctionName 'ConvertTo-CodexMarkdown'
+        -FunctionName 'ConvertTo-CodexMarkdown' `
+        -ForwardedCommand 'ConvertTo-ChatMarkdown'
 
     # Shared helper: mirror the reposnapshot operation family while retaining
     # whitespace that is structural in Markdown or literal payloads.

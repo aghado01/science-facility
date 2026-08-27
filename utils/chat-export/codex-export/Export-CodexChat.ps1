@@ -48,8 +48,6 @@ param(
 
     [string]$MarkdownDir,
 
-    [string]$LeafSegmentId,
-
     [string]$WorkingDir,
 
     [string]$RunStamp,
@@ -75,7 +73,9 @@ param(
     [bool]$NormalizeWhitespace = $true,
 
     [ValidateSet('Utf8', 'Utf16LE')]
-    [string]$OutputEncoding = 'Utf8'
+    [string]$OutputEncoding = 'Utf8',
+
+    [string]$LeafSegmentId
 )
 
 $ErrorActionPreference = 'Stop'

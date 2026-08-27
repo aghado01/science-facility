@@ -1,6 +1,7 @@
 # Tree Manifest TOC for Snapshot: `{{Title}}`
 
 {{SummaryLine}}
+Encoding: {{Encoding}}
 
 Payload:
 {{#each PayloadLines}}{{this}}

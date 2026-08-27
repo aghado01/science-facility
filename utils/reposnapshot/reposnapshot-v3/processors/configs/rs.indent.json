@@ -1,5 +1,5 @@
 {
-    "Operations": [],
+    "Operations": ["strip-common", "detab", "min-indent", "tabify"],
     "TargetUnit": 2,
     "IncludeMeta": true
 }

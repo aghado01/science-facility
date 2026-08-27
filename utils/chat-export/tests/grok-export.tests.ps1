@@ -182,6 +182,11 @@ try
     Assert-Equal $result.Stats.TailDropped $false 'complete snapshot drops no tail'
     Assert-True ([System.IO.File]::Exists($result.MarkdownPath)) 'markdown file exists'
     Assert-True ([System.IO.File]::Exists($result.ExchangesPath)) 'exchanges file exists'
+    $validatedFreeze = Assert-ChatFrozenSourceContract -FrozenSource $result.FrozenSource
+    Assert-Equal $validatedFreeze.SnapshotPath $result.SnapshotPath `
+        'Grok runner returns the shared frozen-source contract'
+    Assert-Equal $validatedFreeze.SourceCount 1 'Grok frozen source reports one input'
+    Assert-True (-not $validatedFreeze.Fragmented) 'Grok frozen source is not fragmented'
 
     $exchanges = Get-GrokExchanges `
         -SnapshotPath $result.SnapshotPath `
@@ -202,6 +207,8 @@ try
 
     $markdown = Get-Content -LiteralPath $result.MarkdownPath -Raw -Encoding utf8
     Assert-True ($markdown.Contains('provider: grok')) 'frontmatter names grok'
+    Assert-True ($markdown.Contains("session_id: $sessionId")) `
+        'shared Grok renderer preserves session identity frontmatter'
     Assert-True ($markdown.Contains('# export this')) 'structural heading is unwrapped prompt'
     Assert-True ($markdown.Contains('skills listed')) 'empty exclude keeps synthetic'
     Assert-True ($markdown.Contains('**[tool: list_dir]**')) 'empty exclude keeps tools'

@@ -5,8 +5,8 @@ Exports a locally persisted Codex task into:
 1. A canonical exchange-envelope JSONL intermediate representation.
 2. Markdown with tunable structural, house, diarized, or dialogue formatting.
 
-This directory is independent of `claude-export`. It reuses only the generic
-`jso-jackson.ps1` primitives.
+This directory is independent of `claude-export`. Codex-specific source
+resolution and parsing sit above the client-agnostic contracts in `../shared`.
 
 ## Agent-facing export
 
@@ -28,6 +28,7 @@ MarkdownPath
 ExchangesPath
 ThreadId
 RolloutPath
+SelectedSegmentId
 WorkingDir
 RunStamp
 RunDir
@@ -125,6 +126,15 @@ Invoke-CodexThreadExport `
 ```
 
 ## Exchange-envelope IR
+
+Codex source resolution and record parsing are provider-specific. The resulting
+canonical snapshot conforms to the shared frozen-source contract, and exchange
+JSONL writing, run/path resolution, and Markdown rendering delegate to
+`../shared`. `New-CodexJsonlSnapshot`, `Export-CodexExchanges`, and
+`ConvertTo-CodexMarkdown` remain available as compatibility adapters.
+
+Shared Markdown is invoked with `IdentityKind Thread`, so Codex frontmatter uses
+`thread_id`; Grok's default shared policy continues to use `session_id`.
 
 Each JSONL line is one human-initiated exchange:
 

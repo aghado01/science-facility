@@ -7,6 +7,7 @@
         "strip-zwnbsp",
         "trim-trailing",
         "max-blank-1",
+        "trim-inner", 
         "trim-doc",
         "pad-breaks"
     ],

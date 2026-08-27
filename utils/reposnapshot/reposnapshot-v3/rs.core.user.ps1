@@ -103,7 +103,8 @@
     ./rs.core.user.ps1 -Root ../reposnapshot-v3 -SelectionPatterns '*.ps1','*.psm1'
 
 .EXAMPLE
-  &  ./rs.core.user.ps1 -ConfigPath './user-config.json'
+   # from utils/reposnapshot/ 
+  &  ./reposnapshot-v3/rs.core.user.ps1 -ConfigPath './reposnapshot-v3/user-config.json'
 
 .EXAMPLE
     ./rs.core.user.ps1 -Config @{ Root = '..\reposnapshot-v3'; IncludeProcessors = @('StripComments', 'Whitespace') }

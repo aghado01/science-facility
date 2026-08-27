@@ -86,6 +86,7 @@ function script:Get-ChatMarkdownFrontmatter
         [string]$Provider,
         [string]$SessionId,
         [string]$ThreadId,
+        [string]$IdentityKind,
         [System.Collections.Generic.HashSet[string]]$Models,
         [int]$ExchangeCount,
         [string]$UserLabel
@@ -96,8 +97,24 @@ function script:Get-ChatMarkdownFrontmatter
     if ($Provider) { [void]$sb.Append("provider: $Provider`n") }
     [void]$sb.Append("format: $Format`n")
     [void]$sb.Append("exported_at: $([datetime]::UtcNow.ToString('o'))`n")
-    if ($SessionId) { [void]$sb.Append("session_id: $SessionId`n") }
-    elseif ($ThreadId) { [void]$sb.Append("thread_id: $ThreadId`n") }
+    switch ($IdentityKind)
+    {
+        'Thread'
+        {
+            if ($ThreadId) { [void]$sb.Append("thread_id: $ThreadId`n") }
+            elseif ($SessionId) { [void]$sb.Append("session_id: $SessionId`n") }
+        }
+        'Session'
+        {
+            if ($SessionId) { [void]$sb.Append("session_id: $SessionId`n") }
+            elseif ($ThreadId) { [void]$sb.Append("thread_id: $ThreadId`n") }
+        }
+        default
+        {
+            if ($SessionId) { [void]$sb.Append("session_id: $SessionId`n") }
+            elseif ($ThreadId) { [void]$sb.Append("thread_id: $ThreadId`n") }
+        }
+    }
     [void]$sb.Append("exchanges: $ExchangeCount`n")
     if ($UserLabel) { [void]$sb.Append("user_label: $UserLabel`n") }
 
@@ -131,6 +148,10 @@ function ConvertTo-ChatMarkdown
     .PARAMETER AssistantLabel
         Speaker name in Diarized/Dialogue formats. Defaults to a title-cased
         Provider value.
+    .PARAMETER IdentityKind
+        Frontmatter identity policy. Auto preserves the historical session-first
+        behavior. Thread and Session prefer their named field and fall back to
+        the other when the preferred identity is absent.
     .PARAMETER NormalizeWhitespace
         Apply the shared final-Markdown whitespace and Unicode normalizer.
         Default: $true. Set to $false for a pre-postprocessor forensic view;
@@ -168,7 +189,10 @@ function ConvertTo-ChatMarkdown
         [bool]$NormalizeWhitespace = $true,
 
         [ValidateSet('Utf8', 'Utf16LE')]
-        [string]$OutputEncoding = 'Utf8'
+        [string]$OutputEncoding = 'Utf8',
+
+        [ValidateSet('Auto', 'Thread', 'Session')]
+        [string]$IdentityKind = 'Auto'
     )
 
     if (-not [System.IO.File]::Exists($ExchangesJsonlPath))
@@ -389,6 +413,7 @@ function ConvertTo-ChatMarkdown
         -Provider $Provider `
         -SessionId $sessionId `
         -ThreadId $threadId `
+        -IdentityKind $IdentityKind `
         -Models $models `
         -ExchangeCount $exchangeCount `
         -UserLabel $userLabel

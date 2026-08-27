@@ -92,6 +92,7 @@ function Invoke-GrokThreadExport
             RunDir        = $run.RunDir
             HistoryPath   = $resolved.HistoryPath
             SessionDir    = $resolved.SessionDir
+            FrozenSource  = $snapshot
             SnapshotPath  = $snapshot.SnapshotPath
             ExchangesPath = $exchangeResult.ExchangesPath
             MarkdownPath  = $null
@@ -129,6 +130,7 @@ function Invoke-GrokThreadExport
         RunDir        = $run.RunDir
         HistoryPath   = $resolved.HistoryPath
         SessionDir    = $resolved.SessionDir
+        FrozenSource  = $snapshot
         SnapshotPath  = $snapshot.SnapshotPath
         ExchangesPath = $exchangeResult.ExchangesPath
         MarkdownPath  = $resolvedMarkdownPath

@@ -38,6 +38,10 @@
     Encoding shared by both Markdown siblings. Utf8 (default) is BOM-less.
     Utf16LE writes FF FE plus each rendered .NET UTF-16 code unit verbatim.
 
+.PARAMETER LeafSegmentId
+    Optional Codex physical leaf UUID. Forwarded only for Codex when equal
+    cumulative graph leaves require explicit disambiguation.
+
 .OUTPUTS
     PSCustomObject containing frozen-source provenance, sibling paths, byte
     lengths, SHA-256 hashes, encoding, and the enforced pair invariant.
@@ -78,7 +82,9 @@ param(
     [ValidateSet('Utf8', 'Utf16LE')]
     [string]$OutputEncoding = 'Utf8',
 
-    [switch]$Force
+    [switch]$Force,
+
+    [string]$LeafSegmentId
 )
 
 $ErrorActionPreference = 'Stop'
@@ -140,6 +146,7 @@ if ($Provider -eq 'Codex')
     . "$PSScriptRoot\codex-export\codex-jso-run.ps1"
     $freezeResult = Invoke-CodexThreadExport `
         -ThreadId $ThreadId `
+        -LeafSegmentId $LeafSegmentId `
         -WorkingDir $providerWorkingDir `
         -RunStamp $RunStamp `
         -RunThrough Exchanges `

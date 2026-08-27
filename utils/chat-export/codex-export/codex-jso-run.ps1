@@ -16,7 +16,6 @@ function Invoke-CodexThreadExport
         [string]$ThreadId,
 
         [string]$CodexHome,
-        [string]$LeafSegmentId,
         [string]$WorkingDir,
         [string]$RunStamp,
 
@@ -46,7 +45,9 @@ function Invoke-CodexThreadExport
         [ValidateSet('Utf8', 'Utf16LE')]
         [string]$OutputEncoding = 'Utf8',
 
-        [string]$OutputPrefix = 'thread'
+        [string]$OutputPrefix = 'thread',
+
+        [string]$LeafSegmentId
     )
 
     $timer = [Diagnostics.Stopwatch]::StartNew()
@@ -60,19 +61,10 @@ function Invoke-CodexThreadExport
         $WorkingDir = [System.IO.Path]::Combine(
             $resolved.CodexHome, 'tmp', 'codex-jso-run')
     }
-    $WorkingDir = [System.IO.Path]::GetFullPath($WorkingDir)
-
-    if ([string]::IsNullOrWhiteSpace($RunStamp))
-    {
-        $RunStamp = Get-JobTimestamp
-    }
-    if ($RunStamp -notmatch '^[0-9]{8}_[0-9]{6}$')
-    {
-        throw "Malformed run stamp '$RunStamp'. Expected UTC yyyyMMdd_HHmmss."
-    }
-
-    $runDir = [System.IO.Path]::Combine($WorkingDir, $RunStamp)
-    [void][System.IO.Directory]::CreateDirectory($runDir)
+    $run = Resolve-ChatRunDir -WorkingDir $WorkingDir -RunStamp $RunStamp
+    $WorkingDir = $run.WorkingDir
+    $RunStamp = $run.RunStamp
+    $runDir = $run.RunDir
 
     $rawDir = [System.IO.Path]::Combine($runDir, 'raw')
     $snapshot = New-CodexThreadSnapshot `
@@ -115,6 +107,7 @@ function Invoke-CodexThreadExport
             RolloutPaths  = $resolved.RolloutPaths
             SelectedSegmentId = $resolved.SelectedSegmentId
             SegmentManifest = $snapshot.Segments
+            FrozenSource   = $snapshot
             SnapshotPath  = $snapshot.SnapshotPath
             ExchangesPath = $exchangeResult.ExchangesPath
             MarkdownPath  = $null
@@ -125,25 +118,12 @@ function Invoke-CodexThreadExport
         }
     }
 
-    $resolvedMarkdownPath = if ($MarkdownPath)
-    {
-        $MarkdownPath
-    }
-    elseif ($MarkdownDir)
-    {
-        [System.IO.Path]::Combine(
-            $MarkdownDir, "$OutputPrefix-$ThreadId.md")
-    }
-    elseif ($env:JSO_EXPORT_DIR)
-    {
-        [System.IO.Path]::Combine(
-            $env:JSO_EXPORT_DIR, "$OutputPrefix-$ThreadId.md")
-    }
-    else
-    {
-        [System.IO.Path]::Combine(
-            $runDir, 'output', "$OutputPrefix-$ThreadId.md")
-    }
+    $resolvedMarkdownPath = Resolve-ChatMarkdownPath `
+        -MarkdownPath $MarkdownPath `
+        -MarkdownDir $MarkdownDir `
+        -RunDir $runDir `
+        -OutputPrefix $OutputPrefix `
+        -Identity $ThreadId
 
     ConvertTo-CodexMarkdown `
         -ExchangesJsonlPath $exchangeResult.ExchangesPath `
@@ -164,6 +144,7 @@ function Invoke-CodexThreadExport
         RolloutPaths  = $resolved.RolloutPaths
         SelectedSegmentId = $resolved.SelectedSegmentId
         SegmentManifest = $snapshot.Segments
+        FrozenSource   = $snapshot
         SnapshotPath  = $snapshot.SnapshotPath
         ExchangesPath = $exchangeResult.ExchangesPath
         MarkdownPath  = $resolvedMarkdownPath

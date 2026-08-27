@@ -23,9 +23,16 @@ The Claude merge stage deduplicates copied continuation history by record UUID.
 It retains distinct thinking, text, and tool-use records even when Claude assigns
 them the same response `message.id`.
 
-Grok post-ingest stages (live JSONL snapshot, exchange-envelope I/O, Markdown
-render, run/path resolution) live in `shared/`. Claude and Codex still have
-their own copies of those later stages.
+Provider adapters own source discovery, continuation/segment reconstruction,
+and provider-record parsing. They hand downstream code an asserted frozen-source
+object with `SnapshotPath`, `IndexPath`, `LineCount`, `TailDropped`, and
+`SourcePath`; provider-specific provenance is additive.
+
+Grok uses the shared single-file freeze directly. Codex performs its
+`history_base` segment moonwalk before that boundary, then delegates single-file
+compatibility snapshotting, exchange-envelope I/O, Markdown rendering, and
+run/path resolution to `shared/`. Its former public helper names remain thin
+compatibility adapters. Claude retains its own merge and later-stage copies.
 
 Claude, Codex, and Grok Markdown output passes through the shared
 `chat-export-format-ws.ps1` final-stage formatter. It normalizes line endings

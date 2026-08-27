@@ -5,17 +5,23 @@
     "SelectionPatterns": [
         "*.ps1",
         "*.psm1",
-        "!tests/"
+        "*.cs",
+        "!tests/",
+        "!hashish/",
+        "!archivory/",
+        "!user-repl/",
+        "!viz/",        
+        "!test-harness/",        
+        "!viz-core/",        
+        "!repo-audit/"
     ],
     "IncludeProcessors": [
         "StripComments",
         "Indentation",
-        "Whitespace", 
-        "ContentMetadata"
+        "Whitespace"
     ],
     "Columns": [
-        "gidx", 
-        "content_meta"
+        "gidx"
     ],
     "ShardQuotaBytes": 65536,
     "ShardToleranceBytes": 4096,

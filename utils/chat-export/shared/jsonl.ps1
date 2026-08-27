@@ -19,6 +19,61 @@ function ConvertFrom-ChatJsonString
     catch { return $Value }
 }
 
+function Assert-ChatFrozenSourceContract
+{
+    <#
+    .SYNOPSIS
+        Validate the provider-to-shared frozen-source boundary.
+    .DESCRIPTION
+        Provider adapters may freeze one file, merge sessions, or reconstruct a
+        physical-segment chain. Downstream stages receive the same required
+        surface: a stable JSONL snapshot and index, record count, tail status,
+        and primary source path. Provider-specific provenance is additive.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory, ValueFromPipeline)]
+        [object]$FrozenSource
+    )
+
+    process
+    {
+        foreach ($propertyName in @(
+                'SnapshotPath', 'IndexPath', 'LineCount', 'TailDropped', 'SourcePath'))
+        {
+            if ($FrozenSource.PSObject.Properties.Name -notcontains $propertyName)
+            {
+                throw "Frozen-source result is missing required property '$propertyName'."
+            }
+        }
+
+        if ([string]::IsNullOrWhiteSpace([string]$FrozenSource.SnapshotPath) -or
+            -not [System.IO.File]::Exists([string]$FrozenSource.SnapshotPath))
+        {
+            throw "Frozen-source snapshot does not exist: $($FrozenSource.SnapshotPath)"
+        }
+        if ([string]::IsNullOrWhiteSpace([string]$FrozenSource.IndexPath) -or
+            -not [System.IO.File]::Exists([string]$FrozenSource.IndexPath))
+        {
+            throw "Frozen-source index does not exist: $($FrozenSource.IndexPath)"
+        }
+        if ([string]::IsNullOrWhiteSpace([string]$FrozenSource.SourcePath))
+        {
+            throw 'Frozen-source primary SourcePath is empty.'
+        }
+
+        [long]$lineCount = 0
+        try { $lineCount = [long]$FrozenSource.LineCount }
+        catch { throw "Frozen-source LineCount is not an integer: '$($FrozenSource.LineCount)'." }
+        if ($lineCount -lt 0)
+        {
+            throw "Frozen-source LineCount cannot be negative: $lineCount."
+        }
+
+        return $FrozenSource
+    }
+}
+
 function New-ChatJsonlSnapshot
 {
     <#
@@ -118,13 +173,17 @@ function New-ChatJsonlSnapshot
     }
 
     $idx = [JsonlIndex]::Build($snapshotPath, $indexPath)
-    return [pscustomobject]@{
+    $result = [pscustomobject]@{
         SnapshotPath = $snapshotPath
         IndexPath    = $indexPath
         LineCount    = $idx.LineCount
         TailDropped  = $tailDropped
         SourcePath   = $SourcePath
+        SourcePaths  = @($SourcePath)
+        SourceCount  = 1
+        Fragmented   = $false
     }
+    return Assert-ChatFrozenSourceContract -FrozenSource $result
 }
 
 function Export-ChatExchanges

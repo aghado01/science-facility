@@ -169,6 +169,7 @@ try
             @{
                 Path = "$PSScriptRoot\..\codex-export\codex-jso-markdown.ps1"
                 FunctionName = 'ConvertTo-CodexMarkdown'
+                ForwardedCommand = 'ConvertTo-ChatMarkdown'
             },
             @{
                 Path = "$PSScriptRoot\..\shared\markdown.ps1"
@@ -202,6 +203,12 @@ try
     Assert-Equal ([regex]::Matches(
             $wrapperText, '-RunThrough\s+Exchanges').Count) 3 `
         'forensic wrapper freezes all providers through exchanges'
+    Assert-Equal ([regex]::Matches(
+            $wrapperText, '(?m)^\s*\[string\]\$LeafSegmentId').Count) 1 `
+        'forensic wrapper exposes one Codex leaf override parameter'
+    Assert-Equal ([regex]::Matches(
+            $wrapperText, '-LeafSegmentId\s+\$LeafSegmentId').Count) 1 `
+        'forensic wrapper forwards the Codex leaf override exactly once'
     Assert-Equal ([regex]::Matches(
             $wrapperText, '-NormalizeWhitespace:\$false').Count) 3 `
         'forensic wrapper renders all provider masters without normalization'
