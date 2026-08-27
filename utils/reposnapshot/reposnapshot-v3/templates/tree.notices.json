@@ -3,7 +3,7 @@
     "Format": "psr — piped snapshot rows; shard files are .txt as a reader accommodation, not a format marker",
     "OffsetUnit": "bytes, 0-based, end offsets inclusive",
     "Formatting": "Pipe-separated values; LF newlines; Normalized indentation; BOM, C0 controls and DEL are stripped", 
-    "Compaction": "To ensure single physical lines per row and avoid tokenization boundary effects, normalized LF newlines are encoded with ` \n `", 
+    "Compaction": "To ensure single physical lines per row and avoid tokenization boundary effects, normalized LF newlines are strictly encoded with ` \n `", 
     "TreeLegend": "name sidx    row_offset  row_meta_end    row_content_begin   row_content_end",
     "Instructions": [
         "This is an index manifest of a selective and curated repository snapshot with payload shard files in a custom pipe-separated, LF-delimited container format.", 

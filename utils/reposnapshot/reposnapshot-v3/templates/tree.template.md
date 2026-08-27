@@ -2,10 +2,14 @@
 {{SummaryLine}}
 Snapshot Root: {{Root}}
 
+## Instructions
 {{#each Instructions}}{{this}}
 {{/each}}
+
+## Conventions 
 {{Formatting}}
 {{Compaction}}
+
 ## Tree for `{{TreeLabel}}`
 
 Payload:

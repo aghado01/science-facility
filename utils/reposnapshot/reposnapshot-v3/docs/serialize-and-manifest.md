@@ -10,7 +10,7 @@ The export stages (`rs.core.serialize.psm1` and `rs.core.manifest.psm1`) write f
 
 ## Tree Manifest (`rs.core.manifest.psm1`)
 
-`New-Manifest` is a poor-man's template engine for the tree TOC (`_tree.md`). The document pattern is `templates/tree.template.md`; canned reader notices (format, offset unit, compaction, instructions, oversized reason, tree legend) are `templates/tree.notices.json`. The psm1 interpolates run facts into that pattern; it does not own the prose.
+`New-Manifest` is a poor-man's template engine for the tree TOC (`_tree.md`). The document pattern is `templates/tree.template.md`; canned reader notices (format, offset unit, formatting, compaction, instructions, oversized reason, tree legend) are `templates/tree.notices.json`. The psm1 interpolates run facts into that pattern; it does not own the prose.
 
 A shard file is the header row plus the records in it — the header is the local structure of those rows. Packing settings (Grouping, GroupSort, OrderStrict, quota, tolerance, shard count) are snapshot-global and live on the tree's summary line, not inside shards.
 
@@ -29,6 +29,7 @@ Explicitly declares all format parameters to downstream consumer models:
 - Offset units (UTF-8 bytes).
 - File encoding (`utf-8` — no BOM; LF record terminator).
 - Compaction notice (not a cipher key).
+- Formatting notice (row surface).
 - Byte-identical header row string.
 - Hazard disclosures for any shards exceeding standard quota limits.
 - Rendered ASCII directory tree and templated provenance.

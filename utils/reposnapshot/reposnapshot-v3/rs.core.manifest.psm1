@@ -371,6 +371,7 @@ function New-Manifest
         ColumnHeader     = [string]$Layout.HeaderRowText
         OffsetUnit       = [string]$notices['OffsetUnit']
         Encoding         = [string]$Receipt.Encoding
+        Formatting       = [string]$notices['Formatting']
         Compaction       = [string]$notices['Compaction']
         Hazards          = $hazards.ToArray()
         TocTree          = (Build-TocTree -RootName $rootName -Rows $rows.ToArray())

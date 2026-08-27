@@ -64,6 +64,7 @@
       "ColumnHeader":  { "type": "string",   "note": "tree row metadata legend AND the psr header row verbatim (layout.HeaderRowText)" },
       "OffsetUnit":    { "type": "string",   "note": "from templates/tree.notices.json — payload-manifest-ledger #8" },
       "Encoding":      { "from": "serialize.out.receipt", "note": "'utf-8'; template appends no-BOM / LF — ledger #17" },
+      "Formatting":    { "type": "string",   "note": "from templates/tree.notices.json — row surface (separators, newlines, indent, stripped controls)" },
       "Compaction":    { "type": "string",   "note": "from templates/tree.notices.json — payload-manifest-ledger #16" },
       "Hazards":       { "type": "hazard[]", "note": "one per oversized shard; empty when none — the reader's 'every shard ≤ ceiling except these'" },
       "TocTree":       { "type": "string",   "note": "rendered tree: name<TAB>shard_index<TAB>row_offset<TAB>row_meta_end<TAB>row_content_begin<TAB>row_content_end, from receipt rows" },

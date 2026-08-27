@@ -127,6 +127,7 @@ try
     Assert-True ($text.Contains('not a cipher key')) 'compaction is a notice, not a cipher key (payload-manifest #16, #10)'
     Assert-True ($text.Contains("Grouping: Flat") -and $text.Contains("Created: 20260824_120000") -and $text.Contains("Shards: $($plan.Plan.ShardCount)")) 'summary line composed from plan + RunContext, never preformatted upstream'
     Assert-True ($m.Model.ColumnHeader -eq $L.HeaderRowText -and $m.Model.OffsetUnit -like 'bytes*') 'model fields are checkable, not prose'
+    Assert-True (-not [string]::IsNullOrEmpty($m.Model.Formatting) -and $text.Contains($m.Model.Formatting)) 'Formatting is on the model and interpolated'
 
     # -----------------------------------------------------------------------
     Enter-Section '3. TocTree — receipt offsets verbatim, tree shape'

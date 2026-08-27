@@ -7,6 +7,10 @@ never as standing claims, and never hand-copied from prose.
 Rulings live in [decisions.md](decisions.md); what remains lives in
 [roadmap.md](roadmap.md).
 
+- **2026-08-27 — tree model `Formatting`**: `New-Manifest` copies
+  `tree.notices.json` `Formatting` onto the interpolation model (same
+  path as Compaction). `{{Formatting}}` in `tree.template.md` now fills.
+
 - **2026-08-27 — `rs.content_meta` `Digits`**: floating metrics (Entropy,
   WhitespaceRatio, CompressionRatio, LineStats.Mean/StdDev) round to
   `Config.Digits` (default **2** in `processors/configs/rs.content_meta.json`,

@@ -2,7 +2,7 @@
 
 {{SummaryLine}}
 Encoding: {{Encoding}}
-Preprocessing: {{}}
+Pre-processing: {{}}
 
 Payload:
 {{#each PayloadLines}}{{this}}
