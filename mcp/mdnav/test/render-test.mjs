@@ -93,7 +93,11 @@ try {
 
   ok("the read prefix presents it identically", emitted.read.includes(surface));
   ok("the batch prefix presents it identically", emitted.batchPrefixed.includes(surface));
-  ok("the batch comment tag presents it identically", emitted.batch.includes(surface));
+  // prefixFormat:false now means no provenance at all, not "a different
+  // provenance format" — an off switch that left an HTML comment carrying the
+  // address behind was only off for `read`.
+  ok("opting out of the frame leaves no provenance behind",
+    !emitted.batch.includes(surface) && !/D001|mdnav/.test(emitted.batch), emitted.batch);
   ok("the drift warning presents it identically", emitted.drift.includes(surface));
 
   const docSurface = "D001";

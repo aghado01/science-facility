@@ -15,6 +15,7 @@ const SUITES = [
   ["acceptance  (CLI — mdnav.mjs)", "acceptance.mjs"],
   ["engine      (MCP — src/engine.ts)", "engine-test.mjs"],
   ["journal     (MCP — ledger + formatting)", "journal-test.mjs"],
+  ["frame-matrix(MCP — ablation manipulation check)", "frame-matrix-test.mjs"],
   ["render      (MCP — what reaches the stream)", "render-test.mjs"],
 ];
 

@@ -43,11 +43,69 @@ export const EMPTY = "-";
 export const JOURNAL_HEADER =
   ["id", "ts", "op", "refs", "concept", "status", "anchors", "bytes", "body"].join(FIELD);
 
-/** Column header for prefix-formatted source chunks. */
-export const CHUNK_HEADER = ["address", "span", "content"].join(FIELD);
+/**
+ * How the frame is shaped. Set OUTSIDE the tool schemas, deliberately: tool
+ * descriptions are themselves part of the context stream, so a per-call
+ * parameter would leak the manipulation into the instructions and confound any
+ * study of it. Nothing an agent can see changes between settings — only what
+ * the tools emit.
+ *
+ * The factors nest the way the design does: with `frame` off there is nothing
+ * for the others to shape, and they go inert.
+ */
+export interface FrameConfig {
+  /** Emit a chunk frame at all. */
+  frame: boolean;
+  /** Document in its own field, rather than joined into one address. */
+  docColumn: boolean;
+  /** Operators isolated (` : `, ` @ `) rather than fused. Global, not frame-local. */
+  spaced: boolean;
+  /** Close a content block by repeating its address. */
+  close: boolean;
+  /** Carry the source byte span. */
+  span: boolean;
+}
 
-/** Same, for the batch reader, which carries a caller-supplied label. */
-export const BATCH_CHUNK_HEADER = ["address", "label", "span", "content"].join(FIELD);
+/** The four named address spellings are a 2x2 over placement and spacing. */
+const ADDRESS_MODES: Record<string, { docColumn: boolean; spaced: boolean }> = {
+  "full": { docColumn: false, spaced: true },          // D021 : H0006 @ e5f6
+  "columns": { docColumn: true, spaced: true },        // D021 | H0006 @ e5f6
+  "inner-fused": { docColumn: true, spaced: false },   // D021 | H0006@e5f6
+  "fused": { docColumn: false, spaced: false },        // D021:H0006@e5f6
+};
+
+function envFlag(name: string, dflt: boolean): boolean {
+  const v = (process.env[name] ?? "").trim().toLowerCase();
+  if (v === "off" || v === "0" || v === "false" || v === "no") return false;
+  if (v === "on" || v === "1" || v === "true" || v === "yes") return true;
+  return dflt;
+}
+
+export function frameConfig(): FrameConfig {
+  // MDNAV_PREFIX=off is the earlier spelling of MDNAV_FRAME=off; still honoured.
+  const legacyOff = (process.env["MDNAV_PREFIX"] ?? "").trim().toLowerCase() === "off";
+  const raw = (process.env["MDNAV_FRAME_ADDRESS"] ?? "").trim().toLowerCase();
+  // An unrecognised mode must not silently fuse — fall back to the default.
+  const mode = ADDRESS_MODES[raw] ?? ADDRESS_MODES["full"]!;
+
+  return {
+    frame: !legacyOff && envFlag("MDNAV_FRAME", true),
+    docColumn: mode.docColumn,
+    spaced: mode.spaced,
+    close: envFlag("MDNAV_FRAME_CLOSE", true),
+    span: envFlag("MDNAV_FRAME_SPAN", true),
+  };
+}
+
+/** Column header naming the fields the current configuration actually emits. */
+export function chunkHeader(withLabel = false): string {
+  const cfg = frameConfig();
+  const cols = cfg.docColumn ? ["doc", "anchor"] : ["address"];
+  if (withLabel) cols.push("label");
+  if (cfg.span) cols.push("span");
+  cols.push("content");
+  return cols.join(FIELD);
+}
 
 /**
  * The metadata prefix framing one materialized source chunk.
@@ -71,10 +129,18 @@ export function formatSourceChunkPrefix(
   span: ByteSpan,
   label?: string | undefined
 ): string {
-  const fields = [chunkAddress(docId, anchor)];
+  const cfg = frameConfig();
+  const fields = addressFields(docId, anchor, cfg);
   if (label !== undefined) fields.push(label || EMPTY);
-  fields.push(`${span[0]}${RANGE}${span[1]}`);
+  if (cfg.span) fields.push(`${span[0]}${RANGE}${span[1]}`);
   return `${fields.join(FIELD)}${FIELD.trimEnd()}`;
+}
+
+/** One field, or two, depending on where the document is placed. */
+function addressFields(docId: string, anchor: string, cfg: FrameConfig): string[] {
+  return cfg.docColumn
+    ? [docId, anchor ? formatAnchorString(anchor) : EMPTY]
+    : [chunkAddress(docId, anchor)];
 }
 
 function chunkAddress(docId: string, anchor: string): string {
@@ -95,11 +161,13 @@ function chunkAddress(docId: string, anchor: string): string {
  * redundancy is an attention argument, not a parsing one.
  */
 export function formatChunkClose(docId: string, anchor: string): string {
-  return `${FIELD.trimStart()}${chunkAddress(docId, anchor)}`;
+  const addr = addressFields(docId, anchor, frameConfig()).join(FIELD);
+  return `${FIELD.trimStart()}${addr}`;
 }
 
 /** A content block with its closing frame, on its own line and without padding it. */
 export function closeChunk(content: string, docId: string, anchor: string): string {
+  if (!frameConfig().close) return content;
   return `${content}${content.endsWith("\n") ? "" : "\n"}${formatChunkClose(docId, anchor)}`;
 }
 
@@ -138,6 +206,11 @@ export function parseAnchor(raw: string): ParsedAnchor {
  * `code:grassmann.py` → `code : grassmann.py`
  */
 export function formatAnchorString(anchor: string): string {
+  // Spacing is decided here, once, so every emitter agrees — an outline row and
+  // a chunk frame must present the same chunk as the same tokens, or the
+  // consistency the scheme is built on does not exist.
+  if (!frameConfig().spaced) return anchor.trim();
+
   const a = parseAnchor(anchor);
   let out = a.scope;
   if (a.unit !== undefined) out += `${SCOPE}${a.unit}`;

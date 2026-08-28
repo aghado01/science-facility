@@ -39,8 +39,8 @@ import {
   formatJournalReceipt,
   renderJournalTree,
   JOURNAL_HEADER,
-  CHUNK_HEADER,
-  BATCH_CHUNK_HEADER,
+  chunkHeader,
+  frameConfig,
   closeChunk,
   FIELD,
   RANGE,
@@ -250,7 +250,7 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
             const anchor = res.anchors[i] ?? res.anchors[0] ?? "";
             return `${formatSourceChunkPrefix(res.docId, anchor, span)}\n${closeChunk(chunk, res.docId, anchor)}`;
           });
-          body = `${CHUNK_HEADER}\n\n${blocks.join("\n\n")}`;
+          body = `${chunkHeader()}\n\n${blocks.join("\n\n")}`;
         }
 
         return {
@@ -279,19 +279,16 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
           strip: args.strip,
         });
 
-        // One labelling mechanism, not two: prefixFormat REPLACES the comment
-        // tag rather than stacking on it. The prefix carries strictly more —
-        // the resolved digest, the span, and the byte count.
+        // Framing off means NO provenance, here as anywhere else. This branch
+        // used to emit an HTML comment carrying the full address, so the
+        // "off" setting was only off for `read` — which would quietly
+        // contaminate the control arm of any study of the framing itself.
+        // The label rides in the frame, and so is surfaced only when there is
+        // one.
         const blocks = results.map((r) => {
-          if (prefixOn(args.prefixFormat)) {
-            const head = formatSourceChunkPrefix(r.docId, r.anchor || EMPTY, r.span ?? [0, 0], r.label ?? EMPTY);
-            return `${head}\n${closeChunk(r.text, r.docId, r.anchor || EMPTY)}`;
-          }
-          const cite = formatAnchorString(`${r.docId}:${r.anchor}`);
-          const tag = r.label
-            ? `<!-- mdnav ${cite} [${r.label}] -->`
-            : `<!-- mdnav ${cite} -->`;
-          return `${tag}\n\n${r.text}`;
+          if (!prefixOn(args.prefixFormat)) return r.text;
+          const head = formatSourceChunkPrefix(r.docId, r.anchor || EMPTY, r.span ?? [0, 0], r.label ?? EMPTY);
+          return `${head}\n${closeChunk(r.text, r.docId, r.anchor || EMPTY)}`;
         });
 
         const warnings = [
@@ -302,7 +299,7 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
           ),
         ];
         const warn = warnings.length > 0 ? `${warnings.map((w) => `mdnav: ${w}`).join("\n")}\n\n` : "";
-        const header = prefixOn(args.prefixFormat) ? `${BATCH_CHUNK_HEADER}\n\n` : "";
+        const header = prefixOn(args.prefixFormat) ? `${chunkHeader(true)}\n\n` : "";
 
         return {
           content: [
@@ -506,8 +503,7 @@ function renderInventory(docs: InventoryDoc[]): string {
  * MDNAV_PREFIX=off silences them for a whole session.
  */
 function prefixOn(argValue: boolean | undefined): boolean {
-  if ((process.env["MDNAV_PREFIX"] ?? "").toLowerCase() === "off") return false;
-  return argValue !== false;
+  return frameConfig().frame && argValue !== false;
 }
 
 /** Outer bound of a set of spans — used only when a span cannot be identified. */

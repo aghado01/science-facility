@@ -15,7 +15,8 @@
     "test:cli": "node test/acceptance.mjs",
     "test:engine": "node test/engine-test.mjs",
     "test:journal": "node test/journal-test.mjs",
-    "test:render": "node test/render-test.mjs"
+    "test:render": "node test/render-test.mjs",
+    "test:frames": "node test/frame-matrix-test.mjs"
   },
   "engines": {
     "node": ">=22"
