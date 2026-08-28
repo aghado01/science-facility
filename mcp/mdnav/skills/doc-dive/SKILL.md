@@ -67,7 +67,7 @@ Never dive blind into an unknown document:
 - `strip: "all"`, or name the species (`strip: ["data-uri"]`), to drop multi-kilobyte assets.
 
 ### 4. `SURFACE & ACCUMULATE` — Stateful Ledger Updates
-- **Anchored Evidence:** Every finding must reference `Dnnn:Hnnnn[@digest]`. Record it with `mdnav_journal_record` as you read, while the span is still in front of you.
+- **Anchored Evidence:** Every finding must reference its address, digest included. Record it with `mdnav_journal_record` as you read, while the span is still in front of you.
 - **Contextual Glue:** Write trails as causal prose embedding anchors (e.g., *“Proposed at D001:H0003; narrowed at D001:H0019 when edge case broke it; adopted at D002:H0007”*) rather than bare IDs or brittle dependency graphs.
 - **Preserve History:** Reversible updates only—never overwrite previous formulations in place. In the journal this is structural: a reversal is a new entry (`retract`, `supersede`) that re-derives the parent's status, and the parent's own record is never touched.
 
@@ -141,7 +141,8 @@ Operates on literal byte spans, either directly via **MCP Tools** (recommended f
 
 | Tool Call | Description & Usage |
 |---|---|
-| `mdnav_discover({ paths: ["./corpus"], recursive: true })` | Discovers, indexes, and caches documents. Returns the inventory with triage flags (below). Calling it again continues the current run rather than starting one — see [Runs](#runs-and-the-reading-record). |
+| **`mdnav_discover({ root: "./corpus" })`** | **Mount a corpus.** Indexes every Markdown file beneath the root in one call, addresses them by coordinate, reports paths relative to the root. Returns the inventory with triage flags (below). Calling it again continues the current run — see [Runs](#runs-and-the-reading-record). |
+| `mdnav_discover({ paths: [...] })` | The same for individual files or directories, when there is no single root. |
 | `mdnav_index({ docIds: ["D003"], refresh: true })` | Re-reports inventory rows for documents already indexed, without re-crawling. `refresh` forces a re-scan. |
 | `mdnav_profile({ docId: "D001" })` | Reports construct shares, median gaps, and $cv$ for delimiter identification. |
 | `mdnav_outline({ docId: "D001", depth: 2, comp: true })` | Hierarchical unit outline with sizes and construct composition tags (`[quote84 prose12]`). |
@@ -150,7 +151,7 @@ Operates on literal byte spans, either directly via **MCP Tools** (recommended f
 | **`mdnav_batch_read({ requests: [...] })`** | **Native multi-document batch reading** (e.g. read 20+ abstracts/theorems across papers in 1 RPC). |
 | `mdnav_coverage({ docIds: ["D001"], depth: 1 })` | Bytes read **and bytes cited**, with the read-not-cited / cited-not-read diagnostics. `byBreaks: true` scores against the segment basis. |
 | `mdnav_locate({ pattern: "keyword", docIds: ["D001"] })` | Fast regex/string search returning anchor lines without dumping full bodies. |
-| **`mdnav_journal_record({ op, body, concept?, refs?, anchors? })`** | **Append one observation/hypothesis/decision to the notebook.** Returns a compact receipt — never an echo. |
+| **`mdnav_journal_record({ op, body, concept?, refs?, anchors? })`** | **Append one observation/hypothesis/decision to the notebook.** Returns a compact receipt. |
 | `mdnav_journal_read({ concept?, status?, docId?, anchor?, digest?, op? })` | Ledger view, filtered. `status: "active"` lists what nothing has yet superseded; `anchor`/`digest` traverse the citation graph. |
 | `mdnav_journal_tree({ concept? })` | Lineage of ideas: what refined, superseded, adopted, or rejected what. |
 
@@ -161,51 +162,65 @@ Material arrives inside a frame — a metadata prefix, the content, then a close
 ```
 address | span | content
 
-D001 : H0002 @ d21b | 9 .. 60 |
+D0301 : H05 @ add7 | 9 .. 60 |
 ## Abstract
 
 A scale-calibrated geometric median.
-| D001 : H0002 @ d21b
+| D0301 : H05 @ add7
 ```
 
-` | ` separates **fields**; the operators join the components *within* one field — so the address is a single field, not three columns.
+` | ` separates fields. The operators join components within one field, so the address is one field. The close repeats the address, bracketing the content so every token inside has its anchor before and after.
 
-There is deliberately **no length field.** A length prefix delimits for something that reads N bytes, and nothing here does — the consumer is attention, which cannot count. Extent is already legible from the span, and an elision is already reported by its inline marker and the read's summary line.
-
-The close **repeats the address** rather than using a bare sigil, which buys a second thing: the content is bracketed by its own anchor, so every token inside has it both before *and* after. For a long block the opening frame is thousands of tokens behind by the time the end arrives.
-
-**Why it earns the characters.** Attention binds on token identity. `D001` here is the same token sequence as `D001` in an outline row 30k tokens back and in a journal citation later, so those mentions link to each other without you re-deriving the connection. Fused as `D001:H0002@d21b` the components merge with the punctuation and tokenize differently depending on the digits around them — the link then has to be *inferred* from string similarity rather than seen. And because the stream only ever moves forward, an unframed block has no recoverable end: the framing is what keeps material and metadata told apart further down.
+**Why it earns the characters.** Attention binds on token identity. `D0301` here is the same token sequence as `D0301` in an outline row 30k tokens back and in a journal citation later, so those mentions link to each other directly. The stream only moves forward, so the frame is what keeps material and metadata distinguishable further down.
 
 In practice:
 
 - **Quote anchors exactly as given.** A restyled citation loses the binding.
-- **One frame per span.** A multi-unit read frames each unit separately, never the outer bound — that would claim the gaps between them as read.
-- Pass anchors *back* compact (`D014:H0003@a1b2`); only the stream spaces them out.
+- **One frame per span.** A multi-unit read frames each unit separately.
+- Pass anchors back compact (`D014:H0003@a1b2`); the stream spaces them out.
 - `prefixFormat: false` per call, `MDNAV_PREFIX=off` per session.
 
-**Anchor families** — one shared address space, all four accepted by `read`:
+### Addressing
+
+An address is a coordinate. Both axes are measured from the material and padded to a fixed width, so every atom of a kind is the same length and shares a literal prefix with its neighbours.
+
+| Part | Scope | Reads as |
+|---|---|---|
+| `D0301` | corpus | group 3, document 1 — `D03xx` are all one directory |
+| `H05` | that document | heading 5 of a document with tens of headings |
+| `H007` | that document | heading 7 of a document with hundreds |
+| `@a1b2` | that heading | its content when you cited it |
+
+Width is itself signal: `H007` says the document has hundreds of headings without a lookup. A single-group corpus carries no group axis (`D01`). Input is tolerant — `H7`, `H07` and `H0007` all resolve to heading 7.
+
+**Anchor families,** one shared address space, all accepted by `read`:
 
 | Family | Minted by | Use when |
 |---|---|---|
-| `Hnnnn` | headings, always | The document has usable headings |
-| `H0000` | `PREAMBLE` (prose before the first heading) or `BODY` (no headings at all) | Bytes would otherwise be unreachable by anchor |
-| `Snnnn` | `outline({ byBreaks: true })` | Structure is carried by `---`, not headings |
-| `Wnnnn` | `outline({ windows: 4000 })` | Neither headings nor breaks give usable grain |
+| `Hnn` | headings, always | The document has usable headings |
+| `H00` | `PREAMBLE` (prose before the first heading) or `BODY` (no headings at all) | Bytes would otherwise be unreachable by anchor |
+| `Snn` | `outline({ byBreaks: true })` | Structure is carried by `---` |
+| `Wnn` | `outline({ windows: 4000 })` | Neither headings nor breaks give usable grain |
 
-**Two things the tools volunteer,** in-band, because stderr reaches the server log and not you:
+**Three things the tools volunteer,** in-band:
 
 - **A source that changed under you** — re-indexed and announced before the content. `mdnav_journal_read({ digest })` then lists which citations were pinned to the old version.
 - **What `strip` removed** — each span leaves a marker naming its kind and byte cost (`mdnav elided | data-uri | 4030 B`), plus a total. Re-read the same anchor without `strip` to get the bytes back.
+- **A stale citation, at write time** — `journal_record` resolves every `Dnn:Hnn@digest` anchor as you record it and reports drift then.
 
 ### Reading the Inventory
 
-`discover` and `index` report what a document *costs* to read, never what it means:
+`discover` and `index` report what a document costs to read:
 
 ```
+mount | D:\corpus\Bishop2006
+
 doc | bytes | h1/h2/.. | grain | spine | notes | path
-D001 | 9,091 B | 3 | 3/3/3~3.0K | 0.4% | embedded 8.8K (99%) breaks x2 (= h1-1) | .../chat.md
-D002 |    90 B | 1/1 | 1/2/2~90B | 8.9% | breaks x2 (not h1-1) setext? x2 frontmatter | .../paper.md
+D0101 | 1,489 B | 1/3 | 1/4/4~1.5K | 1.0% | crlf | CONTENTS.md
+D0303 | 176,641 B | 1/4/16/0/0/7 | 1/5/21~172.5K | — | setext? x1 crlf | Chapters/Chapter02.md
 ```
+
+The root is stated once; paths are relative to it.
 
 | Note | What it means | What to do |
 |---|---|---|
@@ -215,7 +230,7 @@ D002 |    90 B | 1/1 | 1/2/2~90B | 8.9% | breaks x2 (not h1-1) setext? x2 frontm
 | `breaks x2 (not h1-1)` | They disagree. **Neither is privileged** | Inspect both: `outline({ depth: 1 })` and `outline({ byBreaks: true })` |
 | `setext? x2` | Underlined headings the ATX scanner cannot see, so the real structure may be finer than `grain` suggests | Check with `marks`, or fall back to `byBreaks` / `windows` |
 | `frontmatter` · `bom` · `crlf` | Structural facts that mislead naive offset arithmetic | Nothing — mdnav already accounts for them |
-| `maxline 12K` | A very long line in an otherwise clean document: a blob, not prose | Expect an `unbroken` window there |
+| `maxline 12K` | A blob sits in an otherwise clean document | Expect an `unbroken` window there |
 
 ### Runs and the Reading Record
 
@@ -228,7 +243,7 @@ A **run** holds one investigation's artifacts under `<corpus>/.doc-dive/<stamp>/
 | `discover({ run: "<stamp>" })` | Attaches to an earlier run and restores its `reads.jsonl` — how you resume an investigation, or look at one you left behind. Does not move `LATEST`. |
 | `discover({ run: "latest" })` | The same, following the `LATEST` pointer. |
 
-**Document ids are assigned once per path** and never reassigned, so an anchor cited early still names the same document after the corpus grows.
+**Document ids are assigned once per path,** so an anchor cited early still names the same document after the corpus grows.
 
 Coverage is **not merged across runs**. If a corpus was read across two of them, attach to each in turn and read the figures separately.
 
