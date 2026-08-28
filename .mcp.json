@@ -38,6 +38,12 @@
         "NO_COLOR": "1",
         "NU_LOG_LEVEL": "warn"
       }
+    },
+    "mdnav": {
+      "command": "node",
+      "args": [
+        "./mcp/mdnav/src/index.ts"
+      ]
     }
   }
 }

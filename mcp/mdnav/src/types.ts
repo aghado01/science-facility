@@ -27,10 +27,29 @@ export interface BreakEntry {
 
 export interface WindowEntry {
   wid: string;           // e.g. "W0001"
+  title: string;
+  digest: string;        // 4-char hex, minted from sha256 + start
   start: number;
   end: number;
   bytes: number;
+  within?: string | undefined;
   unbroken?: boolean | undefined;
+}
+
+/**
+ * A resolved anchor target. Headings, thematic-break segments (Snnnn) and
+ * windows (Wnnnn) all resolve into this one shape, so `read` treats the three
+ * as a single address space — the same guarantee the CLI makes.
+ */
+export interface AnchorTarget {
+  hid: string;
+  level: number;
+  title: string;
+  digest: string;
+  headingStart: number;
+  bodyStart: number;
+  subtreeEnd: number;
+  synthetic?: boolean | undefined;
 }
 
 export interface NoiseEntry {
@@ -132,6 +151,63 @@ export interface DocumentCoverage {
   unreadAnchors: Array<{ anchor: string; bytes: number; title: string }>;
 }
 
+// ────────────────────────────────────────────────────────── Journal Ledger
+
+export type JournalOp = "propose" | "refine" | "supersede" | "reject" | "adopt" | "retract" | "note";
+
+export type JournalStatus = "active" | "refined" | "superseded" | "rejected" | "adopted" | "retracted";
+
+/**
+ * One append-only entry in the investigative notebook.
+ *
+ * `status` is NOT stored: it is derived from the ops of an entry's children at
+ * read time. The file stays a pure event log, so rehydrating it reproduces the
+ * live session exactly, and "preserve history — never overwrite in place" holds
+ * by construction rather than by discipline.
+ */
+export interface JournalEntry {
+  id: string;              // "N001", "N002", ...
+  ts: string;              // ISO-8601 UTC, directly comparable with ReadLedgerEntry.ts
+  op: JournalOp;
+  refs: string[];          // Causal parents. Plural: reconciling two lines of thought is a merge.
+  concept?: string | undefined;   // e.g. "C-001" or a topic tag
+  anchors: string[];       // e.g. ["D014:H0003@a1b2", "code:grassmann.py"]
+  bytes: number;           // Byte length of body
+  body: string;
+}
+
+/** A journal entry with its derived state attached. */
+export interface ResolvedJournalEntry extends JournalEntry {
+  status: JournalStatus;
+  children: string[];
+}
+
+export interface JournalRecordArgs {
+  op: JournalOp;
+  body: string;
+  concept?: string | undefined;
+  refs?: string[] | undefined;
+  anchors?: string[] | undefined;
+  workDir?: string | undefined;
+}
+
+export interface JournalReadArgs {
+  concept?: string | undefined;
+  status?: JournalStatus | undefined;
+  docId?: string | undefined;
+  anchor?: string | undefined;
+  digest?: string | undefined;
+  op?: JournalOp | undefined;
+  limit?: number | undefined;
+  rawJson?: boolean | undefined;
+  workDir?: string | undefined;
+}
+
+export interface JournalTreeArgs {
+  concept?: string | undefined;
+  workDir?: string | undefined;
+}
+
 // ────────────────────────────────────────────────────────── Tool Arguments
 
 export interface DiscoverArgs {
@@ -174,7 +250,29 @@ export interface ReadArgs {
   depth?: number | undefined;
   strip?: "all" | "none" | undefined;
   stripMatch?: string | undefined;
+  prefixFormat?: boolean | undefined;
   workDir?: string | undefined;
+}
+
+export interface ReadResult {
+  docId: string;
+  text: string;
+  bytes: number;
+  elidedBytes: number;
+  spans: ByteSpan[];
+  anchors: string[];
+  /** Digest-drift notices. Reported, never fatal — the bytes are still there. */
+  warnings: string[];
+}
+
+export interface BatchReadResult {
+  docId: string;
+  label?: string | undefined;
+  anchor: string;
+  span?: ByteSpan | undefined;
+  text: string;
+  bytes: number;
+  warnings: string[];
 }
 
 export interface BatchReadArgs {
@@ -189,6 +287,7 @@ export interface BatchReadArgs {
   }>;
   depth?: number | undefined;
   strip?: "all" | "none" | undefined;
+  prefixFormat?: boolean | undefined;
   workDir?: string | undefined;
 }
 
@@ -249,6 +348,7 @@ export const ReadSchema = z.object({
   depth: z.number().int().min(1).max(6).optional().describe("Depth grain context for the unit read"),
   strip: z.enum(["all", "none"]).optional().default("none").describe("Strip heavy binary noise (base64 PNGs, presigned URLs)"),
   stripMatch: z.string().optional().describe("Custom regex pattern to elide at read time"),
+  prefixFormat: z.boolean().optional().default(false).describe("Prepend a token-isolated provenance header: 'D023 | H0006@e5f6 | 8420 .. 9860 | 1440 |'"),
   workDir: z.string().optional().describe("Explicit work directory"),
 });
 
@@ -264,6 +364,7 @@ export const BatchReadSchema = z.object({
   })).describe("List of target sections to read across one or multiple documents"),
   depth: z.number().int().min(1).max(6).optional().default(2).describe("Default depth for unit extents"),
   strip: z.enum(["all", "none"]).optional().default("all").describe("Strip heavy binary noise (default: all)"),
+  prefixFormat: z.boolean().optional().default(false).describe("Head each block with a token-isolated provenance line instead of an HTML comment tag"),
   workDir: z.string().optional().describe("Explicit work directory"),
 });
 
@@ -279,5 +380,33 @@ export const LocateSchema = z.object({
   docIds: z.array(z.string()).optional().describe("Documents to search within (default: all)"),
   caseInsensitive: z.boolean().optional().default(false).describe("Case insensitive match (-i)"),
   max: z.number().int().positive().optional().default(50).describe("Maximum matches to return"),
+  workDir: z.string().optional().describe("Explicit work directory"),
+});
+
+export const JournalRecordSchema = z.object({
+  op: z.enum(["propose", "refine", "supersede", "reject", "adopt", "retract", "note"])
+    .describe("What this entry does to the record: propose | refine | supersede | reject | adopt | retract | note"),
+  body: z.string().describe("The observation, hypothesis, or decision text"),
+  concept: z.string().optional().describe("Concept or topic tag this entry belongs to (e.g. C-001)"),
+  refs: z.array(z.string()).optional().describe("Causal parent entry IDs (e.g. ['N001']). Two or more express a merge."),
+  anchors: z.array(z.string()).optional().describe("Evidence anchors: 'Dnnn:Hnnnn@digest' resolve and are digest-checked; any other form (e.g. 'code:file.py') is kept verbatim"),
+  workDir: z.string().optional().describe("Explicit work directory"),
+});
+
+export const JournalReadSchema = z.object({
+  concept: z.string().optional().describe("Filter to one concept tag"),
+  status: z.enum(["active", "refined", "superseded", "rejected", "adopted", "retracted"]).optional()
+    .describe("Filter by derived status — 'active' lists entries nothing has superseded"),
+  docId: z.string().optional().describe("Traverse by scope: every entry citing this document (or namespace, e.g. 'code')"),
+  anchor: z.string().optional().describe("Traverse by unit: 'D014:H0003' or bare 'H0003' matches every version cited, whatever the digest; add '@a1b2' to pin one version"),
+  digest: z.string().optional().describe("Traverse by content identity: every entry citing any chunk at this digest"),
+  op: z.enum(["propose", "refine", "supersede", "reject", "adopt", "retract", "note"]).optional().describe("Filter by op"),
+  limit: z.number().int().positive().optional().default(100).describe("Maximum entries to return (most recent kept)"),
+  rawJson: z.boolean().optional().default(false).describe("Return raw JSON records instead of the formatted ledger"),
+  workDir: z.string().optional().describe("Explicit work directory"),
+});
+
+export const JournalTreeSchema = z.object({
+  concept: z.string().optional().describe("Restrict the lineage forest to one concept tag"),
   workDir: z.string().optional().describe("Explicit work directory"),
 });

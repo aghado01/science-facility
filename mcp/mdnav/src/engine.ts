@@ -16,9 +16,17 @@ import type {
   ConstructRun,
   DocumentCoverage,
   ReadLedgerEntry,
-  HeadingEntry,
+  AnchorTarget,
+  ReadResult,
+  BatchReadResult,
+  JournalEntry,
+  ResolvedJournalEntry,
+  JournalStatus,
+  JournalRecordArgs,
+  JournalReadArgs,
 } from "./types.ts";
-import { scanDocument, stripNoise, profileDocument, extractMarks } from "./scanner.ts";
+import { scanDocument, stripNoise, profileDocument, extractMarks, computeWindows, digestOf } from "./scanner.ts";
+import { parseAnchor } from "./formatting.ts";
 
 export class MdnavEngine {
   private workDir: string | null = null;
@@ -26,6 +34,12 @@ export class MdnavEngine {
   private indices = new Map<string, DocumentIndex>();
   private sourceBuffers = new Map<string, Buffer>();
   private readsLedger: ReadLedgerEntry[] = [];
+
+  // The journal is a notebook, not a run artifact: it lives at the .doc-dive
+  // ROOT and outlives re-indexing, while reads.jsonl belongs to its stamped run.
+  private journalRoot: string | null = null;
+  private journalEntries: JournalEntry[] = [];
+  private journalLoaded = false;
 
   constructor(initialWorkDir?: string) {
     if (initialWorkDir) {
@@ -50,6 +64,15 @@ export class MdnavEngine {
     const runDir = join(root, stamp);
     mkdirSync(join(runDir, "documents"), { recursive: true });
     writeFileSync(join(root, "LATEST"), stamp, "utf8");
+
+    // Re-anchoring on a different corpus means a different notebook. Drop the
+    // cache so the next journal op rehydrates from the new root rather than
+    // minting ids on top of someone else's ledger.
+    if (this.journalRoot !== root) {
+      this.journalRoot = root;
+      this.journalEntries = [];
+      this.journalLoaded = false;
+    }
 
     this.workDir = runDir;
     return runDir;
@@ -149,25 +172,41 @@ export class MdnavEngine {
       windows?: number | undefined;
     } = {}
   ): Promise<OutlineUnit[]> {
-    const { depth = 1, within, comp = false, byBreaks = false } = options;
+    const { depth = 1, within, comp = false, byBreaks = false, windows } = options;
     const { docId, buf } = this.resolveDoc(docRef);
     const idx = this.getIndex(docId);
 
     const units: OutlineUnit[] = [];
 
+    // Windows are the last-resort partition for a document whose headings give
+    // no usable grain. They are minted onto the index here so that Wnnnn anchors
+    // resolve on the reads that follow.
+    if (windows !== undefined) {
+      const parent = within ? idx.headings.find((h) => h.hid === within) : undefined;
+      const wins = computeWindows(buf, idx, windows, parent);
+      idx.windows = wins;
+      this.persistIndex(docId, idx);
+      return wins.map((w) => ({
+        id: w.wid,
+        digest: w.digest,
+        title: w.unbroken ? `${w.title}  UNBROKEN — no line break to split on` : w.title,
+        unitBytes: w.bytes,
+      }));
+    }
+
     if (byBreaks) {
-      // Break partition
-      for (let i = 0; i < idx.breaks.length; i++) {
-        const cur = idx.breaks[i]!;
-        const nextStart = i + 1 < idx.breaks.length ? idx.breaks[i + 1]!.start : idx.bytes;
-        const spanBytes = nextStart - cur.start;
-        units.push({
-          id: cur.sid,
-          title: cur.label || `Segment ${i + 1}`,
-          unitBytes: spanBytes,
-        });
-      }
-      return units;
+      // Segments partition the whole document, not just the stretch after the
+      // first break — otherwise everything ahead of it is silently dropped.
+      const segs = this.segmentsOf(idx);
+      return segs.map((s, i) => {
+        const terminator = idx.breaks.find((b) => b.end === s.subtreeEnd);
+        return {
+          id: s.hid,
+          digest: s.digest,
+          title: terminator?.label || `SEGMENT ${i + 1}`,
+          unitBytes: s.subtreeEnd - s.headingStart,
+        };
+      });
     }
 
     // Heading Partition
@@ -240,38 +279,54 @@ export class MdnavEngine {
       strip?: "all" | "none" | undefined;
       stripMatch?: string | undefined;
     } = {}
-  ): Promise<{ text: string; bytes: number; elidedBytes: number }> {
+  ): Promise<ReadResult> {
     const { heading, headings, from, to, span, extent = "unit", depth = 1, strip = "none", stripMatch } = options;
     const { docId, buf } = this.resolveDoc(docRef);
     const idx = this.getIndex(docId);
 
     const spansToRead: ByteSpan[] = [];
+    const anchors: string[] = [];
+    const warnings: string[] = [];
+
+    const take = (spec: string): AnchorTarget => {
+      const { target, warning } = this.resolveAnchor(idx, spec);
+      if (warning) warnings.push(warning);
+      return target;
+    };
 
     if (span) {
+      if (span[1] <= span[0] || span[0] < 0 || span[1] > buf.length) {
+        throw new Error(`span ${span[0]}..${span[1]} is outside 0..${buf.length}`);
+      }
       spansToRead.push(span);
+      anchors.push(`@${span[0]}..${span[1]}`);
     } else if (headings && headings.length > 0) {
-      for (const hid of headings) {
-        const h = idx.headings.find((e) => e.hid === hid);
-        if (h) {
-          const s = this.computeHeadingSpan(idx, h, depth, extent);
-          spansToRead.push(s);
-        }
+      const targets = headings.map(take).sort((a, b) => a.headingStart - b.headingStart);
+      for (const t of targets) {
+        spansToRead.push(this.computeHeadingSpan(idx, t, depth, extent));
+        anchors.push(`${t.hid}@${t.digest}`);
       }
-    } else if (from && to) {
-      const hFrom = idx.headings.find((e) => e.hid === from);
-      const hTo = idx.headings.find((e) => e.hid === to);
-      if (hFrom && hTo) {
-        const sFrom = this.computeHeadingSpan(idx, hFrom, depth, extent);
-        const sTo = this.computeHeadingSpan(idx, hTo, depth, extent);
-        spansToRead.push([sFrom[0], Math.max(sFrom[1], sTo[1])]);
+    } else if (from) {
+      const a = take(from);
+      const b = to ? take(to) : a;
+      const [, endB] = this.computeHeadingSpan(idx, b, depth, extent);
+      if (endB <= a.headingStart) {
+        throw new Error(`"to" anchor ${b.hid} precedes "from" anchor ${a.hid}`);
       }
+      spansToRead.push([a.headingStart, endB]);
+      anchors.push(`${a.hid}@${a.digest}`, `${b.hid}@${b.digest}`);
     } else if (heading) {
-      const h = idx.headings.find((e) => e.hid === heading);
-      if (!h) throw new Error(`Heading ${heading} not found in ${docId}`);
-      spansToRead.push(this.computeHeadingSpan(idx, h, depth, extent));
+      const t = take(heading);
+      spansToRead.push(this.computeHeadingSpan(idx, t, depth, extent));
+      anchors.push(`${t.hid}@${t.digest}`);
     } else {
-      // Default: full document
-      spansToRead.push([0, buf.length]);
+      // Defaulting to the whole document would be the exact failure this tool
+      // exists to prevent. A headingless document is still addressable — the
+      // scanner mints H0000 (BODY) for it — so there is always a named way in.
+      throw new Error(
+        `read needs a selector: heading, headings, from/to, or span. ` +
+        `To read a whole document, address it as H0000 or give an explicit span.`
+      );
     }
 
     // Materialize spans
@@ -288,13 +343,18 @@ export class MdnavEngine {
       chunks.push(stripped.text);
     }
 
-    // Log to ledger
-    this.recordRead(docId, spansToRead, "heading", depth, totalRawBytes, totalElided);
+    const first = anchors[0] ?? "";
+    const basis = span ? "span" : /^S/i.test(first) ? "breaks" : /^W/i.test(first) ? "windows" : `d${depth}`;
+    this.recordRead(docId, spansToRead, basis, depth, totalRawBytes, totalElided);
 
     return {
+      docId,
       text: chunks.join("\n\n"),
       bytes: totalRawBytes,
       elidedBytes: totalElided,
+      spans: spansToRead,
+      anchors,
+      warnings,
     };
   }
 
@@ -311,9 +371,9 @@ export class MdnavEngine {
       label?: string | undefined;
     }>,
     options: { depth?: number | undefined; strip?: "all" | "none" | undefined } = {}
-  ): Promise<Array<{ docId: string; label?: string | undefined; anchor?: string | undefined; text: string; bytes: number }>> {
+  ): Promise<BatchReadResult[]> {
     const { depth = 2, strip = "all" } = options;
-    const results: Array<{ docId: string; label?: string | undefined; anchor?: string | undefined; text: string; bytes: number }> = [];
+    const results: BatchReadResult[] = [];
 
     for (const req of requests) {
       try {
@@ -327,20 +387,31 @@ export class MdnavEngine {
           strip,
         });
 
-        const anchor = req.heading ? `${req.docId}:${req.heading}` : req.span ? `${req.docId}:@${req.span[0]}..${req.span[1]}` : req.docId;
+        // Report the anchor that RESOLVED, digest included — that string is what
+        // a follow-up read takes verbatim.
+        const anchor = readResult.anchors[0] ?? readResult.docId;
+        const starts = readResult.spans.map((s) => s[0]);
+        const ends = readResult.spans.map((s) => s[1]);
+        const merged: ByteSpan | undefined =
+          starts.length > 0 ? [Math.min(...starts), Math.max(...ends)] : undefined;
+
         results.push({
-          docId: req.docId,
+          docId: readResult.docId,
           label: req.label,
           anchor,
+          span: merged,
           text: readResult.text,
           bytes: readResult.bytes,
+          warnings: readResult.warnings,
         });
       } catch (err: any) {
         results.push({
           docId: req.docId,
           label: req.label,
+          anchor: req.heading ?? req.from ?? "",
           text: `[Error reading ${req.docId}: ${err.message}]`,
           bytes: 0,
+          warnings: [],
         });
       }
     }
@@ -350,7 +421,7 @@ export class MdnavEngine {
 
   // ──────────────────────────────────────────────────────── Coverage
 
-  public async coverage(docIds?: string[] | undefined, depth = 1): Promise<DocumentCoverage[]> {
+  public async coverage(docIds?: string[] | undefined, depth = 1, byBreaks = false): Promise<DocumentCoverage[]> {
     const targetDocIds = docIds && docIds.length > 0 ? docIds : Array.from(this.indices.keys());
     const reports: DocumentCoverage[] = [];
 
@@ -358,43 +429,39 @@ export class MdnavEngine {
       const idx = this.getIndex(docId);
       const docReads = this.readsLedger.filter((r) => r.doc === docId);
 
-      // Merge read intervals
-      const intervals = docReads.flatMap((r) => r.spans).sort((a, b) => a[0] - b[0]);
+      // Merge read intervals ONCE, and settle both questions against the merged
+      // list: two adjacent reads that together cover a unit do cover it.
+      const sorted = docReads.flatMap((r) => r.spans).sort((a, b) => a[0] - b[0]);
+      const merged: ByteSpan[] = [];
+      for (const iv of sorted) {
+        const last = merged[merged.length - 1];
+        if (last && iv[0] <= last[1]) last[1] = Math.max(last[1], iv[1]);
+        else merged.push([iv[0], iv[1]]);
+      }
+
       let bytesRead = 0;
+      for (const [s, e] of merged) bytesRead += e - s;
       let elided = 0;
       docReads.forEach((r) => (elided += r.elidedBytes || 0));
 
-      if (intervals.length > 0) {
-        let curStart = intervals[0]![0];
-        let curEnd = intervals[0]![1];
-
-        for (let i = 1; i < intervals.length; i++) {
-          const next = intervals[i]!;
-          if (next[0] <= curEnd) {
-            curEnd = Math.max(curEnd, next[1]);
-          } else {
-            bytesRead += (curEnd - curStart);
-            curStart = next[0];
-            curEnd = next[1];
-          }
-        }
-        bytesRead += (curEnd - curStart);
-      }
-
-      // Check unread units at depth
+      // Unread units, against whichever basis the caller is working on.
       const unread: Array<{ anchor: string; bytes: number; title: string }> = [];
-      const activeHeadings = idx.headings.filter((h) => h.level <= depth);
+      const basis = byBreaks
+        ? this.segmentsOf(idx).map((s) => ({ hid: s.hid, title: s.title, start: s.headingStart, end: s.subtreeEnd }))
+        : ((): Array<{ hid: string; title: string; start: number; end: number }> => {
+            const active = idx.headings.filter((h) => h.level <= depth);
+            return active.map((h, i) => ({
+              hid: h.hid,
+              title: h.title,
+              start: h.headingStart,
+              end: i + 1 < active.length ? active[i + 1]!.headingStart : idx.bytes,
+            }));
+          })();
 
-      for (let i = 0; i < activeHeadings.length; i++) {
-        const cur = activeHeadings[i]!;
-        const nextStart = i + 1 < activeHeadings.length ? activeHeadings[i + 1]!.headingStart : idx.bytes;
-        const isRead = intervals.some(([s, e]) => s <= cur.headingStart && e >= nextStart);
+      for (const u of basis) {
+        const isRead = merged.some(([s, e]) => s <= u.start && e >= u.end);
         if (!isRead) {
-          unread.push({
-            anchor: `${docId}:${cur.hid}`,
-            bytes: nextStart - cur.headingStart,
-            title: cur.title,
-          });
+          unread.push({ anchor: `${docId}:${u.hid}`, bytes: u.end - u.start, title: u.title });
         }
       }
 
@@ -429,11 +496,17 @@ export class MdnavEngine {
       const { buf } = this.resolveDoc(docId);
       const idx = this.getIndex(docId);
       const text = buf.toString("utf8");
-      const lines = text.split(/\r?\n/);
+      // Split on LF only and keep any trailing CR on the line: a line's byte
+      // cost is then exactly its own length plus the one LF, whatever newline
+      // convention the document uses. Splitting on /\r?\n/ discards the CR and
+      // drifts the offset by one byte per line on CRLF sources — which silently
+      // produces a WRONG anchor, the one failure this tool must not have.
+      const lines = text.split("\n");
 
       let byteOffset = 0;
       for (let l = 0; l < lines.length; l++) {
-        const line = lines[l]!;
+        const raw = lines[l]!;
+        const line = raw.endsWith("\r") ? raw.slice(0, -1) : raw;
         if (regex.test(line)) {
           const parent = idx.headings.filter((h) => h.headingStart <= byteOffset).pop();
           const anchor = parent ? `${docId}:${parent.hid}@${parent.digest}` : docId;
@@ -445,11 +518,209 @@ export class MdnavEngine {
           });
           if (matches.length >= max) return matches;
         }
-        byteOffset += Buffer.byteLength(line, "utf8") + 1;
+        byteOffset += Buffer.byteLength(raw, "utf8") + 1;
       }
     }
 
     return matches;
+  }
+
+  // ──────────────────────────────────────────────────────── Journal Ledger
+
+  private ensureJournalRoot(explicit?: string | undefined): string {
+    if (explicit) {
+      const root = resolve(explicit);
+      if (this.journalRoot !== root) {
+        this.journalRoot = root;
+        this.journalEntries = [];
+        this.journalLoaded = false;
+      }
+    }
+    if (!this.journalRoot) {
+      const env = process.env["MDNAV_WORK_DIR"];
+      this.journalRoot = env ? resolve(env) : join(tmpdir(), "mdnav");
+    }
+    return this.journalRoot;
+  }
+
+  /** The notebook sits at the .doc-dive root, beside LATEST — not inside a run. */
+  public journalPath(explicit?: string | undefined): string {
+    return join(this.ensureJournalRoot(explicit), "journal.jsonl");
+  }
+
+  /**
+   * Rehydrate the ledger from disk before touching it.
+   *
+   * Ids are minted from what the FILE already holds, never from an in-memory
+   * counter: the notebook outlives the server process, and minting N001 on top
+   * of an existing N001 would make every `refs` pointer ambiguous.
+   */
+  private ensureJournalLoaded(explicit?: string | undefined): void {
+    const path = this.journalPath(explicit);
+    if (this.journalLoaded) return;
+
+    this.journalEntries = [];
+    if (existsSync(path)) {
+      for (const line of readFileSync(path, "utf8").split("\n")) {
+        const t = line.trim();
+        if (!t) continue;
+        try {
+          const rec = JSON.parse(t) as JournalEntry;
+          if (rec && typeof rec.id === "string") {
+            this.journalEntries.push({ ...rec, refs: rec.refs ?? [], anchors: rec.anchors ?? [] });
+          }
+        } catch {
+          // A torn or hand-edited line must not take the whole notebook down.
+        }
+      }
+    }
+    this.journalLoaded = true;
+  }
+
+  private mintJournalId(): string {
+    let max = 0;
+    for (const e of this.journalEntries) {
+      const m = /^N(\d+)$/.exec(e.id);
+      if (m) max = Math.max(max, Number(m[1]));
+    }
+    return `N${String(max + 1).padStart(3, "0")}`;
+  }
+
+  public recordJournal(args: JournalRecordArgs): { entry: JournalEntry; anchorWarnings: string[] } {
+    this.ensureJournalLoaded(args.workDir);
+
+    const refs = args.refs ?? [];
+    for (const r of refs) {
+      if (!this.journalEntries.some((e) => e.id === r)) {
+        throw new Error(`journal: ref ${r} does not exist — record the parent before referring to it`);
+      }
+    }
+
+    // Validate mdnav-shaped anchors against the live index. Anything else
+    // (`code:grassmann.py`, a url, a bare tag) is the reader's own vocabulary
+    // and is kept verbatim. A citation that is ALREADY stale should be said so
+    // at write time, while it is still cheap to fix.
+    const anchorWarnings: string[] = [];
+    const anchors = args.anchors ?? [];
+    for (const a of anchors) {
+      const m = /^(D\d+):([HSW]\d+)(?:@([0-9a-f]{4}))?$/i.exec(a.trim());
+      if (!m) continue;
+      const idx = this.indices.get(m[1]!.toUpperCase());
+      if (!idx) {
+        anchorWarnings.push(`anchor ${a} names ${m[1]}, which is not indexed in this session`);
+        continue;
+      }
+      try {
+        const { warning } = this.resolveAnchor(idx, m[3] ? `${m[2]}@${m[3]}` : `${m[2]}`);
+        if (warning) anchorWarnings.push(warning);
+      } catch (err: any) {
+        anchorWarnings.push(`anchor ${a}: ${err.message}`);
+      }
+    }
+
+    const entry: JournalEntry = {
+      id: this.mintJournalId(),
+      ts: new Date().toISOString(),
+      op: args.op,
+      refs,
+      concept: args.concept,
+      anchors,
+      bytes: Buffer.byteLength(args.body, "utf8"),
+      body: args.body,
+    };
+
+    this.journalEntries.push(entry);
+    const path = this.journalPath(args.workDir);
+    mkdirSync(dirname(path), { recursive: true });
+    appendFileSync(path, JSON.stringify(entry) + "\n", "utf8");
+
+    return { entry, anchorWarnings };
+  }
+
+  /**
+   * Every entry with its state attached.
+   *
+   * Status is DERIVED from the ops of an entry's children, never stored and
+   * never written back over a parent. That keeps the file a pure event log, so
+   * rehydrating it reproduces the live session exactly — and "preserve history,
+   * never overwrite in place" holds by construction rather than by discipline.
+   */
+  public resolveJournal(workDir?: string | undefined): ResolvedJournalEntry[] {
+    this.ensureJournalLoaded(workDir);
+
+    const byId = new Map<string, ResolvedJournalEntry>();
+    for (const e of this.journalEntries) {
+      byId.set(e.id, { ...e, status: "active", children: [] });
+    }
+
+    const VERDICT: Record<string, JournalStatus | undefined> = {
+      refine: "refined",
+      supersede: "superseded",
+      reject: "rejected",
+      adopt: "adopted",
+      retract: "retracted",
+    };
+    // A decisive verdict outranks a refinement; among equals the most recent
+    // child wins, which is why this walks the ledger in file order.
+    const RANK: Record<JournalStatus, number> = {
+      active: 0, refined: 1, superseded: 2, rejected: 3, adopted: 3, retracted: 3,
+    };
+
+    for (const e of this.journalEntries) {
+      const verdict = VERDICT[e.op];
+      for (const r of e.refs) {
+        const parent = byId.get(r);
+        if (!parent) continue;
+        parent.children.push(e.id);
+        if (verdict && RANK[verdict] >= RANK[parent.status]) parent.status = verdict;
+      }
+    }
+
+    return Array.from(byId.values());
+  }
+
+  public readJournal(args: JournalReadArgs): ResolvedJournalEntry[] {
+    let out = this.resolveJournal(args.workDir);
+
+    if (args.concept) out = out.filter((e) => e.concept === args.concept);
+    if (args.op) out = out.filter((e) => e.op === args.op);
+    if (args.status) out = out.filter((e) => e.status === args.status);
+
+    // Anchor filters join on COMPONENTS, not on string prefixes. Each component
+    // is an edge — document, chunk, content identity — and each has to be
+    // traversable on its own, or citations are only ever a leaf you can match
+    // whole.
+    const ci = (a?: string | undefined) => (a === undefined ? undefined : a.toUpperCase());
+
+    if (args.docId) {
+      const doc = ci(args.docId);
+      out = out.filter((e) => e.anchors.some((a) => ci(parseAnchor(a).scope) === doc));
+    }
+
+    if (args.anchor) {
+      const want = parseAnchor(args.anchor);
+      // A bare "H0003" names the unit; "D014:H0003" pins the scope as well.
+      const wantUnit = ci(want.unit ?? want.scope);
+      const wantScope = want.unit !== undefined ? ci(want.scope) : undefined;
+      out = out.filter((e) =>
+        e.anchors.some((a) => {
+          const p = parseAnchor(a);
+          if (ci(p.unit ?? p.scope) !== wantUnit) return false;
+          if (wantScope !== undefined && ci(p.scope) !== wantScope) return false;
+          // No digest asked for means every version of this chunk.
+          if (want.digest !== undefined && ci(p.digest) !== ci(want.digest)) return false;
+          return true;
+        })
+      );
+    }
+
+    if (args.digest) {
+      const dig = ci(args.digest);
+      out = out.filter((e) => e.anchors.some((a) => ci(parseAnchor(a).digest) === dig));
+    }
+
+    const limit = args.limit ?? 100;
+    return out.length > limit ? out.slice(out.length - limit) : out;
   }
 
   // ──────────────────────────────────────────────────────── Internal Helpers
@@ -485,15 +756,114 @@ export class MdnavEngine {
     return idx;
   }
 
-  private computeHeadingSpan(idx: DocumentIndex, h: HeadingEntry, depth: number, extent: "unit" | "subtree"): ByteSpan {
-    if (extent === "subtree") {
+  /**
+   * Resolve one anchor spec against the document's single shared address space.
+   *
+   * Accepts `Hnnnn`, `Dnnn:Hnnnn`, and either with an `@digest` suffix, plus the
+   * synthetic families: `H0000` (preamble/body), `Snnnn` (break segments) and
+   * `Wnnnn` (windows). A digest that no longer matches is REPORTED, not
+   * rejected — the bytes are still there; the reader needs to know the source
+   * moved under the citation, and needs to be told in-band to know it at all.
+   */
+  private resolveAnchor(idx: DocumentIndex, spec: string): { target: AnchorTarget; warning?: string | undefined } {
+    const [hidRaw = "", dig] = String(spec).trim().split("@");
+    const hid = hidRaw.includes(":") ? (hidRaw.split(":").pop() ?? hidRaw) : hidRaw;
+
+    const drift = (t: AnchorTarget, kind: string): string | undefined =>
+      dig && dig !== t.digest
+        ? `anchor ${idx.id}:${t.hid}@${dig} does not match the current ${kind} digest @${t.digest} — the source has changed under this anchor`
+        : undefined;
+
+    const h = idx.headings.find((x) => x.hid.toLowerCase() === hid.toLowerCase());
+    if (h) {
+      const target: AnchorTarget = {
+        hid: h.hid, level: h.level, title: h.title, digest: h.digest,
+        headingStart: h.headingStart, bodyStart: h.bodyStart, subtreeEnd: h.subtreeEnd,
+        synthetic: h.level === 0 ? true : undefined,
+      };
+      return { target, warning: drift(target, "heading") };
+    }
+
+    if (/^W\d+$/i.test(hid)) {
+      const w = (idx.windows ?? []).find((x) => x.wid.toLowerCase() === hid.toLowerCase());
+      if (!w) {
+        throw new Error(`${idx.id}: no anchor ${hid} — mint window anchors first with outline(windows: <size>)`);
+      }
+      const target: AnchorTarget = {
+        hid: w.wid, level: 0, title: w.title, digest: w.digest,
+        headingStart: w.start, bodyStart: w.start, subtreeEnd: w.end, synthetic: true,
+      };
+      return { target, warning: drift(target, "window") };
+    }
+
+    if (/^S\d+$/i.test(hid)) {
+      const s = this.segmentsOf(idx).find((x) => x.hid.toLowerCase() === hid.toLowerCase());
+      if (!s) {
+        throw new Error(`${idx.id}: no anchor ${hid} (document has ${idx.breaks.length} thematic break(s))`);
+      }
+      return { target: s, warning: drift(s, "segment") };
+    }
+
+    throw new Error(`${idx.id}: no anchor ${hid}`);
+  }
+
+  /**
+   * Thematic-break segments as anchor targets. Segments partition the WHOLE
+   * document: the first one starts at byte 0, so nothing ahead of the first
+   * break is dropped from a break-basis outline or coverage report.
+   */
+  private segmentsOf(idx: DocumentIndex): AnchorTarget[] {
+    const out: AnchorTarget[] = [];
+    let pos = 0;
+    let n = 1;
+    const push = (start: number, end: number) => {
+      out.push({
+        hid: `S${String(n++).padStart(4, "0")}`,
+        level: 0,
+        title: "SEGMENT",
+        digest: digestOf(`seg:${idx.sha256}:${start}`),
+        headingStart: start,
+        bodyStart: start,
+        subtreeEnd: end,
+        synthetic: true,
+      });
+    };
+    for (const b of idx.breaks) {
+      if (b.end > pos) { push(pos, b.end); pos = b.end; }
+    }
+    if (pos < idx.bytes) push(pos, idx.bytes);
+    return out;
+  }
+
+  private computeHeadingSpan(idx: DocumentIndex, h: AnchorTarget, depth: number, extent: "unit" | "subtree"): ByteSpan {
+    // A segment, a window, or a synthetic root IS its own unit — there is no
+    // depth ladder to walk for it.
+    if (h.synthetic || extent === "subtree") {
       return [h.headingStart, h.subtreeEnd];
     }
-    // Unit extent: until next active heading at depth
+
+    // Unit extent: until the next heading that is active at this depth.
     const active = idx.headings.filter((e) => e.level <= depth);
     const curIdx = active.findIndex((e) => e.hid === h.hid);
-    const nextStart = curIdx !== -1 && curIdx + 1 < active.length ? active[curIdx + 1]!.headingStart : idx.bytes;
+    if (curIdx === -1) {
+      // Silently running the span to EOF would hand back a unit that does not
+      // exist at the requested grain. Fail where the mistake was made.
+      throw new Error(
+        `${idx.id}:${h.hid} is a level-${h.level} heading and is not active at depth ${depth} — ` +
+        `raise depth to ${h.level}, or read it with extent "subtree"`
+      );
+    }
+    const nextStart = curIdx + 1 < active.length ? active[curIdx + 1]!.headingStart : idx.bytes;
     return [h.headingStart, nextStart];
+  }
+
+  private persistIndex(docId: string, idx: DocumentIndex): void {
+    if (!this.workDir) return;
+    try {
+      writeFileSync(join(this.workDir, "documents", `${docId}.index.json`), JSON.stringify(idx, null, 2), "utf8");
+    } catch {
+      // The index is a cache; failing to persist it must not fail the read.
+    }
   }
 
   private computeUnitComposition(buf: Buffer): string {

@@ -65,21 +65,43 @@ Never dive blind into an unknown document:
 - Strip multi-kilobyte embedded assets (PNGs, presigned URLs): `--strip all`.
 
 ### 4. `SURFACE & ACCUMULATE` — Stateful Ledger Updates
-- **Anchored Evidence:** Every finding must reference `Dnnn:Hnnnn[@digest]`.
+- **Anchored Evidence:** Every finding must reference `Dnnn:Hnnnn[@digest]`. Record it with `mdnav_journal_record` as you read, while the span is still in front of you.
 - **Contextual Glue:** Write trails as causal prose embedding anchors (e.g., *“Proposed at D001:H0003; narrowed at D001:H0019 when edge case broke it; adopted at D002:H0007”*) rather than bare IDs or brittle dependency graphs.
-- **Preserve History:** Reversible updates only—never overwrite previous formulations in place.
+- **Preserve History:** Reversible updates only—never overwrite previous formulations in place. In the journal this is structural: a reversal is a new entry (`retract`, `supersede`) that re-derives the parent's status, and the parent's own record is never touched.
 
 ### 5. `INTEGRATE & AUDIT` — Epoch Reviews
 At major boundaries (section, document, theme):
-- Rebuild concepts from the observation ledger, not from the previous summary.
-- **The Reverse Walk:** Walk surviving claims *backward* against their literal source anchors.
-- **Coverage Arithmetic:** Compare bytes read vs bytes cited to catch silent attrition and ungrounded salience capture.
+- Rebuild concepts from the observation ledger (`mdnav_journal_read({ concept })`), not from the previous summary.
+- **The Reverse Walk:** Walk surviving claims *backward* against their literal source anchors. Re-reading a cited anchor reports digest drift in-band, so Audit Check 4 answers itself.
+- **Coverage Arithmetic:** Compare bytes read (`mdnav_coverage`) vs bytes cited (`mdnav_journal_read({ docId })`) to catch silent attrition and ungrounded salience capture.
 
 ---
 
 ## 3. Analytical Notebook State
 
-Maintain a concise, durable working notebook (e.g. `review-state.md` or `.doc-dive/review-state.md`):
+State lives in two places, split by who does the work:
+
+| | Holds | Kept by |
+|---|---|---|
+| **Journal** (`.doc-dive/journal.jsonl`) | The evidence chain: proposals, refinements, adoptions, retractions, and the anchors backing each | `mdnav_journal_*` — ids, timestamps, parent linkage and status are minted for you |
+| **Notebook** (`review-state.md`) | The study contract, document inventory and working grain, causal glue prose, open questions | You, by hand |
+
+Record as you read, not at the end — an entry costs one small write and its receipt:
+
+```
+mdnav_journal_record({ op: "propose", concept: "C-001",
+                       body: "Median is scale-calibrated.",
+                       anchors: ["D001:H0003@a1b2"] })
+→ recorded | N001 (+28 B) | propose | - | C-001 | D001:H0003@a1b2
+
+mdnav_journal_record({ op: "refine", concept: "C-001", refs: ["N001"],
+                       body: "Only under bounded curvature — edge case at D001:H0019." })
+→ recorded | N002 (+52 B) | refine | N001 | C-001 | -
+```
+
+`N001` now reads as `refined` without anything being rewritten. See [state-and-audit.md](references/state-and-audit.md) §4 for the ops table and the derivation rule.
+
+The markdown notebook keeps what the journal deliberately does not:
 
 ```markdown
 # Study Contract & FRAME Parameters
@@ -97,14 +119,11 @@ Maintain a concise, durable working notebook (e.g. `review-state.md` or `.doc-di
 # Developing Concepts & Mechanisms
 ## C-001 — [Concept Name]
 - Current Formulation: ...
-- Development: Proposed at D001:H0002; refined at D001:H0014; grounded at D002:H0006.
-- History: [prior formulations preserved]
-- Anchors: D001:H0002@a1b2, D001:H0014@3c4d, D002:H0006@e5f6
+- Development: Proposed as a general principle; narrowed when multi-file exports broke the flat assumption; formalized and named in the methods section.
 - Counterevidence / Tensions: ...
-- Status: [active | refined | retracted | split -> C-001a, C-001b]
+- Split criterion (if split): ...
 
-# Proposal & Evidence Ledger
-- [P-001] D001:H0003: [One-line proposal description] | Status: [adopted | refined | superseded | rejected | open]
+*History, anchors, and status are not restated here — `mdnav_journal_read({ concept: "C-001" })` holds them, and `mdnav_journal_tree({ concept: "C-001" })` charts the lineage. Keeping one copy is what keeps them from disagreeing.*
 
 # Unresolved Questions & Contradictions
 - Q-001: ...
@@ -124,10 +143,28 @@ Operates on literal byte spans, either directly via **MCP Tools** (recommended f
 | `mdnav_profile({ docId: "D001" })` | Reports construct shares, median gaps, and $cv$ for delimiter identification. |
 | `mdnav_outline({ docId: "D001", depth: 2, comp: true })` | Hierarchical unit outline with sizes and construct composition tags (`[quote84 prose12]`). |
 | `mdnav_marks({ docId: "D001", kind: "blockquote" })` | Enumerates exact byte spans and previews of specific constructs. |
-| `mdnav_read({ docId: "D001", heading: "H0003", extent: "unit", strip: "all" })` | Reads literal Markdown span at exact depth/extent with optional binary noise stripping. |
+| `mdnav_read({ docId: "D001", heading: "H0003@a1b2", extent: "unit", strip: "all" })` | Reads literal Markdown span at exact depth/extent with optional binary noise stripping. Pass `prefixFormat: true` for a provenance header. |
 | **`mdnav_batch_read({ requests: [...] })`** | **Native multi-document batch reading** (e.g. read 20+ abstracts/theorems across papers in 1 RPC). |
-| `mdnav_coverage({ docIds: ["D001"], depth: 1 })` | Byte-exact read vs unread accounting and unread anchor listing. |
+| `mdnav_coverage({ docIds: ["D001"], depth: 1 })` | Byte-exact read vs unread accounting and unread anchor listing. `byBreaks: true` scores against the segment basis. |
 | `mdnav_locate({ pattern: "keyword", docIds: ["D001"] })` | Fast regex/string search returning anchor lines without dumping full bodies. |
+| **`mdnav_journal_record({ op, body, concept?, refs?, anchors? })`** | **Append one observation/hypothesis/decision to the notebook.** Returns a compact receipt — never an echo. |
+| `mdnav_journal_read({ concept?, status?, docId?, anchor?, digest?, op? })` | Ledger view, filtered. `status: "active"` lists what nothing has yet superseded; `anchor`/`digest` traverse the citation graph. |
+| `mdnav_journal_tree({ concept? })` | Lineage of ideas: what refined, superseded, adopted, or rejected what. |
+
+### Addressing
+
+Every anchor is `Dnnn:Hnnnn[@digest]`, and the space is shared across three families:
+
+| Family | Minted by | Use when |
+|---|---|---|
+| `Hnnnn` | headings, always | The document has usable headings |
+| `H0000` | `PREAMBLE` (prose before the first heading) or `BODY` (no headings at all) | Bytes would otherwise be unreachable by anchor |
+| `Snnnn` | `outline({ byBreaks: true })` | Structure is carried by `---`, not headings |
+| `Wnnnn` | `outline({ windows: 4000 })` | Neither headings nor breaks give usable grain |
+
+The `@digest` suffix an outline hands you is accepted verbatim by `read`. If the source has changed under it, the read still returns the bytes and **reports the drift in-band** — which is Audit Check 4 answered for free rather than deferred to the reverse walk.
+
+An anchor is a **path, not an identifier**: document, chunk, and the chunk's content identity when you cited it are three components, and each is separately traversable in the journal (`docId` / `anchor` / `digest`). Asking for `D014:H0003` finds every version anyone cited; asking for a superseded digest lists exactly the claims that now need re-walking. See [state-and-audit.md](references/state-and-audit.md) §4.
 
 ### CLI Equivalents
 
@@ -157,7 +194,8 @@ node mdnav.mjs coverage D001 [--depth 1]         # Byte-exact coverage & unread 
 | `62/219/221~3.29K` | Level-1 headings delimit records/turns | Outline `--depth 1`, read turns as units |
 | `1/83/141~918B` | H1 is a document title; structure starts at H2 | Outline `--depth 2`, descend selectively |
 | `1/1/38~746B` | Headings flattened/demoted upstream | Target `--depth 3` |
-| `1/1/1~6.57K` | No usable headings | Try `--by breaks`, fallback to `--windows 4000` |
+| `1/1/1~6.57K` | No usable headings | Try `byBreaks: true` (Snnnn), fallback to `windows: 4000` (Wnnnn) |
+| `0/0/0~4.3K` | No headings at all | The whole document is `H0000` (BODY); partition it with `windows` |
 | `15/15/15~1.14K` | Flat records with no nesting | Read at depth 1 |
 
 ---

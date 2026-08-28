@@ -69,7 +69,87 @@ A concept cannot be split without a distinguishing criterion sourced from a lite
 
 ---
 
-## 4. The Reverse Walk (Pre-Synthesis Audit)
+## 4. The Journal Ledger (`mdnav_journal_*`)
+
+Sections 1–3 describe bookkeeping the reader would otherwise do by hand in prose: minting ids, stamping time, threading parents, tracking which formulation is still live. That work is deterministic, it repeats on every entry, and it decides nothing about meaning — so it belongs in the utility. The **journal** is that machinery. What it never does is choose the `op`, write the `body`, or pick the anchors; those are the reasoning agent's.
+
+The notebook lives at `<corpus>/.doc-dive/journal.jsonl`. It sits at the **root**, beside `LATEST` — not inside a stamped run — so re-indexing the corpus never orphans it.
+
+### Ops and what they settle
+
+| Op | Meaning | Effect on the entries it refs |
+|---|---|---|
+| `propose` | Put a formulation on the record | — |
+| `refine` | Narrow or sharpen a parent | parent → `refined` |
+| `supersede` | Replace a parent outright | parent → `superseded` |
+| `adopt` | Take a formulation into the deliverable | parent → `adopted` |
+| `reject` | Rule a formulation out | parent → `rejected` |
+| `retract` | Withdraw your own earlier entry | parent → `retracted` |
+| `note` | Observation attached to nothing | — |
+
+`refs` is a **list**. One parent is the ordinary case; two or more express a *merge*, which is how two lines of thought get reconciled into one statement. Splits go the other way — several children naming the same parent.
+
+### Status is derived, never stored
+
+No entry's record is ever rewritten. An entry's status is computed from the ops of its children each time the ledger is read:
+
+- The file stays a pure event log, so rehydrating it reproduces the live session exactly.
+- "Preserve history — never overwrite in place" (§3) holds **by construction** rather than by discipline.
+- A decisive verdict outranks a refinement; among equals the most recent child wins.
+
+This is what makes §3's reverse moves computable rather than aspirational: un-adopting is a new entry, not an edit, and the prior formulation is still sitting there to restore.
+
+### The ledger line
+
+`mdnav_journal_read` renders nine fields, every structural mark isolated by one space on both sides so it tokenizes identically wherever it appears:
+
+```
+id | ts | op | refs | concept | status | anchors | bytes | body
+N003 | 20260828_194530Z | adopt | N002 | C-001 | active | D023 : H0006 @ e5f6 ; code : grassmann.py | 148 | Adopted for the tracker. \n \n See the method section.
+```
+
+Marks nest by rank: ` | ` separates fields, ` ; ` separates items within a field, and ` : ` / ` @ ` / ` .. ` separate the components of a single item.
+
+- `-` holds a field open when it has no value, so the column count never varies.
+- A body is flattened onto one line; each newline becomes an isolated `\n` mark. Body is the terminal field, so pipes inside it are left alone.
+- Timestamps are stored as ISO-8601 UTC — directly comparable with `reads.jsonl` — and rendered compact.
+
+### Anchors are paths, not identifiers
+
+`D023 : H0006 @ e5f6` is not one opaque id. It is a document, a chunk inside it, and that chunk's content identity **at the moment it was cited** — three components, each an edge in the corpus graph. Isolating them is what makes each traversable on its own:
+
+| Ask | Query | Edge traversed |
+|---|---|---|
+| Everything citing this document | `journal_read({ docId: "D023" })` | entry → document |
+| Every version of this chunk anyone cited | `journal_read({ anchor: "D023:H0006" })` | entry → chunk, digest-agnostic |
+| Only citations pinned to one version | `journal_read({ anchor: "D023:H0006@e5f6" })` | entry → chunk at version |
+| Everything cited at this content identity | `journal_read({ digest: "e5f6" })` | entry → version, across chunks |
+
+The last two are what turn Audit Check 4 into a query. When a chunk drifts, the citations still pinned to the **old** digest are exactly the claims that need re-walking — and you can list them without re-reading a byte. Fusing the anchor into one token would collapse the path to a leaf and put every one of these edges out of reach.
+
+Namespaces outside the corpus decompose identically: `code : grassmann.py` is scope `code`, unit `grassmann.py`, so `journal_read({ docId: "code" })` lists every entry grounded in source rather than in the documents.
+
+### Writes are acknowledged, not echoed
+
+`mdnav_journal_record` returns a receipt and nothing else:
+
+```
+recorded | N003 (+148 B) | adopt | N002 | C-001 | D023:H0006@e5f6 ; code:grassmann.py
+```
+
+You just wrote the body; being read it back doubles what the note cost. The receipt carries the minted id, the byte cost, and where the entry attached.
+
+### Anchors are checked at write time
+
+An anchor of the form `Dnnn:Hnnnn@digest` is resolved against the live index as it is recorded, and a digest that no longer matches is reported **then** — while the citation is still cheap to fix — rather than at the reverse walk, when it is not. Anything not of that shape (`code:grassmann.py`, a URL, a bare tag) is your own vocabulary and is kept verbatim. A `ref` to an entry that does not exist is refused outright.
+
+### What still belongs in the markdown notebook
+
+The journal holds the **evidence chain**. The study contract from `FRAME`, the document inventory and working grain, the causal glue prose of §2, and unresolved-question lists stay in `review-state.md` — they are framing and interpretation, not ledger entries.
+
+---
+
+## 5. The Reverse Walk (Pre-Synthesis Audit)
 
 Before producing a final deliverable or synthesis, walk every surviving claim **backward** against its supporting anchors.
 
@@ -92,9 +172,9 @@ For every claim surviving into the final deliverable:
 
 ---
 
-## 5. Computable Diagnostics: Read vs. Cited Bytes
+## 6. Computable Diagnostics: Read vs. Cited Bytes
 
-`mdnav` maintains an exact ledger of byte spans read (`reads.jsonl`), and the notebook maintains an exact ledger of anchors cited.
+`mdnav` maintains an exact ledger of byte spans read (`reads.jsonl`), and the journal (§4) maintains an exact ledger of anchors cited (`journal.jsonl`). Both halves of this arithmetic are now on disk in the same directory: `mdnav_coverage` reports the bytes read, and `mdnav_journal_read({ docId })` lists every entry citing that document.
 
 Comparing the set of bytes read against the set of bytes cited reveals structural reading defects:
 

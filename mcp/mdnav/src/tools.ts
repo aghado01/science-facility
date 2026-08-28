@@ -11,6 +11,10 @@ import {
   BatchReadSchema,
   CoverageSchema,
   LocateSchema,
+  JournalRecordSchema,
+  JournalReadSchema,
+  JournalTreeSchema,
+  type ByteSpan,
   type DiscoverArgs,
   type ProfileArgs,
   type OutlineArgs,
@@ -19,8 +23,21 @@ import {
   type BatchReadArgs,
   type CoverageArgs,
   type LocateArgs,
+  type JournalRecordArgs,
+  type JournalReadArgs,
+  type JournalTreeArgs,
 } from "./types.ts";
 import { MdnavEngine } from "./engine.ts";
+import {
+  formatSourceChunkPrefix,
+  formatJournalEntry,
+  formatJournalReceipt,
+  renderJournalTree,
+  JOURNAL_HEADER,
+  CHUNK_HEADER,
+  FIELD,
+  EMPTY,
+} from "./formatting.ts";
 
 export function registerMdnavTools(server: any, engine: MdnavEngine) {
   // 1. mdnav_discover
@@ -175,11 +192,18 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
           stripMatch: args.stripMatch,
         });
 
+        // Drift notices go in-band. On stderr they would reach the server log
+        // and never the reader, who is the one citing the anchor.
+        const warn = res.warnings.length > 0 ? `${res.warnings.map((w) => `mdnav: ${w}`).join("\n")}\n\n` : "";
+        const head = args.prefixFormat
+          ? `${CHUNK_HEADER}\n${formatSourceChunkPrefix(res.docId, res.anchors[0] ?? EMPTY, mergeSpans(res.spans), res.bytes)}\n`
+          : "";
+
         return {
           content: [
             {
               type: "text",
-              text: res.text,
+              text: `${warn}${head}${res.text}`,
             },
           ],
         };
@@ -201,16 +225,29 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
           strip: args.strip,
         });
 
+        // One labelling mechanism, not two: prefixFormat REPLACES the comment
+        // tag rather than stacking on it. The prefix carries strictly more —
+        // the resolved digest, the span, and the byte count.
         const blocks = results.map((r) => {
-          const tag = r.label ? `<!-- mdnav ${r.anchor} [${r.label}] -->` : `<!-- mdnav ${r.anchor} -->`;
+          if (args.prefixFormat) {
+            const head = `${formatSourceChunkPrefix(r.docId, r.anchor || EMPTY, r.span ?? [0, 0], r.bytes)}${FIELD}${r.label ?? EMPTY}`;
+            return `${head}\n${r.text}`;
+          }
+          const tag = r.label
+            ? `<!-- mdnav ${r.docId}:${r.anchor} [${r.label}] -->`
+            : `<!-- mdnav ${r.docId}:${r.anchor} -->`;
           return `${tag}\n\n${r.text}`;
         });
+
+        const warnings = results.flatMap((r) => r.warnings);
+        const warn = warnings.length > 0 ? `${warnings.map((w) => `mdnav: ${w}`).join("\n")}\n\n` : "";
+        const header = args.prefixFormat ? `${CHUNK_HEADER}${FIELD}label\n\n` : "";
 
         return {
           content: [
             {
               type: "text",
-              text: blocks.join("\n\n---\n\n"),
+              text: `${warn}${header}${blocks.join("\n\n---\n\n")}`,
             },
           ],
         };
@@ -227,7 +264,7 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
     CoverageSchema.shape,
     async (args: CoverageArgs) => {
       try {
-        const reports = await engine.coverage(args.docIds, args.depth);
+        const reports = await engine.coverage(args.docIds, args.depth, args.byBreaks);
         const lines: string[] = [];
 
         for (const rep of reports) {
@@ -283,6 +320,68 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
       }
     }
   );
+
+  // 9. mdnav_journal_record
+  server.tool(
+    "mdnav_journal_record",
+    "Append one observation, hypothesis, or decision to the investigative notebook, optionally linked to the entries it develops. Returns a compact receipt — never an echo of the body you just wrote.",
+    JournalRecordSchema.shape,
+    async (args: JournalRecordArgs) => {
+      try {
+        const { entry, anchorWarnings } = engine.recordJournal(args);
+        const warn = anchorWarnings.length > 0 ? `${anchorWarnings.map((w) => `mdnav: ${w}`).join("\n")}\n` : "";
+        return { content: [{ type: "text", text: `${warn}${formatJournalReceipt(entry)}` }] };
+      } catch (err: any) {
+        return { isError: true, content: [{ type: "text", text: `mdnav_journal_record error: ${err.message}` }] };
+      }
+    }
+  );
+
+  // 10. mdnav_journal_read
+  server.tool(
+    "mdnav_journal_read",
+    "Read back the notebook as a token-isolated ledger, filtered by concept, derived status, op, or citing document.",
+    JournalReadSchema.shape,
+    async (args: JournalReadArgs) => {
+      try {
+        const entries = engine.readJournal(args);
+        if (entries.length === 0) {
+          return { content: [{ type: "text", text: "No journal entries match those filters." }] };
+        }
+        const text = args.rawJson
+          ? JSON.stringify(entries, null, 2)
+          : [JOURNAL_HEADER, ...entries.map(formatJournalEntry)].join("\n");
+        return { content: [{ type: "text", text }] };
+      } catch (err: any) {
+        return { isError: true, content: [{ type: "text", text: `mdnav_journal_read error: ${err.message}` }] };
+      }
+    }
+  );
+
+  // 11. mdnav_journal_tree
+  server.tool(
+    "mdnav_journal_tree",
+    "Render the lineage of recorded ideas — what refined, superseded, adopted, or rejected what — with each entry's derived status.",
+    JournalTreeSchema.shape,
+    async (args: JournalTreeArgs) => {
+      try {
+        const all = engine.resolveJournal(args.workDir);
+        const scoped = args.concept ? all.filter((e) => e.concept === args.concept) : all;
+        if (scoped.length === 0) {
+          return { content: [{ type: "text", text: "No journal entries to chart." }] };
+        }
+        return { content: [{ type: "text", text: renderJournalTree(scoped) }] };
+      } catch (err: any) {
+        return { isError: true, content: [{ type: "text", text: `mdnav_journal_tree error: ${err.message}` }] };
+      }
+    }
+  );
+}
+
+/** Outer bound of a set of spans, for one provenance header over a multi-span read. */
+function mergeSpans(spans: ByteSpan[]): ByteSpan {
+  if (spans.length === 0) return [0, 0];
+  return [Math.min(...spans.map((s) => s[0])), Math.max(...spans.map((s) => s[1]))];
 }
 
 function fmtBytes(n: number): string {

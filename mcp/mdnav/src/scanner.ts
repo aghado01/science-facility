@@ -3,7 +3,7 @@
  */
 
 import { createHash } from "node:crypto";
-import type { HeadingEntry, BreakEntry, NoiseEntry, DocumentIndex, ProfileRow, ConstructRun } from "./types.ts";
+import type { HeadingEntry, BreakEntry, NoiseEntry, DocumentIndex, ProfileRow, ConstructRun, WindowEntry } from "./types.ts";
 
 const LF = 10, CR = 13;
 
@@ -157,9 +157,29 @@ export function scanDocument(buf: Buffer, options: ScanOptions): DocumentIndex {
     cur.subtreeEnd = nextSameOrHigher;
   }
 
-  // Count distribution
+  // Nothing may be silently dropped because a document lacks expected structure.
+  // A document with no headings still has an address (H0000 BODY), and prose
+  // sitting ahead of the first heading still has one (H0000 PREAMBLE). Without
+  // these, those bytes are unreachable by anchor and sit in the coverage
+  // denominator as permanently unread.
+  const firstStart = headings.length > 0 ? headings[0]!.headingStart : len;
+  const leading = buf.subarray(0, firstStart).toString("utf8").trim();
+  if (headings.length === 0) {
+    headings.push({
+      hid: "H0000", level: 0, title: "BODY", digest: digestOf("BODY"),
+      line: 1, headingStart: 0, bodyStart: 0, subtreeEnd: len,
+    });
+  } else if (firstStart > 0 && leading !== "") {
+    headings.unshift({
+      hid: "H0000", level: 0, title: "PREAMBLE", digest: digestOf("PREAMBLE"),
+      line: 1, headingStart: 0, bodyStart: 0, subtreeEnd: firstStart,
+    });
+  }
+
+  // Count distribution — level 0 is synthetic and belongs to no depth band.
   const counts = [0, 0, 0, 0, 0, 0];
   for (const h of headings) {
+    if (h.level < 1) continue;
     const idx = h.level - 1;
     counts[idx] = (counts[idx] ?? 0) + 1;
   }
@@ -195,6 +215,62 @@ export function scanDocument(buf: Buffer, options: ScanOptions): DocumentIndex {
     setextSuspects: setextSuspects.length > 0 ? setextSuspects : undefined,
     frontmatter,
   };
+}
+
+/**
+ * Partition a document (or one subtree of it) into ~`size` byte windows.
+ *
+ * Window boundaries ALWAYS fall after a newline. Any prose document has line
+ * breaks, so a stretch with none is not prose — it is a blob (base64, minified
+ * JSON, a data URI). Slicing a blob at an arbitrary offset would manufacture
+ * fragments that mean nothing; emitting it whole reports what is actually there
+ * and lets the reader skip it. Prefer a paragraph break within slack, else take
+ * the next line break, however far — and flag the result as `unbroken`.
+ */
+export function computeWindows(
+  buf: Buffer,
+  idx: DocumentIndex,
+  size: number,
+  within?: HeadingEntry | undefined
+): WindowEntry[] {
+  const lo = within ? within.headingStart : 0;
+  const hi = within ? within.subtreeEnd : idx.bytes;
+
+  const boundary = (from: number): number => {
+    const target = Math.min(from + size, hi);
+    if (target >= hi) return hi;
+
+    const slack = Math.floor(size / 2);
+    const a = Math.max(from + 1, target - slack);
+    const b = Math.min(hi, target + slack);
+    const near = buf.subarray(a, b);
+
+    let rel = near.indexOf("\n\n");
+    if (rel === -1) rel = near.indexOf("\r\n\r\n");
+    if (rel !== -1) return a + rel + (near[rel] === CR ? 4 : 2);
+
+    const nl = buf.indexOf(LF, target);
+    return nl === -1 || nl + 1 >= hi ? hi : nl + 1;
+  };
+
+  const windows: WindowEntry[] = [];
+  for (let pos = lo, n = 1; pos < hi; n++) {
+    const end = boundary(pos);
+    if (end <= pos) break;
+    windows.push({
+      wid: `W${String(n).padStart(4, "0")}`,
+      title: `WINDOW ${n}`,
+      digest: digestOf(`${idx.sha256}:${pos}`),
+      start: pos,
+      end,
+      bytes: end - pos,
+      within: within ? within.hid : undefined,
+      unbroken: end - pos > size * 2 ? true : undefined,
+    });
+    pos = end;
+  }
+
+  return windows;
 }
 
 function scanNoise(buf: Buffer): NoiseEntry[] {

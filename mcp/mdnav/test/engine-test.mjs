@@ -1,98 +1,261 @@
 /**
- * Integration verification for MdnavEngine.
+ * Engine suite for MdnavEngine — the MCP's own code path.
+ *
+ * test/acceptance.mjs spawns the mdnav.mjs CLI and never touches src/, so it
+ * cannot fail because of anything in here. This is the suite that covers the
+ * engine, and the load-bearing check is `partition`: reading every unit at a
+ * given depth and concatenating must reproduce the source byte-for-byte. That
+ * one check covers completeness, non-overlap, byte fidelity, and preservation
+ * of CRLF / multibyte / fenced / long-line content.
  */
 
-import assert from "node:assert";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { writeFileSync, mkdirSync, rmSync } from "node:fs";
+import { writeFileSync, mkdirSync, rmSync, readFileSync } from "node:fs";
 
-// Import engine from src
 import { MdnavEngine } from "../src/engine.ts";
 
-const testDir = join(tmpdir(), "mdnav-engine-test-" + Date.now());
+let pass = 0, fail = 0;
+const ok = (name, cond, detail) => {
+  if (cond) { pass++; process.stdout.write(`  ok   ${name}\n`); }
+  else { fail++; process.stdout.write(`  FAIL ${name}${detail ? `\n       ${detail}` : ""}\n`); }
+};
+const eq = (name, a, b) => ok(name, a === b, `expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`);
+async function throws(name, fn, match) {
+  try { await fn(); ok(name, false, "expected a throw, got a value"); }
+  catch (err) { ok(name, !match || match.test(err.message), `message was: ${err.message}`); }
+}
+
+const testDir = join(tmpdir(), "mdnav-engine-test-" + process.pid);
+const workDir = join(tmpdir(), "mdnav-engine-wd-" + process.pid);
 mkdirSync(testDir, { recursive: true });
 
 try {
-  // 1. Create sample markdown files
+  // ───────────────────────────────────────────────────────────────── fixtures
+
+  const paper1 = [
+    "# Geometric Medians on Riemannian Manifolds",
+    "",
+    "## Abstract",
+    "This paper introduces a scale-calibrated geometric median.",
+    "",
+    "## 1. Introduction",
+    "High dimensional representations often lie on submanifolds.",
+    "",
+    "### 1.1 Background",
+    "Riemannian gradient descent converges under mild curvature conditions.",
+    "",
+    "## 2. Main Theorem",
+    "Theorem 1 states that the breakdown point is 0.5.",
+    "",
+  ].join("\n");
+
+  const paper2 = [
+    "# Subspace Tracking",
+    "",
+    "## Abstract",
+    "We study principal angles and Grassmannian distance metrics.",
+    "",
+    "## 1. Methods",
+    "Using horizontal tangent lifts for geodesics.",
+    "",
+  ].join("\n");
+
+  // Exercises the partition invariant against everything that could break it:
+  // leading prose with no heading of its own, multibyte, a fence whose content
+  // looks like a heading, a long unbroken line, and a thematic break.
+  const gnarly = [
+    "Leading prose that belongs to no heading — a résumé of what follows.",
+    "",
+    "# Tïtle with ünicode",
+    "",
+    "Body text.",
+    "",
+    "```",
+    "# this is NOT a heading, it is inside a fence",
+    "```",
+    "",
+    "---",
+    "",
+    "## After the break",
+    "",
+    "x".repeat(3000),
+    "",
+    "$$\\int_0^1 f(x)\\,dx = \\frac{1}{2}$$",
+    "",
+  ].join("\n");
+
   const doc1 = join(testDir, "paper1.md");
-  writeFileSync(
-    doc1,
-    `# Geometric Medians on Riemannian Manifolds
-
-## Abstract
-This paper introduces a scale-calibrated geometric median.
-
-## 1. Introduction
-High dimensional representations often lie on submanifolds.
-
-### 1.1 Background
-Riemannian gradient descent converges under mild curvature conditions.
-
-## 2. Main Theorem
-Theorem 1 states that the breakdown point is 0.5.
-`,
-    "utf8"
-  );
-
   const doc2 = join(testDir, "paper2.md");
-  writeFileSync(
-    doc2,
-    `# Subspace Tracking
+  const doc3 = join(testDir, "gnarly.md");
+  const doc4 = join(testDir, "crlf.md");
+  const doc5 = join(testDir, "headless.md");
 
-## Abstract
-We study principal angles and Grassmannian distance metrics.
-
-## 1. Methods
-Using horizontal tangent lifts for geodesics.
-`,
-    "utf8"
-  );
+  writeFileSync(doc1, paper1, "utf8");
+  writeFileSync(doc2, paper2, "utf8");
+  writeFileSync(doc3, gnarly, "utf8");
+  writeFileSync(doc4, gnarly.replace(/\n/g, "\r\n"), "utf8");
+  writeFileSync(doc5, "just prose with no headings at all\n".repeat(200), "utf8");
 
   const engine = new MdnavEngine();
+  const inv = await engine.discover([testDir], { glob: "*.md", workDir });
+  const id = (name) => inv.docs.find((d) => d.name === name).id;
+  const [P1, P2, GNARLY, CRLF, HEADLESS] = [
+    id("paper1.md"), id("paper2.md"), id("gnarly.md"), id("crlf.md"), id("headless.md"),
+  ];
 
-  // Test 1: Discover
-  const inv = await engine.discover([testDir], { glob: "*.md" });
-  assert.strictEqual(inv.docs.length, 2, "Should discover 2 documents");
-  console.log("✓ discover passed: found 2 documents");
+  // ────────────────────────────────────────────────────────────────── the basics
 
-  // Test 2: Profile
-  const profile = await engine.profile("D001");
-  assert(profile.length > 0, "Profile should return construct rows");
-  console.log("✓ profile passed: found constructs:", profile.map((p) => p.construct).join(", "));
+  process.stdout.write("\nbasics\n");
+  eq("discover indexes every document", inv.docs.length, 5);
+  ok("profile returns construct rows", (await engine.profile(P1)).length > 0);
 
-  // Test 3: Outline
-  const outline = await engine.outline("D001", { depth: 2 });
-  assert.strictEqual(outline.length, 4, "Outline depth 2 should return 4 units");
-  console.log("✓ outline passed: units:", outline.map((u) => u.title).join(" | "));
+  const outline = await engine.outline(P1, { depth: 2 });
+  eq("outline at depth 2 returns the active units", outline.length, 4);
+  ok("outline carries digests", outline.every((u) => /^[0-9a-f]{4}$/.test(u.digest)));
 
-  // Test 4: Read Heading Unit
-  const readRes = await engine.read("D001", { heading: "H0002" });
-  assert(readRes.text.includes("This paper introduces a scale-calibrated"), "Read should contain abstract body");
-  console.log("✓ read passed");
+  const abstract = await engine.read(P1, { heading: "H0002", depth: 2 });
+  ok("read returns the unit body", abstract.text.includes("scale-calibrated"));
+  ok("read stops at the next active heading", !abstract.text.includes("Introduction"));
 
-  // Test 5: Batch Read across multiple documents
-  const batchRes = await engine.batchRead([
-    { docId: "D001", heading: "H0002", label: "Paper 1 Abstract" },
-    { docId: "D002", heading: "H0002", label: "Paper 2 Abstract" },
+  const batch = await engine.batchRead([
+    { docId: P1, heading: "H0002", label: "Paper 1 Abstract" },
+    { docId: P2, heading: "H0002", label: "Paper 2 Abstract" },
   ]);
-  assert.strictEqual(batchRes.length, 2, "Batch read should return 2 entries");
-  assert(batchRes[0].text.includes("scale-calibrated"), "Paper 1 abstract text should match");
-  assert(batchRes[1].text.includes("Grassmannian"), "Paper 2 abstract text should match");
-  console.log("✓ batchRead passed across multiple documents!");
+  eq("batchRead returns one result per request", batch.length, 2);
+  ok("batchRead crosses documents", batch[0].text.includes("scale-calibrated") && batch[1].text.includes("Grassmannian"));
+  ok("batchRead reports the resolved anchor with its digest", /^H\d{4}@[0-9a-f]{4}$/.test(batch[0].anchor));
 
-  // Test 6: Coverage
-  const cov = await engine.coverage(["D001"]);
-  assert(cov[0].bytesRead > 0, "Coverage should record reads");
-  console.log(`✓ coverage passed: ${cov[0].percent}% read`);
-
-  // Test 7: Locate
   const hits = await engine.locate("breakdown point");
-  assert.strictEqual(hits.length, 1, "Locate should find 1 hit");
-  assert.strictEqual(hits[0].docId, "D001");
-  console.log("✓ locate passed:", hits[0]);
+  eq("locate finds the line", hits.length, 1);
+  eq("locate attributes it to the right document", hits[0].docId, P1);
 
-  console.log("\nALL ENGINE TESTS PASSED!");
+  // ───────────────────────────────────────────────────── the partition invariant
+
+  process.stdout.write("\npartition\n");
+  for (const [name, docId] of [["paper1", P1], ["gnarly", GNARLY], ["crlf", CRLF], ["headless", HEADLESS]]) {
+    for (const depth of [1, 2, 3]) {
+      const units = await engine.outline(docId, { depth });
+      const parts = [];
+      for (const u of units) {
+        const r = await engine.read(docId, { heading: u.id, depth, extent: "unit" });
+        parts.push(r.text);
+      }
+      const source = readFileSync(inv.docs.find((d) => d.id === docId).path, "utf8");
+      ok(
+        `${name} at depth ${depth}: units concatenate back to the source`,
+        parts.join("") === source,
+        `rebuilt ${parts.join("").length} chars from ${units.length} unit(s), source is ${source.length}`
+      );
+    }
+  }
+
+  // ────────────────────────────────────────────────────── unheaded bytes (H0000)
+
+  process.stdout.write("\nunheaded bytes are still addressable\n");
+  const gOutline = await engine.outline(GNARLY, { depth: 1 });
+  eq("prose ahead of the first heading gets H0000", gOutline[0].id, "H0000");
+  eq("and is titled PREAMBLE", gOutline[0].title, "PREAMBLE");
+  const preamble = await engine.read(GNARLY, { heading: "H0000" });
+  ok("H0000 reads the preamble", preamble.text.includes("belongs to no heading"));
+  ok("H0000 stops at the first real heading", !preamble.text.includes("Tïtle"));
+
+  const hOutline = await engine.outline(HEADLESS, { depth: 1 });
+  eq("a document with no headings gets exactly one unit", hOutline.length, 1);
+  eq("titled BODY", hOutline[0].title, "BODY");
+  const whole = await engine.read(HEADLESS, { heading: "H0000" });
+  eq("H0000 BODY spans the whole document", whole.bytes, inv.docs.find((d) => d.id === HEADLESS).bytes);
+
+  // ─────────────────────────────────────────────────────────── digest anchors
+
+  process.stdout.write("\ndigest anchors round-trip\n");
+  const unit = (await engine.outline(P1, { depth: 2 }))[1];
+  const fused = `${unit.id}@${unit.digest}`;
+  const viaDigest = await engine.read(P1, { heading: fused, depth: 2 });
+  ok("an anchor emitted by outline is accepted by read", viaDigest.text.includes("scale-calibrated"));
+  eq("and resolves without complaint", viaDigest.warnings.length, 0);
+  ok("read echoes the anchor in round-trippable form", viaDigest.anchors[0] === fused);
+
+  const qualified = await engine.read(P1, { heading: `${P1}:${fused}`, depth: 2 });
+  ok("a document-qualified anchor resolves too", qualified.text.includes("scale-calibrated"));
+
+  const drifted = await engine.read(P1, { heading: `${unit.id}@dead`, depth: 2 });
+  eq("a stale digest still returns the bytes", drifted.text.includes("scale-calibrated"), true);
+  ok("but reports the drift", drifted.warnings.some((w) => /has changed under this anchor/.test(w)));
+
+  // ─────────────────────────────────────────────────────────────────── windows
+
+  process.stdout.write("\nwindows\n");
+  const wins = await engine.outline(HEADLESS, { windows: 1000 });
+  ok("a headingless document partitions into windows", wins.length > 1);
+  ok("windows carry digests", wins.every((w) => /^[0-9a-f]{4}$/.test(w.digest)));
+  const w2 = await engine.read(HEADLESS, { heading: wins[1].id });
+  eq("a window anchor resolves to its exact bytes", w2.bytes, wins[1].unitBytes);
+  const wsum = wins.reduce((a, w) => a + w.unitBytes, 0);
+  eq("windows tile the whole document", wsum, inv.docs.find((d) => d.id === HEADLESS).bytes);
+
+  // ──────────────────────────────────────────────────── break-basis addressing
+
+  process.stdout.write("\nthematic breaks\n");
+  const segs = await engine.outline(GNARLY, { byBreaks: true });
+  ok("segments partition from byte 0", segs.length >= 2);
+  const segSum = segs.reduce((a, s) => a + s.unitBytes, 0);
+  eq("segments tile the whole document", segSum, inv.docs.find((d) => d.id === GNARLY).bytes);
+  const s1 = await engine.read(GNARLY, { heading: segs[0].id });
+  eq("a segment anchor resolves to its exact bytes", s1.bytes, segs[0].unitBytes);
+
+  // ────────────────────────────────────────────────────────── CRLF anchoring
+
+  process.stdout.write("\nCRLF sources anchor identically\n");
+  const lfHit = (await engine.locate("After the break", [GNARLY]))[0];
+  const crlfHit = (await engine.locate("After the break", [CRLF]))[0];
+  ok("a CRLF twin resolves to the same heading as its LF original",
+    lfHit.anchor.split(":")[1] === crlfHit.anchor.split(":")[1],
+    `LF ${lfHit.anchor} vs CRLF ${crlfHit.anchor}`);
+  eq("and to the same line number", lfHit.line, crlfHit.line);
+
+  // ──────────────────────────────────────────────────────────── loud failures
+
+  process.stdout.write("\nfailures are loud\n");
+  await throws("read with no selector refuses", () => engine.read(P1, {}), /needs a selector/);
+  await throws("an inactive heading read as a unit refuses",
+    () => engine.read(P1, { heading: "H0004", depth: 1 }), /not active at depth 1/);
+  await throws("an unknown anchor refuses", () => engine.read(P1, { heading: "H9999" }), /no anchor/);
+  await throws("a span outside the document refuses",
+    () => engine.read(P1, { span: [0, 10 ** 9] }), /outside/);
+  await throws("a window anchor with no windows minted refuses",
+    () => engine.read(P1, { heading: "W0001" }), /mint window anchors first/);
+  const subtree = await engine.read(P1, { heading: "H0004", depth: 1, extent: "subtree" });
+  ok("but the same heading reads fine as a subtree", subtree.text.includes("Background"));
+
+  // ────────────────────────────────────────────────────────────────── coverage
+
+  process.stdout.write("\ncoverage\n");
+  const fresh = new MdnavEngine();
+  await fresh.discover([doc1], { workDir: join(workDir, "cov") });
+  const covId = "D001";
+  const before = (await fresh.coverage([covId], 2))[0];
+  eq("nothing read yet", before.bytesRead, 0);
+
+  // Two adjacent reads that together cover one unit must count as covering it.
+  const full = await fresh.outline(covId, { depth: 1 });
+  const half = Math.floor(full[0].unitBytes / 2);
+  await fresh.read(covId, { span: [0, half] });
+  await fresh.read(covId, { span: [half, full[0].unitBytes] });
+  const after = (await fresh.coverage([covId], 1))[0];
+  eq("adjacent spans merge into one covered stretch", after.bytesRead, full[0].unitBytes);
+  ok("and the unit is no longer listed unread", !after.unreadAnchors.some((u) => u.anchor.endsWith("H0001")));
+
+  const byBreak = (await engine.coverage([GNARLY], 1, true))[0];
+  ok("coverage accepts a break basis", byBreak.unreadAnchors.every((u) => /:S\d{4}$/.test(u.anchor)));
+} catch (err) {
+  // A throw mid-suite must never read as a pass.
+  process.stdout.write(`\n  SUITE ABORTED: ${err && err.stack ? err.stack : err}\n`);
+  fail++;
 } finally {
   rmSync(testDir, { recursive: true, force: true });
+  rmSync(workDir, { recursive: true, force: true });
 }
+
+process.stdout.write(`\n${pass} passed, ${fail} failed\n`);
+process.exit(fail > 0 ? 1 : 0);
