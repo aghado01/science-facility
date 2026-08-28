@@ -11,6 +11,7 @@ import {
   BatchReadSchema,
   CoverageSchema,
   LocateSchema,
+  IndexSchema,
   JournalRecordSchema,
   JournalReadSchema,
   JournalTreeSchema,
@@ -23,6 +24,8 @@ import {
   type BatchReadArgs,
   type CoverageArgs,
   type LocateArgs,
+  type IndexArgs,
+  type InventoryDoc,
   type JournalRecordArgs,
   type JournalReadArgs,
   type JournalTreeArgs,
@@ -68,23 +71,38 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
         const inventory = await engine.discover(args.paths, {
           glob: args.glob,
           recursive: args.recursive,
+          run: args.run,
           workDir: args.workDir,
         });
-
-        const rows = inventory.docs.map(
-          (d) => `${d.id}  ${String(d.bytes).padStart(8)} B  Grain: ${d.grain}  Spine: ${(d.spineRatio ? `${(d.spineRatio * 100).toFixed(1)}%` : "—").padStart(5)}  ${d.path}`
-        );
 
         return {
           content: [
             {
               type: "text",
-              text: `Indexed ${inventory.docs.length} document(s) under ${inventory.workDir}\n\n${rows.join("\n")}`,
+              text: `${renderInventory(inventory.docs)}\n\n${inventory.docs.length} document(s) indexed under ${inventory.workDir}`,
             },
           ],
         };
       } catch (err: any) {
         return { isError: true, content: [{ type: "text", text: `mdnav_discover error: ${err.message}` }] };
+      }
+    }
+  );
+
+  // 1b. mdnav_index
+  tool(
+    "mdnav_index",
+    "Re-report the inventory row for documents already indexed — sizes, grain, and triage flags — without re-crawling a directory. Pass refresh to force a re-scan.",
+    IndexSchema.shape,
+    async (args: IndexArgs) => {
+      try {
+        const docs = await engine.index(args.docIds, args.refresh);
+        if (docs.length === 0) {
+          return { content: [{ type: "text", text: "No documents indexed yet — run mdnav_discover first." }] };
+        }
+        return { content: [{ type: "text", text: renderInventory(docs) }] };
+      } catch (err: any) {
+        return { isError: true, content: [{ type: "text", text: `mdnav_index error: ${err.message}` }] };
       }
     }
   );
@@ -430,6 +448,51 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
       }
     }
   );
+}
+
+/**
+ * The inventory table, with the triage facts a reader needs BEFORE spending
+ * context on the bytes: how much of each document is machine furniture, whether
+ * its thematic breaks correspond to its H1s, and what structural oddities would
+ * mislead someone assuming a clean ATX document.
+ *
+ * The two closing warnings are composition, never meaning: they say what the
+ * material costs to read, not what it is worth reading.
+ */
+function renderInventory(docs: InventoryDoc[]): string {
+  const rows = docs.map((d) => [
+    d.id,
+    `${fmtNum(d.bytes ?? 0)} B`,
+    d.levels || "—",
+    d.grain || "—",
+    (d.spineRatio ?? 0) > 0 ? `${((d.spineRatio ?? 0) * 100).toFixed(1)}%` : "—",
+    d.notes || EMPTY,
+    d.path,
+  ]);
+  const header = ["doc", "bytes", "h1/h2/..", "grain", "spine", "notes", "path"];
+  const lines = [header.join(FIELD), ...rows.map((r) => r.join(FIELD))];
+
+  const unaligned = docs.filter((d) => d.breaksUnaligned);
+  if (unaligned.length > 0) {
+    lines.push(
+      "",
+      `mdnav: in ${unaligned.length} document(s) the H1 count and thematic-break count do not correspond.`,
+      `       Neither basis is privileged — inspect both and choose: outline({ depth: 1 }) or outline({ byBreaks: true }).`
+    );
+  }
+
+  const noisy = docs.filter((d) => (d.noiseRatio ?? 0) >= 0.1);
+  if (noisy.length > 0) {
+    const worst = noisy.reduce((a, b) => ((a.noiseRatio ?? 0) > (b.noiseRatio ?? 0) ? a : b));
+    lines.push(
+      "",
+      `mdnav: ${noisy.length} document(s) are >=10% embedded data or HTML markup (worst: ${worst.id} at ${((worst.noiseRatio ?? 0) * 100).toFixed(1)}%).`,
+      `       Read those with strip: "all" — or name the species, e.g. strip: ["data-uri"] — before spending context on the raw bytes.`,
+      `       For a species mdnav does not know about, aim stripMatch: "<regex>" at it.`
+    );
+  }
+
+  return lines.join("\n");
 }
 
 /**

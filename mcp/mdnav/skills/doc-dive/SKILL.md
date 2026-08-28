@@ -139,7 +139,8 @@ Operates on literal byte spans, either directly via **MCP Tools** (recommended f
 
 | Tool Call | Description & Usage |
 |---|---|
-| `mdnav_discover({ paths: ["./corpus"], recursive: true })` | Discovers, indexes, and caches documents in memory. Returns inventory table. |
+| `mdnav_discover({ paths: ["./corpus"], recursive: true })` | Discovers, indexes, and caches documents. Returns the inventory with triage flags (below). `run: "latest"` attaches to an earlier run instead of starting one, restoring its read ledger. |
+| `mdnav_index({ docIds: ["D003"], refresh: true })` | Re-reports inventory rows for documents already indexed, without re-crawling. `refresh` forces a re-scan. |
 | `mdnav_profile({ docId: "D001" })` | Reports construct shares, median gaps, and $cv$ for delimiter identification. |
 | `mdnav_outline({ docId: "D001", depth: 2, comp: true })` | Hierarchical unit outline with sizes and construct composition tags (`[quote84 prose12]`). |
 | `mdnav_marks({ docId: "D001", kind: "blockquote" })` | Enumerates exact byte spans and previews of specific constructs. |
@@ -186,9 +187,11 @@ The four fields map one-to-one onto the call that would fetch the same bytes aga
 ### Two things the tools tell you without being asked
 
 - **A source that changed under you.** Every read stats the file; if it moved, mdnav re-indexes and says so in-band before the content. Anchors taken earlier may no longer match — `mdnav_journal_read({ digest })` lists exactly which citations were pinned to the old version.
-- **What was elided.** With `strip: "all"`, each removed span leaves a marker in the stream naming its kind and byte cost (`mdnav elided | data-uri | 4030 B`), and the read reports the total. The elision is addressed, not hidden: re-read the same anchor without `strip` to get the bytes.
+- **What was elided.** With `strip: "all"` — or a named species, `strip: ["data-uri", "signed-url"]` — each removed span leaves a marker in the stream naming its kind and byte cost (`mdnav elided | data-uri | 4030 B`), and the read reports the total. The elision is addressed, not hidden: re-read the same anchor without `strip` to get the bytes.
 
 ### CLI Equivalents
+
+The MCP tools now cover every CLI capability, so a doc-dive never needs to leave the tool surface. The CLI remains for shell work — piping, scripting, a quick look without a session.
 
 ```bash
 # Discovery & Indexing
@@ -208,6 +211,26 @@ node mdnav.mjs read D001 --headings H0003,H0019,H0042                 # Multi-sp
 # Audit & Accounting
 node mdnav.mjs coverage D001 [--depth 1]         # Byte-exact coverage & unread anchors
 ```
+
+### Reading the Inventory
+
+`discover` and `index` report what a document *costs* to read, never what it means:
+
+```
+doc | bytes | h1/h2/.. | grain | spine | notes | path
+D001 | 9,091 B | 3 | 3/3/3~3.0K | 0.4% | embedded 8.8K (99%) breaks x2 (= h1-1) | .../chat.md
+D002 |    90 B | 1/1 | 1/2/2~90B | 8.9% | breaks x2 (not h1-1) setext? x2 frontmatter | .../paper.md
+```
+
+| Note | What it means | What to do |
+|---|---|---|
+| `embedded 8.8K (99%)` | The document is almost entirely a base64 payload | Read with `strip: "all"`, or `strip: ["data-uri"]` to take only that species |
+| `signed xN` · `imgref xN` · `html 4.2K` | Other machine furniture, counted separately — different problems, different remedies | Name the species you want gone |
+| `breaks x2 (= h1-1)` | Thematic breaks correspond to H1 count — the two bases agree | Either basis works |
+| `breaks x2 (not h1-1)` | They disagree. **Neither is privileged** | Inspect both: `outline({ depth: 1 })` and `outline({ byBreaks: true })` |
+| `setext? x2` | Underlined headings the ATX scanner cannot see, so the real structure may be finer than `grain` suggests | Check with `marks`, or fall back to `byBreaks` / `windows` |
+| `frontmatter` · `bom` · `crlf` | Structural facts that mislead naive offset arithmetic | Nothing — mdnav already accounts for them |
+| `maxline 12K` | A very long line in an otherwise clean document: a blob, not prose | Expect an `unbroken` window there |
 
 ### Grain Signatures Triage Table
 

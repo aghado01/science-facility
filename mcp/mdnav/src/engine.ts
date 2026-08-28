@@ -18,6 +18,7 @@ import type {
   ReadLedgerEntry,
   AnchorTarget,
   Elision,
+  StripSpec,
   ReadResult,
   BatchReadResult,
   JournalEntry,
@@ -53,7 +54,7 @@ export class MdnavEngine {
     }
   }
 
-  public initWorkDir(customWorkDir?: string, anchorPath?: string): string {
+  public initWorkDir(customWorkDir?: string, anchorPath?: string, run?: string | undefined): string {
     const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/T/, "_").slice(0, 15);
     const envWorkDir = process.env["MDNAV_WORK_DIR"];
     let root = customWorkDir ? resolve(customWorkDir) : envWorkDir ? resolve(envWorkDir) : null;
@@ -67,9 +68,29 @@ export class MdnavEngine {
       root = join(tmpdir(), "mdnav");
     }
 
-    const runDir = join(root, stamp);
+    let rel: string;
+    if (run) {
+      // Attaching to an existing run, not starting one.
+      rel = run === "latest" ? this.readLatest(root) : run;
+      if (!existsSync(join(root, rel))) {
+        throw new Error(`no run ${rel} under ${root} — omit run to start a new one`);
+      }
+    } else {
+      // Second-resolution stamps collide when runs start in quick succession,
+      // and a silently reused directory would merge two investigations.
+      // Disambiguate deterministically, so the order stays readable.
+      rel = stamp;
+      for (let n = 2; existsSync(join(root, rel)); n++) rel = `${stamp}-${n}`;
+    }
+
+    const runDir = join(root, rel);
     mkdirSync(join(runDir, "documents"), { recursive: true });
-    writeFileSync(join(root, "LATEST"), stamp, "utf8");
+    writeFileSync(join(root, "LATEST"), rel, "utf8");
+
+    // A new run reads nothing yet; an attached one inherits what it already
+    // read, so coverage continues across a restart instead of resetting to 0%.
+    this.readsLedger = [];
+    if (run) this.loadReadsLedger(runDir);
 
     // Re-anchoring on a different corpus means a different notebook. Drop the
     // cache so the next journal op rehydrates from the new root rather than
@@ -84,6 +105,43 @@ export class MdnavEngine {
     return runDir;
   }
 
+  private readLatest(root: string): string {
+    const p = join(root, "LATEST");
+    if (!existsSync(p)) throw new Error(`no run found under ${root} — omit run to start one`);
+    return readFileSync(p, "utf8").trim();
+  }
+
+  /**
+   * Restore a run's read ledger.
+   *
+   * reads.jsonl belongs to its run, so without this an attached run reports 0%
+   * coverage over documents it has already read — the journal survives a
+   * restart and the reading record did not, which made the two halves of the
+   * read-vs-cited arithmetic disagree about what happened.
+   */
+  private loadReadsLedger(runDir: string): void {
+    const p = join(runDir, "reads.jsonl");
+    if (!existsSync(p)) return;
+
+    for (const line of readFileSync(p, "utf8").split("\n")) {
+      const t = line.trim();
+      if (!t) continue;
+      try {
+        const rec = JSON.parse(t) as ReadLedgerEntry;
+        if (rec && typeof rec.doc === "string" && Array.isArray(rec.spans)) this.readsLedger.push(rec);
+      } catch {
+        // A torn line must not take the whole ledger down.
+      }
+    }
+
+    if (this.readsLedger.length > 0) {
+      this.notices.push(
+        `attached to run ${basename(runDir)} — ${this.readsLedger.length} prior read(s) restored, ` +
+        `so coverage continues rather than restarting at zero`
+      );
+    }
+  }
+
   /** Take and clear the pending notices, for the caller to put in the stream. */
   public drainNotices(): string[] {
     const out = this.notices;
@@ -95,15 +153,15 @@ export class MdnavEngine {
 
   public async discover(
     paths: string[],
-    options: { glob?: string | undefined; recursive?: boolean | undefined; workDir?: string | undefined } = {}
+    options: { glob?: string | undefined; recursive?: boolean | undefined; workDir?: string | undefined; run?: string | undefined } = {}
   ): Promise<Inventory> {
-    const { glob = "*.md", recursive = false, workDir } = options;
+    const { glob = "*.md", recursive = false, workDir, run } = options;
     const resolvedTargets = paths.map((p) => resolve(p));
     if (resolvedTargets.length === 0) {
       throw new Error("No target paths supplied for discover");
     }
 
-    this.initWorkDir(workDir, resolvedTargets[0]);
+    this.initWorkDir(workDir, resolvedTargets[0], run);
 
     // Collect matching files
     const fileList: string[] = [];
@@ -139,15 +197,7 @@ export class MdnavEngine {
       const medianBytes = idx.bytes > 0 && d1 > 0 ? Math.round(idx.bytes / d1) : idx.bytes;
       const grain = `${d1}/${d2}/${d3}~${this.fmtBytes(medianBytes)}`;
 
-      const invDoc: InventoryDoc = {
-        id: docId,
-        path: filePath,
-        name: basename(filePath),
-        bytes: idx.bytes,
-        grain,
-        spineRatio: Number(idx.spine.ratio.toFixed(3)),
-      };
-      docs.push(invDoc);
+      docs.push(this.describeDoc(idx, grain));
 
       // Persist index
       if (this.workDir) {
@@ -167,6 +217,91 @@ export class MdnavEngine {
     }
 
     return this.inventory;
+  }
+
+  /**
+   * Re-report the inventory row for documents already indexed, the way the CLI's
+   * `index` verb does — without re-crawling a directory. `refresh` forces a
+   * re-scan even when size and mtime say nothing moved.
+   */
+  public async index(docIds?: string[] | undefined, refresh = false): Promise<InventoryDoc[]> {
+    const targets = docIds && docIds.length > 0 ? docIds : Array.from(this.indices.keys());
+    const out: InventoryDoc[] = [];
+
+    for (const ref of targets) {
+      const { docId } = this.resolveDoc(ref);
+      if (refresh) {
+        const idx = this.getIndex(docId);
+        const buf = readFileSync(idx.path);
+        const fresh = scanDocument(buf, { id: docId, path: idx.path, mtimeMs: statSync(idx.path).mtimeMs });
+        this.indices.set(docId, fresh);
+        this.sourceBuffers.set(docId, buf);
+        this.persistIndex(docId, fresh);
+      }
+      out.push(this.describeDoc(this.getIndex(docId)));
+    }
+
+    return out;
+  }
+
+  /**
+   * Triage facts about a document, decided on composition and never on meaning:
+   * how much of it is machine furniture, whether its breaks correspond to its
+   * H1s, and what structural oddities would mislead a reader who assumed a
+   * clean ATX document.
+   */
+  private describeDoc(idx: DocumentIndex, grainOverride?: string): InventoryDoc {
+    const c = (n: number) => idx.counts[n] ?? 0;
+    const d1 = c(0), d2 = d1 + c(1), d3 = d2 + c(2);
+    const grain = grainOverride ??
+      `${d1}/${d2}/${d3}~${this.fmtBytes(idx.bytes > 0 && d1 > 0 ? Math.round(idx.bytes / d1) : idx.bytes)}`;
+
+    const byKind = new Map<string, { count: number; bytes: number }>();
+    let noiseBytes = 0;
+    for (const n of idx.noise) {
+      const cur = byKind.get(n.kind) ?? { count: 0, bytes: 0 };
+      byKind.set(n.kind, { count: cur.count + 1, bytes: cur.bytes + n.bytes });
+      noiseBytes += n.bytes;
+    }
+    const noiseRatio = idx.bytes > 0 ? noiseBytes / idx.bytes : 0;
+
+    // Species are reported separately: an embedded file and a handful of tags
+    // are different problems with different remedies.
+    const notes: string[] = [];
+    const embedded = byKind.get("data-uri");
+    if (embedded?.bytes) notes.push(`embedded ${this.fmtBytes(embedded.bytes)} (${(embedded.bytes / idx.bytes * 100).toFixed(0)}%)`);
+    const signed = byKind.get("signed-url");
+    if (signed?.count) notes.push(`signed x${signed.count}`);
+    const html = byKind.get("html");
+    if (html && html.bytes > 1024) notes.push(`html ${this.fmtBytes(html.bytes)}`);
+    const imgref = byKind.get("image-ref");
+    if (imgref?.count) notes.push(`imgref x${imgref.count}`);
+
+    // Two bases, neither privileged. Saying whether they correspond is what
+    // lets the reader choose one deliberately.
+    const breaksUnaligned = idx.breaks.length > 0 && d1 > 0 && idx.breaks.length !== d1 - 1;
+    if (idx.breaks.length) notes.push(`breaks x${idx.breaks.length}${breaksUnaligned ? " (not h1-1)" : " (= h1-1)"}`);
+
+    // A very long line in an otherwise clean document is a blob, not prose.
+    if (idx.maxLine > 4096 && noiseRatio < 0.02) notes.push(`maxline ${this.fmtBytes(idx.maxLine)}`);
+    if (idx.setextSuspects?.length) notes.push(`setext? x${idx.setextSuspects.length}`);
+    if (idx.frontmatter) notes.push("frontmatter");
+    if (idx.newline !== "lf") notes.push(idx.newline);
+    if (idx.bom) notes.push("bom");
+    if (idx.windows?.length) notes.push(`windows x${idx.windows.length}`);
+
+    return {
+      id: idx.id,
+      path: idx.path,
+      name: basename(idx.path),
+      bytes: idx.bytes,
+      grain,
+      spineRatio: Number(idx.spine.ratio.toFixed(3)),
+      levels: [0, 1, 2, 3, 4, 5].map((n) => c(n)).join("/").replace(/(\/0)+$/, ""),
+      notes: notes.join(" "),
+      noiseRatio: Number(noiseRatio.toFixed(3)),
+      breaksUnaligned,
+    };
   }
 
   // ──────────────────────────────────────────────────────── Profile
@@ -292,7 +427,7 @@ export class MdnavEngine {
       span?: ByteSpan | undefined;
       extent?: "unit" | "subtree" | undefined;
       depth?: number | undefined;
-      strip?: "all" | "none" | undefined;
+      strip?: StripSpec | undefined;
       stripMatch?: string | undefined;
     } = {}
   ): Promise<ReadResult> {
@@ -390,7 +525,7 @@ export class MdnavEngine {
       span?: ByteSpan | undefined;
       label?: string | undefined;
     }>,
-    options: { depth?: number | undefined; strip?: "all" | "none" | undefined } = {}
+    options: { depth?: number | undefined; strip?: StripSpec | undefined } = {}
   ): Promise<BatchReadResult[]> {
     const { depth = 2, strip = "all" } = options;
     const results: BatchReadResult[] = [];

@@ -52,6 +52,7 @@ try {
 
   const emitted = {};
   emitted.discover = await call("mdnav_discover", { paths: [corpus], workDir: wd });
+  emitted.index = await call("mdnav_index", {});
   emitted.outline = await call("mdnav_outline", { docId: "D001", depth: 2 });
   emitted.marks = await call("mdnav_marks", { docId: "D001", kind: "blockquote", minBytes: 0 });
   emitted.locate = await call("mdnav_locate", { pattern: "geodesics", max: 50 });
@@ -176,6 +177,77 @@ try {
   ok("citing an unread span is reported as salience capture", rep2.citedNotRead > 0);
   ok("and the report says so",
     (await call3("mdnav_coverage", { docIds: ["D001"], depth: 2 })).includes("cited not read"));
+  // ───────────────────────────────────────────────── inventory triage signal
+
+  process.stdout.write("\nthe inventory carries the triage facts\n");
+  const inv = await call("mdnav_index", {});
+  ok("index reports the full column set",
+    inv.split("\n")[0] === "doc | bytes | h1/h2/.. | grain | spine | notes | path", inv.split("\n")[0]);
+  ok("it counts headings per level", /\| 1\/2 \|/.test(inv), inv.split("\n")[1]);
+  ok("it flags the thematic-break basis", /breaks x1/.test(inv));
+  ok("and says whether the two bases correspond", /not h1-1|= h1-1/.test(inv));
+  ok("a disagreeing basis is called out, with both options named",
+    /Neither basis is privileged/.test(inv) && /byBreaks: true/.test(inv));
+  eq("index without discover-crawling reports the same docs",
+    inv.split("\n").filter((l) => /^D\d{3} \| /.test(l)).length, emitted.discover.split("\n").filter((l) => /^D\d{3} \| /.test(l)).length);
+
+  // ─────────────────────────────────────────────────────── strip by species
+
+  process.stdout.write("\nstrip names the species\n");
+  const mixed = join(corpus, "mixed.md");
+  writeFileSync(mixed, `# Mixed\n\n![pic](data:image/png;base64,${"A".repeat(2000)})\n\n<div class="x">kept text</div>\n\n![remote](https://example.com/a.png)\n\ntail\n`, "utf8");
+  const hM = new Map();
+  const eM = new MdnavEngine();
+  registerMdnavTools({ tool: (n, _d, _s, fn) => hM.set(n, fn) }, eM);
+  const callM = async (n, a) => (await hM.get(n)(a)).content[0].text;
+  await callM("mdnav_discover", { paths: [mixed], workDir: join(wd, "mixed") });
+
+  const onlyData = await callM("mdnav_read", { docId: "D001", heading: "H0001", depth: 1, strip: ["data-uri"] });
+  ok("naming one species removes it", onlyData.includes("mdnav elided | data-uri |"));
+  ok("and leaves the others alone", onlyData.includes("<div class=\"x\">") && onlyData.includes("![remote]"));
+
+  const onlyHtml = await callM("mdnav_read", { docId: "D001", heading: "H0001", depth: 1, strip: ["html"] });
+  ok("naming a different species removes that one", !onlyHtml.includes("<div class=\"x\">"));
+  ok("html removal keeps the inner text", onlyHtml.includes("kept text"));
+  ok("and leaves the embedded file in place", onlyHtml.includes("data:image/png;base64"));
+
+  const everything = await callM("mdnav_read", { docId: "D001", heading: "H0001", depth: 1, strip: "all" });
+  ok("'all' still means every species, image refs included",
+    !everything.includes("data:image/png;base64") && !everything.includes("<div") && everything.includes("[image remote]"));
+
+  // ──────────────────────────────────────────── attaching to an earlier run
+
+  process.stdout.write("\nattaching to an earlier run\n");
+  const runWd = join(wd, "runs");
+  const paper = join(corpus, "paper.md");
+  const mk = () => {
+    const h = new Map();
+    const e = new MdnavEngine();
+    registerMdnavTools({ tool: (n, _d, _s, fn) => h.set(n, fn) }, e);
+    return { e, call: async (n, a) => (await h.get(n)(a)).content[0].text };
+  };
+
+  const first = mk();
+  await first.call("mdnav_discover", { paths: [paper], workDir: runWd });
+  await first.call("mdnav_read", { docId: "D001", heading: "H0002", depth: 2 });
+  const readBytes = (await first.e.coverage(["D001"], 2))[0].bytesRead;
+  ok("the first run recorded a read", readBytes > 0);
+
+  // A second engine is a restart: same work dir, attach to the same run.
+  const attached = mk();
+  const attachOut = await attached.call("mdnav_discover", { paths: [paper], workDir: runWd, run: "latest" });
+  eq("attaching restores the prior reads", (await attached.e.coverage(["D001"], 2))[0].bytesRead, readBytes);
+  ok("and says so in-band", /prior read\(s\) restored/.test(attachOut));
+
+  const brandNew = mk();
+  await brandNew.call("mdnav_discover", { paths: [paper], workDir: runWd });
+  eq("a run started fresh reads nothing yet", (await brandNew.e.coverage(["D001"], 2))[0].bytesRead, 0);
+
+  const missing = mk();
+  ok("attaching to a run that does not exist fails loudly",
+    /no run 19990101_000000/.test(
+      await missing.call("mdnav_discover", { paths: [paper], workDir: runWd, run: "19990101_000000" })));
+
   // ─────────────────────────────────────── a source that moves under the cache
 
   process.stdout.write("\na source that changes under us\n");

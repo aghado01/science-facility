@@ -81,6 +81,14 @@ export interface DocumentIndex {
   windows?: WindowEntry[] | undefined;
 }
 
+/** Machine furniture mdnav knows how to name and remove. */
+export type StripKind = "data-uri" | "html" | "signed-url" | "image-ref";
+
+export const STRIP_KINDS: StripKind[] = ["data-uri", "html", "signed-url", "image-ref"];
+
+/** `"all"`, `"none"`, or the exact species to elide. */
+export type StripSpec = "all" | "none" | StripKind[];
+
 export interface InventoryDoc {
   id: string;
   path: string;
@@ -88,7 +96,14 @@ export interface InventoryDoc {
   bytes?: number | undefined;
   grain?: string | undefined;
   spineRatio?: number | undefined;
+  /** H1/H2/.. counts, trailing zeroes trimmed. */
+  levels?: string | undefined;
+  /** Triage flags: embedded data, signed URLs, break basis, setext suspects... */
   notes?: string | undefined;
+  /** Share of the document that is machine furniture rather than prose. */
+  noiseRatio?: number | undefined;
+  /** True when the thematic-break count does not correspond to the H1 count. */
+  breaksUnaligned?: boolean | undefined;
 }
 
 export interface Inventory {
@@ -222,6 +237,13 @@ export interface DiscoverArgs {
   paths: string[];
   glob?: string | undefined;
   recursive?: boolean | undefined;
+  run?: string | undefined;
+  workDir?: string | undefined;
+}
+
+export interface IndexArgs {
+  docIds?: string[] | undefined;
+  refresh?: boolean | undefined;
   workDir?: string | undefined;
 }
 
@@ -256,7 +278,7 @@ export interface ReadArgs {
   span?: ByteSpan | undefined;
   extent?: "unit" | "subtree" | undefined;
   depth?: number | undefined;
-  strip?: "all" | "none" | undefined;
+  strip?: StripSpec | undefined;
   stripMatch?: string | undefined;
   prefixFormat?: boolean | undefined;
   workDir?: string | undefined;
@@ -305,7 +327,7 @@ export interface BatchReadArgs {
     label?: string | undefined;
   }>;
   depth?: number | undefined;
-  strip?: "all" | "none" | undefined;
+  strip?: StripSpec | undefined;
   prefixFormat?: boolean | undefined;
   workDir?: string | undefined;
 }
@@ -331,7 +353,14 @@ export const DiscoverSchema = z.object({
   paths: z.array(z.string()).describe("Files or directories to index"),
   glob: z.string().optional().default("*.md").describe("File glob pattern (default: *.md)"),
   recursive: z.boolean().optional().default(false).describe("Whether to crawl subdirectories recursively"),
+  run: z.string().optional().describe("Attach to an existing run stamp instead of starting a new one ('latest' follows the LATEST pointer). Restores that run's read ledger, so coverage continues across a restart."),
   workDir: z.string().optional().describe("Explicit runtime artifact directory"),
+});
+
+export const IndexSchema = z.object({
+  docIds: z.array(z.string()).optional().describe("Documents to re-report (default: everything indexed)"),
+  refresh: z.boolean().optional().default(false).describe("Force a re-scan even when size and mtime say the source has not moved"),
+  workDir: z.string().optional().describe("Explicit work directory"),
 });
 
 export const ProfileSchema = z.object({
@@ -365,7 +394,9 @@ export const ReadSchema = z.object({
   span: z.tuple([z.number(), z.number()]).optional().describe("Exact byte span [start, end)"),
   extent: z.enum(["unit", "subtree"]).optional().default("unit").describe("Read unit cell or full subtree branch"),
   depth: z.number().int().min(1).max(6).optional().describe("Depth grain context for the unit read"),
-  strip: z.enum(["all", "none"]).optional().default("none").describe("Strip heavy binary noise (base64 PNGs, presigned URLs)"),
+  strip: z.union([z.enum(["all", "none"]), z.array(z.enum(["data-uri", "html", "signed-url", "image-ref"]))])
+    .optional().default("none")
+    .describe("Elide machine furniture: 'all', 'none', or the exact species, e.g. ['data-uri','signed-url']. Each removed span leaves a marker naming its kind and size."),
   stripMatch: z.string().optional().describe("Custom regex pattern to elide at read time"),
   prefixFormat: z.boolean().optional().default(true).describe("Head each chunk with a token-isolated provenance line: 'D023 | H0006 @ e5f6 | 8420 .. 9860 | 1440'. On by default; pass false here, or set MDNAV_PREFIX=off for the session."),
   workDir: z.string().optional().describe("Explicit work directory"),
@@ -382,7 +413,9 @@ export const BatchReadSchema = z.object({
     label: z.string().optional().describe("Optional user label for the section"),
   })).describe("List of target sections to read across one or multiple documents"),
   depth: z.number().int().min(1).max(6).optional().default(2).describe("Default depth for unit extents"),
-  strip: z.enum(["all", "none"]).optional().default("all").describe("Strip heavy binary noise (default: all)"),
+  strip: z.union([z.enum(["all", "none"]), z.array(z.enum(["data-uri", "html", "signed-url", "image-ref"]))])
+    .optional().default("all")
+    .describe("Elide machine furniture: 'all' (default), 'none', or the exact species, e.g. ['data-uri','signed-url']."),
   prefixFormat: z.boolean().optional().default(true).describe("Head each block with a token-isolated provenance line instead of an HTML comment tag. On by default; MDNAV_PREFIX=off disables it for the session."),
   workDir: z.string().optional().describe("Explicit work directory"),
 });

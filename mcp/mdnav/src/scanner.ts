@@ -3,7 +3,8 @@
  */
 
 import { createHash } from "node:crypto";
-import type { HeadingEntry, BreakEntry, NoiseEntry, DocumentIndex, ProfileRow, ConstructRun, WindowEntry, Elision } from "./types.ts";
+import type { HeadingEntry, BreakEntry, NoiseEntry, DocumentIndex, ProfileRow, ConstructRun, WindowEntry, Elision, StripKind, StripSpec } from "./types.ts";
+import { STRIP_KINDS } from "./types.ts";
 
 const LF = 10, CR = 13;
 
@@ -327,10 +328,17 @@ function scanNoise(buf: Buffer): NoiseEntry[] {
 
 export function stripNoise(
   text: string,
-  options: { strip?: "all" | "none" | undefined; stripMatch?: string | undefined } = {}
+  options: { strip?: StripSpec | undefined; stripMatch?: string | undefined } = {}
 ): { text: string; elidedBytes: number; elisions: Elision[] } {
   const { strip = "none", stripMatch } = options;
-  if (strip === "none" && !stripMatch) return { text, elidedBytes: 0, elisions: [] };
+
+  // An embedded file and a handful of tags are different problems with
+  // different remedies, so the caller may name the species rather than take
+  // all-or-nothing.
+  const kinds = new Set<StripKind>(
+    strip === "all" ? STRIP_KINDS : strip === "none" ? [] : strip
+  );
+  if (kinds.size === 0 && !stripMatch) return { text, elidedBytes: 0, elisions: [] };
 
   const initialBytes = Buffer.byteLength(text);
   let out = text;
@@ -349,17 +357,29 @@ export function stripNoise(
     return `mdnav elided | ${kind} | ${bytes} B`;
   };
 
-  if (strip === "all") {
-    // 1. Data URIs — an embedded file. Nothing of it is worth keeping.
+  // Data URIs — an embedded file. Nothing of it is worth keeping.
+  if (kinds.has("data-uri")) {
     out = out.replace(/!\[(.*?)\]\(data:[^;]+;base64,[A-Za-z0-9+/=]+\)/g, mark("data-uri"));
+  }
 
-    // 2. Presigned URLs. The `!` decides the remedy: an image has nothing worth
-    //    keeping, a link's label names what was cited, so the label survives.
+  // Presigned URLs. The `!` decides the remedy: an image has nothing worth
+  // keeping, a link's label names what was cited, so the label survives.
+  if (kinds.has("signed-url")) {
     out = out.replace(/!\[(.*?)\]\((https?:\/\/[^)]*(?:X-Amz-Signature|X-Amz-Credential|X-Goog-Signature|sig=)[^)]*)\)/g, mark("signed-url"));
     out = out.replace(/\[(.*?)\]\((https?:\/\/[^)]*(?:X-Amz-Signature|X-Amz-Credential|X-Goog-Signature|sig=)[^)]*)\)/g, "$1");
+  }
 
-    // 3. HTML furniture. Markup goes, inner text stays — this removes no
-    //    content, so it leaves no marker.
+  // A plain external image. The alt text is the only part that carries meaning.
+  if (kinds.has("image-ref")) {
+    out = out.replace(/!\[([^\]]*)\]\((https?:\/\/[^)]+)\)/g, (match, alt: string) => {
+      if (/X-Amz-|X-Goog-|sig=/.test(match)) return match;
+      return alt ? `[image ${alt}]` : mark("image-ref")(match);
+    });
+  }
+
+  // HTML furniture. Markup goes, inner text stays — this removes no content,
+  // so it leaves no marker.
+  if (kinds.has("html")) {
     out = out.replace(/<div\b[^>]*>([\s\S]*?)<\/div>/gi, "$1");
     out = out.replace(/<span\b[^>]*>([\s\S]*?)<\/span>/gi, "$1");
     out = out.replace(/<!--[\s\S]*?-->/g, "");
