@@ -246,10 +246,7 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
           const blocks = res.chunks.map((chunk, i) => {
             const span = res.spans[i] ?? mergeSpans(res.spans);
             const anchor = res.anchors[i] ?? res.anchors[0] ?? EMPTY;
-            // The length measures what follows, not the span it came from: after
-            // an elision those differ, and the difference is the useful signal.
-            const len = Buffer.byteLength(chunk, "utf8");
-            return `${formatSourceChunkPrefix(res.docId, anchor, span, len)}\n${closeChunk(chunk)}`;
+            return `${formatSourceChunkPrefix(res.docId, anchor, span)}\n${closeChunk(chunk, res.docId, anchor)}`;
           });
           body = `${CHUNK_HEADER}\n\n${blocks.join("\n\n")}`;
         }
@@ -285,11 +282,8 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
         // the resolved digest, the span, and the byte count.
         const blocks = results.map((r) => {
           if (prefixOn(args.prefixFormat)) {
-            // The label goes before the length, never after: the length is the
-            // last field for a reason — reading it closes the frame.
-            const len = Buffer.byteLength(r.text, "utf8");
-            const head = formatSourceChunkPrefix(r.docId, r.anchor || EMPTY, r.span ?? [0, 0], len, r.label ?? EMPTY);
-            return `${head}\n${closeChunk(r.text)}`;
+            const head = formatSourceChunkPrefix(r.docId, r.anchor || EMPTY, r.span ?? [0, 0], r.label ?? EMPTY);
+            return `${head}\n${closeChunk(r.text, r.docId, r.anchor || EMPTY)}`;
           }
           const cite = formatAnchorString(`${r.docId}:${r.anchor}`);
           const tag = r.label

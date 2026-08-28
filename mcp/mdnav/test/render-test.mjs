@@ -113,7 +113,8 @@ try {
   // ──────────────────────────────────────── provenance headers are the default
 
   process.stdout.write("\nprovenance headers are the default\n");
-  const HEADER_RE = /D001 : H\d{4} @ [0-9a-f]{4} \| \d+ \.\. \d+ \| \d+ \|/;
+  const HEADER_RE = /D001 : H\d{4} @ [0-9a-f]{4} \| \d+ \.\. \d+ \|/;
+  const CLOSE_RE = /^\| D001 : H\d{4} @ [0-9a-f]{4}$/gm;
   const plain = await call("mdnav_read", { docId: "D001", heading: "H0002", depth: 2 });
   ok("a read that asks for nothing still carries its header", HEADER_RE.test(plain), plain.slice(0, 160));
   ok("opting out per call works",
@@ -129,31 +130,23 @@ try {
   // A discontiguous read has no single span; labelling it with the outer bound
   // would claim the material between the units as read.
   const multi = await call("mdnav_read", { docId: "D001", headings: ["H0002", "H0003"], depth: 2 });
-  const heads = multi.match(/D001 : H\d{4} @ [0-9a-f]{4} \| \d+ \.\. \d+ \| \d+ \|/g) ?? [];
-  eq("a multi-unit read labels every span, not the outer bound", heads.length, 2);
-  for (const h of heads) {
-    const m = /\| (\d+) \.\. (\d+) \| (\d+) \|$/.exec(h);
-    ok(`each frame states its own length (${h.slice(0, 22)}…)`, Number(m[3]) === Number(m[2]) - Number(m[1]), h);
-  }
-  eq("every content block is terminated", (multi.match(/^\|$/gm) || []).length, 2);
+  const heads = multi.match(/D001 : H\d{4} @ [0-9a-f]{4} \| \d+ \.\. \d+ \|/g) ?? [];
+  eq("a multi-unit read frames every span, not the outer bound", heads.length, 2);
+  eq("each frame names a distinct span", new Set(heads).size, 2);
 
-  // The length measures what is handed over, not the span it came from. With
-  // nothing elided those agree; that is what makes the disagreement legible.
-  // Its own directory: dropping a fixture into `corpus` would renumber the
-  // documents every later section resolves by id.
-  const lenDir = join(wd, "len-fixture");
-  mkdirSync(lenDir, { recursive: true });
-  const withNoise = join(lenDir, "noise-len.md");
-  writeFileSync(withNoise, `# Doc\n\nkeep this\n\n![x](data:image/png;base64,${"A".repeat(900)})\n`, "utf8");
-  const hL = new Map();
-  const eL = new MdnavEngine();
-  registerMdnavTools({ tool: (n, _d, _s, fn) => hL.set(n, fn) }, eL);
-  const callL = async (n, a) => (await hL.get(n)(a)).content[0].text;
-  await callL("mdnav_discover", { paths: [withNoise], workDir: join(wd, "len") });
-  const frame = /\| (\d+) \.\. (\d+) \| (\d+) \|/.exec(
-    await callL("mdnav_read", { docId: "D001", heading: "H0001", depth: 1, strip: "all" }));
-  ok("after an elision the length is smaller than the span it names",
-    Number(frame[3]) < Number(frame[2]) - Number(frame[1]), frame && frame[0]);
+  // No length field: nothing downstream can count bytes, so a length prefix
+  // delimits nothing here. Extent is legible from the span.
+  ok("no frame carries a byte count", !/\.\. \d+ \| \d+ \|/.test(multi), multi.slice(0, 200));
+
+  const closes = multi.match(CLOSE_RE) ?? [];
+  eq("every content block closes", closes.length, 2);
+  ok("and closes by repeating its own address",
+    heads.every((h) => closes.some((c) => c === `| ${h.split(" | ")[0]}`)), `${heads}\n${closes}`);
+
+  // Content is bracketed: the address appears both before and after the body.
+  const firstOpen = multi.indexOf(heads[0]);
+  const firstClose = multi.indexOf(`| ${heads[0].split(" | ")[0]}`, firstOpen + heads[0].length);
+  ok("the body sits between two mentions of its own anchor", firstClose > firstOpen);
 
   // ────────────────────────────────────────── read vs cited is now arithmetic
 

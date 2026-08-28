@@ -156,19 +156,23 @@ Operates on literal byte spans, either directly via **MCP Tools** (recommended f
 
 ### The Stream Is Framed
 
-Material arrives inside a frame — metadata prefix, then the content, then a close:
+Material arrives inside a frame — a metadata prefix, the content, then a close that repeats the address:
 
 ```
-address | span | bytes | content
+address | span | content
 
-D001 : H0002 @ d21b | 9 .. 60 | 51 |
+D001 : H0002 @ d21b | 9 .. 60 |
 ## Abstract
 
 A scale-calibrated geometric median.
-|
+| D001 : H0002 @ d21b
 ```
 
-` | ` separates **fields**; the operators join the components *within* one field — so the address is a single field, not three columns. **`bytes` is a length prefix**, and it is last for that reason: reading it closes the frame, and the next that-many bytes are the material. It counts what you were handed, not the span it came from, so `60 .. 735 | 78` says the unit is 675 bytes and 597 of them were elided. The trailing `|` closes the block; markdown content contains `|` itself (tables), so it is a boundary marker, never the parse mechanism.
+` | ` separates **fields**; the operators join the components *within* one field — so the address is a single field, not three columns.
+
+There is deliberately **no length field.** A length prefix delimits for something that reads N bytes, and nothing here does — the consumer is attention, which cannot count. Extent is already legible from the span, and an elision is already reported by its inline marker and the read's summary line.
+
+The close **repeats the address** rather than using a bare sigil, which buys a second thing: the content is bracketed by its own anchor, so every token inside has it both before *and* after. For a long block the opening frame is thousands of tokens behind by the time the end arrives.
 
 **Why it earns the characters.** Attention binds on token identity. `D001` here is the same token sequence as `D001` in an outline row 30k tokens back and in a journal citation later, so those mentions link to each other without you re-deriving the connection. Fused as `D001:H0002@d21b` the components merge with the punctuation and tokenize differently depending on the digits around them — the link then has to be *inferred* from string similarity rather than seen. And because the stream only ever moves forward, an unframed block has no recoverable end: the framing is what keeps material and metadata told apart further down.
 

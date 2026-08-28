@@ -44,10 +44,10 @@ export const JOURNAL_HEADER =
   ["id", "ts", "op", "refs", "concept", "status", "anchors", "bytes", "body"].join(FIELD);
 
 /** Column header for prefix-formatted source chunks. */
-export const CHUNK_HEADER = ["address", "span", "bytes", "content"].join(FIELD);
+export const CHUNK_HEADER = ["address", "span", "content"].join(FIELD);
 
 /** Same, for the batch reader, which carries a caller-supplied label. */
-export const BATCH_CHUNK_HEADER = ["address", "label", "span", "bytes", "content"].join(FIELD);
+export const BATCH_CHUNK_HEADER = ["address", "label", "span", "content"].join(FIELD);
 
 /**
  * The metadata prefix framing one materialized source chunk.
@@ -57,48 +57,50 @@ export const BATCH_CHUNK_HEADER = ["address", "label", "span", "bytes", "content
  *   `...`
  *   `|`                                                <- CHUNK_CLOSE
  *
- * The prefix is the whole frame; the length is only its last field. ` | `
- * separates FIELDS, and the operators join the components WITHIN one field —
+ * ` | ` separates FIELDS; the operators join the components WITHIN one field —
  * so the address is a single field, `D023 : H0006 @ e5f6`, not two columns.
  *
- * The last field before the content is a LENGTH PREFIX, and it comes last for
- * that reason: reading it closes the frame. Everything up to it is framing;
- * what follows for that many bytes is the material itself. It measures the
- * EMITTED content, not the source span — after an elision `8420 .. 9860 | 1300`
- * says the span was 1440 bytes and you are being handed 1300 of them.
+ * There is deliberately NO length field. A length prefix delimits for something
+ * that reads N bytes, and nothing here does: the consumer is attention, which
+ * cannot count. Extent is already legible from the span, and an elision is
+ * already reported twice — by its inline marker and by the read's summary line.
  */
 export function formatSourceChunkPrefix(
   docId: string,
   anchor: string,
   span: ByteSpan,
-  contentBytes: number,
   label?: string | undefined
 ): string {
-  const fields = [formatAnchorString(anchor ? `${docId}:${anchor}` : docId)];
+  const fields = [chunkAddress(docId, anchor)];
   if (label !== undefined) fields.push(label || EMPTY);
-  fields.push(`${span[0]}${RANGE}${span[1]}`, String(contentBytes));
+  fields.push(`${span[0]}${RANGE}${span[1]}`);
   return `${fields.join(FIELD)}${FIELD.trimEnd()}`;
 }
 
+function chunkAddress(docId: string, anchor: string): string {
+  return formatAnchorString(anchor ? `${docId}:${anchor}` : docId);
+}
+
 /**
- * Closes a content block.
+ * Closes a content block by repeating its address.
  *
  * The stream is appended to continuously and only moves forward, so a block
  * with no terminator has an undeclared end: further down there is nothing left
- * to say where the material stopped and the next frame began. The length field
- * settles that for anything that can count bytes; this settles it for a reader
- * that cannot, and it costs one token.
+ * to say where the material stopped and the next frame began.
  *
- * It is deliberately the same mark as a field boundary — content was the last
- * field of the record, and this closes it. Markdown content is full of `|`
- * (tables), so the terminator is a boundary MARKER, never the parse mechanism:
- * the length prefix is what actually delimits the region.
+ * Repeating the address rather than emitting a bare sigil does a second job.
+ * The content is then BRACKETED by its own anchor, so every token inside has
+ * that anchor both before and after it — and for a long block the opening
+ * frame is thousands of tokens behind by the time the end arrives. The
+ * redundancy is an attention argument, not a parsing one.
  */
-export const CHUNK_CLOSE = "|";
+export function formatChunkClose(docId: string, anchor: string): string {
+  return `${FIELD.trimStart()}${chunkAddress(docId, anchor)}`;
+}
 
-/** A content block with its terminator, on its own line and without padding it. */
-export function closeChunk(content: string): string {
-  return `${content}${content.endsWith("\n") ? "" : "\n"}${CHUNK_CLOSE}`;
+/** A content block with its closing frame, on its own line and without padding it. */
+export function closeChunk(content: string, docId: string, anchor: string): string {
+  return `${content}${content.endsWith("\n") ? "" : "\n"}${formatChunkClose(docId, anchor)}`;
 }
 
 /**

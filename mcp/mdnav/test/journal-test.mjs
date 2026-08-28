@@ -16,6 +16,8 @@ import {
   formatJournalEntry,
   formatJournalReceipt,
   formatSourceChunkPrefix,
+  formatChunkClose,
+  closeChunk,
   formatAnchorList,
   formatAnchorString,
   formatCompactStamp,
@@ -180,16 +182,23 @@ try {
   ok("an empty field is held open by a placeholder", formatJournalEntry(afterMerge.find((e) => e.id === "N007")).includes(" | - | "));
   eq("the header names the same nine fields", JOURNAL_HEADER.split(" | ").length, 9);
 
-  const prefix = formatSourceChunkPrefix("D023", "H0006@e5f6", [8420, 9860], 1440);
+  const prefix = formatSourceChunkPrefix("D023", "H0006@e5f6", [8420, 9860]);
   // The address is ONE field: ` | ` separates fields, the operators join the
-  // components within one. And the frame closes on the length, because the
-  // content field is what comes next.
-  eq("a chunk prefix reads as address, span, length", prefix, "D023 : H0006 @ e5f6 | 8420 .. 9860 | 1440 |");
+  // components within one.
+  eq("a chunk prefix reads as address then span", prefix, "D023 : H0006 @ e5f6 | 8420 .. 9860 |");
   eq("the address is a single field, not two columns", prefix.split(" | ")[0], "D023 : H0006 @ e5f6");
-  ok("the length is the last field before the content", /\| 1440 \|$/.test(prefix));
-  eq("a label sits before the length, never after",
-    formatSourceChunkPrefix("D023", "H0006@e5f6", [8420, 9860], 1440, "abstract"),
-    "D023 : H0006 @ e5f6 | abstract | 8420 .. 9860 | 1440 |");
+  ok("it opens the content field and stops there", prefix.endsWith(" |"));
+  ok("no length is emitted — nothing downstream can count bytes", !/\| \d+ \|$/.test(prefix));
+  eq("a label sits between the address and the span",
+    formatSourceChunkPrefix("D023", "H0006@e5f6", [8420, 9860], "abstract"),
+    "D023 : H0006 @ e5f6 | abstract | 8420 .. 9860 |");
+
+  eq("a block closes by repeating its address",
+    formatChunkClose("D023", "H0006@e5f6"), "| D023 : H0006 @ e5f6");
+  eq("so the content ends up bracketed by its own anchor",
+    closeChunk("body\n", "D023", "H0006@e5f6"), "body\n| D023 : H0006 @ e5f6");
+  eq("and a block not ending in a newline still gets its own line",
+    closeChunk("body", "D023", "H0006@e5f6"), "body\n| D023 : H0006 @ e5f6");
   ok("the range mark is isolated", prefix.includes(" .. "));
   ok("the identity mark is isolated", prefix.includes(" @ ") && !/[^ ]@|@[^ ]/.test(prefix));
 
