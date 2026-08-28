@@ -1204,7 +1204,18 @@ export class MdnavEngine {
         ? `anchor ${formatAnchorString(`${idx.id}:${t.hid}@${dig}`)} does not match the current ${kind} digest ${formatAnchorString(`${t.hid}@${t.digest}`)} — the source has changed under this anchor`
         : undefined;
 
-    const h = idx.headings.find((x) => x.hid.toLowerCase() === hid.toLowerCase());
+    // Exact on output, tolerant on input. A local coordinate's width belongs to
+    // its document, so `H7`, `H07` and `H0007` all name heading 7 — which is
+    // also what lets an anchor recorded under a narrower or wider form still
+    // resolve after the document's heading count crosses a width boundary.
+    const sameCoord = (a: string, b: string): boolean => {
+      const pa = /^([A-Za-z])(\d+)$/.exec(a);
+      const pb = /^([A-Za-z])(\d+)$/.exec(b);
+      if (!pa || !pb) return a.toLowerCase() === b.toLowerCase();
+      return pa[1]!.toLowerCase() === pb[1]!.toLowerCase() && Number(pa[2]) === Number(pb[2]);
+    };
+
+    const h = idx.headings.find((x) => sameCoord(x.hid, hid));
     if (h) {
       const target: AnchorTarget = {
         hid: h.hid, level: h.level, title: h.title, digest: h.digest,
@@ -1215,7 +1226,7 @@ export class MdnavEngine {
     }
 
     if (/^W\d+$/i.test(hid)) {
-      const w = (idx.windows ?? []).find((x) => x.wid.toLowerCase() === hid.toLowerCase());
+      const w = (idx.windows ?? []).find((x) => sameCoord(x.wid, hid));
       if (!w) {
         throw new Error(`no anchor ${hid} in ${idx.id} — mint window anchors first with outline(windows: <size>)`);
       }
@@ -1227,7 +1238,7 @@ export class MdnavEngine {
     }
 
     if (/^S\d+$/i.test(hid)) {
-      const s = this.segmentsOf(idx).find((x) => x.hid.toLowerCase() === hid.toLowerCase());
+      const s = this.segmentsOf(idx).find((x) => sameCoord(x.hid, hid));
       if (!s) {
         throw new Error(`no anchor ${hid} in ${idx.id} — the document has ${idx.breaks.length} thematic break(s)`);
       }
@@ -1248,7 +1259,7 @@ export class MdnavEngine {
     let n = 1;
     const push = (start: number, end: number) => {
       out.push({
-        hid: `S${String(n++).padStart(4, "0")}`,
+        hid: `S${n++}`,
         level: 0,
         title: "SEGMENT",
         digest: digestOf(`seg:${idx.sha256}:${start}`),
@@ -1262,6 +1273,9 @@ export class MdnavEngine {
       if (b.end > pos) { push(pos, b.end); pos = b.end; }
     }
     if (pos < idx.bytes) push(pos, idx.bytes);
+
+    const width = Math.max(2, String(out.length).length);
+    for (const s of out) s.hid = `S${String(Number(s.hid.slice(1))).padStart(width, "0")}`;
     return out;
   }
 

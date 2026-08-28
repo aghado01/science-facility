@@ -26,8 +26,8 @@ const ok = (name, cond, detail) => {
 const eq = (name, a, b) => ok(name, a === b, `expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`);
 
 // A fused anchor in either of its two shapes. Neither may appear in any output.
-const FUSED_SCOPE = /D\d{3}:[HSW]\d{4}/;
-const FUSED_DIGEST = /[HSW]\d{4}@[0-9a-f]{4}/;
+const FUSED_SCOPE = /D\d+:[HSW]\d+/;
+const FUSED_DIGEST = /[HSW]\d+@[0-9a-f]{4}/;
 
 const corpus = join(tmpdir(), "mdnav-render-src-" + process.pid);
 const wd = join(tmpdir(), "mdnav-render-wd-" + process.pid);
@@ -54,19 +54,26 @@ try {
   emitted.discover = await call("mdnav_discover", { paths: [corpus], workDir: wd });
   emitted.index = await call("mdnav_index", {});
   emitted.outline = await call("mdnav_outline", { docId: "D001", depth: 2 });
+
+  // Heading ids AND digests come from the outline the model would have read
+  // first. A local coordinate's width belongs to its document, so neither is
+  // something a test may assume.
+  const abs = /(H\d+) @ ([0-9a-f]{4}).*Abstract/.exec(emitted.outline);
+  const meth = /(H\d+) @ ([0-9a-f]{4}).*Method/.exec(emitted.outline);
+  const HID = abs?.[1], digest = abs?.[2], HID2 = meth?.[1];
   emitted.marks = await call("mdnav_marks", { docId: "D001", kind: "blockquote", minBytes: 0 });
   emitted.locate = await call("mdnav_locate", { pattern: "geodesics", max: 50 });
-  emitted.read = await call("mdnav_read", { docId: "D001", heading: "H0002", depth: 2, prefixFormat: true });
-  emitted.drift = await call("mdnav_read", { docId: "D001", heading: "H0002@dead", depth: 2 });
+  emitted.read = await call("mdnav_read", { docId: "D001", heading: HID, depth: 2, prefixFormat: true });
+  emitted.drift = await call("mdnav_read", { docId: "D001", heading: `${HID}@dead`, depth: 2 });
   emitted.batch = await call("mdnav_batch_read", {
-    requests: [{ docId: "D001", heading: "H0002", label: "abstract" }], depth: 2, prefixFormat: false,
+    requests: [{ docId: "D001", heading: HID, label: "abstract" }], depth: 2, prefixFormat: false,
   });
   emitted.batchPrefixed = await call("mdnav_batch_read", {
-    requests: [{ docId: "D001", heading: "H0002", label: "abstract" }], depth: 2, prefixFormat: true,
+    requests: [{ docId: "D001", heading: HID, label: "abstract" }], depth: 2, prefixFormat: true,
   });
   emitted.segments = await call("mdnav_outline", { docId: "D001", byBreaks: true });
   emitted.record = await call("mdnav_journal_record", {
-    op: "propose", concept: "C-001", body: "Scale-calibrated.", anchors: ["D001:H0002@dead"],
+    op: "propose", concept: "C-001", body: "Scale-calibrated.", anchors: [`D001:${HID}@dead`],
   });
   emitted.journal = await call("mdnav_journal_read", { limit: 100 });
   emitted.tree = await call("mdnav_journal_tree", {});
@@ -86,10 +93,8 @@ try {
   // ────────────────────────────────── the same chunk presents the same tokens
 
   process.stdout.write("\nthe same chunk presents the same surface form everywhere\n");
-  // H0002's digest, taken from the outline the model would have read first.
-  const digest = /H0002 @ ([0-9a-f]{4})/.exec(emitted.outline)?.[1];
-  ok("outline names the chunk with an isolated digest", digest !== undefined, emitted.outline);
-  const surface = `H0002 @ ${digest}`;
+  ok("outline names the chunk with an isolated digest", digest !== undefined && HID !== undefined, emitted.outline);
+  const surface = `${HID} @ ${digest}`;
 
   ok("the read prefix presents it identically", emitted.read.includes(surface));
   ok("the batch prefix presents it identically", emitted.batchPrefixed.includes(surface));
@@ -111,25 +116,25 @@ try {
   process.stdout.write("\nmarks stay isolated\n");
   ok("spans use an isolated range mark", emitted.marks.includes(" .. ") && !/\d\.\.\d/.test(emitted.marks));
   ok("the read prefix span does too", emitted.read.includes(" .. ") && !/\d\.\.\d/.test(emitted.read));
-  ok("outline drops the brackets that would merge into the id", !/\[[HSW]\d{4}/.test(emitted.outline));
+  ok("outline drops the brackets that would merge into the id", !/\[[HSW]\d+/.test(emitted.outline));
   ok("locate does not weld its line marker to the number", !/\bL\d/.test(emitted.locate));
 
   // ──────────────────────────────────────── provenance headers are the default
 
   process.stdout.write("\nprovenance headers are the default\n");
-  const HEADER_RE = /D001 : H\d{4} @ [0-9a-f]{4} \| \d+ \.\. \d+ \|/;
-  const CLOSE_RE = /^\| D001 : H\d{4} @ [0-9a-f]{4}$/gm;
-  const plain = await call("mdnav_read", { docId: "D001", heading: "H0002", depth: 2 });
+  const HEADER_RE = /D001 : H\d+ @ [0-9a-f]{4} \| \d+ \.\. \d+ \|/;
+  const CLOSE_RE = /^\| D001 : H\d+ @ [0-9a-f]{4}$/gm;
+  const plain = await call("mdnav_read", { docId: "D001", heading: HID, depth: 2 });
   ok("a read that asks for nothing still carries its header", HEADER_RE.test(plain), plain.slice(0, 160));
   ok("opting out per call works",
-    !HEADER_RE.test(await call("mdnav_read", { docId: "D001", heading: "H0002", depth: 2, prefixFormat: false })));
+    !HEADER_RE.test(await call("mdnav_read", { docId: "D001", heading: HID, depth: 2, prefixFormat: false })));
 
   process.env["MDNAV_PREFIX"] = "off";
   ok("MDNAV_PREFIX=off silences the whole session",
-    !HEADER_RE.test(await call("mdnav_read", { docId: "D001", heading: "H0002", depth: 2 })));
+    !HEADER_RE.test(await call("mdnav_read", { docId: "D001", heading: HID, depth: 2 })));
   delete process.env["MDNAV_PREFIX"];
   ok("and unsetting it brings them back",
-    HEADER_RE.test(await call("mdnav_read", { docId: "D001", heading: "H0002", depth: 2 })));
+    HEADER_RE.test(await call("mdnav_read", { docId: "D001", heading: HID, depth: 2 })));
 
   // A raw span read has no anchor — the span field is the address. The old
   // `@12..30` marker wrote a range without isolating `..`, overloaded `@`
@@ -141,8 +146,8 @@ try {
 
   // A discontiguous read has no single span; labelling it with the outer bound
   // would claim the material between the units as read.
-  const multi = await call("mdnav_read", { docId: "D001", headings: ["H0002", "H0003"], depth: 2 });
-  const heads = multi.match(/D001 : H\d{4} @ [0-9a-f]{4} \| \d+ \.\. \d+ \|/g) ?? [];
+  const multi = await call("mdnav_read", { docId: "D001", headings: [HID, HID2], depth: 2 });
+  const heads = multi.match(/D001 : H\d+ @ [0-9a-f]{4} \| \d+ \.\. \d+ \|/g) ?? [];
   eq("a multi-unit read frames every span, not the outer bound", heads.length, 2);
   eq("each frame names a distinct span", new Set(heads).size, 2);
 
@@ -174,11 +179,11 @@ try {
   eq("nothing cited", zero.bytesCited, 0);
 
   // Read both sections; cite only one.
-  await call2("mdnav_read", { docId: "D001", heading: "H0002", depth: 2 });
-  await call2("mdnav_read", { docId: "D001", heading: "H0003", depth: 2 });
+  await call2("mdnav_read", { docId: "D001", heading: HID, depth: 2 });
+  await call2("mdnav_read", { docId: "D001", heading: HID2, depth: 2 });
   const outline2 = await call2("mdnav_outline", { docId: "D001", depth: 2 });
-  const d2 = /H0002 @ ([0-9a-f]{4})/.exec(outline2)[1];
-  await call2("mdnav_journal_record", { op: "propose", body: "cited the abstract", anchors: [`D001:H0002@${d2}`] });
+  const d2 = new RegExp(`${HID} @ ([0-9a-f]{4})`).exec(outline2)[1];
+  await call2("mdnav_journal_record", { op: "propose", body: "cited the abstract", anchors: [`D001:${HID}@${d2}`] });
 
   const rep = (await fresh.coverage(["D001"], 2))[0];
   ok("bytes cited is a strict subset of bytes read", rep.bytesCited > 0 && rep.bytesCited < rep.bytesRead);
@@ -189,14 +194,14 @@ try {
     (await call2("mdnav_coverage", { docIds: ["D001"], depth: 2 })).includes("read not cited"));
 
   // Cite a section that was never read.
-  const d3 = /H0003 @ ([0-9a-f]{4})/.exec(outline2)[1];
+  const d3 = new RegExp(`${HID2} @ ([0-9a-f]{4})`).exec(outline2)[1];
   const fresh2 = new MdnavEngine();
   const h3 = new Map();
   registerMdnavTools({ tool: (n, _d, _s, fn) => h3.set(n, fn) }, fresh2);
   const call3 = async (name, args) => (await h3.get(name)(args)).content[0].text;
   await call3("mdnav_discover", { paths: [corpus], workDir: join(wd, "capture") });
-  await call3("mdnav_read", { docId: "D001", heading: "H0002", depth: 2 });
-  await call3("mdnav_journal_record", { op: "propose", body: "cited unread", anchors: [`D001:H0003@${d3}`] });
+  await call3("mdnav_read", { docId: "D001", heading: HID, depth: 2 });
+  await call3("mdnav_journal_record", { op: "propose", body: "cited unread", anchors: [`D001:${HID2}@${d3}`] });
   const rep2 = (await fresh2.coverage(["D001"], 2))[0];
   ok("citing an unread span is reported as salience capture", rep2.citedNotRead > 0);
   ok("and the report says so",
@@ -254,7 +259,7 @@ try {
   const first = mk();
   await first.call("mdnav_discover", { paths: [paper], workDir: runWd });
   const stampA = readFileSync(join(runWd, "LATEST"), "utf8").trim();
-  await first.call("mdnav_read", { docId: "D001", heading: "H0002", depth: 2 });
+  await first.call("mdnav_read", { docId: "D001", heading: HID, depth: 2 });
   const readBytes = (await first.e.coverage(["D001"], 2))[0].bytesRead;
   ok("the first run recorded a read", readBytes > 0);
 
@@ -295,14 +300,16 @@ try {
   const callS = async (n, a) => (await hS.get(n)(a)).content[0].text;
 
   await callS("mdnav_discover", { paths: [live], workDir: join(wd, "stale") });
-  const beforeDigest = /H0002 @ ([0-9a-f]{4})/.exec(await callS("mdnav_outline", { docId: "D001", depth: 2 }))[1];
+  const digestOfAlpha = async () =>
+    /(H\d+) @ ([0-9a-f]{4}).*Alpha/.exec(await callS("mdnav_outline", { docId: "D001", depth: 2 }))[2];
+  const beforeDigest = await digestOfAlpha();
 
   writeFileSync(live, "# Live\n\n## Alpha RENAMED\n\ncompletely different body\n", "utf8");
 
-  const afterRead = await callS("mdnav_read", { docId: "D001", heading: "H0002", depth: 2 });
+  const afterRead = await callS("mdnav_read", { docId: "D001", heading: HID, depth: 2 });
   ok("a read after the source changed returns the CURRENT bytes", afterRead.includes("completely different body"), afterRead);
   ok("and the change is announced in-band", /changed on disk and was re-indexed/.test(afterRead));
-  const afterDigest = /H0002 @ ([0-9a-f]{4})/.exec(await callS("mdnav_outline", { docId: "D001", depth: 2 }))[1];
+  const afterDigest = await digestOfAlpha();
   ok("the digest moved with the source, so drift is detectable again", beforeDigest !== afterDigest);
   ok("the notice fires once, not on every later call",
     !/changed on disk/.test(await callS("mdnav_outline", { docId: "D001", depth: 2 })));

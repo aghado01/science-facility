@@ -124,7 +124,7 @@ try {
   ]);
   eq("batchRead returns one result per request", batch.length, 2);
   ok("batchRead crosses documents", batch[0].text.includes("scale-calibrated") && batch[1].text.includes("Grassmannian"));
-  ok("batchRead reports the resolved anchor with its digest", /^H\d{4}@[0-9a-f]{4}$/.test(batch[0].anchor));
+  ok("batchRead reports the resolved anchor with its digest", /^H\d+@[0-9a-f]{4}$/.test(batch[0].anchor));
 
   const hits = await engine.locate("breakdown point");
   eq("locate finds the line", hits.length, 1);
@@ -154,7 +154,7 @@ try {
 
   process.stdout.write("\nunheaded bytes are still addressable\n");
   const gOutline = await engine.outline(GNARLY, { depth: 1 });
-  eq("prose ahead of the first heading gets H0000", gOutline[0].id, "H0000");
+  ok("prose ahead of the first heading gets the zero coordinate", /^H0+$/.test(gOutline[0].id), gOutline[0].id);
   eq("and is titled PREAMBLE", gOutline[0].title, "PREAMBLE");
   const preamble = await engine.read(GNARLY, { heading: "H0000" });
   ok("H0000 reads the preamble", preamble.text.includes("belongs to no heading"));

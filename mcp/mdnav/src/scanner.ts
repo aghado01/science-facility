@@ -107,7 +107,8 @@ export function scanDocument(buf: Buffer, options: ScanOptions): DocumentIndex {
         if (level >= 1 && level <= 6 && (trimmed.charCodeAt(level) === 32 || trimmed.charCodeAt(level) === 9)) {
           const title = trimmed.slice(level).trim();
           const digest = digestOf(title);
-          const hid = `H${String(headings.length + 1).padStart(4, "0")}`;
+          // Width is settled after the scan, once the count is known.
+          const hid = `H${headings.length + 1}`;
           const bodyStart = lineEnd < len ? lineEnd + 1 : len;
           headings.push({
             hid,
@@ -124,7 +125,7 @@ export function scanDocument(buf: Buffer, options: ScanOptions): DocumentIndex {
 
       // Check Thematic Break
       if (/^(\s*[-*_]\s*){3,}$/.test(rawLine)) {
-        const sid = `S${String(breaks.length + 1).padStart(4, "0")}`;
+        const sid = `S${breaks.length + 1}`;
         breaks.push({
           sid,
           line: lineNum,
@@ -175,6 +176,23 @@ export function scanDocument(buf: Buffer, options: ScanOptions): DocumentIndex {
       hid: "H0000", level: 0, title: "PREAMBLE", digest: digestOf("PREAMBLE"),
       line: 1, headingStart: 0, bodyStart: 0, subtreeEnd: firstStart,
     });
+  }
+
+  // Local coordinates are scoped to the document that owns them, so their width
+  // is measured from that document. An H atom never appears without the D atom
+  // that conditions it, so `H07` in one document and `H007` in another are
+  // never in competition — and the width is itself informative: it says at a
+  // glance what order of magnitude of structure this document has. Exact token
+  // matching is unaffected, because that holds per referent: heading 7 of a
+  // 30-heading document is `H07` in every emitter, always.
+  const localWidth = (n: number) => Math.max(2, String(n).length);
+  const hidWidth = localWidth(headings.filter((h) => h.level > 0).length);
+  for (const h of headings) {
+    h.hid = `H${String(Number(h.hid.slice(1))).padStart(hidWidth, "0")}`;
+  }
+  const sidWidth = localWidth(breaks.length);
+  for (const b of breaks) {
+    b.sid = `S${String(Number(b.sid.slice(1))).padStart(sidWidth, "0")}`;
   }
 
   // Count distribution — level 0 is synthetic and belongs to no depth band.
@@ -259,7 +277,7 @@ export function computeWindows(
     const end = boundary(pos);
     if (end <= pos) break;
     windows.push({
-      wid: `W${String(n).padStart(4, "0")}`,
+      wid: `W${n}`,
       title: `WINDOW ${n}`,
       digest: digestOf(`${idx.sha256}:${pos}`),
       start: pos,
@@ -269,6 +287,12 @@ export function computeWindows(
       unbroken: end - pos > size * 2 ? true : undefined,
     });
     pos = end;
+  }
+
+  // Same rule as headings: the width belongs to the partition it numbers.
+  const width = Math.max(2, String(windows.length).length);
+  for (const w of windows) {
+    w.wid = `W${String(Number(w.wid.slice(1))).padStart(width, "0")}`;
   }
 
   return windows;
