@@ -66,23 +66,34 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
   // 1. mdnav_discover
   tool(
     "mdnav_discover",
-    "Discover, index, and cache Markdown documents from paths or directories.",
+    "Mount a corpus. Pass a root to index every Markdown file nested under it in one call, addressed by a group/document coordinate and reported by relative path; or pass individual paths when there is no single root.",
     DiscoverSchema.shape,
     async (args: DiscoverArgs) => {
       try {
-        const inventory = await engine.discover(args.paths, {
+        const inventory = await engine.discover(args.paths ?? [], {
           glob: args.glob,
           recursive: args.recursive,
+          root: args.root,
           run: args.run,
           newRun: args.newRun,
           workDir: args.workDir,
         });
 
+        // The root once, then relative paths. Repeating a 70-character absolute
+        // prefix on every row spends tokens restating a constant.
+        //
+        // The id scheme itself is NOT stated. The engine holds it — widths,
+        // group paths, the whole map, in inventory.json — but the table already
+        // demonstrates it: D301..D315 sit against Chapters/ rows. Emitting a
+        // decoder for something the rows already show is the MCP spending
+        // context on what it merely happens to know.
+        const head = inventory.root ? `mount | ${inventory.root}\n\n` : "";
+
         return {
           content: [
             {
               type: "text",
-              text: `${renderInventory(inventory.docs)}\n\n${inventory.docs.length} document(s) indexed under ${inventory.workDir}`,
+              text: `${head}${renderInventory(inventory.docs)}\n\n${inventory.docs.length} document(s) indexed under ${inventory.workDir}`,
             },
           ],
         };
@@ -468,7 +479,7 @@ function renderInventory(docs: InventoryDoc[]): string {
     d.grain || "—",
     (d.spineRatio ?? 0) > 0 ? `${((d.spineRatio ?? 0) * 100).toFixed(1)}%` : "—",
     d.notes || EMPTY,
-    d.path,
+    d.relPath ?? d.path,
   ]);
   const header = ["doc", "bytes", "h1/h2/..", "grain", "spine", "notes", "path"];
   const lines = [header.join(FIELD), ...rows.map((r) => r.join(FIELD))];

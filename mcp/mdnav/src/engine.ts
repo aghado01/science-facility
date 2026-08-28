@@ -3,7 +3,7 @@
  */
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, statSync, appendFileSync } from "node:fs";
-import { resolve, join, basename, dirname } from "node:path";
+import { resolve, join, basename, dirname, relative } from "node:path";
 import { tmpdir } from "node:os";
 
 import type {
@@ -11,6 +11,7 @@ import type {
   DocumentIndex,
   Inventory,
   InventoryDoc,
+  MountAddressing,
   OutlineUnit,
   ProfileRow,
   ConstructRun,
@@ -70,6 +71,52 @@ export class MdnavEngine {
     const id = `D${String(++this.docSeq).padStart(3, "0")}`;
     this.docIdByPath.set(path, id);
     return id;
+  }
+
+  /**
+   * Assign every file under a mount a group/document coordinate.
+   *
+   * Both axes come from the data — directories in sorted order, files sorted
+   * within them — so the same corpus mounted on another machine produces the
+   * same addresses. Widths are measured, never assumed: a corpus with 7 groups
+   * and 43 files in its largest gets `D<g><dd>`, and one with 200 files in a
+   * group gets three digits. Regularity has to hold within a stream, not
+   * between corpora.
+   *
+   * A single-group corpus carries no group axis at all — a constant coordinate
+   * is not information, it is width.
+   */
+  private assignMountIds(root: string, files: string[]): MountAddressing {
+    const byGroup = new Map<string, string[]>();
+    for (const f of files) {
+      const dir = dirname(relative(root, f)).replace(/\\/g, "/");
+      const key = dir === "." ? "" : dir;
+      const bucket = byGroup.get(key);
+      if (bucket) bucket.push(f);
+      else byGroup.set(key, [f]);
+    }
+
+    // Root first, then directories in path order — a canonical walk, so the
+    // numbering reflects the layout rather than the order files were met.
+    const groupPaths = Array.from(byGroup.keys()).sort();
+    const single = groupPaths.length === 1;
+    const groupWidth = single ? 0 : String(groupPaths.length).length;
+    const docWidth = Math.max(
+      3 - groupWidth,
+      ...Array.from(byGroup.values()).map((v) => String(v.length).length)
+    );
+
+    this.docIdByPath.clear();
+    groupPaths.forEach((g, gi) => {
+      const inGroup = byGroup.get(g)!.slice().sort();
+      inGroup.forEach((f, di) => {
+        const doc = String(di + 1).padStart(docWidth, "0");
+        const id = single ? `D${doc}` : `D${String(gi + 1).padStart(groupWidth, "0")}${doc}`;
+        this.docIdByPath.set(f, id);
+      });
+    });
+
+    return { groups: groupPaths.length, groupWidth, docWidth, groupPaths };
   }
 
   public initWorkDir(
@@ -196,13 +243,20 @@ export class MdnavEngine {
   // ──────────────────────────────────────────────────────── Discover & Index
 
   public async discover(
-    paths: string[],
-    options: { glob?: string | undefined; recursive?: boolean | undefined; workDir?: string | undefined; run?: string | undefined; newRun?: boolean | undefined } = {}
+    paths: string[] = [],
+    options: { glob?: string | undefined; recursive?: boolean | undefined; workDir?: string | undefined; run?: string | undefined; newRun?: boolean | undefined; root?: string | undefined } = {}
   ): Promise<Inventory> {
-    const { glob = "*.md", recursive = false, workDir, run, newRun = false } = options;
-    const resolvedTargets = paths.map((p) => resolve(p));
+    const { glob = "*.md", recursive = false, workDir, run, newRun = false, root } = options;
+
+    // A mount is a root plus everything Markdown beneath it. Recursion is not a
+    // choice there — "the corpus" means the corpus.
+    const mountRoot = root ? resolve(root) : null;
+    const resolvedTargets = mountRoot ? [mountRoot] : paths.map((p) => resolve(p));
     if (resolvedTargets.length === 0) {
-      throw new Error("No target paths supplied for discover");
+      throw new Error("discover needs a root or at least one path");
+    }
+    if (mountRoot && !existsSync(mountRoot)) {
+      throw new Error(`no such root: ${mountRoot}`);
     }
 
     this.initWorkDir(workDir, resolvedTargets[0], run, newRun);
@@ -215,11 +269,16 @@ export class MdnavEngine {
       if (st.isFile()) {
         fileList.push(target);
       } else if (st.isDirectory()) {
-        this.crawlDirectory(target, glob, recursive, fileList);
+        this.crawlDirectory(target, glob, mountRoot ? true : recursive, fileList);
       }
     }
 
     const uniqueFiles = Array.from(new Set(fileList)).sort();
+    if (mountRoot && uniqueFiles.length === 0) {
+      throw new Error(`no ${glob} files under ${mountRoot}`);
+    }
+
+    const addressing = mountRoot ? this.assignMountIds(mountRoot, uniqueFiles) : undefined;
     const docs: InventoryDoc[] = [];
 
     for (let i = 0; i < uniqueFiles.length; i++) {
@@ -241,7 +300,9 @@ export class MdnavEngine {
       const medianBytes = idx.bytes > 0 && d1 > 0 ? Math.round(idx.bytes / d1) : idx.bytes;
       const grain = `${d1}/${d2}/${d3}~${this.fmtBytes(medianBytes)}`;
 
-      docs.push(this.describeDoc(idx, grain));
+      const described = this.describeDoc(idx, grain);
+      if (mountRoot) described.relPath = relative(mountRoot, filePath).replace(/\\/g, "/");
+      docs.push(described);
 
       // Persist index
       if (this.workDir) {
@@ -249,11 +310,17 @@ export class MdnavEngine {
       }
     }
 
+    // By id, so co-located documents sit together and the shared prefix that
+    // marks a group is visible as a block rather than scattered.
+    docs.sort((a, b) => a.id.localeCompare(b.id));
+
     this.inventory = {
       schema: 2,
       stamp: basename(this.workDir || ""),
       workDir: this.workDir || "",
       docs,
+      root: mountRoot ?? undefined,
+      addressing,
     };
 
     if (this.workDir) {

@@ -248,6 +248,57 @@ try {
 
   const byBreak = (await engine.coverage([GNARLY], 1, true))[0];
   ok("coverage accepts a break basis", byBreak.unreadAnchors.every((u) => /:S\d{4}$/.test(u.anchor)));
+  // ──────────────────────────────────────────────────────── mounting a root
+
+  process.stdout.write("\nmounting a corpus root\n");
+  const mountRoot = join(testDir, "mount");
+  mkdirSync(join(mountRoot, "chapters"), { recursive: true });
+  mkdirSync(join(mountRoot, "appendix"), { recursive: true });
+  writeFileSync(join(mountRoot, "README.md"), "# Readme\n\n## About\n\nintro\n", "utf8");
+  for (const n of ["01", "02", "03"]) {
+    writeFileSync(join(mountRoot, "chapters", `Ch${n}.md`), `# Chapter ${n}\n\n## One\n\nbody\n`, "utf8");
+  }
+  writeFileSync(join(mountRoot, "appendix", "A.md"), "# Appendix A\n\n## Notes\n\nbody\n", "utf8");
+
+  const mounted = new MdnavEngine();
+  const mnt = await mounted.discover([], { root: mountRoot, workDir: join(workDir, "mount") });
+
+  eq("a mount finds every document beneath the root, recursively", mnt.docs.length, 5);
+  eq("the root is recorded", mnt.root, mountRoot);
+  eq("groups are the directories holding documents", mnt.addressing.groups, 3);
+  eq("in canonical path order, root first",
+    mnt.addressing.groupPaths.join(","), ",appendix,chapters");
+
+  const idOf = (rel) => mnt.docs.find((d) => d.relPath === rel).id;
+  eq("root documents take group 1", idOf("README.md"), "D101");
+  eq("appendix takes group 2", idOf("appendix/A.md"), "D201");
+  eq("chapters take group 3, numbered within the group",
+    ["chapters/Ch01.md", "chapters/Ch02.md", "chapters/Ch03.md"].map(idOf).join(","), "D301,D302,D303");
+  ok("so co-located documents share a literal prefix",
+    ["D301", "D302", "D303"].every((id) => id.startsWith("D3")));
+
+  ok("paths are reported relative to the root",
+    mnt.docs.every((d) => d.relPath && !d.relPath.includes(":") && !d.relPath.startsWith("/")));
+  eq("widths are measured from the corpus, not assumed",
+    `${mnt.addressing.groupWidth}/${mnt.addressing.docWidth}`, "1/2");
+
+  // Deterministic from the data: mount the same corpus again, anywhere, and the
+  // addresses are identical. That is what makes a corpus usable as a fixture.
+  const remount = new MdnavEngine();
+  const mnt2 = await remount.discover([], { root: mountRoot, workDir: join(workDir, "mount2") });
+  eq("mounting the same corpus again yields the same addresses",
+    mnt2.docs.map((d) => `${d.id}=${d.relPath}`).join(" "),
+    mnt.docs.map((d) => `${d.id}=${d.relPath}`).join(" "));
+
+  // A single-group corpus carries no group axis — a constant is not information.
+  const flat = new MdnavEngine();
+  const flatInv = await flat.discover([], { root: join(mountRoot, "chapters"), workDir: join(workDir, "flat") });
+  eq("one group means no group axis", flatInv.addressing.groups, 1);
+  eq("and plain document ids", flatInv.docs.map((d) => d.id).join(","), "D001,D002,D003");
+
+  await throws("mounting a root that does not exist fails loudly",
+    () => new MdnavEngine().discover([], { root: join(testDir, "nope") }), /no such root/);
+
   // ────────────────────────────────────────── identity survives re-discovery
 
   process.stdout.write("\nre-discovering does not fragment the investigation\n");

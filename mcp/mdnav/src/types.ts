@@ -92,6 +92,8 @@ export type StripSpec = "all" | "none" | StripKind[];
 export interface InventoryDoc {
   id: string;
   path: string;
+  /** Path relative to the mount root, when one was given. */
+  relPath?: string | undefined;
   name: string;
   bytes?: number | undefined;
   grain?: string | undefined;
@@ -111,6 +113,31 @@ export interface Inventory {
   stamp: string;
   workDir: string;
   docs: InventoryDoc[];
+  /** The mounted corpus root, when discovery was given one. */
+  root?: string | undefined;
+  /** How document ids were minted under this mount. */
+  addressing?: MountAddressing | undefined;
+}
+
+/**
+ * Document ids under a mount are a coordinate, not a counter: a group axis
+ * (which directory) and a document axis (which file within it), each padded to
+ * a width measured from the corpus itself rather than assumed.
+ *
+ * Both axes are derived canonically from the data, so the same corpus mounted
+ * anywhere yields the same addresses — which is what makes a corpus usable as a
+ * fixture. A corpus that changes is a new version of the data, and citations
+ * carried across versions are caught by digest drift.
+ *
+ * Padding is what makes co-located documents share a literal token prefix
+ * (`D0301`, `D0302`), so grouping is legible without decoding anything.
+ */
+export interface MountAddressing {
+  groups: number;
+  groupWidth: number;
+  docWidth: number;
+  /** Directory per group index, relative to root. Index 0 is the root itself. */
+  groupPaths: string[];
 }
 
 export interface ReadLedgerEntry {
@@ -234,7 +261,8 @@ export interface JournalTreeArgs {
 // ────────────────────────────────────────────────────────── Tool Arguments
 
 export interface DiscoverArgs {
-  paths: string[];
+  paths?: string[] | undefined;
+  root?: string | undefined;
   glob?: string | undefined;
   recursive?: boolean | undefined;
   run?: string | undefined;
@@ -351,7 +379,8 @@ export interface LocateArgs {
 // ────────────────────────────────────────────────────────── Zod Tool Schemas
 
 export const DiscoverSchema = z.object({
-  paths: z.array(z.string()).describe("Files or directories to index"),
+  root: z.string().optional().describe("Mount a corpus root: index every Markdown file nested under it, address them by a group/document coordinate derived from the directory layout, and report paths relative to the root. Prefer this over 'paths' for a corpus."),
+  paths: z.array(z.string()).optional().describe("Individual files or directories to index, when there is no single root"),
   glob: z.string().optional().default("*.md").describe("File glob pattern (default: *.md)"),
   recursive: z.boolean().optional().default(false).describe("Whether to crawl subdirectories recursively"),
   run: z.string().optional().describe("Attach to an existing run stamp instead of starting a new one ('latest' follows the LATEST pointer). Restores that run's read ledger, so coverage continues across a restart."),
