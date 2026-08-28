@@ -13,7 +13,7 @@
 
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 
 import { MdnavEngine } from "../src/engine.ts";
 import { registerMdnavTools } from "../src/tools.ts";
@@ -241,6 +241,7 @@ try {
 
   const first = mk();
   await first.call("mdnav_discover", { paths: [paper], workDir: runWd });
+  const stampA = readFileSync(join(runWd, "LATEST"), "utf8").trim();
   await first.call("mdnav_read", { docId: "D001", heading: "H0002", depth: 2 });
   const readBytes = (await first.e.coverage(["D001"], 2))[0].bytesRead;
   ok("the first run recorded a read", readBytes > 0);
@@ -259,6 +260,17 @@ try {
   ok("attaching to a run that does not exist fails loudly",
     /no run 19990101_000000/.test(
       await missing.call("mdnav_discover", { paths: [paper], workDir: runWd, run: "19990101_000000" })));
+
+  // Looking at an older run must not redefine which run is current — inspection
+  // should never move a pointer other sessions follow.
+  const currentBefore = readFileSync(join(runWd, "LATEST"), "utf8").trim();
+  ok("a later run has taken over LATEST", currentBefore !== stampA);
+  const peek = mk();
+  await peek.call("mdnav_discover", { paths: [paper], workDir: runWd, run: stampA });
+  eq("attaching to an older run by name leaves LATEST alone",
+    readFileSync(join(runWd, "LATEST"), "utf8").trim(), currentBefore);
+  eq("though that session does see the older run's record",
+    (await peek.e.coverage(["D001"], 2))[0].bytesRead, readBytes);
 
   // ─────────────────────────────────────── a source that moves under the cache
 

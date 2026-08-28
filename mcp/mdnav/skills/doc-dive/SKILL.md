@@ -141,7 +141,7 @@ Operates on literal byte spans, either directly via **MCP Tools** (recommended f
 
 | Tool Call | Description & Usage |
 |---|---|
-| `mdnav_discover({ paths: ["./corpus"], recursive: true })` | Discovers, indexes, and caches documents. Returns the inventory with triage flags (below). `run: "latest"` attaches to an earlier run instead of starting one, restoring its read ledger. |
+| `mdnav_discover({ paths: ["./corpus"], recursive: true })` | Discovers, indexes, and caches documents. Returns the inventory with triage flags (below). Calling it again continues the current run rather than starting one — see [Runs](#runs-and-the-reading-record). |
 | `mdnav_index({ docIds: ["D003"], refresh: true })` | Re-reports inventory rows for documents already indexed, without re-crawling. `refresh` forces a re-scan. |
 | `mdnav_profile({ docId: "D001" })` | Reports construct shares, median gaps, and $cv$ for delimiter identification. |
 | `mdnav_outline({ docId: "D001", depth: 2, comp: true })` | Hierarchical unit outline with sizes and construct composition tags (`[quote84 prose12]`). |
@@ -216,6 +216,23 @@ D002 |    90 B | 1/1 | 1/2/2~90B | 8.9% | breaks x2 (not h1-1) setext? x2 frontm
 | `setext? x2` | Underlined headings the ATX scanner cannot see, so the real structure may be finer than `grain` suggests | Check with `marks`, or fall back to `byBreaks` / `windows` |
 | `frontmatter` · `bom` · `crlf` | Structural facts that mislead naive offset arithmetic | Nothing — mdnav already accounts for them |
 | `maxline 12K` | A very long line in an otherwise clean document: a blob, not prose | Expect an `unbroken` window there |
+
+### Runs and the Reading Record
+
+A **run** holds one investigation's artifacts under `<corpus>/.doc-dive/<stamp>/`: the index cache and `reads.jsonl`. The journal sits at the root instead, outside any run, and survives all of this.
+
+| Call | What it does to the record |
+|---|---|
+| `discover` again, same corpus | **Continues the current run.** Adding a path or picking up a new file does not restart coverage; you are told when a record is being kept. |
+| `discover({ newRun: true })` | Starts a separate run. Coverage begins at zero. |
+| `discover({ run: "<stamp>" })` | Attaches to an earlier run and restores its `reads.jsonl` — how you resume an investigation, or look at one you left behind. Does not move `LATEST`. |
+| `discover({ run: "latest" })` | The same, following the `LATEST` pointer. |
+
+**Document ids are assigned once per path** and never reassigned, so an anchor cited early still names the same document after the corpus grows.
+
+Coverage is **not merged across runs**. If a corpus was read across two of them, attach to each in turn and read the figures separately.
+
+On the CLI every `discover` mints a run instead, and later verbs follow `LATEST` or an explicit `--run <stamp>` — so `coverage --run <stamp>` is the CLI way into an earlier one. The two surfaces differ here on purpose.
 
 ### Grain Signatures Triage Table
 

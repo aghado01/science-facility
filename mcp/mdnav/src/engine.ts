@@ -122,7 +122,13 @@ export class MdnavEngine {
 
     const runDir = join(root, rel);
     mkdirSync(join(runDir, "documents"), { recursive: true });
-    writeFileSync(join(root, "LATEST"), rel, "utf8");
+
+    // LATEST names the run in progress. Attaching to an OLDER run to look at it
+    // must not redefine that for everyone else — inspection should not move a
+    // shared pointer. Written on mint, or if nothing has claimed it yet.
+    if (!run || !existsSync(join(root, "LATEST"))) {
+      writeFileSync(join(root, "LATEST"), rel, "utf8");
+    }
 
     // A new run reads nothing yet; an attached one inherits what it already
     // read, so coverage continues across a restart instead of resetting to 0%.
