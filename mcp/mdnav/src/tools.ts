@@ -26,6 +26,7 @@ import {
   type JournalRecordArgs,
   type JournalReadArgs,
   type JournalTreeArgs,
+  type Elision,
 } from "./types.ts";
 import { MdnavEngine } from "./engine.ts";
 import {
@@ -42,8 +43,23 @@ import {
 } from "./formatting.ts";
 
 export function registerMdnavTools(server: any, engine: MdnavEngine) {
+  /**
+   * Every tool registers through here so out-of-band notices — a source that
+   * moved under the cache — always reach the reader, whichever verb happens to
+   * notice. On stderr they would reach the server log and nobody who matters.
+   */
+  const tool = (name: string, desc: string, shape: unknown, fn: (args: any) => Promise<any>) => {
+    server.tool(name, desc, shape, async (args: any) => {
+      const res = await fn(args);
+      const notes = engine.drainNotices();
+      if (notes.length === 0) return res;
+      const lead = `${notes.map((n) => `mdnav: ${n}`).join("\n")}\n\n`;
+      return { ...res, content: [{ type: "text", text: lead + (res?.content?.[0]?.text ?? "") }] };
+    });
+  };
+
   // 1. mdnav_discover
-  server.tool(
+  tool(
     "mdnav_discover",
     "Discover, index, and cache Markdown documents from paths or directories.",
     DiscoverSchema.shape,
@@ -74,7 +90,7 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
   );
 
   // 2. mdnav_profile
-  server.tool(
+  tool(
     "mdnav_profile",
     "Profile construct composition and gap cadence (cv) to identify structural delimiters.",
     ProfileSchema.shape,
@@ -108,7 +124,7 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
   );
 
   // 3. mdnav_outline
-  server.tool(
+  tool(
     "mdnav_outline",
     "Generate hierarchical outline with direct and subtree sizes, and construct composition tags.",
     OutlineSchema.shape,
@@ -149,7 +165,7 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
   );
 
   // 4. mdnav_marks
-  server.tool(
+  tool(
     "mdnav_marks",
     "List exact runs and byte spans of specific constructs (blockquote, fence, html, table, list).",
     MarksSchema.shape,
@@ -179,7 +195,7 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
   );
 
   // 5. mdnav_read
-  server.tool(
+  tool(
     "mdnav_read",
     "Read literal Markdown byte span at exact depth/extent with optional binary noise stripping.",
     ReadSchema.shape,
@@ -199,7 +215,8 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
 
         // Drift notices go in-band. On stderr they would reach the server log
         // and never the reader, who is the one citing the anchor.
-        const warn = res.warnings.length > 0 ? `${res.warnings.map((w) => `mdnav: ${w}`).join("\n")}\n\n` : "";
+        const notes = [...res.warnings, ...elisionNote(res.elidedBytes, res.elisions)];
+        const warn = notes.length > 0 ? `${notes.map((w) => `mdnav: ${w}`).join("\n")}\n\n` : "";
         const head = args.prefixFormat
           ? `${CHUNK_HEADER}\n${formatSourceChunkPrefix(res.docId, res.anchors[0] ?? EMPTY, mergeSpans(res.spans), res.bytes)}\n`
           : "";
@@ -219,7 +236,7 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
   );
 
   // 6. mdnav_batch_read
-  server.tool(
+  tool(
     "mdnav_batch_read",
     "Native batch reader for harvesting multiple sections (e.g. abstracts across 20+ papers) in a single RPC.",
     BatchReadSchema.shape,
@@ -245,7 +262,13 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
           return `${tag}\n\n${r.text}`;
         });
 
-        const warnings = results.flatMap((r) => r.warnings);
+        const warnings = [
+          ...results.flatMap((r) => r.warnings),
+          ...elisionNote(
+            results.reduce((n, r) => n + r.elidedBytes, 0),
+            results.flatMap((r) => r.elisions)
+          ),
+        ];
         const warn = warnings.length > 0 ? `${warnings.map((w) => `mdnav: ${w}`).join("\n")}\n\n` : "";
         const header = args.prefixFormat ? `${CHUNK_HEADER}${FIELD}label\n\n` : "";
 
@@ -264,7 +287,7 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
   );
 
   // 7. mdnav_coverage
-  server.tool(
+  tool(
     "mdnav_coverage",
     "Compute byte-exact reading coverage against total document size and list unread units.",
     CoverageSchema.shape,
@@ -319,7 +342,7 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
   );
 
   // 8. mdnav_locate
-  server.tool(
+  tool(
     "mdnav_locate",
     "Locate exact text or regex matches in headings/lines without dumping full text bodies.",
     LocateSchema.shape,
@@ -343,7 +366,7 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
   );
 
   // 9. mdnav_journal_record
-  server.tool(
+  tool(
     "mdnav_journal_record",
     "Append one observation, hypothesis, or decision to the investigative notebook, optionally linked to the entries it develops. Returns a compact receipt — never an echo of the body you just wrote.",
     JournalRecordSchema.shape,
@@ -359,7 +382,7 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
   );
 
   // 10. mdnav_journal_read
-  server.tool(
+  tool(
     "mdnav_journal_read",
     "Read back the notebook as a token-isolated ledger, filtered by concept, derived status, op, or citing document.",
     JournalReadSchema.shape,
@@ -380,7 +403,7 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
   );
 
   // 11. mdnav_journal_tree
-  server.tool(
+  tool(
     "mdnav_journal_tree",
     "Render the lineage of recorded ideas — what refined, superseded, adopted, or rejected what — with each entry's derived status.",
     JournalTreeSchema.shape,
@@ -403,6 +426,19 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
 function mergeSpans(spans: ByteSpan[]): ByteSpan {
   if (spans.length === 0) return [0, 0];
   return [Math.min(...spans.map((s) => s[0])), Math.max(...spans.map((s) => s[1]))];
+}
+
+/**
+ * Elision is addressed, not hidden. The stream carries a marker where each
+ * removed span was; this says how much went in total, so the reader can see
+ * what was skipped and decide whether to re-read the anchor without strip.
+ */
+function elisionNote(elidedBytes: number, elisions: Elision[]): string[] {
+  if (elidedBytes <= 0) return [];
+  const byKind = new Map<string, number>();
+  for (const e of elisions) byKind.set(e.kind, (byKind.get(e.kind) ?? 0) + 1);
+  const detail = Array.from(byKind.entries()).map(([k, n]) => `${k} x${n}`).join(", ");
+  return [`elided ${fmtBytes(elidedBytes)}${detail ? ` (${detail})` : ""} — re-read this anchor without strip to get it`];
 }
 
 function fmtBytes(n: number): string {

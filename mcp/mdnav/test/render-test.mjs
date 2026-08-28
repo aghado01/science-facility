@@ -150,6 +150,48 @@ try {
   ok("citing an unread span is reported as salience capture", rep2.citedNotRead > 0);
   ok("and the report says so",
     (await call3("mdnav_coverage", { docIds: ["D001"], depth: 2 })).includes("cited not read"));
+  // ─────────────────────────────────────── a source that moves under the cache
+
+  process.stdout.write("\na source that changes under us\n");
+  const live = join(corpus, "live.md");
+  writeFileSync(live, "# Live\n\n## Alpha\n\noriginal body\n", "utf8");
+  const hS = new Map();
+  const eS = new MdnavEngine();
+  registerMdnavTools({ tool: (n, _d, _s, fn) => hS.set(n, fn) }, eS);
+  const callS = async (n, a) => (await hS.get(n)(a)).content[0].text;
+
+  await callS("mdnav_discover", { paths: [live], workDir: join(wd, "stale") });
+  const beforeDigest = /H0002 @ ([0-9a-f]{4})/.exec(await callS("mdnav_outline", { docId: "D001", depth: 2 }))[1];
+
+  writeFileSync(live, "# Live\n\n## Alpha RENAMED\n\ncompletely different body\n", "utf8");
+
+  const afterRead = await callS("mdnav_read", { docId: "D001", heading: "H0002", depth: 2 });
+  ok("a read after the source changed returns the CURRENT bytes", afterRead.includes("completely different body"), afterRead);
+  ok("and the change is announced in-band", /changed on disk and was re-indexed/.test(afterRead));
+  const afterDigest = /H0002 @ ([0-9a-f]{4})/.exec(await callS("mdnav_outline", { docId: "D001", depth: 2 }))[1];
+  ok("the digest moved with the source, so drift is detectable again", beforeDigest !== afterDigest);
+  ok("the notice fires once, not on every later call",
+    !/changed on disk/.test(await callS("mdnav_outline", { docId: "D001", depth: 2 })));
+
+  // ─────────────────────────────────────── elision is addressed, not hidden
+
+  process.stdout.write("\nelision is addressed, not hidden\n");
+  const noisy = join(corpus, "noisy.md");
+  writeFileSync(noisy, `# Noisy\n\n![pic](data:image/png;base64,${"A".repeat(4000)})\n\ntail text\n`, "utf8");
+  const hN = new Map();
+  const eN = new MdnavEngine();
+  registerMdnavTools({ tool: (n, _d, _s, fn) => hN.set(n, fn) }, eN);
+  const callN = async (n, a) => (await hN.get(n)(a)).content[0].text;
+  await callN("mdnav_discover", { paths: [noisy], workDir: join(wd, "noise") });
+
+  const strippedOut = await callN("mdnav_read", { docId: "D001", heading: "H0001", depth: 1, strip: "all" });
+  ok("the stream carries a marker where the removed span was", strippedOut.includes("mdnav elided | data-uri |"));
+  ok("the marker names its byte cost", /mdnav elided \| data-uri \| \d+ B/.test(strippedOut));
+  ok("the marker is not an HTML comment the html pass would eat", !strippedOut.includes("<!-- mdnav: elided"));
+  ok("the read reports the total elided", /elided [\d.]+ KiB \(data-uri x1\)/.test(strippedOut));
+  ok("surrounding content survives", strippedOut.includes("tail text"));
+  const unstripped = await callN("mdnav_read", { docId: "D001", heading: "H0001", depth: 1, strip: "none" });
+  ok("the same anchor without strip still yields the bytes", unstripped.length > strippedOut.length + 3000);
 } catch (err) {
   process.stdout.write(`\n  SUITE ABORTED: ${err && err.stack ? err.stack : err}\n`);
   fail++;

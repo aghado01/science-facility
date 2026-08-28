@@ -3,7 +3,7 @@
  */
 
 import { createHash } from "node:crypto";
-import type { HeadingEntry, BreakEntry, NoiseEntry, DocumentIndex, ProfileRow, ConstructRun, WindowEntry } from "./types.ts";
+import type { HeadingEntry, BreakEntry, NoiseEntry, DocumentIndex, ProfileRow, ConstructRun, WindowEntry, Elision } from "./types.ts";
 
 const LF = 10, CR = 13;
 
@@ -328,24 +328,38 @@ function scanNoise(buf: Buffer): NoiseEntry[] {
 export function stripNoise(
   text: string,
   options: { strip?: "all" | "none" | undefined; stripMatch?: string | undefined } = {}
-): { text: string; elidedBytes: number } {
+): { text: string; elidedBytes: number; elisions: Elision[] } {
   const { strip = "none", stripMatch } = options;
-  if (strip === "none" && !stripMatch) return { text, elidedBytes: 0 };
+  if (strip === "none" && !stripMatch) return { text, elidedBytes: 0, elisions: [] };
 
   const initialBytes = Buffer.byteLength(text);
   let out = text;
 
-  if (strip === "all") {
-    // 1. Data URIs
-    out = out.replace(/!\[(.*?)\]\(data:[^;]+;base64,[A-Za-z0-9+/=]+\)/g, (_, alt) => {
-      return alt ? `<!-- mdnav: elided data-uri [${alt}] -->` : `<!-- mdnav: elided data-uri -->`;
-    });
+  // Elision is ADDRESSED, not hidden: anything substantial leaves a marker
+  // naming its kind and size, so the reader can see what was skipped and
+  // re-read the same anchor without strip to get it.
+  //
+  // The marker is plain marked-up text, never an HTML comment — the html pass
+  // below deletes comments, and a comment-shaped marker was being manufactured
+  // and then destroyed inside this same function.
+  const elisions: Elision[] = [];
+  const mark = (kind: Elision["kind"]) => (match: string): string => {
+    const bytes = Buffer.byteLength(match, "utf8");
+    elisions.push({ kind, bytes });
+    return `mdnav elided | ${kind} | ${bytes} B`;
+  };
 
-    // 2. Presigned URLs
-    out = out.replace(/!\[(.*?)\]\((https?:\/\/[^)]*(?:X-Amz-Signature|X-Amz-Credential|X-Goog-Signature|sig=)[^)]*)\)/g, "");
+  if (strip === "all") {
+    // 1. Data URIs — an embedded file. Nothing of it is worth keeping.
+    out = out.replace(/!\[(.*?)\]\(data:[^;]+;base64,[A-Za-z0-9+/=]+\)/g, mark("data-uri"));
+
+    // 2. Presigned URLs. The `!` decides the remedy: an image has nothing worth
+    //    keeping, a link's label names what was cited, so the label survives.
+    out = out.replace(/!\[(.*?)\]\((https?:\/\/[^)]*(?:X-Amz-Signature|X-Amz-Credential|X-Goog-Signature|sig=)[^)]*)\)/g, mark("signed-url"));
     out = out.replace(/\[(.*?)\]\((https?:\/\/[^)]*(?:X-Amz-Signature|X-Amz-Credential|X-Goog-Signature|sig=)[^)]*)\)/g, "$1");
 
-    // 3. HTML tags (preserve inner text)
+    // 3. HTML furniture. Markup goes, inner text stays — this removes no
+    //    content, so it leaves no marker.
     out = out.replace(/<div\b[^>]*>([\s\S]*?)<\/div>/gi, "$1");
     out = out.replace(/<span\b[^>]*>([\s\S]*?)<\/span>/gi, "$1");
     out = out.replace(/<!--[\s\S]*?-->/g, "");
@@ -353,16 +367,14 @@ export function stripNoise(
 
   if (stripMatch) {
     try {
-      const re = new RegExp(stripMatch, "g");
-      out = out.replace(re, "<!-- mdnav: elided pattern match -->");
+      out = out.replace(new RegExp(stripMatch, "g"), mark("custom"));
     } catch {
-      // Invalid pattern ignored
+      // An invalid pattern elides nothing rather than failing the read.
     }
   }
 
   const finalBytes = Buffer.byteLength(out);
-  const elidedBytes = Math.max(0, initialBytes - finalBytes);
-  return { text: out, elidedBytes };
+  return { text: out, elidedBytes: Math.max(0, initialBytes - finalBytes), elisions };
 }
 
 // ────────────────────────────────────────────────────────── Profile & Cadence

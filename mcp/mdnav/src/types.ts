@@ -262,11 +262,18 @@ export interface ReadArgs {
   workDir?: string | undefined;
 }
 
+/** One span removed from a read, named and measured so it stays addressable. */
+export interface Elision {
+  kind: "data-uri" | "html" | "signed-url" | "image-ref" | "custom";
+  bytes: number;
+}
+
 export interface ReadResult {
   docId: string;
   text: string;
   bytes: number;
   elidedBytes: number;
+  elisions: Elision[];
   spans: ByteSpan[];
   anchors: string[];
   /** Digest-drift notices. Reported, never fatal — the bytes are still there. */
@@ -280,6 +287,8 @@ export interface BatchReadResult {
   span?: ByteSpan | undefined;
   text: string;
   bytes: number;
+  elidedBytes: number;
+  elisions: Elision[];
   warnings: string[];
 }
 

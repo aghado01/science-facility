@@ -174,7 +174,7 @@ For every claim surviving into the final deliverable:
 1. **Wording Drift:** Does the source span support the claim *as currently stated*, or only as initially conceived?
 2. **Retraction Cascades:** Were any supporting concepts or proposals subsequently retracted or superseded?
 3. **Burn-in Bias:** Was the claim formed during early orientation under an ontology that was later discarded?
-4. **Digest Validity:** Does `Dnnn:Hnnnn@digest` match the current source index (verifying source immutability)?
+4. **Digest Validity:** Does `Dnnn:Hnnnn@digest` match the current source index (verifying source immutability)? Re-reading a cited anchor answers this in-band — and because every read re-stats the source, a corpus edited *during* the investigation is re-indexed and announced rather than served from a stale cache.
 
 ---
 

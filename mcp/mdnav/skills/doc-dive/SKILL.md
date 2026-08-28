@@ -168,6 +168,11 @@ An anchor is a **path, not an identifier**, and every tool renders it decomposed
 
 Pass anchors back in the compact form (`D014:H0003@a1b2`) — that is what the tools accept and what `rawJson` returns; only the rendered stream decomposes.
 
+### Two things the tools tell you without being asked
+
+- **A source that changed under you.** Every read stats the file; if it moved, mdnav re-indexes and says so in-band before the content. Anchors taken earlier may no longer match — `mdnav_journal_read({ digest })` lists exactly which citations were pinned to the old version.
+- **What was elided.** With `strip: "all"`, each removed span leaves a marker in the stream naming its kind and byte cost (`mdnav elided | data-uri | 4030 B`), and the read reports the total. The elision is addressed, not hidden: re-read the same anchor without `strip` to get the bytes.
+
 ### CLI Equivalents
 
 ```bash

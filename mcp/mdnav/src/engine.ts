@@ -17,6 +17,7 @@ import type {
   DocumentCoverage,
   ReadLedgerEntry,
   AnchorTarget,
+  Elision,
   ReadResult,
   BatchReadResult,
   JournalEntry,
@@ -40,6 +41,11 @@ export class MdnavEngine {
   private journalRoot: string | null = null;
   private journalEntries: JournalEntry[] = [];
   private journalLoaded = false;
+
+  // Out-of-band things the reader must be told about — a source that moved
+  // under the cache, so far. Drained into whatever tool output comes next,
+  // because stderr reaches the server log and never the reader.
+  private notices: string[] = [];
 
   constructor(initialWorkDir?: string) {
     if (initialWorkDir) {
@@ -78,6 +84,13 @@ export class MdnavEngine {
     return runDir;
   }
 
+  /** Take and clear the pending notices, for the caller to put in the stream. */
+  public drainNotices(): string[] {
+    const out = this.notices;
+    this.notices = [];
+    return out;
+  }
+
   // ──────────────────────────────────────────────────────── Discover & Index
 
   public async discover(
@@ -111,7 +124,10 @@ export class MdnavEngine {
       const filePath = uniqueFiles[i]!;
       const docId = `D${String(i + 1).padStart(3, "0")}`;
       const buf = readFileSync(filePath);
-      const idx = scanDocument(buf, { id: docId, path: filePath });
+      // The file's own mtime, not the moment we scanned it — staleness is
+      // decided by comparing against the source, so the source's clock is the
+      // only one that means anything here.
+      const idx = scanDocument(buf, { id: docId, path: filePath, mtimeMs: statSync(filePath).mtimeMs });
 
       this.indices.set(docId, idx);
       this.sourceBuffers.set(docId, buf);
@@ -331,6 +347,7 @@ export class MdnavEngine {
 
     // Materialize spans
     const chunks: string[] = [];
+    const elisions: Elision[] = [];
     let totalRawBytes = 0;
     let totalElided = 0;
 
@@ -340,6 +357,7 @@ export class MdnavEngine {
 
       const stripped = stripNoise(raw, { strip, stripMatch });
       totalElided += stripped.elidedBytes;
+      elisions.push(...stripped.elisions);
       chunks.push(stripped.text);
     }
 
@@ -352,6 +370,7 @@ export class MdnavEngine {
       text: chunks.join("\n\n"),
       bytes: totalRawBytes,
       elidedBytes: totalElided,
+      elisions,
       spans: spansToRead,
       anchors,
       warnings,
@@ -402,6 +421,8 @@ export class MdnavEngine {
           span: merged,
           text: readResult.text,
           bytes: readResult.bytes,
+          elidedBytes: readResult.elidedBytes,
+          elisions: readResult.elisions,
           warnings: readResult.warnings,
         });
       } catch (err: any) {
@@ -411,6 +432,8 @@ export class MdnavEngine {
           anchor: req.heading ?? req.from ?? "",
           text: `[Error reading ${req.docId}: ${err.message}]`,
           bytes: 0,
+          elidedBytes: 0,
+          elisions: [],
           warnings: [],
         });
       }
@@ -758,13 +781,13 @@ export class MdnavEngine {
 
   private resolveDoc(docRef: string): { docId: string; buf: Buffer } {
     if (this.indices.has(docRef) && this.sourceBuffers.has(docRef)) {
-      return { docId: docRef, buf: this.sourceBuffers.get(docRef)! };
+      return { docId: docRef, buf: this.refreshIfStale(docRef) };
     }
 
     // Try finding by path or filename
     for (const [id, idx] of this.indices.entries()) {
       if (idx.path === docRef || basename(idx.path) === docRef) {
-        return { docId: id, buf: this.sourceBuffers.get(id)! };
+        return { docId: id, buf: this.refreshIfStale(id) };
       }
     }
 
@@ -772,13 +795,51 @@ export class MdnavEngine {
     if (existsSync(docRef)) {
       const docId = `D${String(this.indices.size + 1).padStart(3, "0")}`;
       const buf = readFileSync(docRef);
-      const idx = scanDocument(buf, { id: docId, path: resolve(docRef) });
+      const idx = scanDocument(buf, { id: docId, path: resolve(docRef), mtimeMs: statSync(docRef).mtimeMs });
       this.indices.set(docId, idx);
       this.sourceBuffers.set(docId, buf);
       return { docId, buf };
     }
 
     throw new Error(`Document reference "${docRef}" could not be resolved`);
+  }
+
+  /**
+   * Re-read and re-index a document whose bytes changed under us.
+   *
+   * Without this the cache is authoritative for the life of the process: a
+   * corpus edited while you are working in it keeps serving the bytes it had at
+   * discover, and — worse — the digest-drift check compares an anchor against
+   * the STALE index, so it always matches and drift is never reported. The one
+   * case the drift guarantee exists for is precisely the case that defeated it.
+   */
+  private refreshIfStale(docId: string): Buffer {
+    const idx = this.indices.get(docId)!;
+    const cached = this.sourceBuffers.get(docId)!;
+
+    let st;
+    try { st = statSync(idx.path); } catch { return cached; }
+
+    // Size and mtime both agreeing is enough to skip the hash on a large file.
+    if (st.size === idx.bytes && Math.floor(st.mtimeMs) === Math.floor(idx.mtimeMs)) return cached;
+
+    const buf = readFileSync(idx.path);
+    const fresh = scanDocument(buf, { id: docId, path: idx.path, mtimeMs: st.mtimeMs });
+
+    if (fresh.sha256 === idx.sha256) {
+      // Touched but not changed. Adopt the new mtime so we stop re-reading it.
+      idx.mtimeMs = st.mtimeMs;
+      return cached;
+    }
+
+    this.indices.set(docId, fresh);
+    this.sourceBuffers.set(docId, buf);
+    this.persistIndex(docId, fresh);
+    this.notices.push(
+      `${docId} changed on disk and was re-indexed — ${idx.bytes} B became ${fresh.bytes} B. ` +
+      `Anchors and digests below describe the NEW source; citations taken before now may no longer match.`
+    );
+    return buf;
   }
 
   private getIndex(docId: string): DocumentIndex {
