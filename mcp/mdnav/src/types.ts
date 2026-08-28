@@ -271,6 +271,8 @@ export interface Elision {
 export interface ReadResult {
   docId: string;
   text: string;
+  /** Per-span text, aligned with `spans`, so each chunk can carry its own header. */
+  chunks: string[];
   bytes: number;
   elidedBytes: number;
   elisions: Elision[];
@@ -365,7 +367,7 @@ export const ReadSchema = z.object({
   depth: z.number().int().min(1).max(6).optional().describe("Depth grain context for the unit read"),
   strip: z.enum(["all", "none"]).optional().default("none").describe("Strip heavy binary noise (base64 PNGs, presigned URLs)"),
   stripMatch: z.string().optional().describe("Custom regex pattern to elide at read time"),
-  prefixFormat: z.boolean().optional().default(false).describe("Prepend a token-isolated provenance header: 'D023 | H0006@e5f6 | 8420 .. 9860 | 1440 |'"),
+  prefixFormat: z.boolean().optional().default(true).describe("Head each chunk with a token-isolated provenance line: 'D023 | H0006 @ e5f6 | 8420 .. 9860 | 1440'. On by default; pass false here, or set MDNAV_PREFIX=off for the session."),
   workDir: z.string().optional().describe("Explicit work directory"),
 });
 
@@ -381,7 +383,7 @@ export const BatchReadSchema = z.object({
   })).describe("List of target sections to read across one or multiple documents"),
   depth: z.number().int().min(1).max(6).optional().default(2).describe("Default depth for unit extents"),
   strip: z.enum(["all", "none"]).optional().default("all").describe("Strip heavy binary noise (default: all)"),
-  prefixFormat: z.boolean().optional().default(false).describe("Head each block with a token-isolated provenance line instead of an HTML comment tag"),
+  prefixFormat: z.boolean().optional().default(true).describe("Head each block with a token-isolated provenance line instead of an HTML comment tag. On by default; MDNAV_PREFIX=off disables it for the session."),
   workDir: z.string().optional().describe("Explicit work directory"),
 });
 

@@ -143,7 +143,7 @@ Operates on literal byte spans, either directly via **MCP Tools** (recommended f
 | `mdnav_profile({ docId: "D001" })` | Reports construct shares, median gaps, and $cv$ for delimiter identification. |
 | `mdnav_outline({ docId: "D001", depth: 2, comp: true })` | Hierarchical unit outline with sizes and construct composition tags (`[quote84 prose12]`). |
 | `mdnav_marks({ docId: "D001", kind: "blockquote" })` | Enumerates exact byte spans and previews of specific constructs. |
-| `mdnav_read({ docId: "D001", heading: "H0003@a1b2", extent: "unit", strip: "all" })` | Reads literal Markdown span at exact depth/extent with optional binary noise stripping. Pass `prefixFormat: true` for a provenance header. |
+| `mdnav_read({ docId: "D001", heading: "H0003@a1b2", extent: "unit", strip: "all" })` | Reads literal Markdown span at exact depth/extent with optional binary noise stripping. Every chunk arrives with a provenance header (see below). |
 | **`mdnav_batch_read({ requests: [...] })`** | **Native multi-document batch reading** (e.g. read 20+ abstracts/theorems across papers in 1 RPC). |
 | `mdnav_coverage({ docIds: ["D001"], depth: 1 })` | Bytes read **and bytes cited**, with the read-not-cited / cited-not-read diagnostics. `byBreaks: true` scores against the segment basis. |
 | `mdnav_locate({ pattern: "keyword", docIds: ["D001"] })` | Fast regex/string search returning anchor lines without dumping full bodies. |
@@ -167,6 +167,21 @@ The `@digest` suffix an outline hands you is accepted verbatim by `read`. If the
 An anchor is a **path, not an identifier**, and every tool renders it decomposed — `D014 : H0003 @ a1b2` — so that each component presents the same tokens wherever it appears in the stream: outline, chunk prefix, locate hit, coverage row, drift warning, journal line. That is what lets mentions of the same document or chunk bind to each other by attention rather than by string similarity. The components are also separately queryable in the journal (`docId` / `anchor` / `digest`): asking for `D014:H0003` finds every version anyone cited; asking for a superseded digest lists exactly the claims that now need re-walking. See [state-and-audit.md](references/state-and-audit.md) §4.
 
 Pass anchors back in the compact form (`D014:H0003@a1b2`) — that is what the tools accept and what `rawJson` returns; only the rendered stream decomposes.
+
+### Every chunk arrives labelled
+
+Materialized content carries a provenance line, on by default:
+
+```
+doc | anchor | span | bytes
+
+D001 | H0002 @ d21b | 9 .. 60 | 51
+## Abstract
+
+A scale-calibrated geometric median.
+```
+
+The four fields map one-to-one onto the call that would fetch the same bytes again. A read spanning several units gets **one header per span**, never a single header over the outer bound — that would claim the material between the units as read. Opt out per call with `prefixFormat: false`, or for a whole session with `MDNAV_PREFIX=off`.
 
 ### Two things the tools tell you without being asked
 

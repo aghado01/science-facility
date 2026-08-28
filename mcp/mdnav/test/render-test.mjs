@@ -109,6 +109,32 @@ try {
   ok("outline drops the brackets that would merge into the id", !/\[[HSW]\d{4}/.test(emitted.outline));
   ok("locate does not weld its line marker to the number", !/\bL\d/.test(emitted.locate));
 
+  // ──────────────────────────────────────── provenance headers are the default
+
+  process.stdout.write("\nprovenance headers are the default\n");
+  const HEADER_RE = /D001 \| H\d{4} @ [0-9a-f]{4} \| \d+ \.\. \d+ \| \d+/;
+  const plain = await call("mdnav_read", { docId: "D001", heading: "H0002", depth: 2 });
+  ok("a read that asks for nothing still carries its header", HEADER_RE.test(plain), plain.slice(0, 160));
+  ok("opting out per call works",
+    !HEADER_RE.test(await call("mdnav_read", { docId: "D001", heading: "H0002", depth: 2, prefixFormat: false })));
+
+  process.env["MDNAV_PREFIX"] = "off";
+  ok("MDNAV_PREFIX=off silences the whole session",
+    !HEADER_RE.test(await call("mdnav_read", { docId: "D001", heading: "H0002", depth: 2 })));
+  delete process.env["MDNAV_PREFIX"];
+  ok("and unsetting it brings them back",
+    HEADER_RE.test(await call("mdnav_read", { docId: "D001", heading: "H0002", depth: 2 })));
+
+  // A discontiguous read has no single span; labelling it with the outer bound
+  // would claim the material between the units as read.
+  const multi = await call("mdnav_read", { docId: "D001", headings: ["H0002", "H0003"], depth: 2 });
+  const heads = multi.match(/D001 \| H\d{4} @ [0-9a-f]{4} \| \d+ \.\. \d+ \| \d+/g) ?? [];
+  eq("a multi-unit read labels every span, not the outer bound", heads.length, 2);
+  for (const h of heads) {
+    const m = /\| (\d+) \.\. (\d+) \| (\d+)$/.exec(h);
+    ok(`each header states its own span width (${h.slice(0, 22)}…)`, Number(m[3]) === Number(m[2]) - Number(m[1]), h);
+  }
+
   // ────────────────────────────────────────── read vs cited is now arithmetic
 
   process.stdout.write("\nread vs cited\n");

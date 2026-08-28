@@ -368,6 +368,7 @@ export class MdnavEngine {
     return {
       docId,
       text: chunks.join("\n\n"),
+      chunks,
       bytes: totalRawBytes,
       elidedBytes: totalElided,
       elisions,

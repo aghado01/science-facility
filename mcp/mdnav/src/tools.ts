@@ -217,15 +217,25 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
         // and never the reader, who is the one citing the anchor.
         const notes = [...res.warnings, ...elisionNote(res.elidedBytes, res.elisions)];
         const warn = notes.length > 0 ? `${notes.map((w) => `mdnav: ${w}`).join("\n")}\n\n` : "";
-        const head = args.prefixFormat
-          ? `${CHUNK_HEADER}\n${formatSourceChunkPrefix(res.docId, res.anchors[0] ?? EMPTY, mergeSpans(res.spans), res.bytes)}\n`
-          : "";
+
+        // Each span gets its OWN header. A discontiguous read (headings: [...])
+        // has no single span — labelling it with the outer bound would claim
+        // the gaps between the units as read material.
+        let body = res.text;
+        if (prefixOn(args.prefixFormat)) {
+          const blocks = res.chunks.map((chunk, i) => {
+            const span = res.spans[i] ?? mergeSpans(res.spans);
+            const anchor = res.anchors[i] ?? res.anchors[0] ?? EMPTY;
+            return `${formatSourceChunkPrefix(res.docId, anchor, span, span[1] - span[0])}\n${chunk}`;
+          });
+          body = `${CHUNK_HEADER}\n\n${blocks.join("\n\n")}`;
+        }
 
         return {
           content: [
             {
               type: "text",
-              text: `${warn}${head}${res.text}`,
+              text: `${warn}${body}`,
             },
           ],
         };
@@ -251,7 +261,7 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
         // tag rather than stacking on it. The prefix carries strictly more —
         // the resolved digest, the span, and the byte count.
         const blocks = results.map((r) => {
-          if (args.prefixFormat) {
+          if (prefixOn(args.prefixFormat)) {
             const head = `${formatSourceChunkPrefix(r.docId, r.anchor || EMPTY, r.span ?? [0, 0], r.bytes)}${FIELD}${r.label ?? EMPTY}`;
             return `${head}\n${r.text}`;
           }
@@ -270,7 +280,7 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
           ),
         ];
         const warn = warnings.length > 0 ? `${warnings.map((w) => `mdnav: ${w}`).join("\n")}\n\n` : "";
-        const header = args.prefixFormat ? `${CHUNK_HEADER}${FIELD}label\n\n` : "";
+        const header = prefixOn(args.prefixFormat) ? `${CHUNK_HEADER}${FIELD}label\n\n` : "";
 
         return {
           content: [
@@ -422,7 +432,18 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
   );
 }
 
-/** Outer bound of a set of spans, for one provenance header over a multi-span read. */
+/**
+ * Provenance headers are ON by default: a header the reader can rely on being
+ * there is worth more than one that comes and goes, and a chunk that enters
+ * context unlabelled cannot be bound to the outline row that introduced it.
+ * MDNAV_PREFIX=off silences them for a whole session.
+ */
+function prefixOn(argValue: boolean | undefined): boolean {
+  if ((process.env["MDNAV_PREFIX"] ?? "").toLowerCase() === "off") return false;
+  return argValue !== false;
+}
+
+/** Outer bound of a set of spans — used only when a span cannot be identified. */
 function mergeSpans(spans: ByteSpan[]): ByteSpan {
   if (spans.length === 0) return [0, 0];
   return [Math.min(...spans.map((s) => s[0])), Math.max(...spans.map((s) => s[1]))];
