@@ -181,8 +181,15 @@ try {
   eq("the header names the same nine fields", JOURNAL_HEADER.split(" | ").length, 9);
 
   const prefix = formatSourceChunkPrefix("D023", "H0006@e5f6", [8420, 9860], 1440);
-  eq("a chunk prefix reads as its four fields", prefix, "D023 | H0006 @ e5f6 | 8420 .. 9860 | 1440");
-  ok("and opens no column it does not fill", !prefix.endsWith("|") && !prefix.endsWith("| "));
+  // The address is ONE field: ` | ` separates fields, the operators join the
+  // components within one. And the frame closes on the length, because the
+  // content field is what comes next.
+  eq("a chunk prefix reads as address, span, length", prefix, "D023 : H0006 @ e5f6 | 8420 .. 9860 | 1440 |");
+  eq("the address is a single field, not two columns", prefix.split(" | ")[0], "D023 : H0006 @ e5f6");
+  ok("the length is the last field before the content", /\| 1440 \|$/.test(prefix));
+  eq("a label sits before the length, never after",
+    formatSourceChunkPrefix("D023", "H0006@e5f6", [8420, 9860], 1440, "abstract"),
+    "D023 : H0006 @ e5f6 | abstract | 8420 .. 9860 | 1440 |");
   ok("the range mark is isolated", prefix.includes(" .. "));
   ok("the identity mark is isolated", prefix.includes(" @ ") && !/[^ ]@|@[^ ]/.test(prefix));
 

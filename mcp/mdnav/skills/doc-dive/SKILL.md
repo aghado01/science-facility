@@ -55,14 +55,16 @@ Do not force an ontology before encountering the material. Emit parameters as op
 
 ### 2. `PROFILE & TELESCOPE` — Characterize Before Ingesting
 Never dive blind into an unknown document:
-1. `profile <ref>`: Inspect composition and gap coefficient of variation (`cv < 0.6` flags structural delimiters).
-2. `outline <ref> --depth N --comp`: Inspect top constructs per unit (e.g. `[quote84 prose12]`, `[data100]`) to identify high-signal units and avoid token traps.
-3. `marks <ref> --kind <construct>`: Locate exact runs of specific markup (blockquotes, `<details>`, fences) when headings are non-standard.
+1. The `discover`/`index` inventory already flags what the document costs to read — embedded payloads, whether its breaks and H1s agree, setext suspects. Act on those notes before anything else.
+2. `mdnav_profile({ docId })`: composition and gap coefficient of variation (`cv < 0.6` flags structural delimiters).
+3. `mdnav_outline({ docId, depth, comp: true })`: top constructs per unit (e.g. `[quote84 prose12]`, `[data100]`) to find high-signal units and avoid token traps.
+4. `mdnav_marks({ docId, kind })`: exact runs of specific markup (blockquotes, `<details>`, fences) when headings are non-standard.
 
 ### 3. `DIVE` — Read at Deliberate Grain
-- Read exact units or subtrees with `mdnav read <ref> --heading Hnnnn --extent unit|subtree`.
-- Batch re-read supporting anchors for a concept in one call: `mdnav read <ref> --headings H0003,H0019`.
-- Strip multi-kilobyte embedded assets (PNGs, presigned URLs): `--strip all`.
+- `mdnav_read({ docId, heading: "H0003@a1b2", extent: "unit" | "subtree" })` — exact units or subtrees.
+- `mdnav_read({ docId, headings: ["H0003", "H0019"] })` — re-read a concept's supporting anchors together; each arrives with its own header.
+- `mdnav_batch_read({ requests: [...] })` — the same across documents in one call.
+- `strip: "all"`, or name the species (`strip: ["data-uri"]`), to drop multi-kilobyte assets.
 
 ### 4. `SURFACE & ACCUMULATE` — Stateful Ledger Updates
 - **Anchored Evidence:** Every finding must reference `Dnnn:Hnnnn[@digest]`. Record it with `mdnav_journal_record` as you read, while the span is still in front of you.
@@ -152,9 +154,32 @@ Operates on literal byte spans, either directly via **MCP Tools** (recommended f
 | `mdnav_journal_read({ concept?, status?, docId?, anchor?, digest?, op? })` | Ledger view, filtered. `status: "active"` lists what nothing has yet superseded; `anchor`/`digest` traverse the citation graph. |
 | `mdnav_journal_tree({ concept? })` | Lineage of ideas: what refined, superseded, adopted, or rejected what. |
 
-### Addressing
+### The Stream Is Framed
 
-Every anchor is `Dnnn:Hnnnn[@digest]`, and the space is shared across three families:
+Material arrives inside a frame — metadata prefix, then the content, then a close:
+
+```
+address | span | bytes | content
+
+D001 : H0002 @ d21b | 9 .. 60 | 51 |
+## Abstract
+
+A scale-calibrated geometric median.
+|
+```
+
+` | ` separates **fields**; the operators join the components *within* one field — so the address is a single field, not three columns. **`bytes` is a length prefix**, and it is last for that reason: reading it closes the frame, and the next that-many bytes are the material. It counts what you were handed, not the span it came from, so `60 .. 735 | 78` says the unit is 675 bytes and 597 of them were elided. The trailing `|` closes the block; markdown content contains `|` itself (tables), so it is a boundary marker, never the parse mechanism.
+
+**Why it earns the characters.** Attention binds on token identity. `D001` here is the same token sequence as `D001` in an outline row 30k tokens back and in a journal citation later, so those mentions link to each other without you re-deriving the connection. Fused as `D001:H0002@d21b` the components merge with the punctuation and tokenize differently depending on the digits around them — the link then has to be *inferred* from string similarity rather than seen. And because the stream only ever moves forward, an unframed block has no recoverable end: the framing is what keeps material and metadata told apart further down.
+
+In practice:
+
+- **Quote anchors exactly as given.** A restyled citation loses the binding.
+- **One frame per span.** A multi-unit read frames each unit separately, never the outer bound — that would claim the gaps between them as read.
+- Pass anchors *back* compact (`D014:H0003@a1b2`); only the stream spaces them out.
+- `prefixFormat: false` per call, `MDNAV_PREFIX=off` per session.
+
+**Anchor families** — one shared address space, all four accepted by `read`:
 
 | Family | Minted by | Use when |
 |---|---|---|
@@ -163,54 +188,10 @@ Every anchor is `Dnnn:Hnnnn[@digest]`, and the space is shared across three fami
 | `Snnnn` | `outline({ byBreaks: true })` | Structure is carried by `---`, not headings |
 | `Wnnnn` | `outline({ windows: 4000 })` | Neither headings nor breaks give usable grain |
 
-The `@digest` suffix an outline hands you is accepted verbatim by `read`. If the source has changed under it, the read still returns the bytes and **reports the drift in-band** — which is Audit Check 4 answered for free rather than deferred to the reverse walk.
+**Two things the tools volunteer,** in-band, because stderr reaches the server log and not you:
 
-An anchor is a **path, not an identifier**, and every tool renders it decomposed — `D014 : H0003 @ a1b2` — so that each component presents the same tokens wherever it appears in the stream: outline, chunk prefix, locate hit, coverage row, drift warning, journal line. That is what lets mentions of the same document or chunk bind to each other by attention rather than by string similarity. The components are also separately queryable in the journal (`docId` / `anchor` / `digest`): asking for `D014:H0003` finds every version anyone cited; asking for a superseded digest lists exactly the claims that now need re-walking. See [state-and-audit.md](references/state-and-audit.md) §4.
-
-Pass anchors back in the compact form (`D014:H0003@a1b2`) — that is what the tools accept and what `rawJson` returns; only the rendered stream decomposes.
-
-### Every chunk arrives labelled
-
-Materialized content carries a provenance line, on by default:
-
-```
-doc | anchor | span | bytes
-
-D001 | H0002 @ d21b | 9 .. 60 | 51
-## Abstract
-
-A scale-calibrated geometric median.
-```
-
-The four fields map one-to-one onto the call that would fetch the same bytes again. A read spanning several units gets **one header per span**, never a single header over the outer bound — that would claim the material between the units as read. Opt out per call with `prefixFormat: false`, or for a whole session with `MDNAV_PREFIX=off`.
-
-### Two things the tools tell you without being asked
-
-- **A source that changed under you.** Every read stats the file; if it moved, mdnav re-indexes and says so in-band before the content. Anchors taken earlier may no longer match — `mdnav_journal_read({ digest })` lists exactly which citations were pinned to the old version.
-- **What was elided.** With `strip: "all"` — or a named species, `strip: ["data-uri", "signed-url"]` — each removed span leaves a marker in the stream naming its kind and byte cost (`mdnav elided | data-uri | 4030 B`), and the read reports the total. The elision is addressed, not hidden: re-read the same anchor without `strip` to get the bytes.
-
-### CLI Equivalents
-
-The MCP tools now cover every CLI capability, so a doc-dive never needs to leave the tool surface. The CLI remains for shell work — piping, scripting, a quick look without a session.
-
-```bash
-# Discovery & Indexing
-node mdnav.mjs discover ./corpus --recursive [--work-dir <path>]
-
-# Triage & Structure
-node mdnav.mjs profile D001                      # Composition, cadence & delimiter detection (cv)
-node mdnav.mjs outline D001 --depth 2 --comp     # Unit outlines with component breakdowns
-node mdnav.mjs marks D001 --kind blockquote      # List markup runs with start..end byte spans
-node mdnav.mjs locate "keyword" D001 -i          # Anchors and line hits without dumping text
-
-# Materialization
-node mdnav.mjs read D001 --heading H0003 --extent unit [--strip all]
-node mdnav.mjs read D001 --from H0003 --to H0007                      # Merge contiguous run
-node mdnav.mjs read D001 --headings H0003,H0019,H0042                 # Multi-span batch read
-
-# Audit & Accounting
-node mdnav.mjs coverage D001 [--depth 1]         # Byte-exact coverage & unread anchors
-```
+- **A source that changed under you** — re-indexed and announced before the content. `mdnav_journal_read({ digest })` then lists which citations were pinned to the old version.
+- **What `strip` removed** — each span leaves a marker naming its kind and byte cost (`mdnav elided | data-uri | 4030 B`), plus a total. Re-read the same anchor without `strip` to get the bytes back.
 
 ### Reading the Inventory
 
@@ -242,6 +223,10 @@ D002 |    90 B | 1/1 | 1/2/2~90B | 8.9% | breaks x2 (not h1-1) setext? x2 frontm
 | `1/1/1~6.57K` | No usable headings | Try `byBreaks: true` (Snnnn), fallback to `windows: 4000` (Wnnnn) |
 | `0/0/0~4.3K` | No headings at all | The whole document is `H0000` (BODY); partition it with `windows` |
 | `15/15/15~1.14K` | Flat records with no nesting | Read at depth 1 |
+
+### CLI
+
+The tools cover every CLI capability, so a doc-dive never needs to leave the tool surface. `node mdnav.mjs <discover|index|profile|outline|marks|read|coverage|locate>` remains for shell work — piping, scripting, a look without a session. `--help` lists the flags.
 
 ---
 

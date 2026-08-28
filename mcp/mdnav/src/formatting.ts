@@ -44,29 +44,61 @@ export const JOURNAL_HEADER =
   ["id", "ts", "op", "refs", "concept", "status", "anchors", "bytes", "body"].join(FIELD);
 
 /** Column header for prefix-formatted source chunks. */
-export const CHUNK_HEADER = ["doc", "anchor", "span", "bytes"].join(FIELD);
+export const CHUNK_HEADER = ["address", "span", "bytes", "content"].join(FIELD);
+
+/** Same, for the batch reader, which carries a caller-supplied label. */
+export const BATCH_CHUNK_HEADER = ["address", "label", "span", "bytes", "content"].join(FIELD);
 
 /**
- * Provenance header for one materialized source chunk.
+ * The metadata prefix framing one materialized source chunk.
  *
- *   `D023 | H0006 @ e5f6 | 8420 .. 9860 | 1440`
+ *   `D023 : H0006 @ e5f6 | 8420 .. 9860 | 1440 |`
+ *   `## Method`                                        <- the content block
+ *   `...`
+ *   `|`                                                <- CHUNK_CLOSE
  *
- * No trailing separator: the body starts on the next line, so a dangling mark
- * would open a column that nothing fills. A caller with a further field (the
- * batch reader's label) appends FIELD itself.
+ * The prefix is the whole frame; the length is only its last field. ` | `
+ * separates FIELDS, and the operators join the components WITHIN one field —
+ * so the address is a single field, `D023 : H0006 @ e5f6`, not two columns.
+ *
+ * The last field before the content is a LENGTH PREFIX, and it comes last for
+ * that reason: reading it closes the frame. Everything up to it is framing;
+ * what follows for that many bytes is the material itself. It measures the
+ * EMITTED content, not the source span — after an elision `8420 .. 9860 | 1300`
+ * says the span was 1440 bytes and you are being handed 1300 of them.
  */
 export function formatSourceChunkPrefix(
   docId: string,
   anchor: string,
   span: ByteSpan,
-  contentBytes: number
+  contentBytes: number,
+  label?: string | undefined
 ): string {
-  return [
-    docId,
-    anchor ? formatAnchorString(anchor) : EMPTY,
-    `${span[0]}${RANGE}${span[1]}`,
-    String(contentBytes),
-  ].join(FIELD);
+  const fields = [formatAnchorString(anchor ? `${docId}:${anchor}` : docId)];
+  if (label !== undefined) fields.push(label || EMPTY);
+  fields.push(`${span[0]}${RANGE}${span[1]}`, String(contentBytes));
+  return `${fields.join(FIELD)}${FIELD.trimEnd()}`;
+}
+
+/**
+ * Closes a content block.
+ *
+ * The stream is appended to continuously and only moves forward, so a block
+ * with no terminator has an undeclared end: further down there is nothing left
+ * to say where the material stopped and the next frame began. The length field
+ * settles that for anything that can count bytes; this settles it for a reader
+ * that cannot, and it costs one token.
+ *
+ * It is deliberately the same mark as a field boundary — content was the last
+ * field of the record, and this closes it. Markdown content is full of `|`
+ * (tables), so the terminator is a boundary MARKER, never the parse mechanism:
+ * the length prefix is what actually delimits the region.
+ */
+export const CHUNK_CLOSE = "|";
+
+/** A content block with its terminator, on its own line and without padding it. */
+export function closeChunk(content: string): string {
+  return `${content}${content.endsWith("\n") ? "" : "\n"}${CHUNK_CLOSE}`;
 }
 
 /**

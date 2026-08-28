@@ -113,7 +113,7 @@ try {
   // ──────────────────────────────────────── provenance headers are the default
 
   process.stdout.write("\nprovenance headers are the default\n");
-  const HEADER_RE = /D001 \| H\d{4} @ [0-9a-f]{4} \| \d+ \.\. \d+ \| \d+/;
+  const HEADER_RE = /D001 : H\d{4} @ [0-9a-f]{4} \| \d+ \.\. \d+ \| \d+ \|/;
   const plain = await call("mdnav_read", { docId: "D001", heading: "H0002", depth: 2 });
   ok("a read that asks for nothing still carries its header", HEADER_RE.test(plain), plain.slice(0, 160));
   ok("opting out per call works",
@@ -129,12 +129,31 @@ try {
   // A discontiguous read has no single span; labelling it with the outer bound
   // would claim the material between the units as read.
   const multi = await call("mdnav_read", { docId: "D001", headings: ["H0002", "H0003"], depth: 2 });
-  const heads = multi.match(/D001 \| H\d{4} @ [0-9a-f]{4} \| \d+ \.\. \d+ \| \d+/g) ?? [];
+  const heads = multi.match(/D001 : H\d{4} @ [0-9a-f]{4} \| \d+ \.\. \d+ \| \d+ \|/g) ?? [];
   eq("a multi-unit read labels every span, not the outer bound", heads.length, 2);
   for (const h of heads) {
-    const m = /\| (\d+) \.\. (\d+) \| (\d+)$/.exec(h);
-    ok(`each header states its own span width (${h.slice(0, 22)}…)`, Number(m[3]) === Number(m[2]) - Number(m[1]), h);
+    const m = /\| (\d+) \.\. (\d+) \| (\d+) \|$/.exec(h);
+    ok(`each frame states its own length (${h.slice(0, 22)}…)`, Number(m[3]) === Number(m[2]) - Number(m[1]), h);
   }
+  eq("every content block is terminated", (multi.match(/^\|$/gm) || []).length, 2);
+
+  // The length measures what is handed over, not the span it came from. With
+  // nothing elided those agree; that is what makes the disagreement legible.
+  // Its own directory: dropping a fixture into `corpus` would renumber the
+  // documents every later section resolves by id.
+  const lenDir = join(wd, "len-fixture");
+  mkdirSync(lenDir, { recursive: true });
+  const withNoise = join(lenDir, "noise-len.md");
+  writeFileSync(withNoise, `# Doc\n\nkeep this\n\n![x](data:image/png;base64,${"A".repeat(900)})\n`, "utf8");
+  const hL = new Map();
+  const eL = new MdnavEngine();
+  registerMdnavTools({ tool: (n, _d, _s, fn) => hL.set(n, fn) }, eL);
+  const callL = async (n, a) => (await hL.get(n)(a)).content[0].text;
+  await callL("mdnav_discover", { paths: [withNoise], workDir: join(wd, "len") });
+  const frame = /\| (\d+) \.\. (\d+) \| (\d+) \|/.exec(
+    await callL("mdnav_read", { docId: "D001", heading: "H0001", depth: 1, strip: "all" }));
+  ok("after an elision the length is smaller than the span it names",
+    Number(frame[3]) < Number(frame[2]) - Number(frame[1]), frame && frame[0]);
 
   // ────────────────────────────────────────── read vs cited is now arithmetic
 
