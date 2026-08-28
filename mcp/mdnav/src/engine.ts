@@ -54,8 +54,15 @@ export class MdnavEngine {
   // after it — and a journal anchor recorded as D001:H0002 then silently points
   // at a different document, which no amount of digest checking can catch
   // because the digest belongs to the wrong file too.
-  private docIdByPath = new Map<string, string>();
-  private docSeq = 0;
+  //
+  // Coordinates are stored; the ID IS RENDERED at the session's widths. Every
+  // atom is then the same length for the whole session by construction rather
+  // than by arithmetic that has to be kept in agreement across three call
+  // sites. Group 0 is reserved for documents outside any mount, so an
+  // on-the-fly read can never collide with a mounted `D001`.
+  private docCoord = new Map<string, [number, number]>();
+  private groupWidth = 0;
+  private docWidth = 3;
   private currentRoot: string | null = null;
 
   constructor(initialWorkDir?: string) {
@@ -64,13 +71,74 @@ export class MdnavEngine {
     }
   }
 
+  /** Render a coordinate at the session's current widths. */
+  private renderDocId(coord: [number, number]): string {
+    const group = this.groupWidth > 0 ? String(coord[0]).padStart(this.groupWidth, "0") : "";
+    return `D${group}${String(coord[1]).padStart(this.docWidth, "0")}`;
+  }
+
   /** Mint an id for a path, or return the one it already has. */
   private docIdFor(path: string): string {
-    const existing = this.docIdByPath.get(path);
-    if (existing) return existing;
-    const id = `D${String(++this.docSeq).padStart(3, "0")}`;
-    this.docIdByPath.set(path, id);
-    return id;
+    const existing = this.docCoord.get(path);
+    if (existing) return this.renderDocId(existing);
+
+    // Outside any mount: group 0, the next free slot in it.
+    let next = 0;
+    for (const [g, d] of this.docCoord.values()) if (g === 0 && d > next) next = d;
+    const coord: [number, number] = [0, next + 1];
+    this.growWidthsFor(0, coord[1]);
+    this.docCoord.set(path, coord);
+    return this.renderDocId(coord);
+  }
+
+  /**
+   * Widen the session's id format if a coordinate no longer fits.
+   *
+   * Every id is re-rendered when this happens, because the alternative is a
+   * session whose atoms are not all the same length — and re-keying the caches
+   * is the price of keeping that invariant true at every moment rather than
+   * only at the start. It is loud, because ids an agent has already seen change
+   * underneath it.
+   */
+  private growWidthsFor(group: number, doc: number): void {
+    const needGroup = group > 0 ? String(group).length : this.groupWidth;
+    const needDoc = String(doc).length;
+    if (needGroup <= this.groupWidth && needDoc <= this.docWidth) return;
+
+    const before = this.renderWidthSpec();
+    this.groupWidth = Math.max(this.groupWidth, needGroup);
+    this.docWidth = Math.max(this.docWidth, needDoc);
+    this.rekeyToCurrentWidths(before);
+  }
+
+  private renderWidthSpec(): string {
+    return this.groupWidth > 0 ? `D<${this.groupWidth}><${this.docWidth}>` : `D<${this.docWidth}>`;
+  }
+
+  /** Re-render every id and move the caches onto the new keys. */
+  private rekeyToCurrentWidths(before: string): void {
+    if (this.docCoord.size === 0) return;
+
+    const indices = new Map<string, DocumentIndex>();
+    const buffers = new Map<string, Buffer>();
+    for (const [path, coord] of this.docCoord) {
+      const id = this.renderDocId(coord);
+      for (const [oldId, idx] of this.indices) {
+        if (idx.path !== path) continue;
+        idx.id = id;
+        indices.set(id, idx);
+        const buf = this.sourceBuffers.get(oldId);
+        if (buf) buffers.set(id, buf);
+      }
+    }
+    if (indices.size === 0) return;
+
+    this.indices = indices;
+    this.sourceBuffers = buffers;
+    this.notices.push(
+      `document ids widened from ${before} to ${this.renderWidthSpec()} — the corpus outgrew the format. ` +
+      `Every id is re-rendered; anchors taken before now name the same documents under the shorter form.`
+    );
   }
 
   /**
@@ -100,23 +168,38 @@ export class MdnavEngine {
     // numbering reflects the layout rather than the order files were met.
     const groupPaths = Array.from(byGroup.keys()).sort();
     const single = groupPaths.length === 1;
-    const groupWidth = single ? 0 : String(groupPaths.length).length;
-    const docWidth = Math.max(
-      3 - groupWidth,
-      ...Array.from(byGroup.values()).map((v) => String(v.length).length)
-    );
 
-    this.docIdByPath.clear();
+    // Widths come from this corpus's own cardinality. A small corpus is
+    // entitled to short ids — the invariant is that every atom in a session is
+    // the same length, not that the length is the same between corpora. But a
+    // session that has already handed ids out can only grow them, never narrow.
+    const before = this.renderWidthSpec();
+    // Two digits is the floor for an axis in use: a corpus of three is entitled
+    // to short ids, but `D31` reads as a number rather than a coordinate.
+    const fresh = this.docCoord.size === 0;
+    const needGroup = single ? 0 : Math.max(2, String(groupPaths.length).length);
+    const needDoc = Math.max(2, ...Array.from(byGroup.values()).map((v) => String(v.length).length));
+
+    this.groupWidth = fresh ? needGroup : Math.max(this.groupWidth, needGroup);
+    this.docWidth = fresh ? needDoc : Math.max(this.docWidth, needDoc);
+
+    // Group 1 upward for mounted directories; 0 stays reserved for anything
+    // read from outside the mount.
     groupPaths.forEach((g, gi) => {
       const inGroup = byGroup.get(g)!.slice().sort();
       inGroup.forEach((f, di) => {
-        const doc = String(di + 1).padStart(docWidth, "0");
-        const id = single ? `D${doc}` : `D${String(gi + 1).padStart(groupWidth, "0")}${doc}`;
-        this.docIdByPath.set(f, id);
+        this.docCoord.set(f, [single ? 0 : gi + 1, di + 1]);
       });
     });
 
-    return { groups: groupPaths.length, groupWidth, docWidth, groupPaths };
+    if (before !== this.renderWidthSpec()) this.rekeyToCurrentWidths(before);
+
+    return {
+      groups: groupPaths.length,
+      groupWidth: this.groupWidth,
+      docWidth: this.docWidth,
+      groupPaths,
+    };
   }
 
   public initWorkDir(

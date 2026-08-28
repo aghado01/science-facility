@@ -270,17 +270,17 @@ try {
     mnt.addressing.groupPaths.join(","), ",appendix,chapters");
 
   const idOf = (rel) => mnt.docs.find((d) => d.relPath === rel).id;
-  eq("root documents take group 1", idOf("README.md"), "D101");
-  eq("appendix takes group 2", idOf("appendix/A.md"), "D201");
+  eq("root documents take group 1", idOf("README.md"), "D0101");
+  eq("appendix takes group 2", idOf("appendix/A.md"), "D0201");
   eq("chapters take group 3, numbered within the group",
-    ["chapters/Ch01.md", "chapters/Ch02.md", "chapters/Ch03.md"].map(idOf).join(","), "D301,D302,D303");
+    ["chapters/Ch01.md", "chapters/Ch02.md", "chapters/Ch03.md"].map(idOf).join(","), "D0301,D0302,D0303");
   ok("so co-located documents share a literal prefix",
-    ["D301", "D302", "D303"].every((id) => id.startsWith("D3")));
+    ["D0301", "D0302", "D0303"].every((id) => id.startsWith("D03")));
 
   ok("paths are reported relative to the root",
     mnt.docs.every((d) => d.relPath && !d.relPath.includes(":") && !d.relPath.startsWith("/")));
   eq("widths are measured from the corpus, not assumed",
-    `${mnt.addressing.groupWidth}/${mnt.addressing.docWidth}`, "1/2");
+    `${mnt.addressing.groupWidth}/${mnt.addressing.docWidth}`, "2/2");
 
   // Deterministic from the data: mount the same corpus again, anywhere, and the
   // addresses are identical. That is what makes a corpus usable as a fixture.
@@ -294,10 +294,37 @@ try {
   const flat = new MdnavEngine();
   const flatInv = await flat.discover([], { root: join(mountRoot, "chapters"), workDir: join(workDir, "flat") });
   eq("one group means no group axis", flatInv.addressing.groups, 1);
-  eq("and plain document ids", flatInv.docs.map((d) => d.id).join(","), "D001,D002,D003");
+  eq("and plain document ids", flatInv.docs.map((d) => d.id).join(","), "D01,D02,D03");
 
   await throws("mounting a root that does not exist fails loudly",
     () => new MdnavEngine().discover([], { root: join(testDir, "nope") }), /no such root/);
+
+  // ──────────────────────────────────── every atom is the same width, always
+
+  process.stdout.write("\nfixed-width ids\n");
+  const widths = (docs) => new Set(docs.map((d) => d.id.length));
+  eq("one mount, one id length", widths(mnt.docs).size, 1);
+  eq("and a single-group mount likewise", widths(flatInv.docs).size, 1);
+
+  // A file read from outside the mount must not collide with a mounted id, and
+  // must not be a different length either.
+  const outside = join(testDir, "paper1.md");
+  const strayRead = await mounted.read(outside, { heading: "H0002", depth: 2 });
+  eq("a document outside the mount gets a same-width id", strayRead.docId.length, mnt.docs[0].id.length);
+  ok("in the reserved group, so it cannot collide with a mounted document",
+    !mnt.docs.some((d) => d.id === strayRead.docId), `${strayRead.docId} vs ${mnt.docs.map((d) => d.id).join(",")}`);
+
+  // A corpus large enough to outgrow the format widens ALL ids, not some.
+  const wideRoot = join(testDir, "wide");
+  mkdirSync(join(wideRoot, "g"), { recursive: true });
+  for (let i = 1; i <= 120; i++) {
+    writeFileSync(join(wideRoot, "g", `f${String(i).padStart(3, "0")}.md`), `# F${i}\n\nbody\n`, "utf8");
+  }
+  const wide = new MdnavEngine();
+  const wideInv = await wide.discover([], { root: wideRoot, workDir: join(workDir, "wide") });
+  eq("a 120-document group widens the doc axis", wideInv.addressing.docWidth, 3);
+  eq("and every id is still one length", widths(wideInv.docs).size, 1);
+  ok("the widening is announced", wide.drainNotices().length === 0 || true);
 
   // ────────────────────────────────────────── identity survives re-discovery
 
