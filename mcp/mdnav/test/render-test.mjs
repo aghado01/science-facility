@@ -127,6 +127,14 @@ try {
   ok("and unsetting it brings them back",
     HEADER_RE.test(await call("mdnav_read", { docId: "D001", heading: "H0002", depth: 2 })));
 
+  // A raw span read has no anchor — the span field is the address. The old
+  // `@12..30` marker wrote a range without isolating `..`, overloaded `@`
+  // (which introduces a digest everywhere else), and did not resolve.
+  const spanRead = await call("mdnav_read", { docId: "D001", span: [12, 30] });
+  ok("a span read is addressed by its document alone", /^D001 \| 12 \.\. 30 \|$/m.test(spanRead), spanRead.slice(0, 120));
+  ok("it invents no pseudo-anchor", !/@\d/.test(spanRead) && !/\d\.\.\d/.test(spanRead));
+  ok("and closes on the same address", /^\| D001$/m.test(spanRead));
+
   // A discontiguous read has no single span; labelling it with the outer bound
   // would claim the material between the units as read.
   const multi = await call("mdnav_read", { docId: "D001", headings: ["H0002", "H0003"], depth: 2 });

@@ -400,7 +400,7 @@ export const ReadSchema = z.object({
     .optional().default("none")
     .describe("Elide machine furniture: 'all', 'none', or the exact species, e.g. ['data-uri','signed-url']. Each removed span leaves a marker naming its kind and size."),
   stripMatch: z.string().optional().describe("Custom regex pattern to elide at read time"),
-  prefixFormat: z.boolean().optional().default(true).describe("Head each chunk with a token-isolated provenance line: 'D023 | H0006 @ e5f6 | 8420 .. 9860 | 1440'. On by default; pass false here, or set MDNAV_PREFIX=off for the session."),
+  prefixFormat: z.boolean().optional().default(true).describe("Frame each chunk with a provenance line — 'D023 : H0006 @ e5f6 | 8420 .. 9860 |' — and close it by repeating the address. On by default; pass false here, or set MDNAV_PREFIX=off for the session."),
   workDir: z.string().optional().describe("Explicit work directory"),
 });
 

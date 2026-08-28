@@ -246,7 +246,8 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
         if (prefixOn(args.prefixFormat)) {
           const blocks = res.chunks.map((chunk, i) => {
             const span = res.spans[i] ?? mergeSpans(res.spans);
-            const anchor = res.anchors[i] ?? res.anchors[0] ?? EMPTY;
+            // No anchor (a raw span read) means the document IS the address.
+            const anchor = res.anchors[i] ?? res.anchors[0] ?? "";
             return `${formatSourceChunkPrefix(res.docId, anchor, span)}\n${closeChunk(chunk, res.docId, anchor)}`;
           });
           body = `${CHUNK_HEADER}\n\n${blocks.join("\n\n")}`;

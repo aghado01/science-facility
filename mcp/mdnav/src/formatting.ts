@@ -52,10 +52,10 @@ export const BATCH_CHUNK_HEADER = ["address", "label", "span", "content"].join(F
 /**
  * The metadata prefix framing one materialized source chunk.
  *
- *   `D023 : H0006 @ e5f6 | 8420 .. 9860 | 1440 |`
+ *   `D023 : H0006 @ e5f6 | 8420 .. 9860 |`
  *   `## Method`                                        <- the content block
  *   `...`
- *   `|`                                                <- CHUNK_CLOSE
+ *   `| D023 : H0006 @ e5f6`                            <- formatChunkClose
  *
  * ` | ` separates FIELDS; the operators join the components WITHIN one field —
  * so the address is a single field, `D023 : H0006 @ e5f6`, not two columns.

@@ -494,7 +494,11 @@ export class MdnavEngine {
         throw new Error(`span ${span[0]}..${span[1]} is outside 0..${buf.length}`);
       }
       spansToRead.push(span);
-      anchors.push(`@${span[0]}..${span[1]}`);
+      // A raw span read has NO anchor: the span field already carries the
+      // location, and it is what a repeat call takes. The old `@a..b` marker
+      // was malformed twice over — it wrote the range without isolating `..`,
+      // and it overloaded `@`, which everywhere else introduces a digest. It
+      // also did not resolve, so it named an address the tool would reject.
     } else if (headings && headings.length > 0) {
       const targets = headings.map(take).sort((a, b) => a.headingStart - b.headingStart);
       for (const t of targets) {
