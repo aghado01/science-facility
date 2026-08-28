@@ -74,6 +74,7 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
           glob: args.glob,
           recursive: args.recursive,
           run: args.run,
+          newRun: args.newRun,
           workDir: args.workDir,
         });
 

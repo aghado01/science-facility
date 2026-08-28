@@ -48,13 +48,36 @@ export class MdnavEngine {
   // because stderr reaches the server log and never the reader.
   private notices: string[] = [];
 
+  // Document ids are assigned ONCE per path and never reassigned. Numbering by
+  // sort position instead means a file joining the corpus renumbers everything
+  // after it — and a journal anchor recorded as D001:H0002 then silently points
+  // at a different document, which no amount of digest checking can catch
+  // because the digest belongs to the wrong file too.
+  private docIdByPath = new Map<string, string>();
+  private docSeq = 0;
+  private currentRoot: string | null = null;
+
   constructor(initialWorkDir?: string) {
     if (initialWorkDir) {
       this.initWorkDir(initialWorkDir);
     }
   }
 
-  public initWorkDir(customWorkDir?: string, anchorPath?: string, run?: string | undefined): string {
+  /** Mint an id for a path, or return the one it already has. */
+  private docIdFor(path: string): string {
+    const existing = this.docIdByPath.get(path);
+    if (existing) return existing;
+    const id = `D${String(++this.docSeq).padStart(3, "0")}`;
+    this.docIdByPath.set(path, id);
+    return id;
+  }
+
+  public initWorkDir(
+    customWorkDir?: string,
+    anchorPath?: string,
+    run?: string | undefined,
+    newRun = false
+  ): string {
     const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/T/, "_").slice(0, 15);
     const envWorkDir = process.env["MDNAV_WORK_DIR"];
     let root = customWorkDir ? resolve(customWorkDir) : envWorkDir ? resolve(envWorkDir) : null;
@@ -66,6 +89,20 @@ export class MdnavEngine {
 
     if (!root) {
       root = join(tmpdir(), "mdnav");
+    }
+
+    // Re-discovering the same corpus CONTINUES the current run. Two discovers
+    // are not two investigations: minting again would set the reading record
+    // aside and report 0% over material already read, which is the fragmentation
+    // this is meant to prevent. `newRun` is how you ask for a fresh start.
+    if (!run && !newRun && this.workDir && this.currentRoot === root) {
+      if (this.readsLedger.length > 0) {
+        this.notices.push(
+          `continuing run ${basename(this.workDir)} — ${this.readsLedger.length} read(s) so far are preserved; ` +
+          `pass newRun to start a separate one`
+        );
+      }
+      return this.workDir;
     }
 
     let rel: string;
@@ -102,6 +139,7 @@ export class MdnavEngine {
     }
 
     this.workDir = runDir;
+    this.currentRoot = root;
     return runDir;
   }
 
@@ -153,15 +191,15 @@ export class MdnavEngine {
 
   public async discover(
     paths: string[],
-    options: { glob?: string | undefined; recursive?: boolean | undefined; workDir?: string | undefined; run?: string | undefined } = {}
+    options: { glob?: string | undefined; recursive?: boolean | undefined; workDir?: string | undefined; run?: string | undefined; newRun?: boolean | undefined } = {}
   ): Promise<Inventory> {
-    const { glob = "*.md", recursive = false, workDir, run } = options;
+    const { glob = "*.md", recursive = false, workDir, run, newRun = false } = options;
     const resolvedTargets = paths.map((p) => resolve(p));
     if (resolvedTargets.length === 0) {
       throw new Error("No target paths supplied for discover");
     }
 
-    this.initWorkDir(workDir, resolvedTargets[0], run);
+    this.initWorkDir(workDir, resolvedTargets[0], run, newRun);
 
     // Collect matching files
     const fileList: string[] = [];
@@ -180,7 +218,7 @@ export class MdnavEngine {
 
     for (let i = 0; i < uniqueFiles.length; i++) {
       const filePath = uniqueFiles[i]!;
-      const docId = `D${String(i + 1).padStart(3, "0")}`;
+      const docId = this.docIdFor(filePath);
       const buf = readFileSync(filePath);
       // The file's own mtime, not the moment we scanned it — staleness is
       // decided by comparing against the source, so the source's clock is the
@@ -929,9 +967,10 @@ export class MdnavEngine {
 
     // If not cached but exists on filesystem, index it on the fly
     if (existsSync(docRef)) {
-      const docId = `D${String(this.indices.size + 1).padStart(3, "0")}`;
+      const full = resolve(docRef);
+      const docId = this.docIdFor(full);
       const buf = readFileSync(docRef);
-      const idx = scanDocument(buf, { id: docId, path: resolve(docRef), mtimeMs: statSync(docRef).mtimeMs });
+      const idx = scanDocument(buf, { id: docId, path: full, mtimeMs: statSync(docRef).mtimeMs });
       this.indices.set(docId, idx);
       this.sourceBuffers.set(docId, buf);
       return { docId, buf };

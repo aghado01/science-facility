@@ -238,6 +238,7 @@ export interface DiscoverArgs {
   glob?: string | undefined;
   recursive?: boolean | undefined;
   run?: string | undefined;
+  newRun?: boolean | undefined;
   workDir?: string | undefined;
 }
 
@@ -354,6 +355,7 @@ export const DiscoverSchema = z.object({
   glob: z.string().optional().default("*.md").describe("File glob pattern (default: *.md)"),
   recursive: z.boolean().optional().default(false).describe("Whether to crawl subdirectories recursively"),
   run: z.string().optional().describe("Attach to an existing run stamp instead of starting a new one ('latest' follows the LATEST pointer). Restores that run's read ledger, so coverage continues across a restart."),
+  newRun: z.boolean().optional().default(false).describe("Start a separate run even if one is already open on this corpus. Off by default: re-discovering the same corpus continues the current run, so coverage is not fragmented."),
   workDir: z.string().optional().describe("Explicit runtime artifact directory"),
 });
 

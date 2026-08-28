@@ -248,6 +248,43 @@ try {
 
   const byBreak = (await engine.coverage([GNARLY], 1, true))[0];
   ok("coverage accepts a break basis", byBreak.unreadAnchors.every((u) => /:S\d{4}$/.test(u.anchor)));
+  // ────────────────────────────────────────── identity survives re-discovery
+
+  process.stdout.write("\nre-discovering does not fragment the investigation\n");
+  const reDir = join(testDir, "redisc");
+  mkdirSync(reDir, { recursive: true });
+  writeFileSync(join(reDir, "paper.md"), "# A\n\n## One\n\nalpha body\n\n## Two\n\nbeta body\n", "utf8");
+
+  const re = new MdnavEngine();
+  const reWd = join(workDir, "redisc");
+  await re.discover([reDir], { workDir: reWd });
+  const paperId = "D001";
+  const citedDigest = (await re.outline(paperId, { depth: 2 }))[1].digest;
+  await re.read(paperId, { heading: "H0002", depth: 2 });
+  const readBefore = (await re.coverage([paperId], 2))[0].bytesRead;
+  ok("a read was recorded", readBefore > 0);
+
+  // A file that sorts BEFORE the one already indexed joins the corpus.
+  writeFileSync(join(reDir, "appendix.md"), "# Appendix\n\n## Notes\n\nunrelated\n", "utf8");
+  const inv2 = await re.discover([reDir], { workDir: reWd });
+
+  eq("re-discovering keeps the reading record", (await re.coverage([paperId], 2))[0].bytesRead, readBefore);
+  eq("the document already indexed keeps its id",
+    inv2.docs.find((d) => d.name === "paper.md").id, paperId);
+  eq("the newcomer gets a fresh id rather than displacing it",
+    inv2.docs.find((d) => d.name === "appendix.md").id, "D002");
+  eq("so an anchor cited earlier still names the same content",
+    (await re.outline(paperId, { depth: 2 }))[1].digest, citedDigest);
+  const stillThere = await re.read(paperId, { heading: `H0002@${citedDigest}`, depth: 2 });
+  ok("and re-reading it returns the material it was cited for", stillThere.text.includes("alpha body"));
+  eq("with no drift reported, because nothing drifted", stillThere.warnings.length, 0);
+
+  // Starting over is available, but has to be asked for.
+  await re.discover([reDir], { workDir: reWd, newRun: true });
+  eq("newRun starts a separate run with an empty record",
+    (await re.coverage([paperId], 2))[0].bytesRead, 0);
+  eq("but ids are still not recycled across runs",
+    (await re.index([])).find((d) => d.name === "paper.md").id, paperId);
 } catch (err) {
   // A throw mid-suite must never read as a pass.
   process.stdout.write(`\n  SUITE ABORTED: ${err && err.stack ? err.stack : err}\n`);
