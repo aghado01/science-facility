@@ -1,0 +1,20 @@
+{
+  "name": "mdnav",
+  "version": "0.2.0",
+  "description": "Structure-aware navigation, byte-span addressability, and MCP server for Markdown corpora",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "bin": {
+    "mdnav": "mdnav.mjs"
+  },
+  "scripts": {
+    "start": "node src/index.ts",
+    "typecheck": "node ../mdnav_v2/deps/node_modules/typescript/bin/tsc --noEmit",
+    "test": "node test/acceptance.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "MIT"
+}
