@@ -145,7 +145,7 @@ Operates on literal byte spans, either directly via **MCP Tools** (recommended f
 | `mdnav_marks({ docId: "D001", kind: "blockquote" })` | Enumerates exact byte spans and previews of specific constructs. |
 | `mdnav_read({ docId: "D001", heading: "H0003@a1b2", extent: "unit", strip: "all" })` | Reads literal Markdown span at exact depth/extent with optional binary noise stripping. Pass `prefixFormat: true` for a provenance header. |
 | **`mdnav_batch_read({ requests: [...] })`** | **Native multi-document batch reading** (e.g. read 20+ abstracts/theorems across papers in 1 RPC). |
-| `mdnav_coverage({ docIds: ["D001"], depth: 1 })` | Byte-exact read vs unread accounting and unread anchor listing. `byBreaks: true` scores against the segment basis. |
+| `mdnav_coverage({ docIds: ["D001"], depth: 1 })` | Bytes read **and bytes cited**, with the read-not-cited / cited-not-read diagnostics. `byBreaks: true` scores against the segment basis. |
 | `mdnav_locate({ pattern: "keyword", docIds: ["D001"] })` | Fast regex/string search returning anchor lines without dumping full bodies. |
 | **`mdnav_journal_record({ op, body, concept?, refs?, anchors? })`** | **Append one observation/hypothesis/decision to the notebook.** Returns a compact receipt — never an echo. |
 | `mdnav_journal_read({ concept?, status?, docId?, anchor?, digest?, op? })` | Ledger view, filtered. `status: "active"` lists what nothing has yet superseded; `anchor`/`digest` traverse the citation graph. |
@@ -164,7 +164,9 @@ Every anchor is `Dnnn:Hnnnn[@digest]`, and the space is shared across three fami
 
 The `@digest` suffix an outline hands you is accepted verbatim by `read`. If the source has changed under it, the read still returns the bytes and **reports the drift in-band** — which is Audit Check 4 answered for free rather than deferred to the reverse walk.
 
-An anchor is a **path, not an identifier**: document, chunk, and the chunk's content identity when you cited it are three components, and each is separately traversable in the journal (`docId` / `anchor` / `digest`). Asking for `D014:H0003` finds every version anyone cited; asking for a superseded digest lists exactly the claims that now need re-walking. See [state-and-audit.md](references/state-and-audit.md) §4.
+An anchor is a **path, not an identifier**, and every tool renders it decomposed — `D014 : H0003 @ a1b2` — so that each component presents the same tokens wherever it appears in the stream: outline, chunk prefix, locate hit, coverage row, drift warning, journal line. That is what lets mentions of the same document or chunk bind to each other by attention rather than by string similarity. The components are also separately queryable in the journal (`docId` / `anchor` / `digest`): asking for `D014:H0003` finds every version anyone cited; asking for a superseded digest lists exactly the claims that now need re-walking. See [state-and-audit.md](references/state-and-audit.md) §4.
+
+Pass anchors back in the compact form (`D014:H0003@a1b2`) — that is what the tools accept and what `rawJson` returns; only the rendered stream decomposes.
 
 ### CLI Equivalents
 

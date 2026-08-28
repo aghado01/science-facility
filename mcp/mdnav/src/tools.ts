@@ -30,12 +30,14 @@ import {
 import { MdnavEngine } from "./engine.ts";
 import {
   formatSourceChunkPrefix,
+  formatAnchorString,
   formatJournalEntry,
   formatJournalReceipt,
   renderJournalTree,
   JOURNAL_HEADER,
   CHUNK_HEADER,
   FIELD,
+  RANGE,
   EMPTY,
 } from "./formatting.ts";
 
@@ -121,7 +123,10 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
         });
 
         const lines = units.map((u) => {
-          const id = `[${u.id}${u.digest ? `@${u.digest}` : ""}]`.padEnd(14);
+          // No brackets around the anchor: `[H0001` and `3504]` merge the
+          // punctuation into the identifier, so the same chunk would not
+          // present the same tokens here as it does everywhere else.
+          const id = formatAnchorString(u.digest ? `${u.id}@${u.digest}` : u.id).padEnd(18);
           const lvl = u.level ? `H${u.level}`.padEnd(4) : "    ";
           const size = `unit=${fmtBytes(u.unitBytes)}`.padEnd(15);
           const sub = u.subtreeBytes ? `subtree=${fmtBytes(u.subtreeBytes)}`.padEnd(18) : "".padEnd(18);
@@ -152,10 +157,10 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
       try {
         const runs = await engine.marks(args.docId, args.kind, args.minBytes);
         const lines = runs.map((r) => {
-          const span = `${r.start}..${r.end}`.padStart(16);
+          const span = `${r.start}${RANGE}${r.end}`.padStart(20);
           const size = fmtBytes(r.bytes).padStart(10);
-          const linesCount = `${r.lines}L`.padStart(4);
-          const anchor = r.containingAnchor ? r.containingAnchor.padEnd(14) : "".padEnd(14);
+          const linesCount = `${r.lines} L`.padStart(6);
+          const anchor = (r.containingAnchor ? formatAnchorString(r.containingAnchor) : "").padEnd(20);
           return `${span} ${size} ${linesCount}  ${anchor} ${r.preview}`;
         });
 
@@ -233,9 +238,10 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
             const head = `${formatSourceChunkPrefix(r.docId, r.anchor || EMPTY, r.span ?? [0, 0], r.bytes)}${FIELD}${r.label ?? EMPTY}`;
             return `${head}\n${r.text}`;
           }
+          const cite = formatAnchorString(`${r.docId}:${r.anchor}`);
           const tag = r.label
-            ? `<!-- mdnav ${r.docId}:${r.anchor} [${r.label}] -->`
-            : `<!-- mdnav ${r.docId}:${r.anchor} -->`;
+            ? `<!-- mdnav ${cite} [${r.label}] -->`
+            : `<!-- mdnav ${cite} -->`;
           return `${tag}\n\n${r.text}`;
         });
 
@@ -267,19 +273,34 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
         const reports = await engine.coverage(args.docIds, args.depth, args.byBreaks);
         const lines: string[] = [];
 
-        for (const rep of reports) {
-          const pct = `${rep.percent.toFixed(1)}%`.padStart(6);
-          const ratio = `${fmtNum(rep.bytesRead)} / ${fmtNum(rep.totalBytes)} B`.padEnd(26);
-          const elided = rep.elidedBytes > 0 ? `  elided=${fmtBytes(rep.elidedBytes)}` : "";
-          lines.push(`${rep.docId.padEnd(6)} ${ratio} ${pct}  reads=${rep.readsCount}${elided}`);
+        lines.push(["doc", "read", "of", "read %", "cited", "cited %", "reads", "entries"].join(FIELD));
 
-          if (rep.unreadAnchors.length > 0) {
-            for (const u of rep.unreadAnchors.slice(0, 10)) {
-              lines.push(`  unread: ${u.anchor.padEnd(12)} (${fmtBytes(u.bytes).padStart(8)})  ${u.title}`);
-            }
-            if (rep.unreadAnchors.length > 10) {
-              lines.push(`  ... and ${rep.unreadAnchors.length - 10} more unread anchors`);
-            }
+        for (const rep of reports) {
+          lines.push([
+            rep.docId,
+            `${fmtNum(rep.bytesRead)} B`,
+            `${fmtNum(rep.totalBytes)} B`,
+            `${rep.percent.toFixed(1)}%`,
+            `${fmtNum(rep.bytesCited)} B`,
+            `${rep.citedPercent.toFixed(1)}%`,
+            String(rep.readsCount),
+            String(rep.citations),
+          ].join(FIELD) + (rep.elidedBytes > 0 ? `${FIELD}elided ${fmtBytes(rep.elidedBytes)}` : ""));
+
+          // The two structural reading defects, as byte counts rather than as
+          // something to eyeball. See state-and-audit.md §6.
+          if (rep.readNotCited > 0) {
+            lines.push(`  read not cited${FIELD}${fmtBytes(rep.readNotCited)}${FIELD}silent attrition candidate — say why, or restore it`);
+          }
+          if (rep.citedNotRead > 0) {
+            lines.push(`  cited not read${FIELD}${fmtBytes(rep.citedNotRead)}${FIELD}salience capture hazard — re-read the surrounding unit`);
+          }
+
+          for (const u of rep.unreadAnchors.slice(0, 10)) {
+            lines.push(`  unread${FIELD}${formatAnchorString(u.anchor)}${FIELD}${fmtBytes(u.bytes)}${FIELD}${u.title}`);
+          }
+          if (rep.unreadAnchors.length > 10) {
+            lines.push(`  unread${FIELD}${rep.unreadAnchors.length - 10} more not listed`);
           }
         }
 
@@ -305,7 +326,7 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
     async (args: LocateArgs) => {
       try {
         const hits = await engine.locate(args.pattern, args.docIds, args.caseInsensitive, args.max);
-        const lines = hits.map((h) => `${h.anchor.padEnd(16)} L${String(h.line).padEnd(5)} ${h.text}`);
+        const lines = hits.map((h) => `${formatAnchorString(h.anchor).padEnd(24)} L ${String(h.line).padEnd(5)} ${h.text}`);
 
         return {
           content: [

@@ -116,7 +116,13 @@ Marks nest by rank: ` | ` separates fields, ` ; ` separates items within a field
 
 ### Anchors are paths, not identifiers
 
-`D023 : H0006 @ e5f6` is not one opaque id. It is a document, a chunk inside it, and that chunk's content identity **at the moment it was cited** — three components, each an edge in the corpus graph. Isolating them is what makes each traversable on its own:
+`D023 : H0006 @ e5f6` is not one opaque id. It is a document, a chunk inside it, and that chunk's content identity **at the moment it was cited** — three components, each an edge in the corpus graph.
+
+**The first reason to isolate them is the context stream itself.** These lines are text the model reads, and every mdnav tool emits them — outlines, chunk prefixes, locate hits, coverage rows, drift warnings, journal lines. When `D023` is its own space-isolated item, it presents the *same tokens* in all of them, and self-attention can bind those mentions to each other directly. Fused into `D023:H0006@e5f6`, the leading component merges with the punctuation, its tokenization shifts with the width of the digits around it, and co-reference has to be inferred from string similarity instead of seen as token identity. The graph stops being legible from the stream and becomes reachable only by tool call.
+
+This is why the rule is uniform across **every** emitter rather than local to the ledger: one tool rendering the chunk differently from the others reintroduces exactly the variability the isolation was bought to remove. `test/render-test.mjs` drives all eleven tools and fails on a fused anchor anywhere, warnings and error messages included.
+
+The second reason is that each component becomes separately queryable:
 
 | Ask | Query | Edge traversed |
 |---|---|---|
@@ -195,10 +201,22 @@ Comparing the set of bytes read against the set of bytes cited reveals structura
          • State why un-cited              • Re-read surrounding context
 ```
 
+`mdnav_coverage` computes both sets and their difference:
+
+```
+doc | read | of | read % | cited | cited % | reads | entries
+D001 | 8,420 B | 11,204 B | 75.2% | 3,180 B | 28.4% | 6 | 4
+  read not cited | 5.12 KiB | silent attrition candidate — say why, or restore it
+  cited not read | 0 B | salience capture hazard — re-read the surrounding unit
+  unread | D001 : H0007 | 2.72 KiB | Appendix
+```
+
+Each cited anchor is resolved to the chunk it names, at that chunk's **own** grain — a citation means the unit it names, not whatever depth you happen to be scoring at. Anchors that no longer resolve cite no bytes; that drift is reported where it is actionable, at read and at record time.
+
 ### Diagnostic 1: Read but Never Cited
-- **Condition:** Large spans were read in `mdnav`, but zero anchors from those spans appear in the notebook.
-- **Remedy:** Either explicitly log that the material was irrelevant/tangential, or identify it as a **silent attrition candidate** to be restored.
+- **Condition:** `read not cited` is large — spans were read but no journal anchor covers them.
+- **Remedy:** Either record a `note` saying the material was irrelevant or tangential, or treat it as a **silent attrition candidate** to be restored.
 
 ### Diagnostic 2: Cited Far Beyond What Was Read (Salience Capture)
-- **Condition:** A claim relies on a single isolated anchor where none of the surrounding context was ever read.
+- **Condition:** `cited not read` is non-zero — a claim rests on an anchor whose surroundings were never read.
 - **Remedy:** The claim may be locally true but contextually wrong or superseded. Re-read the surrounding unit or subtree before finalizing.

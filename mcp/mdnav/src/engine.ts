@@ -26,7 +26,7 @@ import type {
   JournalReadArgs,
 } from "./types.ts";
 import { scanDocument, stripNoise, profileDocument, extractMarks, computeWindows, digestOf } from "./scanner.ts";
-import { parseAnchor } from "./formatting.ts";
+import { parseAnchor, formatAnchorString } from "./formatting.ts";
 
 export class MdnavEngine {
   private workDir: string | null = null;
@@ -425,24 +425,50 @@ export class MdnavEngine {
     const targetDocIds = docIds && docIds.length > 0 ? docIds : Array.from(this.indices.keys());
     const reports: DocumentCoverage[] = [];
 
+    // An unreadable notebook must not fail a coverage report; it just means
+    // nothing has been cited yet.
+    let journal: ResolvedJournalEntry[] = [];
+    try { journal = this.resolveJournal(); } catch { journal = []; }
+
     for (const docId of targetDocIds) {
       const idx = this.getIndex(docId);
       const docReads = this.readsLedger.filter((r) => r.doc === docId);
 
-      // Merge read intervals ONCE, and settle both questions against the merged
+      // Merge read intervals ONCE, and settle every question against the merged
       // list: two adjacent reads that together cover a unit do cover it.
-      const sorted = docReads.flatMap((r) => r.spans).sort((a, b) => a[0] - b[0]);
-      const merged: ByteSpan[] = [];
-      for (const iv of sorted) {
-        const last = merged[merged.length - 1];
-        if (last && iv[0] <= last[1]) last[1] = Math.max(last[1], iv[1]);
-        else merged.push([iv[0], iv[1]]);
-      }
-
-      let bytesRead = 0;
-      for (const [s, e] of merged) bytesRead += e - s;
+      const merged = mergeIntervals(docReads.flatMap((r) => r.spans));
+      const bytesRead = totalBytes(merged);
       let elided = 0;
       docReads.forEach((r) => (elided += r.elidedBytes || 0));
+
+      // Bytes CITED: resolve every journal anchor scoped to this document down
+      // to the chunk it names. Comparing this against bytes read is the
+      // diagnostic the notebook has always specified and never had — both
+      // ledgers are on disk in the same directory, so it is arithmetic now.
+      const citedSpans: ByteSpan[] = [];
+      let citations = 0;
+      for (const entry of journal) {
+        let citesThis = false;
+        for (const a of entry.anchors) {
+          const p = parseAnchor(a);
+          if (p.unit === undefined || p.scope.toUpperCase() !== docId.toUpperCase()) continue;
+          citesThis = true;
+          try {
+            const { target } = this.resolveAnchor(idx, p.unit);
+            // At the chunk's OWN grain: a citation names the unit it names,
+            // not whatever the caller happens to be scoring coverage at.
+            citedSpans.push(this.computeHeadingSpan(idx, target, Math.max(1, target.level), "unit"));
+          } catch {
+            // An anchor that no longer resolves cites no bytes. The drift is
+            // reported where it is actionable — at read and at record time.
+          }
+        }
+        if (citesThis) citations++;
+      }
+
+      const cited = mergeIntervals(citedSpans);
+      const bytesCited = totalBytes(cited);
+      const both = totalBytes(intersectIntervals(merged, cited));
 
       // Unread units, against whichever basis the caller is working on.
       const unread: Array<{ anchor: string; bytes: number; title: string }> = [];
@@ -474,6 +500,11 @@ export class MdnavEngine {
         readsCount: docReads.length,
         elidedBytes: elided,
         unreadAnchors: unread,
+        bytesCited,
+        citedPercent: idx.bytes > 0 ? Number(((bytesCited / idx.bytes) * 100).toFixed(1)) : 0,
+        citations,
+        readNotCited: bytesRead - both,
+        citedNotRead: bytesCited - both,
       });
     }
 
@@ -607,14 +638,14 @@ export class MdnavEngine {
       if (!m) continue;
       const idx = this.indices.get(m[1]!.toUpperCase());
       if (!idx) {
-        anchorWarnings.push(`anchor ${a} names ${m[1]}, which is not indexed in this session`);
+        anchorWarnings.push(`anchor ${formatAnchorString(a)} names ${m[1]}, which is not indexed in this session`);
         continue;
       }
       try {
         const { warning } = this.resolveAnchor(idx, m[3] ? `${m[2]}@${m[3]}` : `${m[2]}`);
         if (warning) anchorWarnings.push(warning);
       } catch (err: any) {
-        anchorWarnings.push(`anchor ${a}: ${err.message}`);
+        anchorWarnings.push(`anchor ${formatAnchorString(a)} — ${err.message}`);
       }
     }
 
@@ -769,9 +800,12 @@ export class MdnavEngine {
     const [hidRaw = "", dig] = String(spec).trim().split("@");
     const hid = hidRaw.includes(":") ? (hidRaw.split(":").pop() ?? hidRaw) : hidRaw;
 
+    // Warnings and errors are context-stream text like any other output: the
+    // chunk they name has to present the same tokens here as it does in an
+    // outline, a chunk prefix, or a journal line, or it cannot be bound to them.
     const drift = (t: AnchorTarget, kind: string): string | undefined =>
       dig && dig !== t.digest
-        ? `anchor ${idx.id}:${t.hid}@${dig} does not match the current ${kind} digest @${t.digest} — the source has changed under this anchor`
+        ? `anchor ${formatAnchorString(`${idx.id}:${t.hid}@${dig}`)} does not match the current ${kind} digest ${formatAnchorString(`${t.hid}@${t.digest}`)} — the source has changed under this anchor`
         : undefined;
 
     const h = idx.headings.find((x) => x.hid.toLowerCase() === hid.toLowerCase());
@@ -787,7 +821,7 @@ export class MdnavEngine {
     if (/^W\d+$/i.test(hid)) {
       const w = (idx.windows ?? []).find((x) => x.wid.toLowerCase() === hid.toLowerCase());
       if (!w) {
-        throw new Error(`${idx.id}: no anchor ${hid} — mint window anchors first with outline(windows: <size>)`);
+        throw new Error(`no anchor ${hid} in ${idx.id} — mint window anchors first with outline(windows: <size>)`);
       }
       const target: AnchorTarget = {
         hid: w.wid, level: 0, title: w.title, digest: w.digest,
@@ -799,12 +833,12 @@ export class MdnavEngine {
     if (/^S\d+$/i.test(hid)) {
       const s = this.segmentsOf(idx).find((x) => x.hid.toLowerCase() === hid.toLowerCase());
       if (!s) {
-        throw new Error(`${idx.id}: no anchor ${hid} (document has ${idx.breaks.length} thematic break(s))`);
+        throw new Error(`no anchor ${hid} in ${idx.id} — the document has ${idx.breaks.length} thematic break(s)`);
       }
       return { target: s, warning: drift(s, "segment") };
     }
 
-    throw new Error(`${idx.id}: no anchor ${hid}`);
+    throw new Error(`no anchor ${hid} in ${idx.id}`);
   }
 
   /**
@@ -849,7 +883,7 @@ export class MdnavEngine {
       // Silently running the span to EOF would hand back a unit that does not
       // exist at the requested grain. Fail where the mistake was made.
       throw new Error(
-        `${idx.id}:${h.hid} is a level-${h.level} heading and is not active at depth ${depth} — ` +
+        `${formatAnchorString(`${idx.id}:${h.hid}`)} is a level-${h.level} heading and is not active at depth ${depth} — ` +
         `raise depth to ${h.level}, or read it with extent "subtree"`
       );
     }
@@ -911,4 +945,38 @@ export class MdnavEngine {
     if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)}K`;
     return `${(n / 1048576).toFixed(1)}M`;
   }
+}
+
+// ──────────────────────────────────────────────────────────── Interval algebra
+
+/** Sort and coalesce overlapping or touching spans into a canonical list. */
+function mergeIntervals(spans: ByteSpan[]): ByteSpan[] {
+  const sorted = [...spans].sort((a, b) => a[0] - b[0]);
+  const out: ByteSpan[] = [];
+  for (const iv of sorted) {
+    const last = out[out.length - 1];
+    if (last && iv[0] <= last[1]) last[1] = Math.max(last[1], iv[1]);
+    else out.push([iv[0], iv[1]]);
+  }
+  return out;
+}
+
+/** Overlap of two already-merged lists. */
+function intersectIntervals(a: ByteSpan[], b: ByteSpan[]): ByteSpan[] {
+  const out: ByteSpan[] = [];
+  let i = 0, j = 0;
+  while (i < a.length && j < b.length) {
+    const x = a[i]!, y = b[j]!;
+    const start = Math.max(x[0], y[0]);
+    const end = Math.min(x[1], y[1]);
+    if (start < end) out.push([start, end]);
+    if (x[1] < y[1]) i++; else j++;
+  }
+  return out;
+}
+
+function totalBytes(spans: ByteSpan[]): number {
+  let n = 0;
+  for (const [s, e] of spans) n += e - s;
+  return n;
 }

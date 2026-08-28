@@ -149,6 +149,14 @@ export interface DocumentCoverage {
   readsCount: number;
   elidedBytes: number;
   unreadAnchors: Array<{ anchor: string; bytes: number; title: string }>;
+
+  // The other half of the read-vs-cited arithmetic. `readNotCited` is the
+  // silent-attrition surface; `citedNotRead` is the salience-capture surface.
+  bytesCited: number;
+  citedPercent: number;
+  citations: number;
+  readNotCited: number;
+  citedNotRead: number;
 }
 
 // ────────────────────────────────────────────────────────── Journal Ledger

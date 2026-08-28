@@ -15,6 +15,7 @@ const SUITES = [
   ["acceptance  (CLI — mdnav.mjs)", "acceptance.mjs"],
   ["engine      (MCP — src/engine.ts)", "engine-test.mjs"],
   ["journal     (MCP — ledger + formatting)", "journal-test.mjs"],
+  ["render      (MCP — what reaches the stream)", "render-test.mjs"],
 ];
 
 let failed = 0;
