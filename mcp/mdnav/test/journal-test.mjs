@@ -20,6 +20,7 @@ import {
   closeChunk,
   formatAnchorList,
   formatAnchorString,
+  canonicalAnchor,
   formatCompactStamp,
   parseAnchor,
   escapeBody,
@@ -220,6 +221,68 @@ try {
     !/[^ ]\\n/.test(escapeBody("a\nb")) && !/\\n[^ ]/.test(escapeBody("a\nb")));
   ok("a body keeps its own pipes — it is the terminal field",
     escapeBody("a | b").includes("a | b"));
+
+  // ──────────────────────────────────── one address, however it is written
+  //
+  // The stream prints anchors spaced and the skill tells the reader to quote
+  // them exactly, so the spaced form is the one that comes back. It has to
+  // arrive at the same components, the same stored value, and the same
+  // filters as the compact form — anything else makes the two instructions
+  // contradict each other.
+
+  process.stdout.write("\nan address is the same address however it arrives\n");
+
+  const spaced = formatAnchorString(goodAnchor);
+  ok("the stream prints anchors spaced", spaced.includes(" : ") && spaced.includes(" @ "));
+
+  eq("the spaced form parses to the same components as the compact one",
+    JSON.stringify(parseAnchor(spaced)),
+    JSON.stringify({ ...parseAnchor(goodAnchor), raw: spaced }));
+  eq("rendering an already-spaced anchor changes nothing", formatAnchorString(spaced), spaced);
+  ok("no containment or identity mark is ever doubled",
+    !/ {2}[:@]|[:@] {2}/.test(formatAnchorString(spaced)));
+
+  eq("components, the compact string and the spaced string canonicalize alike",
+    [
+      canonicalAnchor({ scope: "D001", unit: anchorUnit.id, digest: anchorUnit.digest }),
+      canonicalAnchor(goodAnchor),
+      canonicalAnchor(spaced),
+    ].join(" "),
+    [goodAnchor, goodAnchor, goodAnchor].join(" "));
+  eq("a component anchor with no digest keeps its scope and unit",
+    canonicalAnchor({ scope: "code", unit: "grassmann.py" }), "code:grassmann.py");
+
+  const staleParts = { scope: "D001", unit: anchorUnit.id, digest: "dead" };
+  const staleFused = `D001:${anchorUnit.id}@dead`;
+
+  const byParts = restarted.recordJournal({ op: "note", body: "cited by components", anchors: [staleParts] });
+  ok("an anchor given as components is checked like any other",
+    byParts.anchorWarnings.some((w) => /has changed under this anchor/.test(w)));
+  eq("and is stored in the one canonical form", byParts.entry.anchors[0], staleFused);
+
+  const bySpaced = restarted.recordJournal({
+    op: "note", body: "quoted exactly as the stream printed it",
+    anchors: [formatAnchorString(staleFused)],
+  });
+  ok("quoting the spaced form is checked too, not filed unchecked as vocabulary",
+    bySpaced.anchorWarnings.some((w) => /has changed under this anchor/.test(w)));
+  eq("and it too is stored canonical", bySpaced.entry.anchors[0], staleFused);
+
+  const byUnit = restarted.readJournal({ anchor: { unit: anchorUnit.id }, op: "note" });
+  ok("a component filter finds those entries", byUnit.length > 0);
+  eq("and a bare string still reads its lone component as the unit",
+    restarted.readJournal({ anchor: anchorUnit.id, op: "note" }).map((e) => e.id).join(","),
+    byUnit.map((e) => e.id).join(","));
+  // The same token, read as the edge it was given as: `H0002` names no scope,
+  // so as a scope it matches nothing — while the bare string still finds it as
+  // a unit. Components say which edge is meant; a string leaves it to be guessed.
+  ok("given as components, a scope filter is a scope filter and nothing else",
+    restarted.readJournal({ anchor: { scope: "D001" } }).length > 0 &&
+    restarted.readJournal({ anchor: { scope: anchorUnit.id } }).length === 0 &&
+    restarted.readJournal({ anchor: anchorUnit.id }).length > 0);
+  eq("scope is the name for it; docId still answers to it",
+    restarted.readJournal({ scope: "code" }).map((e) => e.id).join(","),
+    restarted.readJournal({ docId: "code" }).map((e) => e.id).join(","));
 } catch (err) {
   process.stdout.write(`\n  SUITE ABORTED: ${err && err.stack ? err.stack : err}\n`);
   fail++;

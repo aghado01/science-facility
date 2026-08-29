@@ -22,7 +22,7 @@
  * and ` : ` / ` @ ` / ` .. ` separate the components of a single item.
  */
 
-import type { ByteSpan, JournalEntry, ResolvedJournalEntry } from "./types.ts";
+import type { AnchorInput, ByteSpan, JournalEntry, ResolvedJournalEntry } from "./types.ts";
 
 /** Field separator. */
 export const FIELD = " | ";
@@ -189,21 +189,54 @@ export interface ParsedAnchor {
 }
 
 export function parseAnchor(raw: string): ParsedAnchor {
+  // Each component is trimmed, not just the ends of the whole string. The
+  // stream PRINTS anchors spaced and tells the reader to quote them exactly, so
+  // the spaced form is the one that comes back most often — and splitting it
+  // without trimming yields `"D001 "`, a different token sequence from the
+  // `D001` this whole scheme binds on, matching nothing anywhere.
   const s = raw.trim();
-  const m = /^(.*)@([0-9a-fA-F]{4})$/.exec(s);
-  const head = m ? m[1]! : s;
+  const m = /^(.*)@\s*([0-9a-fA-F]{4})$/.exec(s);
+  const head = (m ? m[1]! : s).trim();
   const digest = m ? m[2]! : undefined;
 
   const colon = head.indexOf(":");
   return colon > 0
-    ? { raw: s, scope: head.slice(0, colon), unit: head.slice(colon + 1), digest }
+    ? { raw: s, scope: head.slice(0, colon).trim(), unit: head.slice(colon + 1).trim(), digest }
     : { raw: s, scope: head, digest };
+}
+
+/**
+ * The one stored form of an anchor: components fused, no spaces.
+ *
+ * An anchor exists in three forms and each moves one way. Components come IN,
+ * given separately or parsed out of a string. The fused form is what is STORED,
+ * so one address is one ledger token and the file stays greppable. The spaced
+ * form is what is RENDERED. Normalizing here decides the direction once, rather
+ * than at each of the call sites that compare, store, or join on an anchor.
+ */
+export function canonicalAnchor(a: string | AnchorInput): string {
+  const p = typeof a === "string"
+    ? parseAnchor(a)
+    : {
+        scope: a.scope.trim(),
+        unit: a.unit?.trim() || undefined,
+        digest: a.digest?.trim() || undefined,
+      };
+
+  let out = p.scope;
+  if (p.unit !== undefined) out += `:${p.unit}`;
+  if (p.digest !== undefined) out += `@${p.digest}`;
+  return out;
 }
 
 /**
  * One anchor with every component isolated, so each is separately addressable.
  * `D014:H0003@a1b2` → `D014 : H0003 @ a1b2`
  * `code:grassmann.py` → `code : grassmann.py`
+ *
+ * Idempotent: an anchor that is already spaced renders identically, because the
+ * parse trims each component. Re-rendering one used to widen every mark, and a
+ * doubled ` :  ` is a different token sequence for the same address.
  */
 export function formatAnchorString(anchor: string): string {
   // Spacing is decided here, once, so every emitter agrees — an outline row and

@@ -29,7 +29,7 @@ import type {
   JournalReadArgs,
 } from "./types.ts";
 import { scanDocument, stripNoise, profileDocument, extractMarks, computeWindows, digestOf } from "./scanner.ts";
-import { parseAnchor, formatAnchorString } from "./formatting.ts";
+import { parseAnchor, formatAnchorString, canonicalAnchor } from "./formatting.ts";
 
 export class MdnavEngine {
   private workDir: string | null = null;
@@ -984,22 +984,35 @@ export class MdnavEngine {
       }
     }
 
+    // Canonicalize before anything else reads them. An anchor arrives as
+    // components, as the compact string, or as the spaced form the stream
+    // prints — three ways of naming one address, which must land on one stored
+    // value or `journal_read` joins on components that differ only in how the
+    // caller happened to type them.
+    const anchors = (args.anchors ?? []).map(canonicalAnchor);
+
     // Validate mdnav-shaped anchors against the live index. Anything else
     // (`code:grassmann.py`, a url, a bare tag) is the reader's own vocabulary
     // and is kept verbatim. A citation that is ALREADY stale should be said so
     // at write time, while it is still cheap to fix.
+    //
+    // The shape test runs on the PARSED components, not on the raw string: a
+    // string test answers "was this typed the way I expect", and the spaced
+    // form — the one the stream taught the reader to quote — failed it and fell
+    // through to the verbatim branch, silently unchecked.
     const anchorWarnings: string[] = [];
-    const anchors = args.anchors ?? [];
     for (const a of anchors) {
-      const m = /^(D\d+):([HSW]\d+)(?:@([0-9a-f]{4}))?$/i.exec(a.trim());
-      if (!m) continue;
-      const idx = this.indices.get(m[1]!.toUpperCase());
+      const p = parseAnchor(a);
+      if (p.unit === undefined) continue;
+      if (!/^D\d+$/i.test(p.scope) || !/^[HSW]\d+$/i.test(p.unit)) continue;
+
+      const idx = this.indices.get(p.scope.toUpperCase());
       if (!idx) {
-        anchorWarnings.push(`anchor ${formatAnchorString(a)} names ${m[1]}, which is not indexed in this session`);
+        anchorWarnings.push(`anchor ${formatAnchorString(a)} names ${p.scope}, which is not indexed in this session`);
         continue;
       }
       try {
-        const { warning } = this.resolveAnchor(idx, m[3] ? `${m[2]}@${m[3]}` : `${m[2]}`);
+        const { warning } = this.resolveAnchor(idx, p.digest ? `${p.unit}@${p.digest}` : p.unit);
         if (warning) anchorWarnings.push(warning);
       } catch (err: any) {
         anchorWarnings.push(`anchor ${formatAnchorString(a)} — ${err.message}`);
@@ -1078,22 +1091,28 @@ export class MdnavEngine {
     // is an edge — document, chunk, content identity — and each has to be
     // traversable on its own, or citations are only ever a leaf you can match
     // whole.
-    const ci = (a?: string | undefined) => (a === undefined ? undefined : a.toUpperCase());
+    const ci = (a?: string | undefined) => (a === undefined ? undefined : a.trim().toUpperCase());
 
-    if (args.docId) {
-      const doc = ci(args.docId);
+    const scopeArg = args.scope ?? args.docId;
+    if (scopeArg) {
+      const doc = ci(scopeArg);
       out = out.filter((e) => e.anchors.some((a) => ci(parseAnchor(a).scope) === doc));
     }
 
     if (args.anchor) {
-      const want = parseAnchor(args.anchor);
-      // A bare "H0003" names the unit; "D014:H0003" pins the scope as well.
-      const wantUnit = ci(want.unit ?? want.scope);
-      const wantScope = want.unit !== undefined ? ci(want.scope) : undefined;
+      // Given as components, each one names the edge it is. Given as a string,
+      // a lone component still reads as the unit — that is what callers already
+      // pass, and `H0003` was never a plausible scope.
+      const want = typeof args.anchor === "string" ? parseAnchor(args.anchor) : args.anchor;
+      const bareString = typeof args.anchor === "string" && want.unit === undefined;
+
+      const wantUnit = ci(bareString ? want.scope : want.unit);
+      const wantScope = bareString ? undefined : ci(want.scope);
       out = out.filter((e) =>
         e.anchors.some((a) => {
           const p = parseAnchor(a);
-          if (ci(p.unit ?? p.scope) !== wantUnit) return false;
+          // Every component asked for must match; the ones left out are free.
+          if (wantUnit !== undefined && ci(p.unit ?? p.scope) !== wantUnit) return false;
           if (wantScope !== undefined && ci(p.scope) !== wantScope) return false;
           // No digest asked for means every version of this chunk.
           if (want.digest !== undefined && ci(p.digest) !== ci(want.digest)) return false;
@@ -1193,8 +1212,14 @@ export class MdnavEngine {
    * moved under the citation, and needs to be told in-band to know it at all.
    */
   private resolveAnchor(idx: DocumentIndex, spec: string): { target: AnchorTarget; warning?: string | undefined } {
-    const [hidRaw = "", dig] = String(spec).trim().split("@");
-    const hid = hidRaw.includes(":") ? (hidRaw.split(":").pop() ?? hidRaw) : hidRaw;
+    // Components are trimmed individually. `H0003 @ a1b2` is how the stream
+    // prints this anchor, so it is how it comes back — and splitting it without
+    // trimming leaves `"H0003 "`, which matches no heading, and `" a1b2"`,
+    // which then reports drift against a digest it actually equals.
+    const [hidPart = "", digPart] = String(spec).split("@");
+    const hidRaw = hidPart.trim();
+    const dig = digPart?.trim() || undefined;
+    const hid = hidRaw.includes(":") ? (hidRaw.split(":").pop()?.trim() ?? hidRaw) : hidRaw;
 
     // Warnings and errors are context-stream text like any other output: the
     // chunk they name has to present the same tokens here as it does in an

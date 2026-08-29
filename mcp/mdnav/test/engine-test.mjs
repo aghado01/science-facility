@@ -183,6 +183,15 @@ try {
   eq("a stale digest still returns the bytes", drifted.text.includes("scale-calibrated"), true);
   ok("but reports the drift", drifted.warnings.some((w) => /has changed under this anchor/.test(w)));
 
+  // The stream prints this anchor spaced and the skill says to quote it
+  // exactly. Read has to take it back in that form, or the two instructions
+  // cannot both be followed.
+  const asPrinted = await engine.read(P1, { heading: `${unit.id} @ ${unit.digest}`, depth: 2 });
+  ok("the spaced form the stream printed resolves", asPrinted.text.includes("scale-calibrated"));
+  eq("and raises no drift against the digest it actually equals", asPrinted.warnings.length, 0);
+  const asPrintedQualified = await engine.read(P1, { heading: `${P1} : ${unit.id} @ ${unit.digest}`, depth: 2 });
+  ok("document-qualified and spaced resolves too", asPrintedQualified.text.includes("scale-calibrated"));
+
   // ─────────────────────────────────────────────────────────────────── windows
 
   process.stdout.write("\nwindows\n");

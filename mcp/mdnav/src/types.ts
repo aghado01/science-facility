@@ -232,20 +232,45 @@ export interface ResolvedJournalEntry extends JournalEntry {
   children: string[];
 }
 
+/**
+ * One anchor with its components given separately.
+ *
+ * The stream already presents anchors decomposed — `D014 : H0003 @ a1b2` — so
+ * taking them back apart is the input form that matches what the reader saw.
+ * A fused string is still accepted, but then the tool has to INFER from
+ * punctuation whether `code:grassmann.py` was meant as an address or as the
+ * reader's own vocabulary. Components state it instead of implying it.
+ */
+export interface AnchorInput {
+  scope: string;
+  unit?: string | undefined;
+  digest?: string | undefined;
+}
+
+/** The same components as a filter, where each is optional and names its own edge. */
+export interface AnchorFilter {
+  scope?: string | undefined;
+  unit?: string | undefined;
+  digest?: string | undefined;
+}
+
 export interface JournalRecordArgs {
   op: JournalOp;
   body: string;
   concept?: string | undefined;
   refs?: string[] | undefined;
-  anchors?: string[] | undefined;
+  anchors?: Array<string | AnchorInput> | undefined;
   workDir?: string | undefined;
 }
 
 export interface JournalReadArgs {
   concept?: string | undefined;
   status?: JournalStatus | undefined;
+  /** Anchor scope: a document id, or a namespace like `code`. */
+  scope?: string | undefined;
+  /** @deprecated The old name for `scope`. It never only took document ids. */
   docId?: string | undefined;
-  anchor?: string | undefined;
+  anchor?: string | AnchorFilter | undefined;
   digest?: string | undefined;
   op?: JournalOp | undefined;
   limit?: number | undefined;
@@ -466,13 +491,35 @@ export const LocateSchema = z.object({
   workDir: z.string().optional().describe("Explicit work directory"),
 });
 
+export const AnchorInputSchema = z.object({
+  scope: z.string().describe("Document id ('D014') or namespace ('code', 'url')"),
+  unit: z.string().optional().describe("Chunk within the scope ('H0003', 'S0007', 'W0002'), or the item named by a non-corpus scope ('grassmann.py')"),
+  digest: z.string().optional().describe("Four hex characters: the unit's content identity at the moment you cited it"),
+});
+
+export const AnchorArgSchema = z.union([AnchorInputSchema, z.string()]);
+
+/**
+ * The same components as a filter, where every one is optional and each names
+ * exactly the edge it is: `{ unit: 'H0003' }` is a unit, `{ scope: 'D014' }` is
+ * a scope. A bare STRING keeps its older reading — one component means the unit
+ * — because that is what callers already pass.
+ */
+export const AnchorFilterSchema = z.object({
+  scope: z.string().optional().describe("Pin the document or namespace"),
+  unit: z.string().optional().describe("Pin the chunk within it"),
+  digest: z.string().optional().describe("Pin one content version of that chunk"),
+});
+
+export const AnchorFilterArgSchema = z.union([AnchorFilterSchema, z.string()]);
+
 export const JournalRecordSchema = z.object({
   op: z.enum(["propose", "refine", "supersede", "reject", "adopt", "retract", "note"])
     .describe("What this entry does to the record: propose | refine | supersede | reject | adopt | retract | note"),
   body: z.string().describe("The observation, hypothesis, or decision text"),
   concept: z.string().optional().describe("Concept or topic tag this entry belongs to (e.g. C-001)"),
   refs: z.array(z.string()).optional().describe("Causal parent entry IDs (e.g. ['N001']). Two or more express a merge."),
-  anchors: z.array(z.string()).optional().describe("Evidence anchors: 'Dnnn:Hnnnn@digest' resolve and are digest-checked; any other form (e.g. 'code:file.py') is kept verbatim"),
+  anchors: z.array(AnchorArgSchema).optional().describe("Evidence anchors, each as components: { scope: 'D014', unit: 'H0003', digest: 'a1b2' }. A scope of Dnnn with a unit resolves and is digest-checked; any other scope (e.g. { scope: 'code', unit: 'file.py' }) is kept verbatim. A string is accepted too, spaced as the stream prints it or compact — same address either way."),
   workDir: z.string().optional().describe("Explicit work directory"),
 });
 
@@ -480,8 +527,9 @@ export const JournalReadSchema = z.object({
   concept: z.string().optional().describe("Filter to one concept tag"),
   status: z.enum(["active", "refined", "superseded", "rejected", "adopted", "retracted"]).optional()
     .describe("Filter by derived status — 'active' lists entries nothing has superseded"),
-  docId: z.string().optional().describe("Traverse by scope: every entry citing this document (or namespace, e.g. 'code')"),
-  anchor: z.string().optional().describe("Traverse by unit: 'D014:H0003' or bare 'H0003' matches every version cited, whatever the digest; add '@a1b2' to pin one version"),
+  scope: z.string().optional().describe("Traverse by scope: every entry citing this document (or namespace, e.g. 'code')"),
+  docId: z.string().optional().describe("The old name for 'scope'; still accepted"),
+  anchor: AnchorFilterArgSchema.optional().describe("Traverse by unit: { unit: 'H0003' } matches every version cited, whatever the digest; add scope to pin the document and digest to pin one version"),
   digest: z.string().optional().describe("Traverse by content identity: every entry citing any chunk at this digest"),
   op: z.enum(["propose", "refine", "supersede", "reject", "adopt", "retract", "note"]).optional().describe("Filter by op"),
   limit: z.number().int().positive().optional().default(100).describe("Maximum entries to return (most recent kept)"),

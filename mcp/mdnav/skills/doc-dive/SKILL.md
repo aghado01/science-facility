@@ -75,7 +75,7 @@ Never dive blind into an unknown document:
 At major boundaries (section, document, theme):
 - Rebuild concepts from the observation ledger (`mdnav_journal_read({ concept })`), not from the previous summary.
 - **The Reverse Walk:** Walk surviving claims *backward* against their literal source anchors. Re-reading a cited anchor reports digest drift in-band, so Audit Check 4 answers itself.
-- **Coverage Arithmetic:** Compare bytes read (`mdnav_coverage`) vs bytes cited (`mdnav_journal_read({ docId })`) to catch silent attrition and ungrounded salience capture.
+- **Coverage Arithmetic:** Compare bytes read (`mdnav_coverage`) vs bytes cited (`mdnav_journal_read({ scope })`) to catch silent attrition and ungrounded salience capture.
 
 ---
 
@@ -93,8 +93,8 @@ Record as you read, not at the end — an entry costs one small write and its re
 ```
 mdnav_journal_record({ op: "propose", concept: "C-001",
                        body: "Median is scale-calibrated.",
-                       anchors: ["D001:H0003@a1b2"] })
-→ recorded | N001 (+28 B) | propose | - | C-001 | D001:H0003@a1b2
+                       anchors: [{ scope: "D001", unit: "H0003", digest: "a1b2" }] })
+→ recorded | N001 (+28 B) | propose | - | C-001 | D001 : H0003 @ a1b2
 
 mdnav_journal_record({ op: "refine", concept: "C-001", refs: ["N001"],
                        body: "Only under bounded curvature — edge case at D001:H0019." })
@@ -151,8 +151,8 @@ Operates on literal byte spans, either directly via **MCP Tools** (recommended f
 | **`mdnav_batch_read({ requests: [...] })`** | **Native multi-document batch reading** (e.g. read 20+ abstracts/theorems across papers in 1 RPC). |
 | `mdnav_coverage({ docIds: ["D001"], depth: 1 })` | Bytes read **and bytes cited**, with the read-not-cited / cited-not-read diagnostics. `byBreaks: true` scores against the segment basis. |
 | `mdnav_locate({ pattern: "keyword", docIds: ["D001"] })` | Fast regex/string search returning anchor lines without dumping full bodies. |
-| **`mdnav_journal_record({ op, body, concept?, refs?, anchors? })`** | **Append one observation/hypothesis/decision to the notebook.** Returns a compact receipt. |
-| `mdnav_journal_read({ concept?, status?, docId?, anchor?, digest?, op? })` | Ledger view, filtered. `status: "active"` lists what nothing has yet superseded; `anchor`/`digest` traverse the citation graph. |
+| **`mdnav_journal_record({ op, body, concept?, refs?, anchors? })`** | **Append one observation/hypothesis/decision to the notebook.** Each anchor is given as components — `{ scope, unit?, digest? }`. Returns a compact receipt. |
+| `mdnav_journal_read({ concept?, status?, scope?, anchor?, digest?, op? })` | Ledger view, filtered. `status: "active"` lists what nothing has yet superseded; `scope`/`anchor`/`digest` traverse the citation graph, each naming one component of the address. |
 | `mdnav_journal_tree({ concept? })` | Lineage of ideas: what refined, superseded, adopted, or rejected what. |
 
 ### The Stream Is Framed
@@ -177,7 +177,7 @@ In practice:
 
 - **Quote anchors exactly as given.** A restyled citation loses the binding.
 - **One frame per span.** A multi-unit read frames each unit separately.
-- Pass anchors back compact (`D014:H0003@a1b2`); the stream spaces them out.
+- **Pass anchors back as components** — `{ scope: "D014", unit: "H0003", digest: "a1b2" }`. The stream already shows them decomposed; give them back the same way and nothing has to be inferred from punctuation. A string works too, spaced exactly as printed or compact: all three name one address and resolve identically. Spend no attention on the spacing.
 - `prefixFormat: false` per call, `MDNAV_PREFIX=off` per session.
 
 ### Addressing
@@ -206,7 +206,7 @@ Width is itself signal: `H007` says the document has hundreds of headings withou
 
 - **A source that changed under you** — re-indexed and announced before the content. `mdnav_journal_read({ digest })` then lists which citations were pinned to the old version.
 - **What `strip` removed** — each span leaves a marker naming its kind and byte cost (`mdnav elided | data-uri | 4030 B`), plus a total. Re-read the same anchor without `strip` to get the bytes back.
-- **A stale citation, at write time** — `journal_record` resolves every `Dnn:Hnn@digest` anchor as you record it and reports drift then.
+- **A stale citation, at write time** — `journal_record` resolves every anchor whose scope is a document and whose unit is a chunk, as you record it, and reports drift then.
 
 ### Reading the Inventory
 

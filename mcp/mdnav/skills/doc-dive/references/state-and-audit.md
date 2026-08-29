@@ -126,28 +126,32 @@ The second reason is that each component becomes separately queryable:
 
 | Ask | Query | Edge traversed |
 |---|---|---|
-| Everything citing this document | `journal_read({ docId: "D023" })` | entry → document |
-| Every version of this chunk anyone cited | `journal_read({ anchor: "D023:H0006" })` | entry → chunk, digest-agnostic |
-| Only citations pinned to one version | `journal_read({ anchor: "D023:H0006@e5f6" })` | entry → chunk at version |
+| Everything citing this document | `journal_read({ scope: "D023" })` | entry → document |
+| Every version of this chunk anyone cited | `journal_read({ anchor: { scope: "D023", unit: "H0006" } })` | entry → chunk, digest-agnostic |
+| Only citations pinned to one version | `journal_read({ anchor: { scope: "D023", unit: "H0006", digest: "e5f6" } })` | entry → chunk at version |
 | Everything cited at this content identity | `journal_read({ digest: "e5f6" })` | entry → version, across chunks |
 
 The last two are what turn Audit Check 4 into a query. When a chunk drifts, the citations still pinned to the **old** digest are exactly the claims that need re-walking — and you can list them without re-reading a byte. Fusing the anchor into one token would collapse the path to a leaf and put every one of these edges out of reach.
 
-Namespaces outside the corpus decompose identically: `code : grassmann.py` is scope `code`, unit `grassmann.py`, so `journal_read({ docId: "code" })` lists every entry grounded in source rather than in the documents.
+Each filter names the component it is, so nothing is inferred from how you typed it: `{ scope: "H0006" }` asks for a *document* called `H0006` and correctly finds none. A plain string still works — `anchor: "H0006"` reads its lone component as the unit, and `"D023:H0006@e5f6"` or the spaced `"D023 : H0006 @ e5f6"` split the same way — but components are the form that cannot be misread.
+
+Namespaces outside the corpus decompose identically: `code : grassmann.py` is scope `code`, unit `grassmann.py`, so `journal_read({ scope: "code" })` lists every entry grounded in source rather than in the documents.
 
 ### Writes are acknowledged, not echoed
 
 `mdnav_journal_record` returns a receipt and nothing else:
 
 ```
-recorded | N003 (+148 B) | adopt | N002 | C-001 | D023:H0006@e5f6 ; code:grassmann.py
+recorded | N003 (+148 B) | adopt | N002 | C-001 | D023 : H0006 @ e5f6 ; code : grassmann.py
 ```
 
 You just wrote the body; being read it back doubles what the note cost. The receipt carries the minted id, the byte cost, and where the entry attached.
 
 ### Anchors are checked at write time
 
-An anchor of the form `Dnnn:Hnnnn@digest` is resolved against the live index as it is recorded, and a digest that no longer matches is reported **then** — while the citation is still cheap to fix — rather than at the reverse walk, when it is not. Anything not of that shape (`code:grassmann.py`, a URL, a bare tag) is your own vocabulary and is kept verbatim. A `ref` to an entry that does not exist is refused outright.
+Record an anchor as its components — `{ scope: "D023", unit: "H0006", digest: "e5f6" }`. A scope naming a document with a unit naming a chunk is resolved against the live index as it is recorded, and a digest that no longer matches is reported **then** — while the citation is still cheap to fix — rather than at the reverse walk, when it is not. Any other scope (`{ scope: "code", unit: "grassmann.py" }`, a URL, a bare tag) is your own vocabulary and is kept verbatim.
+
+A string is accepted too, and the spaced form the stream prints resolves exactly like the compact one — you never need to restyle a citation to pass it back. Whatever form goes in, one canonical address is stored, so these entries all join on the same components later. A `ref` to an entry that does not exist is refused outright.
 
 ### What still belongs in the markdown notebook
 
@@ -180,7 +184,7 @@ For every claim surviving into the final deliverable:
 
 ## 6. Computable Diagnostics: Read vs. Cited Bytes
 
-`mdnav` maintains an exact ledger of byte spans read (`reads.jsonl`), and the journal (§4) maintains an exact ledger of anchors cited (`journal.jsonl`). Both halves of this arithmetic are now on disk in the same directory: `mdnav_coverage` reports the bytes read, and `mdnav_journal_read({ docId })` lists every entry citing that document.
+`mdnav` maintains an exact ledger of byte spans read (`reads.jsonl`), and the journal (§4) maintains an exact ledger of anchors cited (`journal.jsonl`). Both halves of this arithmetic are now on disk in the same directory: `mdnav_coverage` reports the bytes read, and `mdnav_journal_read({ scope })` lists every entry citing that document.
 
 Comparing the set of bytes read against the set of bytes cited reveals structural reading defects:
 
