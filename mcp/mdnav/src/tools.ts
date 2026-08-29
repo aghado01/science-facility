@@ -15,6 +15,7 @@ import {
   JournalRecordSchema,
   JournalReadSchema,
   JournalTreeSchema,
+  SkillsSchema,
   type ByteSpan,
   type DiscoverArgs,
   type ProfileArgs,
@@ -29,9 +30,11 @@ import {
   type JournalRecordArgs,
   type JournalReadArgs,
   type JournalTreeArgs,
+  type SkillsArgs,
   type Elision,
 } from "./types.ts";
 import { MdnavEngine } from "./engine.ts";
+import { listTopics, outlineTopic, readSection, readTopic, searchSkills, skillRoot } from "./skills.ts";
 import {
   formatSourceChunkPrefix,
   formatAnchorString,
@@ -457,6 +460,71 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
         return { content: [{ type: "text", text: renderJournalTree(scoped) }] };
       } catch (err: any) {
         return { isError: true, content: [{ type: "text", text: `mdnav_journal_tree error: ${err.message}` }] };
+      }
+    }
+  );
+
+  // 12. mdnav_skills
+  tool(
+    "mdnav_skills",
+    "Serve mdnav's own investigative discipline — the doc-dive skill and its references — listed, outlined, searched, or read a section at a time. Call with no arguments to see what is available.",
+    SkillsSchema.shape,
+    async (args: SkillsArgs) => {
+      try {
+        if (args.search) {
+          const hits = searchSkills(args.search);
+          if (hits.length === 0) {
+            return { content: [{ type: "text", text: `No skill topic matches ${args.search}.` }] };
+          }
+          const rows = hits.map((h) =>
+            `${formatAnchorString(`${h.topic}:${h.hid}`).padEnd(34)}${FIELD}L ${String(h.line).padEnd(5)}${FIELD}${h.text}`
+          );
+          return { content: [{ type: "text", text: rows.join("\n") }] };
+        }
+
+        if (!args.topic) {
+          const topics = listTopics();
+          if (topics.length === 0) {
+            return { content: [{ type: "text", text: `No skill corpus found at ${skillRoot()}.` }] };
+          }
+          const row = (topic: string, bytes: string, units: string, title: string) =>
+            [topic.padEnd(22), bytes.padStart(10), units.padStart(9), title].join(FIELD);
+          const rows = topics.map((t) =>
+            row(t.topic, fmtBytes(t.bytes), `${t.headings} units`, t.title)
+          );
+          return {
+            content: [{
+              type: "text",
+              text: `${row("topic", "bytes", "units", "title")}\n${rows.join("\n")}\n\n` +
+                `Read one with mdnav_skills({ topic }), a section with { topic, section }, ` +
+                `or find a passage with { search }. 'index' is the discipline itself.`,
+            }],
+          };
+        }
+
+        if (args.outline) {
+          const rows = outlineTopic(args.topic, args.depth ?? 6).map(({ heading, bytes }) =>
+            [
+              `${"  ".repeat(Math.max(0, heading.level - 1))}${formatAnchorString(`${heading.hid}@${heading.digest}`)}`.padEnd(30),
+              fmtBytes(bytes).padStart(10),
+              heading.title,
+            ].join(FIELD)
+          );
+          return { content: [{ type: "text", text: rows.join("\n") }] };
+        }
+
+        if (args.section) {
+          const s = readSection(args.topic, args.section);
+          const anchor = `${s.heading.hid}@${s.heading.digest}`;
+          const head = formatSourceChunkPrefix(s.topic, anchor, s.span);
+          return { content: [{ type: "text", text: `${head}\n${closeChunk(s.text, s.topic, anchor)}` }] };
+        }
+
+        const { topic, text } = readTopic(args.topic);
+        const head = formatSourceChunkPrefix(topic.topic, EMPTY, [0, topic.bytes]);
+        return { content: [{ type: "text", text: `${head}\n${closeChunk(text, topic.topic, EMPTY)}` }] };
+      } catch (err: any) {
+        return { isError: true, content: [{ type: "text", text: `mdnav_skills error: ${err.message}` }] };
       }
     }
   );

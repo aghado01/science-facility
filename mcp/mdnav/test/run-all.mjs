@@ -17,6 +17,7 @@ const SUITES = [
   ["journal     (MCP — ledger + formatting)", "journal-test.mjs"],
   ["frame-matrix(MCP — ablation manipulation check)", "frame-matrix-test.mjs"],
   ["render      (MCP — what reaches the stream)", "render-test.mjs"],
+  ["skills      (MCP — serving the discipline)", "skills-test.mjs"],
 ];
 
 let failed = 0;

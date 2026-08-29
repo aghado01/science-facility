@@ -541,3 +541,19 @@ export const JournalTreeSchema = z.object({
   concept: z.string().optional().describe("Restrict the lineage forest to one concept tag"),
   workDir: z.string().optional().describe("Explicit work directory"),
 });
+
+export const SkillsSchema = z.object({
+  topic: z.string().optional().describe("Topic to read: 'index' for the doc-dive discipline itself, or a reference such as 'state-and-audit'. Omit to list what is available."),
+  section: z.string().optional().describe("One section of that topic, by heading id ('H0004') or by a word in its title. The whole subtree comes with it."),
+  outline: z.boolean().optional().describe("List the topic's headings with their byte sizes instead of reading it"),
+  search: z.string().optional().describe("Case-insensitive pattern to find across the whole skill corpus; each hit reports the section holding it"),
+  depth: z.number().int().positive().optional().describe("Heading depth for outline (default 6)"),
+});
+
+export interface SkillsArgs {
+  topic?: string | undefined;
+  section?: string | undefined;
+  outline?: boolean | undefined;
+  search?: string | undefined;
+  depth?: number | undefined;
+}

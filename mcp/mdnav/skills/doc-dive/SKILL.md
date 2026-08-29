@@ -272,6 +272,8 @@ Read the dedicated guide for specific domain workflows and audit mechanics:
 
 | Reference Guide | Read when you need... |
 |---|---|
-| [chat-archaeology.md](file:///d:/aghado01/science-facility/mcp/mdnav/skills/doc-dive/references/chat-archaeology.md) | Deep-diving into long chat exports (Claude, Codex, Perplexity); tracking narrative/design evolution, proposal lifecycles, detecting silent attrition, triage of conversation markup/asides, and multi-thread chronology. |
-| [technical-literature.md](file:///d:/aghado01/science-facility/mcp/mdnav/skills/doc-dive/references/technical-literature.md) | Reading research papers/technical specs transferred from LaTeX/PDF; concept reconciliation, evaluating methods/trade-offs, integrating literature into project architectures, stratified reading, and fan-out gating. |
-| [state-and-audit.md](file:///d:/aghado01/science-facility/mcp/mdnav/skills/doc-dive/references/state-and-audit.md) | Deep specification of the reversible notebook, contextual glue, RJMCMC-style evidence conservation, the backward reverse walk, and byte-vs-cite audit diagnostics. |
+| `mdnav_skills({ topic: "chat-archaeology" })` | Deep-diving into long chat exports (Claude, Codex, Perplexity); tracking narrative/design evolution, proposal lifecycles, detecting silent attrition, triage of conversation markup/asides, and multi-thread chronology. |
+| `mdnav_skills({ topic: "technical-literature" })` | Reading research papers/technical specs transferred from LaTeX/PDF; concept reconciliation, evaluating methods/trade-offs, integrating literature into project architectures, stratified reading, and fan-out gating. |
+| `mdnav_skills({ topic: "state-and-audit" })` | Deep specification of the reversible notebook, contextual glue, RJMCMC-style evidence conservation, the backward reverse walk, and byte-vs-cite audit diagnostics. |
+
+A reference is served by the same MCP that serves this page, so it is reachable wherever the server is mounted and needs no path. Take a section rather than the whole guide when you know what you want: `mdnav_skills({ topic: "state-and-audit", outline: true })` lists them with their sizes, and `mdnav_skills({ search })` finds a passage across all of them.
