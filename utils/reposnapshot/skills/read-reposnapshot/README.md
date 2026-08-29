@@ -1,0 +1,1 @@
+This is skill is a mirror of a client-side trigger skill associated with reposnapshot, for the sake of centralized maintenance. 

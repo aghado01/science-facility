@@ -1,4 +1,10 @@
+
 # Reposnapshot copy-pasta script
+
+```PowerShell
+& "D:/aghado01/science-facility/utils/reposnapshot/reposnapshot-v3/rs.core.user.ps1" -ConfigPath 'D:/aghado01/science-facility/utils/reposnapshot/reposnapshot-v3/user-config.json' -Root 'D:/aipithicus/abliteralus/private/src'
+```
+
 
 ```PowerShell
 #Ignore workflow
