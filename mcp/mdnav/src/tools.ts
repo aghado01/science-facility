@@ -477,7 +477,7 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
             return { content: [{ type: "text", text: `No skill topic matches ${args.search}.` }] };
           }
           const rows = hits.map((h) =>
-            `${formatAnchorString(`${h.topic}:${h.hid}`).padEnd(34)}${FIELD}L ${String(h.line).padEnd(5)}${FIELD}${h.text}`
+            `${h.topic.padEnd(24)}${h.hid.padEnd(8)}L${String(h.line).padEnd(6)}${h.text}`
           );
           return { content: [{ type: "text", text: rows.join("\n") }] };
         }
@@ -488,7 +488,7 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
             return { content: [{ type: "text", text: `No skill corpus found at ${skillRoot()}.` }] };
           }
           const row = (topic: string, bytes: string, units: string, title: string) =>
-            [topic.padEnd(22), bytes.padStart(10), units.padStart(9), title].join(FIELD);
+            `${topic.padEnd(24)}${bytes.padStart(10)}${units.padStart(10)}  ${title}`;
           const rows = topics.map((t) =>
             row(t.topic, fmtBytes(t.bytes), `${t.headings} units`, t.title)
           );
@@ -503,26 +503,25 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
         }
 
         if (args.outline) {
+          // Ids stay left-aligned and the TITLE carries the indent: the id is
+          // what you hand back to `section`, so it should be scannable in a
+          // column rather than staircased across one.
           const rows = outlineTopic(args.topic, args.depth ?? 6).map(({ heading, bytes }) =>
-            [
-              `${"  ".repeat(Math.max(0, heading.level - 1))}${formatAnchorString(`${heading.hid}@${heading.digest}`)}`.padEnd(30),
-              fmtBytes(bytes).padStart(10),
-              heading.title,
-            ].join(FIELD)
+            `${heading.hid.padEnd(8)}${fmtBytes(bytes).padStart(10)}  ` +
+            `${"  ".repeat(Math.max(0, heading.level - 1))}${heading.title}`
           );
           return { content: [{ type: "text", text: rows.join("\n") }] };
         }
 
+        // Skill text is returned as it sits in the file — its own markdown
+        // heading identifies it, and no frame is added. See the register note
+        // in skills.ts for why this surface is deliberately not addressed the
+        // way corpus material is.
         if (args.section) {
-          const s = readSection(args.topic, args.section);
-          const anchor = `${s.heading.hid}@${s.heading.digest}`;
-          const head = formatSourceChunkPrefix(s.topic, anchor, s.span);
-          return { content: [{ type: "text", text: `${head}\n${closeChunk(s.text, s.topic, anchor)}` }] };
+          return { content: [{ type: "text", text: readSection(args.topic, args.section).text }] };
         }
 
-        const { topic, text } = readTopic(args.topic);
-        const head = formatSourceChunkPrefix(topic.topic, EMPTY, [0, topic.bytes]);
-        return { content: [{ type: "text", text: `${head}\n${closeChunk(text, topic.topic, EMPTY)}` }] };
+        return { content: [{ type: "text", text: readTopic(args.topic).text }] };
       } catch (err: any) {
         return { isError: true, content: [{ type: "text", text: `mdnav_skills error: ${err.message}` }] };
       }

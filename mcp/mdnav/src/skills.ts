@@ -6,7 +6,7 @@
  * revised with the code rather than drifting in however many client-side copies
  * exist. A caller that wants it asks for it.
  *
- * The corpus is Markdown and this is a Markdown navigator, so it is addressed
+ * The corpus is Markdown and this is a Markdown navigator, so it is TRAVERSED
  * the way any corpus is: listed with sizes before it is read, outlined before a
  * section is taken. What it must NOT do is mount itself into the live session.
  * Minting `Dnnn` ids for skill files would put them in the inventory a reader is
@@ -14,10 +14,23 @@
  * corpus that never contained them — the tool would corrupt the measurement it
  * exists to teach.
  *
- * A skill address is therefore scoped by TOPIC, not by document id:
- * `state-and-audit : H0004` reads with the same marks as `D001 : H0003` and
- * cannot be mistaken for one, because the scope is not `Dnnn`. It survives being
- * recorded in the journal as the reader's own vocabulary.
+ * ── Why this surface is not framed ───────────────────────────────────────────
+ * Corpus reads are framed because an anchor has to present the same tokens in an
+ * outline, a chunk prefix and a journal line, so attention binds those mentions
+ * into one citation graph. Every part of that argument is about material a
+ * reader CITES. None of it holds here. Skill text is not evidence: nothing is
+ * claimed about its bytes, so a digest has no drift to catch; its spans are not
+ * re-read for an audit; it is not in anyone's coverage. Framing it would pay the
+ * cost with none of the benefit — and worse, hand back something anchor-shaped
+ * and citable in the very vocabulary the reader is about to use for real
+ * anchors, inviting priming text into the evidence chain that follows it.
+ *
+ * Framing would also make this surface swing with `frameConfig()`, putting a
+ * non-corpus output inside the prefixing ablation it has no business confounding.
+ *
+ * So topics are named, sections are handed back as the literal markdown they
+ * are, and the heading ids exist only as handles for asking for the next piece.
+ * This is priming, delivered before an investigation rather than inside one.
  */
 
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";

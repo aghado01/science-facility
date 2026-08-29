@@ -14,6 +14,7 @@ import { tmpdir } from "node:os";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 
 import { MdnavEngine } from "../src/engine.ts";
+import { registerMdnavTools } from "../src/tools.ts";
 import {
   INDEX_TOPIC,
   listTopics,
@@ -125,6 +126,38 @@ try {
   eq("coverage still measures the corpus and nothing else",
     JSON.stringify(coverageAfter.map((c) => [c.docId, c.totalBytes])),
     JSON.stringify(coverageBefore.map((c) => [c.docId, c.totalBytes])));
+
+  // ───────────────────────────────────────────────── priming, not evidence
+
+  process.stdout.write("\nskill output is plain, not framed as corpus material\n");
+
+  const registered = new Map();
+  registerMdnavTools({ tool: (n, _d, _s, fn) => registered.set(n, fn) }, new MdnavEngine());
+  const skills = async (a) => (await registered.get("mdnav_skills")(a)).content[0].text;
+
+  const sectionOut = await skills({ topic: "state-and-audit", section: "Reverse Walk" });
+  ok("a section comes back as the literal markdown it is", sectionOut.startsWith("## 5. The Reverse Walk"));
+  ok("its own heading identifies it — no frame is prepended", !/^\S+ : /.test(sectionOut));
+  ok("and no closing bracket is appended", !/\n\| \S+ : /.test(sectionOut));
+
+  const topicOut = await skills({ topic: INDEX_TOPIC });
+  ok("a whole topic is the file, byte for byte", topicOut === readTopic(INDEX_TOPIC).text);
+
+  // A digest is drift detection for a claim staked on bytes. Nothing is claimed
+  // about skill text, so offering one invites it into the evidence chain.
+  const outlineOut = await skills({ topic: "state-and-audit", outline: true });
+  ok("an outline offers ids as handles, not anchors with digests", !outlineOut.includes(" @ "));
+  ok("but the ids are still there to ask with", /\bH\d+\b/.test(outlineOut));
+
+  // Only the columns the tool renders are asserted on: a matched LINE may well
+  // contain ` : ` or ` | `, because the skill documents the corpus grammar.
+  const searchRows = (await skills({ search: "reverse walk" })).split("\n");
+  ok("search rows locate a hit without dressing it as an anchor",
+    searchRows.every((r) => /^\S+ +[HSW]\d+ +L\d+ +\S/.test(r)));
+
+  const listOut = await skills({});
+  ok("the listing reads as a directory, not a ledger", !listOut.includes(" | "));
+  ok("and still names every topic", listOut.includes("state-and-audit") && listOut.includes(INDEX_TOPIC));
 
   // ─────────────────────────────────────────────────────────────── relocation
 
