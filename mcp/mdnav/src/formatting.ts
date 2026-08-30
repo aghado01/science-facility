@@ -261,6 +261,29 @@ export function formatAnchorList(anchors: string[]): string {
 }
 
 /**
+ * The marquee that leads a skill surface.
+ *
+ * Deliberately NOT the chunk frame. It carries no scope mark, no digest, no
+ * span and no trailing field opener, because none of those mean anything for
+ * text that is never cited — see the register note in skills.ts. What it keeps
+ * is the field mark, so a skill segment stays delimited in the stream the way
+ * everything else mdnav emits is. A marquee, saying what this is and how much
+ * of it there is; not an address you could record.
+ *
+ * It does not consult `frameConfig()`. This surface sits outside the prefixing
+ * ablation, and letting it vary would confound a study of how corpus prefixes
+ * read.
+ */
+export function formatSkillMarquee(skill: string, ...fields: string[]): string {
+  return [skill, ...fields].join(FIELD);
+}
+
+/** `1 section` / `22 sections` — plural only when it earns it. */
+export function countOf(n: number, noun: string): string {
+  return `${n} ${noun}${n === 1 ? "" : "s"}`;
+}
+
+/**
  * Render an ISO-8601 UTC instant as the compact stamp used on the wire.
  * `2026-08-28T19:45:30.123Z` → `20260828_194530Z`
  *

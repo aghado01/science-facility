@@ -34,13 +34,15 @@ import {
   type Elision,
 } from "./types.ts";
 import { MdnavEngine } from "./engine.ts";
-import { listTopics, outlineTopic, readSection, readTopic, searchSkills, skillRoot } from "./skills.ts";
+import { listTopics, outlineTopic, readSection, readTopic, resolveTopic, searchSkills, skillName, skillRoot } from "./skills.ts";
 import {
   formatSourceChunkPrefix,
   formatAnchorString,
   formatJournalEntry,
   formatJournalReceipt,
   renderJournalTree,
+  formatSkillMarquee,
+  countOf,
   JOURNAL_HEADER,
   chunkHeader,
   frameConfig,
@@ -471,6 +473,8 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
     SkillsSchema.shape,
     async (args: SkillsArgs) => {
       try {
+        const marquee = (...fields: string[]) => formatSkillMarquee(skillName(), ...fields);
+
         if (args.search) {
           const hits = searchSkills(args.search);
           if (hits.length === 0) {
@@ -479,7 +483,8 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
           const rows = hits.map((h) =>
             `${h.topic.padEnd(24)}${h.hid.padEnd(8)}L${String(h.line).padEnd(6)}${h.text}`
           );
-          return { content: [{ type: "text", text: rows.join("\n") }] };
+          const head = marquee(`search ${args.search}`, countOf(hits.length, "hit"));
+          return { content: [{ type: "text", text: `${head}\n${rows.join("\n")}` }] };
         }
 
         if (!args.topic) {
@@ -495,7 +500,8 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
           return {
             content: [{
               type: "text",
-              text: `${row("topic", "bytes", "units", "title")}\n${rows.join("\n")}\n\n` +
+              text: `${marquee(countOf(topics.length, "topic"))}\n` +
+                `${row("topic", "bytes", "units", "title")}\n${rows.join("\n")}\n\n` +
                 `Read one with mdnav_skills({ topic }), a section with { topic, section }, ` +
                 `or find a passage with { search }. 'index' is the discipline itself.`,
             }],
@@ -506,22 +512,36 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
           // Ids stay left-aligned and the TITLE carries the indent: the id is
           // what you hand back to `section`, so it should be scannable in a
           // column rather than staircased across one.
-          const rows = outlineTopic(args.topic, args.depth ?? 6).map(({ heading, bytes }) =>
+          const sections = outlineTopic(args.topic, args.depth ?? 6);
+          const rows = sections.map(({ heading, bytes }) =>
             `${heading.hid.padEnd(8)}${fmtBytes(bytes).padStart(10)}  ` +
             `${"  ".repeat(Math.max(0, heading.level - 1))}${heading.title}`
           );
-          return { content: [{ type: "text", text: rows.join("\n") }] };
+          // A depth-limited outline says what it is NOT showing. "7 sections"
+          // over a document with 22 reads as the whole of it.
+          const t = resolveTopic(args.topic);
+          const shown = sections.length < t.headings
+            ? `${sections.length} of ${countOf(t.headings, "section")}`
+            : countOf(sections.length, "section");
+          return { content: [{ type: "text", text: `${marquee(t.topic, shown)}\n${rows.join("\n")}` }] };
         }
 
-        // Skill text is returned as it sits in the file — its own markdown
-        // heading identifies it, and no frame is added. See the register note
-        // in skills.ts for why this surface is deliberately not addressed the
-        // way corpus material is.
+        // The body is returned as it sits in the file — its own markdown heading
+        // identifies it, and no chunk frame is added. Only the marquee leads it,
+        // so the segment stays delimited without being made citable. See the
+        // register note in skills.ts.
         if (args.section) {
-          return { content: [{ type: "text", text: readSection(args.topic, args.section).text }] };
+          const s = readSection(args.topic, args.section);
+          return { content: [{ type: "text", text: `${marquee(s.topic, s.heading.hid)}\n${s.text}` }] };
         }
 
-        return { content: [{ type: "text", text: readTopic(args.topic).text }] };
+        const { topic, text } = readTopic(args.topic);
+        return {
+          content: [{
+            type: "text",
+            text: `${marquee(topic.topic, countOf(topic.headings, "section"))}\n${text}`,
+          }],
+        };
       } catch (err: any) {
         return { isError: true, content: [{ type: "text", text: `mdnav_skills error: ${err.message}` }] };
       }

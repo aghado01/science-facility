@@ -22,6 +22,7 @@ import {
   readSection,
   readTopic,
   searchSkills,
+  skillName,
   skillRoot,
 } from "../src/skills.ts";
 
@@ -135,13 +136,25 @@ try {
   registerMdnavTools({ tool: (n, _d, _s, fn) => registered.set(n, fn) }, new MdnavEngine());
   const skills = async (a) => (await registered.get("mdnav_skills")(a)).content[0].text;
 
+  // Every surface leads with a marquee: the skill, what this is, how much of it.
+  // It keeps the field mark so the segment stays delimited in the stream, and
+  // nothing else — no scope mark, no digest, no span, no trailing field opener.
+  const marqueeOf = (out) => out.split("\n")[0];
+  const isMarquee = (line, skill) =>
+    line.startsWith(`${skill} | `) &&
+    !line.includes(" : ") && !line.includes(" @ ") && !line.includes(" .. ") && !line.endsWith(" |");
+
   const sectionOut = await skills({ topic: "state-and-audit", section: "Reverse Walk" });
-  ok("a section comes back as the literal markdown it is", sectionOut.startsWith("## 5. The Reverse Walk"));
-  ok("its own heading identifies it — no frame is prepended", !/^\S+ : /.test(sectionOut));
-  ok("and no closing bracket is appended", !/\n\| \S+ : /.test(sectionOut));
+  eq("a section is announced by skill, topic and id",
+    marqueeOf(sectionOut), "doc-dive | state-and-audit | H17");
+  ok("the marquee is not an address", isMarquee(marqueeOf(sectionOut), "doc-dive"));
+  ok("and the body below it is the literal markdown",
+    sectionOut.split("\n").slice(1).join("\n").startsWith("## 5. The Reverse Walk"));
+  ok("no closing bracket is appended", !/\n\| \S+ : /.test(sectionOut));
 
   const topicOut = await skills({ topic: INDEX_TOPIC });
-  ok("a whole topic is the file, byte for byte", topicOut === readTopic(INDEX_TOPIC).text);
+  ok("a whole topic is the marquee and then the file, byte for byte",
+    topicOut === `doc-dive | index | 20 sections\n${readTopic(INDEX_TOPIC).text}`);
 
   // A digest is drift detection for a claim staked on bytes. Nothing is claimed
   // about skill text, so offering one invites it into the evidence chain.
@@ -149,15 +162,27 @@ try {
   ok("an outline offers ids as handles, not anchors with digests", !outlineOut.includes(" @ "));
   ok("but the ids are still there to ask with", /\bH\d+\b/.test(outlineOut));
 
+  // "7 sections" over a document with 22 of them reads as the whole outline.
+  const shallowOut = await skills({ topic: "state-and-audit", outline: true, depth: 2 });
+  ok("a depth-limited outline says what it is not showing",
+    /\| \d+ of \d+ sections$/.test(marqueeOf(shallowOut)));
+  ok("an unlimited one just counts", /\| \d+ sections$/.test(marqueeOf(outlineOut)));
+
   // Only the columns the tool renders are asserted on: a matched LINE may well
   // contain ` : ` or ` | `, because the skill documents the corpus grammar.
-  const searchRows = (await skills({ search: "reverse walk" })).split("\n");
-  ok("search rows locate a hit without dressing it as an anchor",
-    searchRows.every((r) => /^\S+ +[HSW]\d+ +L\d+ +\S/.test(r)));
+  const searchOut = await skills({ search: "reverse walk" });
+  ok("search is announced with its pattern and hit count",
+    /^doc-dive \| search reverse walk \| \d+ hits$/.test(marqueeOf(searchOut)));
+  ok("and its rows locate a hit without dressing it as an anchor",
+    searchOut.split("\n").slice(1).every((r) => /^\S+ +[HSW]\d+ +L\d+ +\S/.test(r)));
 
   const listOut = await skills({});
-  ok("the listing reads as a directory, not a ledger", !listOut.includes(" | "));
-  ok("and still names every topic", listOut.includes("state-and-audit") && listOut.includes(INDEX_TOPIC));
+  ok("the listing is announced too", isMarquee(marqueeOf(listOut), "doc-dive"));
+  ok("its rows read as a directory, not a ledger",
+    listOut.split("\n").slice(1).every((r) => !r.includes(" | ")));
+  ok("and it still names every topic", listOut.includes("state-and-audit") && listOut.includes(INDEX_TOPIC));
+
+  eq("the marquee names what the skill calls itself", skillName(), "doc-dive");
 
   // ─────────────────────────────────────────────────────────────── relocation
 
@@ -174,6 +199,8 @@ try {
     eq("MDNAV_SKILL_DIR relocates the corpus", alt.map((t) => t.topic).join(","), "index,one");
     eq("and the relocated index is read from there", readTopic("index").text.includes("Alternate Discipline"), true);
     ok("the override actually changed roots", skillRoot() !== realRoot);
+    // From frontmatter, not the directory — the fixture dir is named for a pid.
+    eq("a relocated corpus announces what IT calls itself", skillName(), "alt");
   } finally {
     delete process.env.MDNAV_SKILL_DIR;
   }

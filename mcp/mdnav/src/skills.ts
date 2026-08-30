@@ -34,7 +34,7 @@
  */
 
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { scanDocument } from "./scanner.ts";
@@ -61,6 +61,26 @@ export interface SkillTopic {
 export function skillRoot(): string {
   const env = process.env["MDNAV_SKILL_DIR"];
   return env ? resolve(env) : resolve(HERE, "../skills/doc-dive");
+}
+
+/**
+ * What the skill calls itself, from its own frontmatter.
+ *
+ * Leading the marquee with this rather than the directory name means a
+ * relocated corpus announces what it is, not where it happens to sit.
+ */
+export function skillName(): string {
+  const root = skillRoot();
+  const indexFile = join(root, "SKILL.md");
+  if (existsSync(indexFile)) {
+    const { buf, index } = loadDocument(INDEX_TOPIC, indexFile);
+    if (index.frontmatter) {
+      const fm = buf.subarray(index.frontmatter.start, index.frontmatter.end).toString("utf8");
+      const named = /^name:\s*(.+)$/m.exec(fm);
+      if (named) return named[1]!.trim();
+    }
+  }
+  return basename(root);
 }
 
 /** Topic names use forward slashes and carry no extension, on every platform. */
