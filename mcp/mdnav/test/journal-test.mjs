@@ -173,6 +173,26 @@ try {
   eq("and the merged node is expanded exactly once",
     (tree.match(/N008 \| supersede/g) || []).length - (tree.match(/↩ shown above/g) || []).length, 1);
 
+  // ───────────────────────────────────────────────────── concurrent writers
+
+  process.stdout.write("\nconcurrent writers\n");
+  const writerA = new MdnavEngine();
+  const writerB = new MdnavEngine();
+  writerA.readJournal({ workDir: wd });
+  writerB.readJournal({ workDir: wd });
+  const fromA = writerA.recordJournal({ workDir: wd, op: "note", body: "writer A" });
+  const fromB = writerB.recordJournal({ workDir: wd, op: "note", body: "writer B" });
+  eq("a stale peer reloads before minting", `${fromA.entry.id},${fromB.entry.id}`, "N009,N010");
+  const persistedIds = readFileSync(writerA.journalPath(wd), "utf8")
+    .trim().split("\n").map((line) => JSON.parse(line).id);
+  eq("separate writers leave globally unique ids", new Set(persistedIds).size, persistedIds.length);
+
+  const lockPath = `${writerA.journalPath(wd)}.lock`;
+  writeFileSync(lockPath, "held", "utf8");
+  throws("an active writer lock fails loudly",
+    () => writerA.recordJournal({ workDir: wd, op: "note", body: "must retry" }), /another writer.*retry/);
+  rmSync(lockPath, { force: true });
+
   // ──────────────────────────────────────────────────── token boundary marks
 
   process.stdout.write("\nmarks are isolated on both sides\n");

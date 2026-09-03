@@ -2,7 +2,18 @@
  * Stateful in-memory engine and cache for mdnav.
  */
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, statSync, appendFileSync } from "node:fs";
+import {
+  appendFileSync,
+  closeSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { resolve, join, basename, dirname, relative } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -42,7 +53,6 @@ export class MdnavEngine {
   // ROOT and outlives re-indexing, while reads.jsonl belongs to its stamped run.
   private journalRoot: string | null = null;
   private journalEntries: JournalEntry[] = [];
-  private journalLoaded = false;
 
   // Out-of-band things the reader must be told about — a source that moved
   // under the cache, so far. Drained into whatever tool output comes next,
@@ -271,7 +281,6 @@ export class MdnavEngine {
     if (this.journalRoot !== root) {
       this.journalRoot = root;
       this.journalEntries = [];
-      this.journalLoaded = false;
     }
 
     this.workDir = runDir;
@@ -921,7 +930,6 @@ export class MdnavEngine {
       if (this.journalRoot !== root) {
         this.journalRoot = root;
         this.journalEntries = [];
-        this.journalLoaded = false;
       }
     }
     if (!this.journalRoot) {
@@ -941,12 +949,11 @@ export class MdnavEngine {
    *
    * Ids are minted from what the FILE already holds, never from an in-memory
    * counter: the notebook outlives the server process, and minting N001 on top
-   * of an existing N001 would make every `refs` pointer ambiguous.
+   * of an existing N001 would make every `refs` pointer ambiguous. Reload on
+   * every operation because several MCP clients may share one notebook.
    */
   private ensureJournalLoaded(explicit?: string | undefined): void {
     const path = this.journalPath(explicit);
-    if (this.journalLoaded) return;
-
     this.journalEntries = [];
     if (existsSync(path)) {
       for (const line of readFileSync(path, "utf8").split("\n")) {
@@ -962,7 +969,35 @@ export class MdnavEngine {
         }
       }
     }
-    this.journalLoaded = true;
+  }
+
+  /**
+   * Serialize the read-mint-append transaction across mdnav processes.
+   *
+   * Exclusive file creation is atomic on every supported platform. A peer gets
+   * a loud retry instruction instead of minting from stale state; the critical
+   * section is synchronous and normally lasts less than a millisecond.
+   */
+  private acquireJournalWriteLock(explicit?: string | undefined): () => void {
+    const path = this.journalPath(explicit);
+    mkdirSync(dirname(path), { recursive: true });
+    const lockPath = `${path}.lock`;
+    let descriptor: number;
+    try {
+      descriptor = openSync(lockPath, "wx");
+    } catch (err: any) {
+      if (err?.code === "EEXIST") {
+        throw new Error("journal: another writer holds the journal lock — retry the record operation");
+      }
+      throw err;
+    }
+    return () => {
+      try {
+        closeSync(descriptor);
+      } finally {
+        unlinkSync(lockPath);
+      }
+    };
   }
 
   private mintJournalId(): string {
@@ -975,67 +1010,73 @@ export class MdnavEngine {
   }
 
   public recordJournal(args: JournalRecordArgs): { entry: JournalEntry; anchorWarnings: string[] } {
-    this.ensureJournalLoaded(args.workDir);
+    const release = this.acquireJournalWriteLock(args.workDir);
+    try {
+      // The reload belongs inside the lock: loading before acquiring it leaves
+      // the same read/mint race under a smaller-looking implementation.
+      this.ensureJournalLoaded(args.workDir);
 
-    const refs = args.refs ?? [];
-    for (const r of refs) {
-      if (!this.journalEntries.some((e) => e.id === r)) {
-        throw new Error(`journal: ref ${r} does not exist — record the parent before referring to it`);
+      const refs = args.refs ?? [];
+      for (const r of refs) {
+        if (!this.journalEntries.some((e) => e.id === r)) {
+          throw new Error(`journal: ref ${r} does not exist — record the parent before referring to it`);
+        }
       }
+
+      // Canonicalize before anything else reads them. An anchor arrives as
+      // components, as the compact string, or as the spaced form the stream
+      // prints — three ways of naming one address, which must land on one stored
+      // value or `journal_read` joins on components that differ only in how the
+      // caller happened to type them.
+      const anchors = (args.anchors ?? []).map(canonicalAnchor);
+
+      // Validate mdnav-shaped anchors against the live index. Anything else
+      // (`code:grassmann.py`, a url, a bare tag) is the reader's own vocabulary
+      // and is kept verbatim. A citation that is ALREADY stale should be said so
+      // at write time, while it is still cheap to fix.
+      //
+      // The shape test runs on the PARSED components, not on the raw string: a
+      // string test answers "was this typed the way I expect", and the spaced
+      // form — the one the stream taught the reader to quote — failed it and fell
+      // through to the verbatim branch, silently unchecked.
+      const anchorWarnings: string[] = [];
+      for (const a of anchors) {
+        const p = parseAnchor(a);
+        if (p.unit === undefined) continue;
+        if (!/^D\d+$/i.test(p.scope) || !/^[HSW]\d+$/i.test(p.unit)) continue;
+
+        const idx = this.indices.get(p.scope.toUpperCase());
+        if (!idx) {
+          anchorWarnings.push(`anchor ${formatAnchorString(a)} names ${p.scope}, which is not indexed in this session`);
+          continue;
+        }
+        try {
+          const { warning } = this.resolveAnchor(idx, p.digest ? `${p.unit}@${p.digest}` : p.unit);
+          if (warning) anchorWarnings.push(warning);
+        } catch (err: any) {
+          anchorWarnings.push(`anchor ${formatAnchorString(a)} — ${err.message}`);
+        }
+      }
+
+      const entry: JournalEntry = {
+        id: this.mintJournalId(),
+        ts: new Date().toISOString(),
+        op: args.op,
+        refs,
+        concept: args.concept,
+        anchors,
+        bytes: Buffer.byteLength(args.body, "utf8"),
+        body: args.body,
+      };
+
+      this.journalEntries.push(entry);
+      const path = this.journalPath(args.workDir);
+      appendFileSync(path, JSON.stringify(entry) + "\n", "utf8");
+
+      return { entry, anchorWarnings };
+    } finally {
+      release();
     }
-
-    // Canonicalize before anything else reads them. An anchor arrives as
-    // components, as the compact string, or as the spaced form the stream
-    // prints — three ways of naming one address, which must land on one stored
-    // value or `journal_read` joins on components that differ only in how the
-    // caller happened to type them.
-    const anchors = (args.anchors ?? []).map(canonicalAnchor);
-
-    // Validate mdnav-shaped anchors against the live index. Anything else
-    // (`code:grassmann.py`, a url, a bare tag) is the reader's own vocabulary
-    // and is kept verbatim. A citation that is ALREADY stale should be said so
-    // at write time, while it is still cheap to fix.
-    //
-    // The shape test runs on the PARSED components, not on the raw string: a
-    // string test answers "was this typed the way I expect", and the spaced
-    // form — the one the stream taught the reader to quote — failed it and fell
-    // through to the verbatim branch, silently unchecked.
-    const anchorWarnings: string[] = [];
-    for (const a of anchors) {
-      const p = parseAnchor(a);
-      if (p.unit === undefined) continue;
-      if (!/^D\d+$/i.test(p.scope) || !/^[HSW]\d+$/i.test(p.unit)) continue;
-
-      const idx = this.indices.get(p.scope.toUpperCase());
-      if (!idx) {
-        anchorWarnings.push(`anchor ${formatAnchorString(a)} names ${p.scope}, which is not indexed in this session`);
-        continue;
-      }
-      try {
-        const { warning } = this.resolveAnchor(idx, p.digest ? `${p.unit}@${p.digest}` : p.unit);
-        if (warning) anchorWarnings.push(warning);
-      } catch (err: any) {
-        anchorWarnings.push(`anchor ${formatAnchorString(a)} — ${err.message}`);
-      }
-    }
-
-    const entry: JournalEntry = {
-      id: this.mintJournalId(),
-      ts: new Date().toISOString(),
-      op: args.op,
-      refs,
-      concept: args.concept,
-      anchors,
-      bytes: Buffer.byteLength(args.body, "utf8"),
-      body: args.body,
-    };
-
-    this.journalEntries.push(entry);
-    const path = this.journalPath(args.workDir);
-    mkdirSync(dirname(path), { recursive: true });
-    appendFileSync(path, JSON.stringify(entry) + "\n", "utf8");
-
-    return { entry, anchorWarnings };
   }
 
   /**
