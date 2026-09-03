@@ -21,6 +21,11 @@ if (Test-Path -LiteralPath "$PSScriptRoot/console-prompt.ps1") {
     . "$PSScriptRoot/console-prompt.ps1"
 }
 
+# load latexAI-aliases.ps1
+if (Test-Path -LiteralPath "$PSScriptRoot/latexAI-aliases.ps1") {
+    . "$PSScriptRoot/latexAI-aliases.ps1"
+}
+
 if (Test-Path -LiteralPath "$PSScriptRoot/dotnet-aliases.ps1") {
     . "$PSScriptRoot/dotnet-aliases.ps1"
 }
