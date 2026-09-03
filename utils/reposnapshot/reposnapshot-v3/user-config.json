@@ -3,18 +3,13 @@
     "Root": null,
     "OutRoot": null,
     "SelectionPatterns": [
-        "*.py",
-        "*.ps1",
-        "*.psm1",
-        "*.cs",
-        "!tests/",
-        "!hashish/",
-        "!archivory/",
-        "!repo-audit/",
-        "!user-repl/",
-        "!test-harness/",
-        "!viz-core/",
-        "!viz/"
+        "!**/node_modules/**",
+        "!**/dist/**",
+        "!**/vite.config.ts",
+        "!**/vite-**",
+        "*.ts",
+        "*.js",
+        "*.pegjs"
     ],
     "IncludeProcessors": [
         "StripComments",

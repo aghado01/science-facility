@@ -1,34 +1,98 @@
 {
-    "Processors": {
-      "file_read": {
-        "Group": 1, "Rank": 0, "Default": true,
-        "File": "file_read.ps1"
-      },
+  "Processors": {
+    "file_read": {
+      "Group": 1,
+      "Rank": 0,
+      "Default": true,
+      "File": "file_read.ps1"
+    },
     "StripComments": {
-    "Group": 2, "Rank": 0, "Default": false,
-    "Requires": ["file_read"],
-    "Routing": [
-        { "File": "rs.ps.strip.ps1", "Extensions": ["ps1", "psm1", "psd1"] },
-        { "File": "rs.cs.strip.ps1", "Extensions": ["cs", "csx"] },
-        { "File": "rs.js.strip.ps1", "Extensions": ["js", "mjs", "cjs", "jsx"] },
-        { "File": "rs.ts.strip.ps1", "Extensions": ["ts", "mts", "cts", "tsx"] },
-        { "File": "rs.py.strip.ps1", "Extensions": ["py", "pyw", "pyi"] }
-    ]
-    }, 
-      "Indentation": {
-        "Group": 3, "Rank": 1, "Default": false,
-        "File": "rs.indent.ps1",
-        "Requires": ["file_read"]
-      },
-      "Whitespace": {
-        "Group": 3, "Rank": 2, "Default": false,
-        "File": "rs.whitespace.ps1",
-        "Requires": ["file_read"]
-      },
-      "ContentMetadata": {
-        "Group": 4, "Rank": 0, "Default": false,
-        "File": "rs.content_meta.ps1",
-        "Requires": ["file_read"]
-      }
+      "Group": 2,
+      "Rank": 0,
+      "Default": false,
+      "Requires": [
+        "file_read"
+      ],
+      "Routing": [
+        {
+          "File": "rs.ps.strip.ps1",
+          "Extensions": [
+            "ps1",
+            "psm1",
+            "psd1"
+          ]
+        },
+        {
+          "File": "rs.pm.strip.ps1",
+          "Extensions": [
+            "pm",
+            "pl",
+            "t",
+            "pod"
+          ]
+        },
+        {
+          "File": "rs.cs.strip.ps1",
+          "Extensions": [
+            "cs",
+            "csx"
+          ]
+        },
+        {
+          "File": "rs.js.strip.ps1",
+          "Extensions": [
+            "js",
+            "pegjs",
+            "mjs",
+            "cjs",
+            "jsx"
+          ]
+        },
+        {
+          "File": "rs.ts.strip.ps1",
+          "Extensions": [
+            "ts",
+            "mts",
+            "cts",
+            "tsx"
+          ]
+        },
+        {
+          "File": "rs.py.strip.ps1",
+          "Extensions": [
+            "py",
+            "pyw",
+            "pyi"
+          ]
+        }
+      ]
+    },
+    "Indentation": {
+      "Group": 3,
+      "Rank": 1,
+      "Default": false,
+      "File": "rs.indent.ps1",
+      "Requires": [
+        "file_read"
+      ]
+    },
+    "Whitespace": {
+      "Group": 3,
+      "Rank": 2,
+      "Default": false,
+      "File": "rs.whitespace.ps1",
+      "Requires": [
+        "file_read"
+      ]
+    },
+    "ContentMetadata": {
+      "Group": 4,
+      "Rank": 0,
+      "Default": false,
+      "File": "rs.content_meta.ps1",
+      "Requires": [
+        "file_read"
+      ]
     }
   }
+}
