@@ -82,6 +82,7 @@ def _run_powershell(code: str) -> str:
     # Run the PowerShell command
     process = subprocess.Popen(
         [powershell_executable, "-NoProfile", "-Command", powershell_code],
+        stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,

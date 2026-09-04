@@ -1,13 +1,27 @@
-# D:\aghado01\science-facility\mcp\pwsh_exec\scripts\pwsh\latexml-aliases.ps1
+# D:\aghado01\science-facility\mcp\pwsh_exec\scripts\pwsh\latexAI-aliases.ps1
 
 # Wrapper functions — Set-Alias only accepts a single command name, so switches
 # (-I lib -I blib/lib) and LaTeXAI fork paths live here.
-# Resolved from portable root and local fork — ambient PATH is bypassed so
-# this works deterministically and never hits stock or MSYS2 perl.
+# Perl is resolved from the dedicated PERL_ROOT variable (User scope; PERL_HOME
+# is its perl\ subdirectory). No filesystem layout is assumed beneath the
+# portable root, and ambient PATH is bypassed so this never hits stock or
+# MSYS2 perl. A missing PERL_ROOT fails loudly at load time rather than at
+# first use.
 
-$script:StrawberryPerl = "$env:PORTABLE_ROOT\strawberry-perl\perl\bin\perl.exe"
-$script:ProveExe = "$env:PORTABLE_ROOT\strawberry-perl\perl\bin\prove.bat"
-$script:LaTeXAIRoot = "D:\aipithicus\LaTeXAI"
+$script:PerlRoot = $env:PERL_ROOT
+if (-not $script:PerlRoot -and $env:PERL_HOME) {
+    $script:PerlRoot = Split-Path -Parent $env:PERL_HOME
+}
+if (-not $script:PerlRoot) {
+    Write-Warning "latexAI-aliases: PERL_ROOT (or PERL_HOME) is not set; lxml/ltst/lmath will not work in this session."
+}
+
+$script:StrawberryPerl = Join-Path $script:PerlRoot "perl\bin\perl.exe"
+$script:ProveExe = Join-Path $script:PerlRoot "perl\bin\prove.bat"
+# The fork root is declared by the project (LaTeXAI/.mcp.json sets LATEXAI_ROOT
+# on the pwsh_exec server); the literal below is only the fallback for shells
+# opened outside that project.
+$script:LaTeXAIRoot = if ($env:LATEXAI_ROOT) { $env:LATEXAI_ROOT } else { "D:\aipithicus\LaTeXAI" }
 $script:LaTeXAILib = "$script:LaTeXAIRoot\lib"
 $script:LaTeXAIBlib = "$script:LaTeXAIRoot\blib\lib"
 $script:LaTeXAIBin = "$script:LaTeXAIRoot\bin"
