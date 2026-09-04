@@ -8,7 +8,7 @@ description: >
   comments and can automatically apply fixes when requested. With appropriate
   review rules, can detect various types of issues including bugs, security
   vulnerabilities, performance problems, and code quality concerns.
-license: Apache-2.0
+license: MIT
 compatibility: >
   Requires the `ocr` CLI installed (via `npm install -g
   @alibaba-group/open-code-review` or GitHub release binary). Requires a

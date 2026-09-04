@@ -6,7 +6,7 @@ description: >
   itself, using OCR only for deterministic engineering: file selection and
   rule resolution. Use when the host agent should drive the review with its
   own LLM capabilities.
-license: Apache-2.0
+license: MIT 
 compatibility: >
   Requires the `ocr` CLI installed (via `npm install -g
   @alibaba-group/open-code-review` or GitHub release binary). Does NOT
