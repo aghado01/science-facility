@@ -9,7 +9,7 @@ folded into `mcp/mdnav/`.
 |---|---|---|
 | `design/` | canon — the "why" and the shape; amended, never forked | `mdnav_v2_design-brief.md`, then `mdnav_v2_structure-brief.md` |
 | `briefs/` | execution-ready phase specs, one per milestone group | `01` → `05` in order |
-| `planning/` | the execution queue and the decisions register | `roadmap.md`, `decisions.md` |
+| `planning/` | the execution queue, the decisions register, the bug inventory | `roadmap.md`, `decisions.md`, `bug-inventory.md` |
 | `reports/` | dated reviews and captures — records, not live specs | `m0-legacy-capture-20260817.md` |
 | `archaeology/` | the legacy file read as a figure model; raw specimens | `figure-model-survey.md` |
 | `discussions/` | design transcripts with other models; historical | read only when a decision row cites one |
@@ -19,8 +19,10 @@ than the v2 engine. Two of them are still open work:
 
 - `reports/v1-codex-workdir-singleton-defect.md` — the server holds one engine; switching artifact
   roots leaks document identities across corpora and most tools ignore their `workDir` argument.
-  The repair list in that file stands. `discussions/v1-claude-on-codex-workdir-report.md` is the
-  second opinion on it.
+  `discussions/v1-claude-on-codex-workdir-report.md` is the second opinion on it. Both are now
+  consolidated, with the latent defects found alongside them, in
+  [planning/bug-inventory.md](planning/bug-inventory.md) (probe battery:
+  `reports/bug-probes-20260905.mjs`).
 - `planning/v1-prefixing-ablation-TODO.md` and `discussions/v1-claude-bishop-corpus-prefix-ablation.md`
   — the context-prefix ablation (named `MDNAV_PREFIX` levels, Bishop as a graded-confusability
   testbed). Overlaps the roadmap's "token-cost measurement battery"; fold it in there when that
