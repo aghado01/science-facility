@@ -3,7 +3,9 @@
  * mdnav — structure-aware navigation and byte-span addressability MCP server.
  */
 
-import { McpServer, StdioServerTransport } from "./deps.ts";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+
 import { MdnavEngine } from "./engine.ts";
 import { registerMdnavTools } from "./tools.ts";
 

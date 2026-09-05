@@ -3,10 +3,22 @@
  */
 
 import { createHash } from "node:crypto";
-import type { HeadingEntry, BreakEntry, NoiseEntry, DocumentIndex, ProfileRow, ConstructRun, WindowEntry, Elision, StripKind, StripSpec } from "./types.ts";
+import type {
+  HeadingEntry,
+  BreakEntry,
+  NoiseEntry,
+  DocumentIndex,
+  ProfileRow,
+  ConstructRun,
+  WindowEntry,
+  Elision,
+  StripKind,
+  StripSpec,
+} from "./types.ts";
 import { STRIP_KINDS } from "./types.ts";
 
-const LF = 10, CR = 13;
+const LF = 10,
+  CR = 13;
 
 export const sha256 = (b: Buffer): string => createHash("sha256").update(b).digest("hex");
 export const digestOf = (s: string): string => sha256(Buffer.from(s, "utf8")).slice(0, 4);
@@ -25,13 +37,14 @@ export function scanDocument(buf: Buffer, options: ScanOptions): DocumentIndex {
   // Check BOM
   let offset = 0;
   let bom = false;
-  if (len >= 3 && buf[0] === 0xEF && buf[1] === 0xBB && buf[2] === 0xBF) {
+  if (len >= 3 && buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf) {
     bom = true;
     offset = 3;
   }
 
   // Detect newline convention
-  let crCount = 0, lfCount = 0;
+  let crCount = 0,
+    lfCount = 0;
   for (let i = offset; i < Math.min(len, 8192); i++) {
     if (buf[i] === CR) crCount++;
     if (buf[i] === LF) lfCount++;
@@ -84,7 +97,7 @@ export function scanDocument(buf: Buffer, options: ScanOptions): DocumentIndex {
     const trimmed = rawLine.trimStart();
 
     // Check code fences
-    if ((trimmed.startsWith("```") || trimmed.startsWith("~~~"))) {
+    if (trimmed.startsWith("```") || trimmed.startsWith("~~~")) {
       const char = trimmed.charCodeAt(0);
       let count = 0;
       while (count < trimmed.length && trimmed.charCodeAt(count) === char) count++;
@@ -104,7 +117,11 @@ export function scanDocument(buf: Buffer, options: ScanOptions): DocumentIndex {
       if (trimmed.startsWith("#")) {
         let level = 0;
         while (level < trimmed.length && trimmed.charCodeAt(level) === 35) level++;
-        if (level >= 1 && level <= 6 && (trimmed.charCodeAt(level) === 32 || trimmed.charCodeAt(level) === 9)) {
+        if (
+          level >= 1 &&
+          level <= 6 &&
+          (trimmed.charCodeAt(level) === 32 || trimmed.charCodeAt(level) === 9)
+        ) {
           const title = trimmed.slice(level).trim();
           const digest = digestOf(title);
           // Width is settled after the scan, once the count is known.
@@ -136,7 +153,11 @@ export function scanDocument(buf: Buffer, options: ScanOptions): DocumentIndex {
       }
 
       // Check Setext Suspects
-      if (/^(=+|-+)\s*$/.test(rawLine) && prevLineText.trim().length > 0 && !rawLine.startsWith("#")) {
+      if (
+        /^(=+|-+)\s*$/.test(rawLine) &&
+        prevLineText.trim().length > 0 &&
+        !rawLine.startsWith("#")
+      ) {
         setextSuspects.push(lineNum);
       }
     }
@@ -168,13 +189,25 @@ export function scanDocument(buf: Buffer, options: ScanOptions): DocumentIndex {
   const leading = buf.subarray(0, firstStart).toString("utf8").trim();
   if (headings.length === 0) {
     headings.push({
-      hid: "H0000", level: 0, title: "BODY", digest: digestOf("BODY"),
-      line: 1, headingStart: 0, bodyStart: 0, subtreeEnd: len,
+      hid: "H0000",
+      level: 0,
+      title: "BODY",
+      digest: digestOf("BODY"),
+      line: 1,
+      headingStart: 0,
+      bodyStart: 0,
+      subtreeEnd: len,
     });
   } else if (firstStart > 0 && leading !== "") {
     headings.unshift({
-      hid: "H0000", level: 0, title: "PREAMBLE", digest: digestOf("PREAMBLE"),
-      line: 1, headingStart: 0, bodyStart: 0, subtreeEnd: firstStart,
+      hid: "H0000",
+      level: 0,
+      title: "PREAMBLE",
+      digest: digestOf("PREAMBLE"),
+      line: 1,
+      headingStart: 0,
+      bodyStart: 0,
+      subtreeEnd: firstStart,
     });
   }
 
@@ -207,7 +240,7 @@ export function scanDocument(buf: Buffer, options: ScanOptions): DocumentIndex {
   let spineBytes = 0;
   for (const h of headings) {
     if (h.level === 1) {
-      spineBytes += (h.bodyStart - h.headingStart);
+      spineBytes += h.bodyStart - h.headingStart;
     }
   }
   const spineRatio = len > 0 ? spineBytes / len : 0;
@@ -250,7 +283,7 @@ export function computeWindows(
   buf: Buffer,
   idx: DocumentIndex,
   size: number,
-  within?: HeadingEntry | undefined
+  within?: HeadingEntry,
 ): WindowEntry[] {
   const lo = within ? within.headingStart : 0;
   const hi = within ? within.subtreeEnd : idx.bytes;
@@ -312,7 +345,8 @@ function scanNoise(buf: Buffer): NoiseEntry[] {
   }
 
   // Presigned URLs
-  const signedUrlRe = /(!?\[([^\]]*)\])\((https?:\/\/[^)]*(?:X-Amz-Signature|X-Amz-Credential|X-Goog-Signature|sig=)[^)]*)\)/g;
+  const signedUrlRe =
+    /(!?\[([^\]]*)\])\((https?:\/\/[^)]*(?:X-Amz-Signature|X-Amz-Credential|X-Goog-Signature|sig=)[^)]*)\)/g;
   while ((m = signedUrlRe.exec(text)) !== null) {
     const isImage = m[0].startsWith("!");
     const start = Buffer.byteLength(text.slice(0, m.index));
@@ -352,16 +386,14 @@ function scanNoise(buf: Buffer): NoiseEntry[] {
 
 export function stripNoise(
   text: string,
-  options: { strip?: StripSpec | undefined; stripMatch?: string | undefined } = {}
+  options: { strip?: StripSpec | undefined; stripMatch?: string | undefined } = {},
 ): { text: string; elidedBytes: number; elisions: Elision[] } {
   const { strip = "none", stripMatch } = options;
 
   // An embedded file and a handful of tags are different problems with
   // different remedies, so the caller may name the species rather than take
   // all-or-nothing.
-  const kinds = new Set<StripKind>(
-    strip === "all" ? STRIP_KINDS : strip === "none" ? [] : strip
-  );
+  const kinds = new Set<StripKind>(strip === "all" ? STRIP_KINDS : strip === "none" ? [] : strip);
   if (kinds.size === 0 && !stripMatch) return { text, elidedBytes: 0, elisions: [] };
 
   const initialBytes = Buffer.byteLength(text);
@@ -375,11 +407,13 @@ export function stripNoise(
   // below deletes comments, and a comment-shaped marker was being manufactured
   // and then destroyed inside this same function.
   const elisions: Elision[] = [];
-  const mark = (kind: Elision["kind"]) => (match: string): string => {
-    const bytes = Buffer.byteLength(match, "utf8");
-    elisions.push({ kind, bytes });
-    return `mdnav elided | ${kind} | ${bytes} B`;
-  };
+  const mark =
+    (kind: Elision["kind"]) =>
+    (match: string): string => {
+      const bytes = Buffer.byteLength(match, "utf8");
+      elisions.push({ kind, bytes });
+      return `mdnav elided | ${kind} | ${bytes} B`;
+    };
 
   // Data URIs — an embedded file. Nothing of it is worth keeping.
   if (kinds.has("data-uri")) {
@@ -389,8 +423,14 @@ export function stripNoise(
   // Presigned URLs. The `!` decides the remedy: an image has nothing worth
   // keeping, a link's label names what was cited, so the label survives.
   if (kinds.has("signed-url")) {
-    out = out.replace(/!\[(.*?)\]\((https?:\/\/[^)]*(?:X-Amz-Signature|X-Amz-Credential|X-Goog-Signature|sig=)[^)]*)\)/g, mark("signed-url"));
-    out = out.replace(/\[(.*?)\]\((https?:\/\/[^)]*(?:X-Amz-Signature|X-Amz-Credential|X-Goog-Signature|sig=)[^)]*)\)/g, "$1");
+    out = out.replace(
+      /!\[(.*?)\]\((https?:\/\/[^)]*(?:X-Amz-Signature|X-Amz-Credential|X-Goog-Signature|sig=)[^)]*)\)/g,
+      mark("signed-url"),
+    );
+    out = out.replace(
+      /\[(.*?)\]\((https?:\/\/[^)]*(?:X-Amz-Signature|X-Amz-Credential|X-Goog-Signature|sig=)[^)]*)\)/g,
+      "$1",
+    );
   }
 
   // A plain external image. The alt text is the only part that carries meaning.
@@ -428,12 +468,20 @@ export function profileDocument(buf: Buffer): ProfileRow[] {
   const totalBytes = buf.length;
   if (totalBytes === 0) return [];
 
-  const constructs: Array<{ name: string; regex: RegExp; extractDetail?: (m: RegExpExecArray) => string }> = [
+  const constructs: {
+    name: string;
+    regex: RegExp;
+    extractDetail?: (m: RegExpExecArray) => string;
+  }[] = [
     { name: "heading h1", regex: /^#\s+.+$/gm },
     { name: "heading h2", regex: /^##\s+.+$/gm },
     { name: "heading h3", regex: /^###\s+.+$/gm },
     { name: "blockquote", regex: /^(?:>[ \t]*.*(?:\r?\n|$))+/gm },
-    { name: "fence", regex: /^```([a-zA-Z0-9_-]*)\r?\n[\s\S]*?^```/gm, extractDetail: (m) => m[1] || "plain" },
+    {
+      name: "fence",
+      regex: /^```([a-zA-Z0-9_-]*)\r?\n[\s\S]*?^```/gm,
+      extractDetail: (m) => m[1] || "plain",
+    },
     { name: "list", regex: /^(?:[ \t]*(?:[-*+]|\d+\.)[ \t]+.*(?:\r?\n|$))+/gm },
     { name: "table", regex: /^(?:\|.+?\|\r?\n)+/gm },
     { name: "html", regex: /<[a-zA-Z/][^>]*>|<!--[\s\S]*?-->/gm },
@@ -443,7 +491,7 @@ export function profileDocument(buf: Buffer): ProfileRow[] {
   const results: ProfileRow[] = [];
 
   for (const c of constructs) {
-    const matches: Array<{ start: number; end: number; detail?: string | undefined }> = [];
+    const matches: { start: number; end: number; detail?: string | undefined }[] = [];
     let m: RegExpExecArray | null;
     const detailsMap = new Map<string, number>();
 
@@ -463,7 +511,7 @@ export function profileDocument(buf: Buffer): ProfileRow[] {
     const gaps: number[] = [];
     for (let i = 0; i < matches.length; i++) {
       const cur = matches[i]!;
-      constructBytes += (cur.end - cur.start);
+      constructBytes += cur.end - cur.start;
       if (i > 0) {
         gaps.push(cur.start - matches[i - 1]!.end);
       }

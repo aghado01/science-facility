@@ -39,7 +39,14 @@ import type {
   JournalRecordArgs,
   JournalReadArgs,
 } from "./types.ts";
-import { scanDocument, stripNoise, profileDocument, extractMarks, computeWindows, digestOf } from "./scanner.ts";
+import {
+  scanDocument,
+  stripNoise,
+  profileDocument,
+  extractMarks,
+  computeWindows,
+  digestOf,
+} from "./scanner.ts";
 import { parseAnchor, formatAnchorString, canonicalAnchor } from "./formatting.ts";
 
 export class MdnavEngine {
@@ -147,7 +154,7 @@ export class MdnavEngine {
     this.sourceBuffers = buffers;
     this.notices.push(
       `document ids widened from ${before} to ${this.renderWidthSpec()} — the corpus outgrew the format. ` +
-      `Every id is re-rendered; anchors taken before now name the same documents under the shorter form.`
+        `Every id is re-rendered; anchors taken before now name the same documents under the shorter form.`,
     );
   }
 
@@ -188,7 +195,10 @@ export class MdnavEngine {
     // to short ids, but `D31` reads as a number rather than a coordinate.
     const fresh = this.docCoord.size === 0;
     const needGroup = single ? 0 : Math.max(2, String(groupPaths.length).length);
-    const needDoc = Math.max(2, ...Array.from(byGroup.values()).map((v) => String(v.length).length));
+    const needDoc = Math.max(
+      2,
+      ...Array.from(byGroup.values()).map((v) => String(v.length).length),
+    );
 
     this.groupWidth = fresh ? needGroup : Math.max(this.groupWidth, needGroup);
     this.docWidth = fresh ? needDoc : Math.max(this.docWidth, needDoc);
@@ -215,8 +225,8 @@ export class MdnavEngine {
   public initWorkDir(
     customWorkDir?: string,
     anchorPath?: string,
-    run?: string | undefined,
-    newRun = false
+    run?: string,
+    newRun = false,
   ): string {
     const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/T/, "_").slice(0, 15);
     const envWorkDir = process.env["MDNAV_WORK_DIR"];
@@ -239,7 +249,7 @@ export class MdnavEngine {
       if (this.readsLedger.length > 0) {
         this.notices.push(
           `continuing run ${basename(this.workDir)} — ${this.readsLedger.length} read(s) so far are preserved; ` +
-          `pass newRun to start a separate one`
+            `pass newRun to start a separate one`,
         );
       }
       return this.workDir;
@@ -311,7 +321,8 @@ export class MdnavEngine {
       if (!t) continue;
       try {
         const rec = JSON.parse(t) as ReadLedgerEntry;
-        if (rec && typeof rec.doc === "string" && Array.isArray(rec.spans)) this.readsLedger.push(rec);
+        if (rec && typeof rec.doc === "string" && Array.isArray(rec.spans))
+          this.readsLedger.push(rec);
       } catch {
         // A torn line must not take the whole ledger down.
       }
@@ -320,7 +331,7 @@ export class MdnavEngine {
     if (this.readsLedger.length > 0) {
       this.notices.push(
         `attached to run ${basename(runDir)} — ${this.readsLedger.length} prior read(s) restored, ` +
-        `so coverage continues rather than restarting at zero`
+          `so coverage continues rather than restarting at zero`,
       );
     }
   }
@@ -336,7 +347,14 @@ export class MdnavEngine {
 
   public async discover(
     paths: string[] = [],
-    options: { glob?: string | undefined; recursive?: boolean | undefined; workDir?: string | undefined; run?: string | undefined; newRun?: boolean | undefined; root?: string | undefined } = {}
+    options: {
+      glob?: string | undefined;
+      recursive?: boolean | undefined;
+      workDir?: string | undefined;
+      run?: string | undefined;
+      newRun?: boolean | undefined;
+      root?: string | undefined;
+    } = {},
   ): Promise<Inventory> {
     const { glob = "*.md", recursive = false, workDir, run, newRun = false, root } = options;
 
@@ -380,7 +398,11 @@ export class MdnavEngine {
       // The file's own mtime, not the moment we scanned it — staleness is
       // decided by comparing against the source, so the source's clock is the
       // only one that means anything here.
-      const idx = scanDocument(buf, { id: docId, path: filePath, mtimeMs: statSync(filePath).mtimeMs });
+      const idx = scanDocument(buf, {
+        id: docId,
+        path: filePath,
+        mtimeMs: statSync(filePath).mtimeMs,
+      });
 
       this.indices.set(docId, idx);
       this.sourceBuffers.set(docId, buf);
@@ -398,7 +420,11 @@ export class MdnavEngine {
 
       // Persist index
       if (this.workDir) {
-        writeFileSync(join(this.workDir, "documents", `${docId}.index.json`), JSON.stringify(idx, null, 2), "utf8");
+        writeFileSync(
+          join(this.workDir, "documents", `${docId}.index.json`),
+          JSON.stringify(idx, null, 2),
+          "utf8",
+        );
       }
     }
 
@@ -416,7 +442,11 @@ export class MdnavEngine {
     };
 
     if (this.workDir) {
-      writeFileSync(join(this.workDir, "inventory.json"), JSON.stringify(this.inventory, null, 2), "utf8");
+      writeFileSync(
+        join(this.workDir, "inventory.json"),
+        JSON.stringify(this.inventory, null, 2),
+        "utf8",
+      );
     }
 
     return this.inventory;
@@ -427,7 +457,7 @@ export class MdnavEngine {
    * `index` verb does — without re-crawling a directory. `refresh` forces a
    * re-scan even when size and mtime say nothing moved.
    */
-  public async index(docIds?: string[] | undefined, refresh = false): Promise<InventoryDoc[]> {
+  public async index(docIds?: string[], refresh = false): Promise<InventoryDoc[]> {
     const targets = docIds && docIds.length > 0 ? docIds : Array.from(this.indices.keys());
     const out: InventoryDoc[] = [];
 
@@ -436,7 +466,11 @@ export class MdnavEngine {
       if (refresh) {
         const idx = this.getIndex(docId);
         const buf = readFileSync(idx.path);
-        const fresh = scanDocument(buf, { id: docId, path: idx.path, mtimeMs: statSync(idx.path).mtimeMs });
+        const fresh = scanDocument(buf, {
+          id: docId,
+          path: idx.path,
+          mtimeMs: statSync(idx.path).mtimeMs,
+        });
         this.indices.set(docId, fresh);
         this.sourceBuffers.set(docId, buf);
         this.persistIndex(docId, fresh);
@@ -455,8 +489,11 @@ export class MdnavEngine {
    */
   private describeDoc(idx: DocumentIndex, grainOverride?: string): InventoryDoc {
     const c = (n: number) => idx.counts[n] ?? 0;
-    const d1 = c(0), d2 = d1 + c(1), d3 = d2 + c(2);
-    const grain = grainOverride ??
+    const d1 = c(0),
+      d2 = d1 + c(1),
+      d3 = d2 + c(2);
+    const grain =
+      grainOverride ??
       `${d1}/${d2}/${d3}~${this.fmtBytes(idx.bytes > 0 && d1 > 0 ? Math.round(idx.bytes / d1) : idx.bytes)}`;
 
     const byKind = new Map<string, { count: number; bytes: number }>();
@@ -472,7 +509,10 @@ export class MdnavEngine {
     // are different problems with different remedies.
     const notes: string[] = [];
     const embedded = byKind.get("data-uri");
-    if (embedded?.bytes) notes.push(`embedded ${this.fmtBytes(embedded.bytes)} (${(embedded.bytes / idx.bytes * 100).toFixed(0)}%)`);
+    if (embedded?.bytes)
+      notes.push(
+        `embedded ${this.fmtBytes(embedded.bytes)} (${((embedded.bytes / idx.bytes) * 100).toFixed(0)}%)`,
+      );
     const signed = byKind.get("signed-url");
     if (signed?.count) notes.push(`signed x${signed.count}`);
     const html = byKind.get("html");
@@ -483,10 +523,12 @@ export class MdnavEngine {
     // Two bases, neither privileged. Saying whether they correspond is what
     // lets the reader choose one deliberately.
     const breaksUnaligned = idx.breaks.length > 0 && d1 > 0 && idx.breaks.length !== d1 - 1;
-    if (idx.breaks.length) notes.push(`breaks x${idx.breaks.length}${breaksUnaligned ? " (not h1-1)" : " (= h1-1)"}`);
+    if (idx.breaks.length)
+      notes.push(`breaks x${idx.breaks.length}${breaksUnaligned ? " (not h1-1)" : " (= h1-1)"}`);
 
     // A very long line in an otherwise clean document is a blob, not prose.
-    if (idx.maxLine > 4096 && noiseRatio < 0.02) notes.push(`maxline ${this.fmtBytes(idx.maxLine)}`);
+    if (idx.maxLine > 4096 && noiseRatio < 0.02)
+      notes.push(`maxline ${this.fmtBytes(idx.maxLine)}`);
     if (idx.setextSuspects?.length) notes.push(`setext? x${idx.setextSuspects.length}`);
     if (idx.frontmatter) notes.push("frontmatter");
     if (idx.newline !== "lf") notes.push(idx.newline);
@@ -500,7 +542,10 @@ export class MdnavEngine {
       bytes: idx.bytes,
       grain,
       spineRatio: Number(idx.spine.ratio.toFixed(3)),
-      levels: [0, 1, 2, 3, 4, 5].map((n) => c(n)).join("/").replace(/(\/0)+$/, ""),
+      levels: [0, 1, 2, 3, 4, 5]
+        .map((n) => c(n))
+        .join("/")
+        .replace(/(\/0)+$/, ""),
       notes: notes.join(" "),
       noiseRatio: Number(noiseRatio.toFixed(3)),
       breaksUnaligned,
@@ -524,7 +569,7 @@ export class MdnavEngine {
       comp?: boolean | undefined;
       byBreaks?: boolean | undefined;
       windows?: number | undefined;
-    } = {}
+    } = {},
   ): Promise<OutlineUnit[]> {
     const { depth = 1, within, comp = false, byBreaks = false, windows } = options;
     const { docId, buf } = this.resolveDoc(docRef);
@@ -570,14 +615,18 @@ export class MdnavEngine {
       const parent = idx.headings.find((h) => h.hid === within);
       if (parent) {
         candidateHeadings = idx.headings.filter(
-          (h) => h.headingStart >= parent.bodyStart && h.headingStart < parent.subtreeEnd && h.level <= depth
+          (h) =>
+            h.headingStart >= parent.bodyStart &&
+            h.headingStart < parent.subtreeEnd &&
+            h.level <= depth,
         );
       }
     }
 
     for (let i = 0; i < candidateHeadings.length; i++) {
       const cur = candidateHeadings[i]!;
-      const nextActiveStart = i + 1 < candidateHeadings.length ? candidateHeadings[i + 1]!.headingStart : idx.bytes;
+      const nextActiveStart =
+        i + 1 < candidateHeadings.length ? candidateHeadings[i + 1]!.headingStart : idx.bytes;
       const unitBytes = nextActiveStart - cur.headingStart;
       const subtreeBytes = cur.subtreeEnd - cur.headingStart;
 
@@ -632,9 +681,19 @@ export class MdnavEngine {
       depth?: number | undefined;
       strip?: StripSpec | undefined;
       stripMatch?: string | undefined;
-    } = {}
+    } = {},
   ): Promise<ReadResult> {
-    const { heading, headings, from, to, span, extent = "unit", depth = 1, strip = "none", stripMatch } = options;
+    const {
+      heading,
+      headings,
+      from,
+      to,
+      span,
+      extent = "unit",
+      depth = 1,
+      strip = "none",
+      stripMatch,
+    } = options;
     const { docId, buf } = this.resolveDoc(docRef);
     const idx = this.getIndex(docId);
 
@@ -683,7 +742,7 @@ export class MdnavEngine {
       // scanner mints H0000 (BODY) for it — so there is always a named way in.
       throw new Error(
         `read needs a selector: heading, headings, from/to, or span. ` +
-        `To read a whole document, address it as H0000 or give an explicit span.`
+          `To read a whole document, address it as H0000 or give an explicit span.`,
       );
     }
 
@@ -695,7 +754,7 @@ export class MdnavEngine {
 
     for (const [start, end] of spansToRead) {
       const raw = buf.subarray(start, end).toString("utf8");
-      totalRawBytes += (end - start);
+      totalRawBytes += end - start;
 
       const stripped = stripNoise(raw, { strip, stripMatch });
       totalElided += stripped.elidedBytes;
@@ -704,7 +763,13 @@ export class MdnavEngine {
     }
 
     const first = anchors[0] ?? "";
-    const basis = span ? "span" : /^S/i.test(first) ? "breaks" : /^W/i.test(first) ? "windows" : `d${depth}`;
+    const basis = span
+      ? "span"
+      : /^S/i.test(first)
+        ? "breaks"
+        : /^W/i.test(first)
+          ? "windows"
+          : `d${depth}`;
     this.recordRead(docId, spansToRead, basis, depth, totalRawBytes, totalElided);
 
     return {
@@ -723,7 +788,7 @@ export class MdnavEngine {
   // ──────────────────────────────────────────────────────── Native Batch Read
 
   public async batchRead(
-    requests: Array<{
+    requests: {
       docId: string;
       heading?: string | undefined;
       headings?: string[] | undefined;
@@ -731,8 +796,8 @@ export class MdnavEngine {
       to?: string | undefined;
       span?: ByteSpan | undefined;
       label?: string | undefined;
-    }>,
-    options: { depth?: number | undefined; strip?: StripSpec | undefined } = {}
+    }[],
+    options: { depth?: number | undefined; strip?: StripSpec | undefined } = {},
   ): Promise<BatchReadResult[]> {
     const { depth = 2, strip = "all" } = options;
     const results: BatchReadResult[] = [];
@@ -787,14 +852,22 @@ export class MdnavEngine {
 
   // ──────────────────────────────────────────────────────── Coverage
 
-  public async coverage(docIds?: string[] | undefined, depth = 1, byBreaks = false): Promise<DocumentCoverage[]> {
+  public async coverage(
+    docIds?: string[],
+    depth = 1,
+    byBreaks = false,
+  ): Promise<DocumentCoverage[]> {
     const targetDocIds = docIds && docIds.length > 0 ? docIds : Array.from(this.indices.keys());
     const reports: DocumentCoverage[] = [];
 
     // An unreadable notebook must not fail a coverage report; it just means
     // nothing has been cited yet.
     let journal: ResolvedJournalEntry[] = [];
-    try { journal = this.resolveJournal(); } catch { journal = []; }
+    try {
+      journal = this.resolveJournal();
+    } catch {
+      journal = [];
+    }
 
     for (const docId of targetDocIds) {
       const idx = this.getIndex(docId);
@@ -823,7 +896,9 @@ export class MdnavEngine {
             const { target } = this.resolveAnchor(idx, p.unit);
             // At the chunk's OWN grain: a citation names the unit it names,
             // not whatever the caller happens to be scoring coverage at.
-            citedSpans.push(this.computeHeadingSpan(idx, target, Math.max(1, target.level), "unit"));
+            citedSpans.push(
+              this.computeHeadingSpan(idx, target, Math.max(1, target.level), "unit"),
+            );
           } catch {
             // An anchor that no longer resolves cites no bytes. The drift is
             // reported where it is actionable — at read and at record time.
@@ -837,10 +912,15 @@ export class MdnavEngine {
       const both = totalBytes(intersectIntervals(merged, cited));
 
       // Unread units, against whichever basis the caller is working on.
-      const unread: Array<{ anchor: string; bytes: number; title: string }> = [];
+      const unread: { anchor: string; bytes: number; title: string }[] = [];
       const basis = byBreaks
-        ? this.segmentsOf(idx).map((s) => ({ hid: s.hid, title: s.title, start: s.headingStart, end: s.subtreeEnd }))
-        : ((): Array<{ hid: string; title: string; start: number; end: number }> => {
+        ? this.segmentsOf(idx).map((s) => ({
+            hid: s.hid,
+            title: s.title,
+            start: s.headingStart,
+            end: s.subtreeEnd,
+          }))
+        : ((): { hid: string; title: string; start: number; end: number }[] => {
             const active = idx.headings.filter((h) => h.level <= depth);
             return active.map((h, i) => ({
               hid: h.hid,
@@ -881,12 +961,12 @@ export class MdnavEngine {
 
   public async locate(
     pattern: string,
-    docIds?: string[] | undefined,
+    docIds?: string[],
     caseInsensitive = false,
-    max = 50
-  ): Promise<Array<{ docId: string; anchor: string; line: number; text: string }>> {
+    max = 50,
+  ): Promise<{ docId: string; anchor: string; line: number; text: string }[]> {
     const targetDocIds = docIds && docIds.length > 0 ? docIds : Array.from(this.indices.keys());
-    const matches: Array<{ docId: string; anchor: string; line: number; text: string }> = [];
+    const matches: { docId: string; anchor: string; line: number; text: string }[] = [];
     const regex = new RegExp(pattern, caseInsensitive ? "i" : "");
 
     for (const docId of targetDocIds) {
@@ -924,7 +1004,7 @@ export class MdnavEngine {
 
   // ──────────────────────────────────────────────────────── Journal Ledger
 
-  private ensureJournalRoot(explicit?: string | undefined): string {
+  private ensureJournalRoot(explicit?: string): string {
     if (explicit) {
       const root = resolve(explicit);
       if (this.journalRoot !== root) {
@@ -940,7 +1020,7 @@ export class MdnavEngine {
   }
 
   /** The notebook sits at the .doc-dive root, beside LATEST — not inside a run. */
-  public journalPath(explicit?: string | undefined): string {
+  public journalPath(explicit?: string): string {
     return join(this.ensureJournalRoot(explicit), "journal.jsonl");
   }
 
@@ -952,7 +1032,7 @@ export class MdnavEngine {
    * of an existing N001 would make every `refs` pointer ambiguous. Reload on
    * every operation because several MCP clients may share one notebook.
    */
-  private ensureJournalLoaded(explicit?: string | undefined): void {
+  private ensureJournalLoaded(explicit?: string): void {
     const path = this.journalPath(explicit);
     this.journalEntries = [];
     if (existsSync(path)) {
@@ -978,7 +1058,7 @@ export class MdnavEngine {
    * a loud retry instruction instead of minting from stale state; the critical
    * section is synchronous and normally lasts less than a millisecond.
    */
-  private acquireJournalWriteLock(explicit?: string | undefined): () => void {
+  private acquireJournalWriteLock(explicit?: string): () => void {
     const path = this.journalPath(explicit);
     mkdirSync(dirname(path), { recursive: true });
     const lockPath = `${path}.lock`;
@@ -987,7 +1067,9 @@ export class MdnavEngine {
       descriptor = openSync(lockPath, "wx");
     } catch (err: any) {
       if (err?.code === "EEXIST") {
-        throw new Error("journal: another writer holds the journal lock — retry the record operation");
+        throw new Error(
+          "journal: another writer holds the journal lock — retry the record operation",
+        );
       }
       throw err;
     }
@@ -1019,7 +1101,9 @@ export class MdnavEngine {
       const refs = args.refs ?? [];
       for (const r of refs) {
         if (!this.journalEntries.some((e) => e.id === r)) {
-          throw new Error(`journal: ref ${r} does not exist — record the parent before referring to it`);
+          throw new Error(
+            `journal: ref ${r} does not exist — record the parent before referring to it`,
+          );
         }
       }
 
@@ -1047,7 +1131,9 @@ export class MdnavEngine {
 
         const idx = this.indices.get(p.scope.toUpperCase());
         if (!idx) {
-          anchorWarnings.push(`anchor ${formatAnchorString(a)} names ${p.scope}, which is not indexed in this session`);
+          anchorWarnings.push(
+            `anchor ${formatAnchorString(a)} names ${p.scope}, which is not indexed in this session`,
+          );
           continue;
         }
         try {
@@ -1087,7 +1173,7 @@ export class MdnavEngine {
    * rehydrating it reproduces the live session exactly — and "preserve history,
    * never overwrite in place" holds by construction rather than by discipline.
    */
-  public resolveJournal(workDir?: string | undefined): ResolvedJournalEntry[] {
+  public resolveJournal(workDir?: string): ResolvedJournalEntry[] {
     this.ensureJournalLoaded(workDir);
 
     const byId = new Map<string, ResolvedJournalEntry>();
@@ -1105,7 +1191,12 @@ export class MdnavEngine {
     // A decisive verdict outranks a refinement; among equals the most recent
     // child wins, which is why this walks the ledger in file order.
     const RANK: Record<JournalStatus, number> = {
-      active: 0, refined: 1, superseded: 2, rejected: 3, adopted: 3, retracted: 3,
+      active: 0,
+      refined: 1,
+      superseded: 2,
+      rejected: 3,
+      adopted: 3,
+      retracted: 3,
     };
 
     for (const e of this.journalEntries) {
@@ -1132,7 +1223,7 @@ export class MdnavEngine {
     // is an edge — document, chunk, content identity — and each has to be
     // traversable on its own, or citations are only ever a leaf you can match
     // whole.
-    const ci = (a?: string | undefined) => (a === undefined ? undefined : a.trim().toUpperCase());
+    const ci = (a?: string) => (a === undefined ? undefined : a.trim().toUpperCase());
 
     const scopeArg = args.scope ?? args.docId;
     if (scopeArg) {
@@ -1158,7 +1249,7 @@ export class MdnavEngine {
           // No digest asked for means every version of this chunk.
           if (want.digest !== undefined && ci(p.digest) !== ci(want.digest)) return false;
           return true;
-        })
+        }),
       );
     }
 
@@ -1213,7 +1304,11 @@ export class MdnavEngine {
     const cached = this.sourceBuffers.get(docId)!;
 
     let st;
-    try { st = statSync(idx.path); } catch { return cached; }
+    try {
+      st = statSync(idx.path);
+    } catch {
+      return cached;
+    }
 
     // Size and mtime both agreeing is enough to skip the hash on a large file.
     if (st.size === idx.bytes && Math.floor(st.mtimeMs) === Math.floor(idx.mtimeMs)) return cached;
@@ -1232,7 +1327,7 @@ export class MdnavEngine {
     this.persistIndex(docId, fresh);
     this.notices.push(
       `${docId} changed on disk and was re-indexed — ${idx.bytes} B became ${fresh.bytes} B. ` +
-      `Anchors and digests below describe the NEW source; citations taken before now may no longer match.`
+        `Anchors and digests below describe the NEW source; citations taken before now may no longer match.`,
     );
     return buf;
   }
@@ -1252,7 +1347,10 @@ export class MdnavEngine {
    * rejected — the bytes are still there; the reader needs to know the source
    * moved under the citation, and needs to be told in-band to know it at all.
    */
-  private resolveAnchor(idx: DocumentIndex, spec: string): { target: AnchorTarget; warning?: string | undefined } {
+  private resolveAnchor(
+    idx: DocumentIndex,
+    spec: string,
+  ): { target: AnchorTarget; warning?: string | undefined } {
     // Components are trimmed individually. `H0003 @ a1b2` is how the stream
     // prints this anchor, so it is how it comes back — and splitting it without
     // trimming leaves `"H0003 "`, which matches no heading, and `" a1b2"`,
@@ -1284,8 +1382,13 @@ export class MdnavEngine {
     const h = idx.headings.find((x) => sameCoord(x.hid, hid));
     if (h) {
       const target: AnchorTarget = {
-        hid: h.hid, level: h.level, title: h.title, digest: h.digest,
-        headingStart: h.headingStart, bodyStart: h.bodyStart, subtreeEnd: h.subtreeEnd,
+        hid: h.hid,
+        level: h.level,
+        title: h.title,
+        digest: h.digest,
+        headingStart: h.headingStart,
+        bodyStart: h.bodyStart,
+        subtreeEnd: h.subtreeEnd,
         synthetic: h.level === 0 ? true : undefined,
       };
       return { target, warning: drift(target, "heading") };
@@ -1294,11 +1397,19 @@ export class MdnavEngine {
     if (/^W\d+$/i.test(hid)) {
       const w = (idx.windows ?? []).find((x) => sameCoord(x.wid, hid));
       if (!w) {
-        throw new Error(`no anchor ${hid} in ${idx.id} — mint window anchors first with outline(windows: <size>)`);
+        throw new Error(
+          `no anchor ${hid} in ${idx.id} — mint window anchors first with outline(windows: <size>)`,
+        );
       }
       const target: AnchorTarget = {
-        hid: w.wid, level: 0, title: w.title, digest: w.digest,
-        headingStart: w.start, bodyStart: w.start, subtreeEnd: w.end, synthetic: true,
+        hid: w.wid,
+        level: 0,
+        title: w.title,
+        digest: w.digest,
+        headingStart: w.start,
+        bodyStart: w.start,
+        subtreeEnd: w.end,
+        synthetic: true,
       };
       return { target, warning: drift(target, "window") };
     }
@@ -1306,7 +1417,9 @@ export class MdnavEngine {
     if (/^S\d+$/i.test(hid)) {
       const s = this.segmentsOf(idx).find((x) => sameCoord(x.hid, hid));
       if (!s) {
-        throw new Error(`no anchor ${hid} in ${idx.id} — the document has ${idx.breaks.length} thematic break(s)`);
+        throw new Error(
+          `no anchor ${hid} in ${idx.id} — the document has ${idx.breaks.length} thematic break(s)`,
+        );
       }
       return { target: s, warning: drift(s, "segment") };
     }
@@ -1336,7 +1449,10 @@ export class MdnavEngine {
       });
     };
     for (const b of idx.breaks) {
-      if (b.end > pos) { push(pos, b.end); pos = b.end; }
+      if (b.end > pos) {
+        push(pos, b.end);
+        pos = b.end;
+      }
     }
     if (pos < idx.bytes) push(pos, idx.bytes);
 
@@ -1345,7 +1461,12 @@ export class MdnavEngine {
     return out;
   }
 
-  private computeHeadingSpan(idx: DocumentIndex, h: AnchorTarget, depth: number, extent: "unit" | "subtree"): ByteSpan {
+  private computeHeadingSpan(
+    idx: DocumentIndex,
+    h: AnchorTarget,
+    depth: number,
+    extent: "unit" | "subtree",
+  ): ByteSpan {
     // A segment, a window, or a synthetic root IS its own unit — there is no
     // depth ladder to walk for it.
     if (h.synthetic || extent === "subtree") {
@@ -1360,7 +1481,7 @@ export class MdnavEngine {
       // exist at the requested grain. Fail where the mistake was made.
       throw new Error(
         `${formatAnchorString(`${idx.id}:${h.hid}`)} is a level-${h.level} heading and is not active at depth ${depth} — ` +
-        `raise depth to ${h.level}, or read it with extent "subtree"`
+          `raise depth to ${h.level}, or read it with extent "subtree"`,
       );
     }
     const nextStart = curIdx + 1 < active.length ? active[curIdx + 1]!.headingStart : idx.bytes;
@@ -1370,7 +1491,11 @@ export class MdnavEngine {
   private persistIndex(docId: string, idx: DocumentIndex): void {
     if (!this.workDir) return;
     try {
-      writeFileSync(join(this.workDir, "documents", `${docId}.index.json`), JSON.stringify(idx, null, 2), "utf8");
+      writeFileSync(
+        join(this.workDir, "documents", `${docId}.index.json`),
+        JSON.stringify(idx, null, 2),
+        "utf8",
+      );
     } catch {
       // The index is a cache; failing to persist it must not fail the read.
     }
@@ -1381,7 +1506,14 @@ export class MdnavEngine {
     return `[${rows.map((r) => `${r.construct.replace("heading ", "").slice(0, 5)}${Math.round(r.percent)}`).join(" ")}]`;
   }
 
-  private recordRead(doc: string, spans: ByteSpan[], basis: string, depth: number, bytes: number, elidedBytes: number) {
+  private recordRead(
+    doc: string,
+    spans: ByteSpan[],
+    basis: string,
+    depth: number,
+    bytes: number,
+    elidedBytes: number,
+  ) {
     const entry: ReadLedgerEntry = {
       ts: new Date().toISOString(),
       doc,
@@ -1440,13 +1572,16 @@ function mergeIntervals(spans: ByteSpan[]): ByteSpan[] {
 /** Overlap of two already-merged lists. */
 function intersectIntervals(a: ByteSpan[], b: ByteSpan[]): ByteSpan[] {
   const out: ByteSpan[] = [];
-  let i = 0, j = 0;
+  let i = 0,
+    j = 0;
   while (i < a.length && j < b.length) {
-    const x = a[i]!, y = b[j]!;
+    const x = a[i]!,
+      y = b[j]!;
     const start = Math.max(x[0], y[0]);
     const end = Math.min(x[1], y[1]);
     if (start < end) out.push([start, end]);
-    if (x[1] < y[1]) i++; else j++;
+    if (x[1] < y[1]) i++;
+    else j++;
   }
   return out;
 }

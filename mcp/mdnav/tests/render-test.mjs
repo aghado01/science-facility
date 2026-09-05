@@ -18,12 +18,19 @@ import { mkdirSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 import { MdnavEngine } from "../src/engine.ts";
 import { registerMdnavTools } from "../src/tools.ts";
 
-let pass = 0, fail = 0;
+let pass = 0,
+  fail = 0;
 const ok = (name, cond, detail) => {
-  if (cond) { pass++; process.stdout.write(`  ok   ${name}\n`); }
-  else { fail++; process.stdout.write(`  FAIL ${name}${detail ? `\n       ${detail}` : ""}\n`); }
+  if (cond) {
+    pass++;
+    process.stdout.write(`  ok   ${name}\n`);
+  } else {
+    fail++;
+    process.stdout.write(`  FAIL ${name}${detail ? `\n       ${detail}` : ""}\n`);
+  }
 };
-const eq = (name, a, b) => ok(name, a === b, `expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`);
+const eq = (name, a, b) =>
+  ok(name, a === b, `expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`);
 
 // A fused anchor in either of its two shapes. Neither may appear in any output.
 const FUSED_SCOPE = /D\d+:[HSW]\d+/;
@@ -37,11 +44,20 @@ try {
   writeFileSync(
     join(corpus, "paper.md"),
     [
-      "# Paper", "", "## Abstract", "A scale-calibrated geometric median.", "",
-      "> a quoted passage worth marking", "",
-      "---", "", "## Method", "Horizontal tangent lifts for geodesics.", "",
+      "# Paper",
+      "",
+      "## Abstract",
+      "A scale-calibrated geometric median.",
+      "",
+      "> a quoted passage worth marking",
+      "",
+      "---",
+      "",
+      "## Method",
+      "Horizontal tangent lifts for geodesics.",
+      "",
     ].join("\n"),
-    "utf8"
+    "utf8",
   );
 
   // Capture the real handlers the MCP server would register.
@@ -60,20 +76,34 @@ try {
   // something a test may assume.
   const abs = /(H\d+) @ ([0-9a-f]{4}).*Abstract/.exec(emitted.outline);
   const meth = /(H\d+) @ ([0-9a-f]{4}).*Method/.exec(emitted.outline);
-  const HID = abs?.[1], digest = abs?.[2], HID2 = meth?.[1];
+  const HID = abs?.[1],
+    digest = abs?.[2],
+    HID2 = meth?.[1];
   emitted.marks = await call("mdnav_marks", { docId: "D001", kind: "blockquote", minBytes: 0 });
   emitted.locate = await call("mdnav_locate", { pattern: "geodesics", max: 50 });
-  emitted.read = await call("mdnav_read", { docId: "D001", heading: HID, depth: 2, prefixFormat: true });
+  emitted.read = await call("mdnav_read", {
+    docId: "D001",
+    heading: HID,
+    depth: 2,
+    prefixFormat: true,
+  });
   emitted.drift = await call("mdnav_read", { docId: "D001", heading: `${HID}@dead`, depth: 2 });
   emitted.batch = await call("mdnav_batch_read", {
-    requests: [{ docId: "D001", heading: HID, label: "abstract" }], depth: 2, prefixFormat: false,
+    requests: [{ docId: "D001", heading: HID, label: "abstract" }],
+    depth: 2,
+    prefixFormat: false,
   });
   emitted.batchPrefixed = await call("mdnav_batch_read", {
-    requests: [{ docId: "D001", heading: HID, label: "abstract" }], depth: 2, prefixFormat: true,
+    requests: [{ docId: "D001", heading: HID, label: "abstract" }],
+    depth: 2,
+    prefixFormat: true,
   });
   emitted.segments = await call("mdnav_outline", { docId: "D001", byBreaks: true });
   emitted.record = await call("mdnav_journal_record", {
-    op: "propose", concept: "C-001", body: "Scale-calibrated.", anchors: [`D001:${HID}@dead`],
+    op: "propose",
+    concept: "C-001",
+    body: "Scale-calibrated.",
+    anchors: [`D001:${HID}@dead`],
   });
   emitted.journal = await call("mdnav_journal_read", { limit: 100 });
   emitted.tree = await call("mdnav_journal_tree", {});
@@ -86,14 +116,21 @@ try {
   for (const [name, text] of Object.entries(emitted)) {
     const scope = FUSED_SCOPE.exec(text);
     const digest = FUSED_DIGEST.exec(text);
-    ok(`${name} keeps every component isolated`, !scope && !digest,
-      scope ? `fused scope: ${scope[0]}` : digest ? `fused digest: ${digest[0]}` : "");
+    ok(
+      `${name} keeps every component isolated`,
+      !scope && !digest,
+      scope ? `fused scope: ${scope[0]}` : digest ? `fused digest: ${digest[0]}` : "",
+    );
   }
 
   // ────────────────────────────────── the same chunk presents the same tokens
 
   process.stdout.write("\nthe same chunk presents the same surface form everywhere\n");
-  ok("outline names the chunk with an isolated digest", digest !== undefined && HID !== undefined, emitted.outline);
+  ok(
+    "outline names the chunk with an isolated digest",
+    digest !== undefined && HID !== undefined,
+    emitted.outline,
+  );
   const surface = `${HID} @ ${digest}`;
 
   ok("the read prefix presents it identically", emitted.read.includes(surface));
@@ -101,22 +138,42 @@ try {
   // prefixFormat:false now means no provenance at all, not "a different
   // provenance format" — an off switch that left an HTML comment carrying the
   // address behind was only off for `read`.
-  ok("opting out of the frame leaves no provenance behind",
-    !emitted.batch.includes(surface) && !/D001|mdnav/.test(emitted.batch), emitted.batch);
+  ok(
+    "opting out of the frame leaves no provenance behind",
+    !emitted.batch.includes(surface) && !/D001|mdnav/.test(emitted.batch),
+    emitted.batch,
+  );
   ok("the drift warning presents it identically", emitted.drift.includes(surface));
 
   const docSurface = "D001";
-  for (const [name, text] of [["outline", emitted.read], ["locate", emitted.locate], ["coverage", emitted.coverage], ["journal", emitted.journal]]) {
-    ok(`${name} names the document as a standalone token`,
-      new RegExp(`(^|[ |])${docSurface}([ |]|$)`, "m").test(text), text.slice(0, 120));
+  for (const [name, text] of [
+    ["outline", emitted.read],
+    ["locate", emitted.locate],
+    ["coverage", emitted.coverage],
+    ["journal", emitted.journal],
+  ]) {
+    ok(
+      `${name} names the document as a standalone token`,
+      new RegExp(`(^|[ |])${docSurface}([ |]|$)`, "m").test(text),
+      text.slice(0, 120),
+    );
   }
 
   // ──────────────────────────────────────────────────── marks stay isolated
 
   process.stdout.write("\nmarks stay isolated\n");
-  ok("spans use an isolated range mark", emitted.marks.includes(" .. ") && !/\d\.\.\d/.test(emitted.marks));
-  ok("the read prefix span does too", emitted.read.includes(" .. ") && !/\d\.\.\d/.test(emitted.read));
-  ok("outline drops the brackets that would merge into the id", !/\[[HSW]\d+/.test(emitted.outline));
+  ok(
+    "spans use an isolated range mark",
+    emitted.marks.includes(" .. ") && !/\d\.\.\d/.test(emitted.marks),
+  );
+  ok(
+    "the read prefix span does too",
+    emitted.read.includes(" .. ") && !/\d\.\.\d/.test(emitted.read),
+  );
+  ok(
+    "outline drops the brackets that would merge into the id",
+    !/\[[HSW]\d+/.test(emitted.outline),
+  );
   ok("locate does not weld its line marker to the number", !/\bL\d/.test(emitted.locate));
 
   // ──────────────────────────────────────── provenance headers are the default
@@ -125,22 +182,38 @@ try {
   const HEADER_RE = /D001 : H\d+ @ [0-9a-f]{4} \| \d+ \.\. \d+ \|/;
   const CLOSE_RE = /^\| D001 : H\d+ @ [0-9a-f]{4}$/gm;
   const plain = await call("mdnav_read", { docId: "D001", heading: HID, depth: 2 });
-  ok("a read that asks for nothing still carries its header", HEADER_RE.test(plain), plain.slice(0, 160));
-  ok("opting out per call works",
-    !HEADER_RE.test(await call("mdnav_read", { docId: "D001", heading: HID, depth: 2, prefixFormat: false })));
+  ok(
+    "a read that asks for nothing still carries its header",
+    HEADER_RE.test(plain),
+    plain.slice(0, 160),
+  );
+  ok(
+    "opting out per call works",
+    !HEADER_RE.test(
+      await call("mdnav_read", { docId: "D001", heading: HID, depth: 2, prefixFormat: false }),
+    ),
+  );
 
   process.env["MDNAV_PREFIX"] = "off";
-  ok("MDNAV_PREFIX=off silences the whole session",
-    !HEADER_RE.test(await call("mdnav_read", { docId: "D001", heading: HID, depth: 2 })));
+  ok(
+    "MDNAV_PREFIX=off silences the whole session",
+    !HEADER_RE.test(await call("mdnav_read", { docId: "D001", heading: HID, depth: 2 })),
+  );
   delete process.env["MDNAV_PREFIX"];
-  ok("and unsetting it brings them back",
-    HEADER_RE.test(await call("mdnav_read", { docId: "D001", heading: HID, depth: 2 })));
+  ok(
+    "and unsetting it brings them back",
+    HEADER_RE.test(await call("mdnav_read", { docId: "D001", heading: HID, depth: 2 })),
+  );
 
   // A raw span read has no anchor — the span field is the address. The old
   // `@12..30` marker wrote a range without isolating `..`, overloaded `@`
   // (which introduces a digest everywhere else), and did not resolve.
   const spanRead = await call("mdnav_read", { docId: "D001", span: [12, 30] });
-  ok("a span read is addressed by its document alone", /^D001 \| 12 \.\. 30 \|$/m.test(spanRead), spanRead.slice(0, 120));
+  ok(
+    "a span read is addressed by its document alone",
+    /^D001 \| 12 \.\. 30 \|$/m.test(spanRead),
+    spanRead.slice(0, 120),
+  );
   ok("it invents no pseudo-anchor", !/@\d/.test(spanRead) && !/\d\.\.\d/.test(spanRead));
   ok("and closes on the same address", /^\| D001$/m.test(spanRead));
 
@@ -157,8 +230,11 @@ try {
 
   const closes = multi.match(CLOSE_RE) ?? [];
   eq("every content block closes", closes.length, 2);
-  ok("and closes by repeating its own address",
-    heads.every((h) => closes.some((c) => c === `| ${h.split(" | ")[0]}`)), `${heads}\n${closes}`);
+  ok(
+    "and closes by repeating its own address",
+    heads.every((h) => closes.some((c) => c === `| ${h.split(" | ")[0]}`)),
+    `${heads}\n${closes}`,
+  );
 
   // Content is bracketed: the address appears both before and after the body.
   const firstOpen = multi.indexOf(heads[0]);
@@ -183,15 +259,28 @@ try {
   await call2("mdnav_read", { docId: "D001", heading: HID2, depth: 2 });
   const outline2 = await call2("mdnav_outline", { docId: "D001", depth: 2 });
   const d2 = new RegExp(`${HID} @ ([0-9a-f]{4})`).exec(outline2)[1];
-  await call2("mdnav_journal_record", { op: "propose", body: "cited the abstract", anchors: [`D001:${HID}@${d2}`] });
+  await call2("mdnav_journal_record", {
+    op: "propose",
+    body: "cited the abstract",
+    anchors: [`D001:${HID}@${d2}`],
+  });
 
   const rep = (await fresh.coverage(["D001"], 2))[0];
-  ok("bytes cited is a strict subset of bytes read", rep.bytesCited > 0 && rep.bytesCited < rep.bytesRead);
+  ok(
+    "bytes cited is a strict subset of bytes read",
+    rep.bytesCited > 0 && rep.bytesCited < rep.bytesRead,
+  );
   eq("one entry cites this document", rep.citations, 1);
   eq("cited bytes are fully inside read bytes", rep.citedNotRead, 0);
-  eq("the read-but-uncited remainder is the rest", rep.readNotCited, rep.bytesRead - rep.bytesCited);
-  ok("the report surfaces the attrition diagnostic",
-    (await call2("mdnav_coverage", { docIds: ["D001"], depth: 2 })).includes("read not cited"));
+  eq(
+    "the read-but-uncited remainder is the rest",
+    rep.readNotCited,
+    rep.bytesRead - rep.bytesCited,
+  );
+  ok(
+    "the report surfaces the attrition diagnostic",
+    (await call2("mdnav_coverage", { docIds: ["D001"], depth: 2 })).includes("read not cited"),
+  );
 
   // Cite a section that was never read.
   const d3 = new RegExp(`${HID2} @ ([0-9a-f]{4})`).exec(outline2)[1];
@@ -201,48 +290,88 @@ try {
   const call3 = async (name, args) => (await h3.get(name)(args)).content[0].text;
   await call3("mdnav_discover", { paths: [corpus], workDir: join(wd, "capture") });
   await call3("mdnav_read", { docId: "D001", heading: HID, depth: 2 });
-  await call3("mdnav_journal_record", { op: "propose", body: "cited unread", anchors: [`D001:${HID2}@${d3}`] });
+  await call3("mdnav_journal_record", {
+    op: "propose",
+    body: "cited unread",
+    anchors: [`D001:${HID2}@${d3}`],
+  });
   const rep2 = (await fresh2.coverage(["D001"], 2))[0];
   ok("citing an unread span is reported as salience capture", rep2.citedNotRead > 0);
-  ok("and the report says so",
-    (await call3("mdnav_coverage", { docIds: ["D001"], depth: 2 })).includes("cited not read"));
+  ok(
+    "and the report says so",
+    (await call3("mdnav_coverage", { docIds: ["D001"], depth: 2 })).includes("cited not read"),
+  );
   // ───────────────────────────────────────────────── inventory triage signal
 
   process.stdout.write("\nthe inventory carries the triage facts\n");
   const inv = await call("mdnav_index", {});
-  ok("index reports the full column set",
-    inv.split("\n")[0] === "doc | bytes | h1/h2/.. | grain | spine | notes | path", inv.split("\n")[0]);
+  ok(
+    "index reports the full column set",
+    inv.split("\n")[0] === "doc | bytes | h1/h2/.. | grain | spine | notes | path",
+    inv.split("\n")[0],
+  );
   ok("it counts headings per level", /\| 1\/2 \|/.test(inv), inv.split("\n")[1]);
   ok("it flags the thematic-break basis", /breaks x1/.test(inv));
   ok("and says whether the two bases correspond", /not h1-1|= h1-1/.test(inv));
-  ok("a disagreeing basis is called out, with both options named",
-    /Neither basis is privileged/.test(inv) && /byBreaks: true/.test(inv));
-  eq("index without discover-crawling reports the same docs",
-    inv.split("\n").filter((l) => /^D\d{3} \| /.test(l)).length, emitted.discover.split("\n").filter((l) => /^D\d{3} \| /.test(l)).length);
+  ok(
+    "a disagreeing basis is called out, with both options named",
+    /Neither basis is privileged/.test(inv) && /byBreaks: true/.test(inv),
+  );
+  eq(
+    "index without discover-crawling reports the same docs",
+    inv.split("\n").filter((l) => /^D\d{3} \| /.test(l)).length,
+    emitted.discover.split("\n").filter((l) => /^D\d{3} \| /.test(l)).length,
+  );
 
   // ─────────────────────────────────────────────────────── strip by species
 
   process.stdout.write("\nstrip names the species\n");
   const mixed = join(corpus, "mixed.md");
-  writeFileSync(mixed, `# Mixed\n\n![pic](data:image/png;base64,${"A".repeat(2000)})\n\n<div class="x">kept text</div>\n\n![remote](https://example.com/a.png)\n\ntail\n`, "utf8");
+  writeFileSync(
+    mixed,
+    `# Mixed\n\n![pic](data:image/png;base64,${"A".repeat(2000)})\n\n<div class="x">kept text</div>\n\n![remote](https://example.com/a.png)\n\ntail\n`,
+    "utf8",
+  );
   const hM = new Map();
   const eM = new MdnavEngine();
   registerMdnavTools({ tool: (n, _d, _s, fn) => hM.set(n, fn) }, eM);
   const callM = async (n, a) => (await hM.get(n)(a)).content[0].text;
   await callM("mdnav_discover", { paths: [mixed], workDir: join(wd, "mixed") });
 
-  const onlyData = await callM("mdnav_read", { docId: "D001", heading: "H0001", depth: 1, strip: ["data-uri"] });
+  const onlyData = await callM("mdnav_read", {
+    docId: "D001",
+    heading: "H0001",
+    depth: 1,
+    strip: ["data-uri"],
+  });
   ok("naming one species removes it", onlyData.includes("mdnav elided | data-uri |"));
-  ok("and leaves the others alone", onlyData.includes("<div class=\"x\">") && onlyData.includes("![remote]"));
+  ok(
+    "and leaves the others alone",
+    onlyData.includes('<div class="x">') && onlyData.includes("![remote]"),
+  );
 
-  const onlyHtml = await callM("mdnav_read", { docId: "D001", heading: "H0001", depth: 1, strip: ["html"] });
-  ok("naming a different species removes that one", !onlyHtml.includes("<div class=\"x\">"));
+  const onlyHtml = await callM("mdnav_read", {
+    docId: "D001",
+    heading: "H0001",
+    depth: 1,
+    strip: ["html"],
+  });
+  ok("naming a different species removes that one", !onlyHtml.includes('<div class="x">'));
   ok("html removal keeps the inner text", onlyHtml.includes("kept text"));
   ok("and leaves the embedded file in place", onlyHtml.includes("data:image/png;base64"));
 
-  const everything = await callM("mdnav_read", { docId: "D001", heading: "H0001", depth: 1, strip: "all" });
-  ok("'all' still means every species, image refs included",
-    !everything.includes("data:image/png;base64") && !everything.includes("<div") && everything.includes("[image remote]"));
+  const everything = await callM("mdnav_read", {
+    docId: "D001",
+    heading: "H0001",
+    depth: 1,
+    strip: "all",
+  });
+  ok(
+    "'all' still means every species, image refs included",
+    !everything.includes("data:image/png;base64") &&
+      !everything.includes("<div") &&
+      everything.includes("[image remote]"),
+  );
 
   // ──────────────────────────────────────────── attaching to an earlier run
 
@@ -265,18 +394,37 @@ try {
 
   // A second engine is a restart: same work dir, attach to the same run.
   const attached = mk();
-  const attachOut = await attached.call("mdnav_discover", { paths: [paper], workDir: runWd, run: "latest" });
-  eq("attaching restores the prior reads", (await attached.e.coverage(["D001"], 2))[0].bytesRead, readBytes);
+  const attachOut = await attached.call("mdnav_discover", {
+    paths: [paper],
+    workDir: runWd,
+    run: "latest",
+  });
+  eq(
+    "attaching restores the prior reads",
+    (await attached.e.coverage(["D001"], 2))[0].bytesRead,
+    readBytes,
+  );
   ok("and says so in-band", /prior read\(s\) restored/.test(attachOut));
 
   const brandNew = mk();
   await brandNew.call("mdnav_discover", { paths: [paper], workDir: runWd });
-  eq("a run started fresh reads nothing yet", (await brandNew.e.coverage(["D001"], 2))[0].bytesRead, 0);
+  eq(
+    "a run started fresh reads nothing yet",
+    (await brandNew.e.coverage(["D001"], 2))[0].bytesRead,
+    0,
+  );
 
   const missing = mk();
-  ok("attaching to a run that does not exist fails loudly",
+  ok(
+    "attaching to a run that does not exist fails loudly",
     /no run 19990101_000000/.test(
-      await missing.call("mdnav_discover", { paths: [paper], workDir: runWd, run: "19990101_000000" })));
+      await missing.call("mdnav_discover", {
+        paths: [paper],
+        workDir: runWd,
+        run: "19990101_000000",
+      }),
+    ),
+  );
 
   // Looking at an older run must not redefine which run is current — inspection
   // should never move a pointer other sessions follow.
@@ -284,10 +432,16 @@ try {
   ok("a later run has taken over LATEST", currentBefore !== stampA);
   const peek = mk();
   await peek.call("mdnav_discover", { paths: [paper], workDir: runWd, run: stampA });
-  eq("attaching to an older run by name leaves LATEST alone",
-    readFileSync(join(runWd, "LATEST"), "utf8").trim(), currentBefore);
-  eq("though that session does see the older run's record",
-    (await peek.e.coverage(["D001"], 2))[0].bytesRead, readBytes);
+  eq(
+    "attaching to an older run by name leaves LATEST alone",
+    readFileSync(join(runWd, "LATEST"), "utf8").trim(),
+    currentBefore,
+  );
+  eq(
+    "though that session does see the older run's record",
+    (await peek.e.coverage(["D001"], 2))[0].bytesRead,
+    readBytes,
+  );
 
   // ─────────────────────────────────────── a source that moves under the cache
 
@@ -301,38 +455,72 @@ try {
 
   await callS("mdnav_discover", { paths: [live], workDir: join(wd, "stale") });
   const digestOfAlpha = async () =>
-    /(H\d+) @ ([0-9a-f]{4}).*Alpha/.exec(await callS("mdnav_outline", { docId: "D001", depth: 2 }))[2];
+    /(H\d+) @ ([0-9a-f]{4}).*Alpha/.exec(
+      await callS("mdnav_outline", { docId: "D001", depth: 2 }),
+    )[2];
   const beforeDigest = await digestOfAlpha();
 
   writeFileSync(live, "# Live\n\n## Alpha RENAMED\n\ncompletely different body\n", "utf8");
 
   const afterRead = await callS("mdnav_read", { docId: "D001", heading: HID, depth: 2 });
-  ok("a read after the source changed returns the CURRENT bytes", afterRead.includes("completely different body"), afterRead);
+  ok(
+    "a read after the source changed returns the CURRENT bytes",
+    afterRead.includes("completely different body"),
+    afterRead,
+  );
   ok("and the change is announced in-band", /changed on disk and was re-indexed/.test(afterRead));
   const afterDigest = await digestOfAlpha();
-  ok("the digest moved with the source, so drift is detectable again", beforeDigest !== afterDigest);
-  ok("the notice fires once, not on every later call",
-    !/changed on disk/.test(await callS("mdnav_outline", { docId: "D001", depth: 2 })));
+  ok(
+    "the digest moved with the source, so drift is detectable again",
+    beforeDigest !== afterDigest,
+  );
+  ok(
+    "the notice fires once, not on every later call",
+    !/changed on disk/.test(await callS("mdnav_outline", { docId: "D001", depth: 2 })),
+  );
 
   // ─────────────────────────────────────── elision is addressed, not hidden
 
   process.stdout.write("\nelision is addressed, not hidden\n");
   const noisy = join(corpus, "noisy.md");
-  writeFileSync(noisy, `# Noisy\n\n![pic](data:image/png;base64,${"A".repeat(4000)})\n\ntail text\n`, "utf8");
+  writeFileSync(
+    noisy,
+    `# Noisy\n\n![pic](data:image/png;base64,${"A".repeat(4000)})\n\ntail text\n`,
+    "utf8",
+  );
   const hN = new Map();
   const eN = new MdnavEngine();
   registerMdnavTools({ tool: (n, _d, _s, fn) => hN.set(n, fn) }, eN);
   const callN = async (n, a) => (await hN.get(n)(a)).content[0].text;
   await callN("mdnav_discover", { paths: [noisy], workDir: join(wd, "noise") });
 
-  const strippedOut = await callN("mdnav_read", { docId: "D001", heading: "H0001", depth: 1, strip: "all" });
-  ok("the stream carries a marker where the removed span was", strippedOut.includes("mdnav elided | data-uri |"));
+  const strippedOut = await callN("mdnav_read", {
+    docId: "D001",
+    heading: "H0001",
+    depth: 1,
+    strip: "all",
+  });
+  ok(
+    "the stream carries a marker where the removed span was",
+    strippedOut.includes("mdnav elided | data-uri |"),
+  );
   ok("the marker names its byte cost", /mdnav elided \| data-uri \| \d+ B/.test(strippedOut));
-  ok("the marker is not an HTML comment the html pass would eat", !strippedOut.includes("<!-- mdnav: elided"));
+  ok(
+    "the marker is not an HTML comment the html pass would eat",
+    !strippedOut.includes("<!-- mdnav: elided"),
+  );
   ok("the read reports the total elided", /elided [\d.]+ KiB \(data-uri x1\)/.test(strippedOut));
   ok("surrounding content survives", strippedOut.includes("tail text"));
-  const unstripped = await callN("mdnav_read", { docId: "D001", heading: "H0001", depth: 1, strip: "none" });
-  ok("the same anchor without strip still yields the bytes", unstripped.length > strippedOut.length + 3000);
+  const unstripped = await callN("mdnav_read", {
+    docId: "D001",
+    heading: "H0001",
+    depth: 1,
+    strip: "none",
+  });
+  ok(
+    "the same anchor without strip still yields the bytes",
+    unstripped.length > strippedOut.length + 3000,
+  );
 } catch (err) {
   process.stdout.write(`\n  SUITE ABORTED: ${err && err.stack ? err.stack : err}\n`);
   fail++;

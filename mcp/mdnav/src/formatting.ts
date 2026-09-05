@@ -40,8 +40,17 @@ export const BREAK = "\\n";
 export const EMPTY = "-";
 
 /** Column header for the journal ledger view. */
-export const JOURNAL_HEADER =
-  ["id", "ts", "op", "refs", "concept", "status", "anchors", "bytes", "body"].join(FIELD);
+export const JOURNAL_HEADER = [
+  "id",
+  "ts",
+  "op",
+  "refs",
+  "concept",
+  "status",
+  "anchors",
+  "bytes",
+  "body",
+].join(FIELD);
 
 /**
  * How the frame is shaped. Set OUTSIDE the tool schemas, deliberately: tool
@@ -68,10 +77,10 @@ export interface FrameConfig {
 
 /** The four named address spellings are a 2x2 over placement and spacing. */
 const ADDRESS_MODES: Record<string, { docColumn: boolean; spaced: boolean }> = {
-  "full": { docColumn: false, spaced: true },          // D021 : H0006 @ e5f6
-  "columns": { docColumn: true, spaced: true },        // D021 | H0006 @ e5f6
-  "inner-fused": { docColumn: true, spaced: false },   // D021 | H0006@e5f6
-  "fused": { docColumn: false, spaced: false },        // D021:H0006@e5f6
+  full: { docColumn: false, spaced: true }, // D021 : H0006 @ e5f6
+  columns: { docColumn: true, spaced: true }, // D021 | H0006 @ e5f6
+  "inner-fused": { docColumn: true, spaced: false }, // D021 | H0006@e5f6
+  fused: { docColumn: false, spaced: false }, // D021:H0006@e5f6
 };
 
 function envFlag(name: string, dflt: boolean): boolean {
@@ -127,7 +136,7 @@ export function formatSourceChunkPrefix(
   docId: string,
   anchor: string,
   span: ByteSpan,
-  label?: string | undefined
+  label?: string,
 ): string {
   const cfg = frameConfig();
   const fields = addressFields(docId, anchor, cfg);
@@ -215,13 +224,14 @@ export function parseAnchor(raw: string): ParsedAnchor {
  * than at each of the call sites that compare, store, or join on an anchor.
  */
 export function canonicalAnchor(a: string | AnchorInput): string {
-  const p = typeof a === "string"
-    ? parseAnchor(a)
-    : {
-        scope: a.scope.trim(),
-        unit: a.unit?.trim() || undefined,
-        digest: a.digest?.trim() || undefined,
-      };
+  const p =
+    typeof a === "string"
+      ? parseAnchor(a)
+      : {
+          scope: a.scope.trim(),
+          unit: a.unit?.trim() || undefined,
+          digest: a.digest?.trim() || undefined,
+        };
 
   let out = p.scope;
   if (p.unit !== undefined) out += `:${p.unit}`;
@@ -353,7 +363,9 @@ export function renderJournalTree(entries: ResolvedJournalEntry[]): string {
     const branch = depth === 0 ? "" : `${prefix}${last ? "└─ " : "├─ "}`;
     const merge = e.refs.length > 1 ? `  (merge of ${e.refs.join(", ")})` : "";
     const repeat = seen.has(e.id) ? "  ↩ shown above" : "";
-    lines.push(`${branch}${[e.id, e.op, e.concept || EMPTY, e.status].join(FIELD)}${merge}${repeat}`);
+    lines.push(
+      `${branch}${[e.id, e.op, e.concept || EMPTY, e.status].join(FIELD)}${merge}${repeat}`,
+    );
     if (repeat) return;
 
     seen.add(e.id);
@@ -361,11 +373,15 @@ export function renderJournalTree(entries: ResolvedJournalEntry[]): string {
       .map((c) => byId.get(c))
       .filter((x): x is ResolvedJournalEntry => x !== undefined);
     const childPrefix = depth === 0 ? "" : `${prefix}${last ? "   " : "│  "}`;
-    kids.forEach((k, i) => walk(k, childPrefix, i === kids.length - 1, depth + 1));
+    kids.forEach((k, i) => {
+      walk(k, childPrefix, i === kids.length - 1, depth + 1);
+    });
   };
 
   const roots = entries.filter((e) => !hasParent.has(e.id));
-  roots.forEach((r, i) => walk(r, "", i === roots.length - 1, 0));
+  roots.forEach((r, i) => {
+    walk(r, "", i === roots.length - 1, 0);
+  });
   return lines.join("\n");
 }
 

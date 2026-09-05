@@ -1,0 +1,5 @@
+# Normalize source to LF; never touch the legacy oracle or binaries.
+* text=auto eol=lf
+mdnav.mjs -text
+*.png binary
+*.pdf binary

@@ -15,15 +15,26 @@ import { writeFileSync, mkdirSync, rmSync, readFileSync } from "node:fs";
 
 import { MdnavEngine } from "../src/engine.ts";
 
-let pass = 0, fail = 0;
+let pass = 0,
+  fail = 0;
 const ok = (name, cond, detail) => {
-  if (cond) { pass++; process.stdout.write(`  ok   ${name}\n`); }
-  else { fail++; process.stdout.write(`  FAIL ${name}${detail ? `\n       ${detail}` : ""}\n`); }
+  if (cond) {
+    pass++;
+    process.stdout.write(`  ok   ${name}\n`);
+  } else {
+    fail++;
+    process.stdout.write(`  FAIL ${name}${detail ? `\n       ${detail}` : ""}\n`);
+  }
 };
-const eq = (name, a, b) => ok(name, a === b, `expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`);
+const eq = (name, a, b) =>
+  ok(name, a === b, `expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`);
 async function throws(name, fn, match) {
-  try { await fn(); ok(name, false, "expected a throw, got a value"); }
-  catch (err) { ok(name, !match || match.test(err.message), `message was: ${err.message}`); }
+  try {
+    await fn();
+    ok(name, false, "expected a throw, got a value");
+  } catch (err) {
+    ok(name, !match || match.test(err.message), `message was: ${err.message}`);
+  }
 }
 
 const testDir = join(tmpdir(), "mdnav-engine-test-" + process.pid);
@@ -101,7 +112,11 @@ try {
   const inv = await engine.discover([testDir], { glob: "*.md", workDir });
   const id = (name) => inv.docs.find((d) => d.name === name).id;
   const [P1, P2, GNARLY, CRLF, HEADLESS] = [
-    id("paper1.md"), id("paper2.md"), id("gnarly.md"), id("crlf.md"), id("headless.md"),
+    id("paper1.md"),
+    id("paper2.md"),
+    id("gnarly.md"),
+    id("crlf.md"),
+    id("headless.md"),
   ];
 
   // ────────────────────────────────────────────────────────────────── the basics
@@ -112,7 +127,10 @@ try {
 
   const outline = await engine.outline(P1, { depth: 2 });
   eq("outline at depth 2 returns the active units", outline.length, 4);
-  ok("outline carries digests", outline.every((u) => /^[0-9a-f]{4}$/.test(u.digest)));
+  ok(
+    "outline carries digests",
+    outline.every((u) => /^[0-9a-f]{4}$/.test(u.digest)),
+  );
 
   const abstract = await engine.read(P1, { heading: "H0002", depth: 2 });
   ok("read returns the unit body", abstract.text.includes("scale-calibrated"));
@@ -123,8 +141,14 @@ try {
     { docId: P2, heading: "H0002", label: "Paper 2 Abstract" },
   ]);
   eq("batchRead returns one result per request", batch.length, 2);
-  ok("batchRead crosses documents", batch[0].text.includes("scale-calibrated") && batch[1].text.includes("Grassmannian"));
-  ok("batchRead reports the resolved anchor with its digest", /^H\d+@[0-9a-f]{4}$/.test(batch[0].anchor));
+  ok(
+    "batchRead crosses documents",
+    batch[0].text.includes("scale-calibrated") && batch[1].text.includes("Grassmannian"),
+  );
+  ok(
+    "batchRead reports the resolved anchor with its digest",
+    /^H\d+@[0-9a-f]{4}$/.test(batch[0].anchor),
+  );
 
   const hits = await engine.locate("breakdown point");
   eq("locate finds the line", hits.length, 1);
@@ -133,7 +157,12 @@ try {
   // ───────────────────────────────────────────────────── the partition invariant
 
   process.stdout.write("\npartition\n");
-  for (const [name, docId] of [["paper1", P1], ["gnarly", GNARLY], ["crlf", CRLF], ["headless", HEADLESS]]) {
+  for (const [name, docId] of [
+    ["paper1", P1],
+    ["gnarly", GNARLY],
+    ["crlf", CRLF],
+    ["headless", HEADLESS],
+  ]) {
     for (const depth of [1, 2, 3]) {
       const units = await engine.outline(docId, { depth });
       const parts = [];
@@ -145,7 +174,7 @@ try {
       ok(
         `${name} at depth ${depth}: units concatenate back to the source`,
         parts.join("") === source,
-        `rebuilt ${parts.join("").length} chars from ${units.length} unit(s), source is ${source.length}`
+        `rebuilt ${parts.join("").length} chars from ${units.length} unit(s), source is ${source.length}`,
       );
     }
   }
@@ -154,7 +183,11 @@ try {
 
   process.stdout.write("\nunheaded bytes are still addressable\n");
   const gOutline = await engine.outline(GNARLY, { depth: 1 });
-  ok("prose ahead of the first heading gets the zero coordinate", /^H0+$/.test(gOutline[0].id), gOutline[0].id);
+  ok(
+    "prose ahead of the first heading gets the zero coordinate",
+    /^H0+$/.test(gOutline[0].id),
+    gOutline[0].id,
+  );
   eq("and is titled PREAMBLE", gOutline[0].title, "PREAMBLE");
   const preamble = await engine.read(GNARLY, { heading: "H0000" });
   ok("H0000 reads the preamble", preamble.text.includes("belongs to no heading"));
@@ -164,7 +197,11 @@ try {
   eq("a document with no headings gets exactly one unit", hOutline.length, 1);
   eq("titled BODY", hOutline[0].title, "BODY");
   const whole = await engine.read(HEADLESS, { heading: "H0000" });
-  eq("H0000 BODY spans the whole document", whole.bytes, inv.docs.find((d) => d.id === HEADLESS).bytes);
+  eq(
+    "H0000 BODY spans the whole document",
+    whole.bytes,
+    inv.docs.find((d) => d.id === HEADLESS).bytes,
+  );
 
   // ─────────────────────────────────────────────────────────── digest anchors
 
@@ -172,7 +209,10 @@ try {
   const unit = (await engine.outline(P1, { depth: 2 }))[1];
   const fused = `${unit.id}@${unit.digest}`;
   const viaDigest = await engine.read(P1, { heading: fused, depth: 2 });
-  ok("an anchor emitted by outline is accepted by read", viaDigest.text.includes("scale-calibrated"));
+  ok(
+    "an anchor emitted by outline is accepted by read",
+    viaDigest.text.includes("scale-calibrated"),
+  );
   eq("and resolves without complaint", viaDigest.warnings.length, 0);
   ok("read echoes the anchor in round-trippable form", viaDigest.anchors[0] === fused);
 
@@ -181,7 +221,10 @@ try {
 
   const drifted = await engine.read(P1, { heading: `${unit.id}@dead`, depth: 2 });
   eq("a stale digest still returns the bytes", drifted.text.includes("scale-calibrated"), true);
-  ok("but reports the drift", drifted.warnings.some((w) => /has changed under this anchor/.test(w)));
+  ok(
+    "but reports the drift",
+    drifted.warnings.some((w) => /has changed under this anchor/.test(w)),
+  );
 
   // The stream prints this anchor spaced and the skill says to quote it
   // exactly. Read has to take it back in that form, or the two instructions
@@ -189,15 +232,24 @@ try {
   const asPrinted = await engine.read(P1, { heading: `${unit.id} @ ${unit.digest}`, depth: 2 });
   ok("the spaced form the stream printed resolves", asPrinted.text.includes("scale-calibrated"));
   eq("and raises no drift against the digest it actually equals", asPrinted.warnings.length, 0);
-  const asPrintedQualified = await engine.read(P1, { heading: `${P1} : ${unit.id} @ ${unit.digest}`, depth: 2 });
-  ok("document-qualified and spaced resolves too", asPrintedQualified.text.includes("scale-calibrated"));
+  const asPrintedQualified = await engine.read(P1, {
+    heading: `${P1} : ${unit.id} @ ${unit.digest}`,
+    depth: 2,
+  });
+  ok(
+    "document-qualified and spaced resolves too",
+    asPrintedQualified.text.includes("scale-calibrated"),
+  );
 
   // ─────────────────────────────────────────────────────────────────── windows
 
   process.stdout.write("\nwindows\n");
   const wins = await engine.outline(HEADLESS, { windows: 1000 });
   ok("a headingless document partitions into windows", wins.length > 1);
-  ok("windows carry digests", wins.every((w) => /^[0-9a-f]{4}$/.test(w.digest)));
+  ok(
+    "windows carry digests",
+    wins.every((w) => /^[0-9a-f]{4}$/.test(w.digest)),
+  );
   const w2 = await engine.read(HEADLESS, { heading: wins[1].id });
   eq("a window anchor resolves to its exact bytes", w2.bytes, wins[1].unitBytes);
   const wsum = wins.reduce((a, w) => a + w.unitBytes, 0);
@@ -218,22 +270,37 @@ try {
   process.stdout.write("\nCRLF sources anchor identically\n");
   const lfHit = (await engine.locate("After the break", [GNARLY]))[0];
   const crlfHit = (await engine.locate("After the break", [CRLF]))[0];
-  ok("a CRLF twin resolves to the same heading as its LF original",
+  ok(
+    "a CRLF twin resolves to the same heading as its LF original",
     lfHit.anchor.split(":")[1] === crlfHit.anchor.split(":")[1],
-    `LF ${lfHit.anchor} vs CRLF ${crlfHit.anchor}`);
+    `LF ${lfHit.anchor} vs CRLF ${crlfHit.anchor}`,
+  );
   eq("and to the same line number", lfHit.line, crlfHit.line);
 
   // ──────────────────────────────────────────────────────────── loud failures
 
   process.stdout.write("\nfailures are loud\n");
   await throws("read with no selector refuses", () => engine.read(P1, {}), /needs a selector/);
-  await throws("an inactive heading read as a unit refuses",
-    () => engine.read(P1, { heading: "H0004", depth: 1 }), /not active at depth 1/);
-  await throws("an unknown anchor refuses", () => engine.read(P1, { heading: "H9999" }), /no anchor/);
-  await throws("a span outside the document refuses",
-    () => engine.read(P1, { span: [0, 10 ** 9] }), /outside/);
-  await throws("a window anchor with no windows minted refuses",
-    () => engine.read(P1, { heading: "W0001" }), /mint window anchors first/);
+  await throws(
+    "an inactive heading read as a unit refuses",
+    () => engine.read(P1, { heading: "H0004", depth: 1 }),
+    /not active at depth 1/,
+  );
+  await throws(
+    "an unknown anchor refuses",
+    () => engine.read(P1, { heading: "H9999" }),
+    /no anchor/,
+  );
+  await throws(
+    "a span outside the document refuses",
+    () => engine.read(P1, { span: [0, 10 ** 9] }),
+    /outside/,
+  );
+  await throws(
+    "a window anchor with no windows minted refuses",
+    () => engine.read(P1, { heading: "W0001" }),
+    /mint window anchors first/,
+  );
   const subtree = await engine.read(P1, { heading: "H0004", depth: 1, extent: "subtree" });
   ok("but the same heading reads fine as a subtree", subtree.text.includes("Background"));
 
@@ -253,10 +320,16 @@ try {
   await fresh.read(covId, { span: [half, full[0].unitBytes] });
   const after = (await fresh.coverage([covId], 1))[0];
   eq("adjacent spans merge into one covered stretch", after.bytesRead, full[0].unitBytes);
-  ok("and the unit is no longer listed unread", !after.unreadAnchors.some((u) => u.anchor.endsWith("H0001")));
+  ok(
+    "and the unit is no longer listed unread",
+    !after.unreadAnchors.some((u) => u.anchor.endsWith("H0001")),
+  );
 
   const byBreak = (await engine.coverage([GNARLY], 1, true))[0];
-  ok("coverage accepts a break basis", byBreak.unreadAnchors.every((u) => /:S\d{4}$/.test(u.anchor)));
+  ok(
+    "coverage accepts a break basis",
+    byBreak.unreadAnchors.every((u) => /:S\d{4}$/.test(u.anchor)),
+  );
   // ──────────────────────────────────────────────────────── mounting a root
 
   process.stdout.write("\nmounting a corpus root\n");
@@ -265,7 +338,11 @@ try {
   mkdirSync(join(mountRoot, "appendix"), { recursive: true });
   writeFileSync(join(mountRoot, "README.md"), "# Readme\n\n## About\n\nintro\n", "utf8");
   for (const n of ["01", "02", "03"]) {
-    writeFileSync(join(mountRoot, "chapters", `Ch${n}.md`), `# Chapter ${n}\n\n## One\n\nbody\n`, "utf8");
+    writeFileSync(
+      join(mountRoot, "chapters", `Ch${n}.md`),
+      `# Chapter ${n}\n\n## One\n\nbody\n`,
+      "utf8",
+    );
   }
   writeFileSync(join(mountRoot, "appendix", "A.md"), "# Appendix A\n\n## Notes\n\nbody\n", "utf8");
 
@@ -275,38 +352,59 @@ try {
   eq("a mount finds every document beneath the root, recursively", mnt.docs.length, 5);
   eq("the root is recorded", mnt.root, mountRoot);
   eq("groups are the directories holding documents", mnt.addressing.groups, 3);
-  eq("in canonical path order, root first",
-    mnt.addressing.groupPaths.join(","), ",appendix,chapters");
+  eq(
+    "in canonical path order, root first",
+    mnt.addressing.groupPaths.join(","),
+    ",appendix,chapters",
+  );
 
   const idOf = (rel) => mnt.docs.find((d) => d.relPath === rel).id;
   eq("root documents take group 1", idOf("README.md"), "D0101");
   eq("appendix takes group 2", idOf("appendix/A.md"), "D0201");
-  eq("chapters take group 3, numbered within the group",
-    ["chapters/Ch01.md", "chapters/Ch02.md", "chapters/Ch03.md"].map(idOf).join(","), "D0301,D0302,D0303");
-  ok("so co-located documents share a literal prefix",
-    ["D0301", "D0302", "D0303"].every((id) => id.startsWith("D03")));
+  eq(
+    "chapters take group 3, numbered within the group",
+    ["chapters/Ch01.md", "chapters/Ch02.md", "chapters/Ch03.md"].map(idOf).join(","),
+    "D0301,D0302,D0303",
+  );
+  ok(
+    "so co-located documents share a literal prefix",
+    ["D0301", "D0302", "D0303"].every((id) => id.startsWith("D03")),
+  );
 
-  ok("paths are reported relative to the root",
-    mnt.docs.every((d) => d.relPath && !d.relPath.includes(":") && !d.relPath.startsWith("/")));
-  eq("widths are measured from the corpus, not assumed",
-    `${mnt.addressing.groupWidth}/${mnt.addressing.docWidth}`, "2/2");
+  ok(
+    "paths are reported relative to the root",
+    mnt.docs.every((d) => d.relPath && !d.relPath.includes(":") && !d.relPath.startsWith("/")),
+  );
+  eq(
+    "widths are measured from the corpus, not assumed",
+    `${mnt.addressing.groupWidth}/${mnt.addressing.docWidth}`,
+    "2/2",
+  );
 
   // Deterministic from the data: mount the same corpus again, anywhere, and the
   // addresses are identical. That is what makes a corpus usable as a fixture.
   const remount = new MdnavEngine();
   const mnt2 = await remount.discover([], { root: mountRoot, workDir: join(workDir, "mount2") });
-  eq("mounting the same corpus again yields the same addresses",
+  eq(
+    "mounting the same corpus again yields the same addresses",
     mnt2.docs.map((d) => `${d.id}=${d.relPath}`).join(" "),
-    mnt.docs.map((d) => `${d.id}=${d.relPath}`).join(" "));
+    mnt.docs.map((d) => `${d.id}=${d.relPath}`).join(" "),
+  );
 
   // A single-group corpus carries no group axis — a constant is not information.
   const flat = new MdnavEngine();
-  const flatInv = await flat.discover([], { root: join(mountRoot, "chapters"), workDir: join(workDir, "flat") });
+  const flatInv = await flat.discover([], {
+    root: join(mountRoot, "chapters"),
+    workDir: join(workDir, "flat"),
+  });
   eq("one group means no group axis", flatInv.addressing.groups, 1);
   eq("and plain document ids", flatInv.docs.map((d) => d.id).join(","), "D01,D02,D03");
 
-  await throws("mounting a root that does not exist fails loudly",
-    () => new MdnavEngine().discover([], { root: join(testDir, "nope") }), /no such root/);
+  await throws(
+    "mounting a root that does not exist fails loudly",
+    () => new MdnavEngine().discover([], { root: join(testDir, "nope") }),
+    /no such root/,
+  );
 
   // ──────────────────────────────────── every atom is the same width, always
 
@@ -319,15 +417,26 @@ try {
   // must not be a different length either.
   const outside = join(testDir, "paper1.md");
   const strayRead = await mounted.read(outside, { heading: "H0002", depth: 2 });
-  eq("a document outside the mount gets a same-width id", strayRead.docId.length, mnt.docs[0].id.length);
-  ok("in the reserved group, so it cannot collide with a mounted document",
-    !mnt.docs.some((d) => d.id === strayRead.docId), `${strayRead.docId} vs ${mnt.docs.map((d) => d.id).join(",")}`);
+  eq(
+    "a document outside the mount gets a same-width id",
+    strayRead.docId.length,
+    mnt.docs[0].id.length,
+  );
+  ok(
+    "in the reserved group, so it cannot collide with a mounted document",
+    !mnt.docs.some((d) => d.id === strayRead.docId),
+    `${strayRead.docId} vs ${mnt.docs.map((d) => d.id).join(",")}`,
+  );
 
   // A corpus large enough to outgrow the format widens ALL ids, not some.
   const wideRoot = join(testDir, "wide");
   mkdirSync(join(wideRoot, "g"), { recursive: true });
   for (let i = 1; i <= 120; i++) {
-    writeFileSync(join(wideRoot, "g", `f${String(i).padStart(3, "0")}.md`), `# F${i}\n\nbody\n`, "utf8");
+    writeFileSync(
+      join(wideRoot, "g", `f${String(i).padStart(3, "0")}.md`),
+      `# F${i}\n\nbody\n`,
+      "utf8",
+    );
   }
   const wide = new MdnavEngine();
   const wideInv = await wide.discover([], { root: wideRoot, workDir: join(workDir, "wide") });
@@ -340,7 +449,11 @@ try {
   process.stdout.write("\nre-discovering does not fragment the investigation\n");
   const reDir = join(testDir, "redisc");
   mkdirSync(reDir, { recursive: true });
-  writeFileSync(join(reDir, "paper.md"), "# A\n\n## One\n\nalpha body\n\n## Two\n\nbeta body\n", "utf8");
+  writeFileSync(
+    join(reDir, "paper.md"),
+    "# A\n\n## One\n\nalpha body\n\n## Two\n\nbeta body\n",
+    "utf8",
+  );
 
   const re = new MdnavEngine();
   const reWd = join(workDir, "redisc");
@@ -355,23 +468,45 @@ try {
   writeFileSync(join(reDir, "appendix.md"), "# Appendix\n\n## Notes\n\nunrelated\n", "utf8");
   const inv2 = await re.discover([reDir], { workDir: reWd });
 
-  eq("re-discovering keeps the reading record", (await re.coverage([paperId], 2))[0].bytesRead, readBefore);
-  eq("the document already indexed keeps its id",
-    inv2.docs.find((d) => d.name === "paper.md").id, paperId);
-  eq("the newcomer gets a fresh id rather than displacing it",
-    inv2.docs.find((d) => d.name === "appendix.md").id, "D002");
-  eq("so an anchor cited earlier still names the same content",
-    (await re.outline(paperId, { depth: 2 }))[1].digest, citedDigest);
+  eq(
+    "re-discovering keeps the reading record",
+    (await re.coverage([paperId], 2))[0].bytesRead,
+    readBefore,
+  );
+  eq(
+    "the document already indexed keeps its id",
+    inv2.docs.find((d) => d.name === "paper.md").id,
+    paperId,
+  );
+  eq(
+    "the newcomer gets a fresh id rather than displacing it",
+    inv2.docs.find((d) => d.name === "appendix.md").id,
+    "D002",
+  );
+  eq(
+    "so an anchor cited earlier still names the same content",
+    (await re.outline(paperId, { depth: 2 }))[1].digest,
+    citedDigest,
+  );
   const stillThere = await re.read(paperId, { heading: `H0002@${citedDigest}`, depth: 2 });
-  ok("and re-reading it returns the material it was cited for", stillThere.text.includes("alpha body"));
+  ok(
+    "and re-reading it returns the material it was cited for",
+    stillThere.text.includes("alpha body"),
+  );
   eq("with no drift reported, because nothing drifted", stillThere.warnings.length, 0);
 
   // Starting over is available, but has to be asked for.
   await re.discover([reDir], { workDir: reWd, newRun: true });
-  eq("newRun starts a separate run with an empty record",
-    (await re.coverage([paperId], 2))[0].bytesRead, 0);
-  eq("but ids are still not recycled across runs",
-    (await re.index([])).find((d) => d.name === "paper.md").id, paperId);
+  eq(
+    "newRun starts a separate run with an empty record",
+    (await re.coverage([paperId], 2))[0].bytesRead,
+    0,
+  );
+  eq(
+    "but ids are still not recycled across runs",
+    (await re.index([])).find((d) => d.name === "paper.md").id,
+    paperId,
+  );
 } catch (err) {
   // A throw mid-suite must never read as a pass.
   process.stdout.write(`\n  SUITE ABORTED: ${err && err.stack ? err.stack : err}\n`);

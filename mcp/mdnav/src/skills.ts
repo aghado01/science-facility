@@ -85,7 +85,10 @@ export function skillName(): string {
 
 /** Topic names use forward slashes and carry no extension, on every platform. */
 function normalizeTopic(raw: string): string {
-  return raw.replace(/\.md$/i, "").replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+  return raw
+    .replace(/\.md$/i, "")
+    .replace(/\\/g, "/")
+    .replace(/^\/+|\/+$/g, "");
 }
 
 /**
@@ -142,7 +145,13 @@ export function listTopics(): SkillTopic[] {
 
   const describe = (topic: string, path: string): SkillTopic => {
     const { buf, index } = loadDocument(topic, path);
-    return { topic, path, bytes: buf.length, title: firstHeading(buf, index), headings: index.headings.length };
+    return {
+      topic,
+      path,
+      bytes: buf.length,
+      title: firstHeading(buf, index),
+      headings: index.headings.length,
+    };
   };
 
   const indexFile = join(root, "SKILL.md");
@@ -182,7 +191,7 @@ export interface SkillSection {
 }
 
 /** One topic's headings, with the byte extent of each subtree. */
-export function outlineTopic(raw: string, depth = 6): Array<{ heading: HeadingEntry; bytes: number }> {
+export function outlineTopic(raw: string, depth = 6): { heading: HeadingEntry; bytes: number }[] {
   const t = resolveTopic(raw);
   const { index } = loadDocument(t.topic, t.path);
   return index.headings
@@ -245,7 +254,9 @@ export function searchSkills(pattern: string, limit = 60): SkillHit[] {
       if (re.test(line)) {
         // Report the containing section, so a hit is an address and not just a
         // line number that shifts the next time the file is edited.
-        const owner = index.headings.filter((h) => h.headingStart <= offset && offset < h.subtreeEnd).pop();
+        const owner = index.headings
+          .filter((h) => h.headingStart <= offset && offset < h.subtreeEnd)
+          .pop();
         hits.push({ topic: t.topic, hid: owner?.hid ?? "H0000", line: i + 1, text: line.trim() });
         if (hits.length >= limit) return hits;
       }

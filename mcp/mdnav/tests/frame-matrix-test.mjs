@@ -18,15 +18,30 @@ import { MdnavEngine } from "../src/engine.ts";
 import { registerMdnavTools } from "../src/tools.ts";
 import { frameConfig } from "../src/formatting.ts";
 
-let pass = 0, fail = 0;
+let pass = 0,
+  fail = 0;
 const ok = (name, cond, detail) => {
-  if (cond) { pass++; process.stdout.write(`  ok   ${name}\n`); }
-  else { fail++; process.stdout.write(`  FAIL ${name}${detail ? `\n       ${detail}` : ""}\n`); }
+  if (cond) {
+    pass++;
+    process.stdout.write(`  ok   ${name}\n`);
+  } else {
+    fail++;
+    process.stdout.write(`  FAIL ${name}${detail ? `\n       ${detail}` : ""}\n`);
+  }
 };
-const eq = (name, a, b) => ok(name, a === b, `expected ${JSON.stringify(b)}\n       got      ${JSON.stringify(a)}`);
+const eq = (name, a, b) =>
+  ok(name, a === b, `expected ${JSON.stringify(b)}\n       got      ${JSON.stringify(a)}`);
 
-const VARS = ["MDNAV_FRAME", "MDNAV_FRAME_ADDRESS", "MDNAV_FRAME_CLOSE", "MDNAV_FRAME_SPAN", "MDNAV_PREFIX"];
-const clearEnv = () => { for (const v of VARS) delete process.env[v]; };
+const VARS = [
+  "MDNAV_FRAME",
+  "MDNAV_FRAME_ADDRESS",
+  "MDNAV_FRAME_CLOSE",
+  "MDNAV_FRAME_SPAN",
+  "MDNAV_PREFIX",
+];
+const clearEnv = () => {
+  for (const v of VARS) delete process.env[v];
+};
 
 const corpus = join(tmpdir(), "mdnav-matrix-" + process.pid);
 const wd = join(tmpdir(), "mdnav-matrix-wd-" + process.pid);
@@ -49,11 +64,14 @@ try {
   // from the outline rather than assumed.
   const ol = await call("mdnav_outline", { docId: "D001", depth: 2 });
   const m = /(H\d+) @ ([0-9a-f]{4}).*Abstract/.exec(ol);
-  const HID = m[1], digest = m[2];
+  const HID = m[1],
+    digest = m[2];
 
   // Take the span from a reference render rather than restating it: the test is
   // about which fields appear and how they are spelled, not about arithmetic.
-  const refLine = (await call("mdnav_read", { docId: "D001", heading: HID, depth: 2 })).split("\n")[2];
+  const refLine = (await call("mdnav_read", { docId: "D001", heading: HID, depth: 2 })).split(
+    "\n",
+  )[2];
   const SPAN = /\| (\d+ \.\. \d+) \|/.exec(refLine)[1];
 
   // Rendered lines of one framed read, under a given environment.
@@ -69,10 +87,30 @@ try {
 
   process.stdout.write("\naddress spelling\n");
   const ADDRESS = [
-    ["full", `D001 : ${HID} @ ${digest} | ${SPAN} |`, `| D001 : ${HID} @ ${digest}`, "address | span | content"],
-    ["columns", `D001 | ${HID} @ ${digest} | ${SPAN} |`, `| D001 | ${HID} @ ${digest}`, "doc | anchor | span | content"],
-    ["inner-fused", `D001 | ${HID}@${digest} | ${SPAN} |`, `| D001 | ${HID}@${digest}`, "doc | anchor | span | content"],
-    ["fused", `D001:${HID}@${digest} | ${SPAN} |`, `| D001:${HID}@${digest}`, "address | span | content"],
+    [
+      "full",
+      `D001 : ${HID} @ ${digest} | ${SPAN} |`,
+      `| D001 : ${HID} @ ${digest}`,
+      "address | span | content",
+    ],
+    [
+      "columns",
+      `D001 | ${HID} @ ${digest} | ${SPAN} |`,
+      `| D001 | ${HID} @ ${digest}`,
+      "doc | anchor | span | content",
+    ],
+    [
+      "inner-fused",
+      `D001 | ${HID}@${digest} | ${SPAN} |`,
+      `| D001 | ${HID}@${digest}`,
+      "doc | anchor | span | content",
+    ],
+    [
+      "fused",
+      `D001:${HID}@${digest} | ${SPAN} |`,
+      `| D001:${HID}@${digest}`,
+      "address | span | content",
+    ],
   ];
   for (const [mode, frame, close, header] of ADDRESS) {
     const lines = await render({ MDNAV_FRAME_ADDRESS: mode });
@@ -87,14 +125,20 @@ try {
   for (const close of ["on", "off"]) {
     for (const span of ["on", "off"]) {
       const lines = await render({ MDNAV_FRAME_CLOSE: close, MDNAV_FRAME_SPAN: span });
-      const expectFrame = span === "on"
-        ? `D001 : ${HID} @ ${digest} | ${SPAN} |`
-        : `D001 : ${HID} @ ${digest} |`;
+      const expectFrame =
+        span === "on" ? `D001 : ${HID} @ ${digest} | ${SPAN} |` : `D001 : ${HID} @ ${digest} |`;
       eq(`close=${close} span=${span}: frame line`, lines[2], expectFrame);
-      eq(`close=${close} span=${span}: header`, lines[0],
-        span === "on" ? "address | span | content" : "address | content");
+      eq(
+        `close=${close} span=${span}: header`,
+        lines[0],
+        span === "on" ? "address | span | content" : "address | content",
+      );
       const closed = lines[lines.length - 1] === `| D001 : ${HID} @ ${digest}`;
-      eq(`close=${close} span=${span}: block ${close === "on" ? "closes" : "does not close"}`, closed, close === "on");
+      eq(
+        `close=${close} span=${span}: block ${close === "on" ? "closes" : "does not close"}`,
+        closed,
+        close === "on",
+      );
     }
   }
 
@@ -103,7 +147,10 @@ try {
   process.stdout.write("\nframe off is one cell, whatever else is set\n");
   const bare = "## Abstract\n\nbody one\n";
   for (const extra of [
-    {}, { MDNAV_FRAME_ADDRESS: "fused" }, { MDNAV_FRAME_CLOSE: "on" }, { MDNAV_FRAME_SPAN: "on" },
+    {},
+    { MDNAV_FRAME_ADDRESS: "fused" },
+    { MDNAV_FRAME_CLOSE: "on" },
+    { MDNAV_FRAME_SPAN: "on" },
   ]) {
     clearEnv();
     Object.assign(process.env, { MDNAV_FRAME: "off", ...extra });
@@ -117,31 +164,45 @@ try {
   clearEnv();
   process.env["MDNAV_FRAME"] = "off";
   const batchOff = await call("mdnav_batch_read", {
-    requests: [{ docId: "D001", heading: HID, label: "abstract" }], depth: 2,
+    requests: [{ docId: "D001", heading: HID, label: "abstract" }],
+    depth: 2,
   });
   clearEnv();
-  ok("frame=off leaves no provenance in batch_read either",
-    !/D001|H0002|mdnav/.test(batchOff), batchOff);
+  ok(
+    "frame=off leaves no provenance in batch_read either",
+    !/D001|H0002|mdnav/.test(batchOff),
+    batchOff,
+  );
 
   // ──────────────────────────────────────────────────────── other emitters
 
   process.stdout.write("\nspelling reaches every emitter, not just the frame\n");
-  for (const [mode, re] of [["full", /D001 : H\d+ @ [0-9a-f]{4}/], ["fused", /D001:H\d+@[0-9a-f]{4}/]]) {
+  for (const [mode, re] of [
+    ["full", /D001 : H\d+ @ [0-9a-f]{4}/],
+    ["fused", /D001:H\d+@[0-9a-f]{4}/],
+  ]) {
     clearEnv();
     process.env["MDNAV_FRAME_ADDRESS"] = mode;
     const locate = await call("mdnav_locate", { pattern: "body one" });
     const cov = await call("mdnav_coverage", { docIds: ["D001"], depth: 2 });
     clearEnv();
     ok(`${mode}: locate agrees with the frame`, re.test(locate), locate);
-    ok(`${mode}: coverage agrees with the frame`, re.test(cov) || /D001 \|/.test(cov), cov.split("\n")[1]);
+    ok(
+      `${mode}: coverage agrees with the frame`,
+      re.test(cov) || /D001 \|/.test(cov),
+      cov.split("\n")[1],
+    );
   }
 
   // ───────────────────────────────────────────────────────── config surface
 
   process.stdout.write("\nconfiguration\n");
   clearEnv();
-  eq("defaults are the shipped format", JSON.stringify(frameConfig()),
-    JSON.stringify({ frame: true, docColumn: false, spaced: true, close: true, span: true }));
+  eq(
+    "defaults are the shipped format",
+    JSON.stringify(frameConfig()),
+    JSON.stringify({ frame: true, docColumn: false, spaced: true, close: true, span: true }),
+  );
   process.env["MDNAV_FRAME_ADDRESS"] = "nonsense";
   ok("an unrecognised mode falls back rather than silently fusing", frameConfig().spaced === true);
   clearEnv();

@@ -33,8 +33,20 @@ import {
   type SkillsArgs,
   type Elision,
 } from "./types.ts";
-import { MdnavEngine } from "./engine.ts";
-import { listTopics, outlineTopic, readSection, readTopic, resolveTopic, searchSkills, skillName, skillRoot } from "./skills.ts";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { ZodRawShape } from "zod";
+
+import { type MdnavEngine } from "./engine.ts";
+import {
+  listTopics,
+  outlineTopic,
+  readSection,
+  readTopic,
+  resolveTopic,
+  searchSkills,
+  skillName,
+  skillRoot,
+} from "./skills.ts";
 import {
   formatSourceChunkPrefix,
   formatAnchorString,
@@ -52,13 +64,18 @@ import {
   EMPTY,
 } from "./formatting.ts";
 
-export function registerMdnavTools(server: any, engine: MdnavEngine) {
+export function registerMdnavTools(server: McpServer, engine: MdnavEngine) {
   /**
    * Every tool registers through here so out-of-band notices — a source that
    * moved under the cache — always reach the reader, whichever verb happens to
    * notice. On stderr they would reach the server log and nobody who matters.
    */
-  const tool = (name: string, desc: string, shape: unknown, fn: (args: any) => Promise<any>) => {
+  const tool = (
+    name: string,
+    desc: string,
+    shape: ZodRawShape,
+    fn: (args: any) => Promise<any>,
+  ) => {
     server.tool(name, desc, shape, async (args: any) => {
       const res = await fn(args);
       const notes = engine.drainNotices();
@@ -103,9 +120,12 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
           ],
         };
       } catch (err: any) {
-        return { isError: true, content: [{ type: "text", text: `mdnav_discover error: ${err.message}` }] };
+        return {
+          isError: true,
+          content: [{ type: "text", text: `mdnav_discover error: ${err.message}` }],
+        };
       }
-    }
+    },
   );
 
   // 1b. mdnav_index
@@ -117,13 +137,20 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
       try {
         const docs = await engine.index(args.docIds, args.refresh);
         if (docs.length === 0) {
-          return { content: [{ type: "text", text: "No documents indexed yet — run mdnav_discover first." }] };
+          return {
+            content: [
+              { type: "text", text: "No documents indexed yet — run mdnav_discover first." },
+            ],
+          };
         }
         return { content: [{ type: "text", text: renderInventory(docs) }] };
       } catch (err: any) {
-        return { isError: true, content: [{ type: "text", text: `mdnav_index error: ${err.message}` }] };
+        return {
+          isError: true,
+          content: [{ type: "text", text: `mdnav_index error: ${err.message}` }],
+        };
       }
-    }
+    },
   );
 
   // 2. mdnav_profile
@@ -155,9 +182,12 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
           ],
         };
       } catch (err: any) {
-        return { isError: true, content: [{ type: "text", text: `mdnav_profile error: ${err.message}` }] };
+        return {
+          isError: true,
+          content: [{ type: "text", text: `mdnav_profile error: ${err.message}` }],
+        };
       }
-    }
+    },
   );
 
   // 3. mdnav_outline
@@ -182,8 +212,10 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
           const id = formatAnchorString(u.digest ? `${u.id}@${u.digest}` : u.id).padEnd(18);
           const lvl = u.level ? `H${u.level}`.padEnd(4) : "    ";
           const size = `unit=${fmtBytes(u.unitBytes)}`.padEnd(15);
-          const sub = u.subtreeBytes ? `subtree=${fmtBytes(u.subtreeBytes)}`.padEnd(18) : "".padEnd(18);
-          const comp = u.comp ? `${u.comp}`.padEnd(24) : "";
+          const sub = u.subtreeBytes
+            ? `subtree=${fmtBytes(u.subtreeBytes)}`.padEnd(18)
+            : "".padEnd(18);
+          const comp = u.comp ? u.comp.padEnd(24) : "";
           return `${id} ${lvl} ${size} ${sub} ${comp} ${u.title}`;
         });
 
@@ -196,9 +228,12 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
           ],
         };
       } catch (err: any) {
-        return { isError: true, content: [{ type: "text", text: `mdnav_outline error: ${err.message}` }] };
+        return {
+          isError: true,
+          content: [{ type: "text", text: `mdnav_outline error: ${err.message}` }],
+        };
       }
-    }
+    },
   );
 
   // 4. mdnav_marks
@@ -213,7 +248,9 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
           const span = `${r.start}${RANGE}${r.end}`.padStart(20);
           const size = fmtBytes(r.bytes).padStart(10);
           const linesCount = `${r.lines} L`.padStart(6);
-          const anchor = (r.containingAnchor ? formatAnchorString(r.containingAnchor) : "").padEnd(20);
+          const anchor = (r.containingAnchor ? formatAnchorString(r.containingAnchor) : "").padEnd(
+            20,
+          );
           return `${span} ${size} ${linesCount}  ${anchor} ${r.preview}`;
         });
 
@@ -226,9 +263,12 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
           ],
         };
       } catch (err: any) {
-        return { isError: true, content: [{ type: "text", text: `mdnav_marks error: ${err.message}` }] };
+        return {
+          isError: true,
+          content: [{ type: "text", text: `mdnav_marks error: ${err.message}` }],
+        };
       }
-    }
+    },
   );
 
   // 5. mdnav_read
@@ -278,9 +318,12 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
           ],
         };
       } catch (err: any) {
-        return { isError: true, content: [{ type: "text", text: `mdnav_read error: ${err.message}` }] };
+        return {
+          isError: true,
+          content: [{ type: "text", text: `mdnav_read error: ${err.message}` }],
+        };
       }
-    }
+    },
   );
 
   // 6. mdnav_batch_read
@@ -303,7 +346,12 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
         // one.
         const blocks = results.map((r) => {
           if (!prefixOn(args.prefixFormat)) return r.text;
-          const head = formatSourceChunkPrefix(r.docId, r.anchor || EMPTY, r.span ?? [0, 0], r.label ?? EMPTY);
+          const head = formatSourceChunkPrefix(
+            r.docId,
+            r.anchor || EMPTY,
+            r.span ?? [0, 0],
+            r.label ?? EMPTY,
+          );
           return `${head}\n${closeChunk(r.text, r.docId, r.anchor || EMPTY)}`;
         });
 
@@ -311,10 +359,11 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
           ...results.flatMap((r) => r.warnings),
           ...elisionNote(
             results.reduce((n, r) => n + r.elidedBytes, 0),
-            results.flatMap((r) => r.elisions)
+            results.flatMap((r) => r.elisions),
           ),
         ];
-        const warn = warnings.length > 0 ? `${warnings.map((w) => `mdnav: ${w}`).join("\n")}\n\n` : "";
+        const warn =
+          warnings.length > 0 ? `${warnings.map((w) => `mdnav: ${w}`).join("\n")}\n\n` : "";
         const header = prefixOn(args.prefixFormat) ? `${chunkHeader(true)}\n\n` : "";
 
         return {
@@ -326,9 +375,12 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
           ],
         };
       } catch (err: any) {
-        return { isError: true, content: [{ type: "text", text: `mdnav_batch_read error: ${err.message}` }] };
+        return {
+          isError: true,
+          content: [{ type: "text", text: `mdnav_batch_read error: ${err.message}` }],
+        };
       }
-    }
+    },
   );
 
   // 7. mdnav_coverage
@@ -341,31 +393,42 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
         const reports = await engine.coverage(args.docIds, args.depth, args.byBreaks);
         const lines: string[] = [];
 
-        lines.push(["doc", "read", "of", "read %", "cited", "cited %", "reads", "entries"].join(FIELD));
+        lines.push(
+          ["doc", "read", "of", "read %", "cited", "cited %", "reads", "entries"].join(FIELD),
+        );
 
         for (const rep of reports) {
-          lines.push([
-            rep.docId,
-            `${fmtNum(rep.bytesRead)} B`,
-            `${fmtNum(rep.totalBytes)} B`,
-            `${rep.percent.toFixed(1)}%`,
-            `${fmtNum(rep.bytesCited)} B`,
-            `${rep.citedPercent.toFixed(1)}%`,
-            String(rep.readsCount),
-            String(rep.citations),
-          ].join(FIELD) + (rep.elidedBytes > 0 ? `${FIELD}elided ${fmtBytes(rep.elidedBytes)}` : ""));
+          lines.push(
+            [
+              rep.docId,
+              `${fmtNum(rep.bytesRead)} B`,
+              `${fmtNum(rep.totalBytes)} B`,
+              `${rep.percent.toFixed(1)}%`,
+              `${fmtNum(rep.bytesCited)} B`,
+              `${rep.citedPercent.toFixed(1)}%`,
+              String(rep.readsCount),
+              String(rep.citations),
+            ].join(FIELD) +
+              (rep.elidedBytes > 0 ? `${FIELD}elided ${fmtBytes(rep.elidedBytes)}` : ""),
+          );
 
           // The two structural reading defects, as byte counts rather than as
           // something to eyeball. See state-and-audit.md §6.
           if (rep.readNotCited > 0) {
-            lines.push(`  read not cited${FIELD}${fmtBytes(rep.readNotCited)}${FIELD}silent attrition candidate — say why, or restore it`);
+            lines.push(
+              `  read not cited${FIELD}${fmtBytes(rep.readNotCited)}${FIELD}silent attrition candidate — say why, or restore it`,
+            );
           }
           if (rep.citedNotRead > 0) {
-            lines.push(`  cited not read${FIELD}${fmtBytes(rep.citedNotRead)}${FIELD}salience capture hazard — re-read the surrounding unit`);
+            lines.push(
+              `  cited not read${FIELD}${fmtBytes(rep.citedNotRead)}${FIELD}salience capture hazard — re-read the surrounding unit`,
+            );
           }
 
           for (const u of rep.unreadAnchors.slice(0, 10)) {
-            lines.push(`  unread${FIELD}${formatAnchorString(u.anchor)}${FIELD}${fmtBytes(u.bytes)}${FIELD}${u.title}`);
+            lines.push(
+              `  unread${FIELD}${formatAnchorString(u.anchor)}${FIELD}${fmtBytes(u.bytes)}${FIELD}${u.title}`,
+            );
           }
           if (rep.unreadAnchors.length > 10) {
             lines.push(`  unread${FIELD}${rep.unreadAnchors.length - 10} more not listed`);
@@ -381,9 +444,12 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
           ],
         };
       } catch (err: any) {
-        return { isError: true, content: [{ type: "text", text: `mdnav_coverage error: ${err.message}` }] };
+        return {
+          isError: true,
+          content: [{ type: "text", text: `mdnav_coverage error: ${err.message}` }],
+        };
       }
-    }
+    },
   );
 
   // 8. mdnav_locate
@@ -394,20 +460,29 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
     async (args: LocateArgs) => {
       try {
         const hits = await engine.locate(args.pattern, args.docIds, args.caseInsensitive, args.max);
-        const lines = hits.map((h) => `${formatAnchorString(h.anchor).padEnd(24)} L ${String(h.line).padEnd(5)} ${h.text}`);
+        const lines = hits.map(
+          (h) =>
+            `${formatAnchorString(h.anchor).padEnd(24)} L ${String(h.line).padEnd(5)} ${h.text}`,
+        );
 
         return {
           content: [
             {
               type: "text",
-              text: lines.length > 0 ? lines.join("\n") : `No matches found for pattern "${args.pattern}"`,
+              text:
+                lines.length > 0
+                  ? lines.join("\n")
+                  : `No matches found for pattern "${args.pattern}"`,
             },
           ],
         };
       } catch (err: any) {
-        return { isError: true, content: [{ type: "text", text: `mdnav_locate error: ${err.message}` }] };
+        return {
+          isError: true,
+          content: [{ type: "text", text: `mdnav_locate error: ${err.message}` }],
+        };
       }
-    }
+    },
   );
 
   // 9. mdnav_journal_record
@@ -418,12 +493,18 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
     async (args: JournalRecordArgs) => {
       try {
         const { entry, anchorWarnings } = engine.recordJournal(args);
-        const warn = anchorWarnings.length > 0 ? `${anchorWarnings.map((w) => `mdnav: ${w}`).join("\n")}\n` : "";
+        const warn =
+          anchorWarnings.length > 0
+            ? `${anchorWarnings.map((w) => `mdnav: ${w}`).join("\n")}\n`
+            : "";
         return { content: [{ type: "text", text: `${warn}${formatJournalReceipt(entry)}` }] };
       } catch (err: any) {
-        return { isError: true, content: [{ type: "text", text: `mdnav_journal_record error: ${err.message}` }] };
+        return {
+          isError: true,
+          content: [{ type: "text", text: `mdnav_journal_record error: ${err.message}` }],
+        };
       }
-    }
+    },
   );
 
   // 10. mdnav_journal_read
@@ -442,9 +523,12 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
           : [JOURNAL_HEADER, ...entries.map(formatJournalEntry)].join("\n");
         return { content: [{ type: "text", text }] };
       } catch (err: any) {
-        return { isError: true, content: [{ type: "text", text: `mdnav_journal_read error: ${err.message}` }] };
+        return {
+          isError: true,
+          content: [{ type: "text", text: `mdnav_journal_read error: ${err.message}` }],
+        };
       }
-    }
+    },
   );
 
   // 11. mdnav_journal_tree
@@ -461,9 +545,12 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
         }
         return { content: [{ type: "text", text: renderJournalTree(scoped) }] };
       } catch (err: any) {
-        return { isError: true, content: [{ type: "text", text: `mdnav_journal_tree error: ${err.message}` }] };
+        return {
+          isError: true,
+          content: [{ type: "text", text: `mdnav_journal_tree error: ${err.message}` }],
+        };
       }
-    }
+    },
   );
 
   // 12. mdnav_skills
@@ -480,8 +567,8 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
           if (hits.length === 0) {
             return { content: [{ type: "text", text: `No skill topic matches ${args.search}.` }] };
           }
-          const rows = hits.map((h) =>
-            `${h.topic.padEnd(24)}${h.hid.padEnd(8)}L${String(h.line).padEnd(6)}${h.text}`
+          const rows = hits.map(
+            (h) => `${h.topic.padEnd(24)}${h.hid.padEnd(8)}L${String(h.line).padEnd(6)}${h.text}`,
           );
           const head = marquee(`search ${args.search}`, countOf(hits.length, "hit"));
           return { content: [{ type: "text", text: `${head}\n${rows.join("\n")}` }] };
@@ -490,21 +577,26 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
         if (!args.topic) {
           const topics = listTopics();
           if (topics.length === 0) {
-            return { content: [{ type: "text", text: `No skill corpus found at ${skillRoot()}.` }] };
+            return {
+              content: [{ type: "text", text: `No skill corpus found at ${skillRoot()}.` }],
+            };
           }
           const row = (topic: string, bytes: string, units: string, title: string) =>
             `${topic.padEnd(24)}${bytes.padStart(10)}${units.padStart(10)}  ${title}`;
           const rows = topics.map((t) =>
-            row(t.topic, fmtBytes(t.bytes), `${t.headings} units`, t.title)
+            row(t.topic, fmtBytes(t.bytes), `${t.headings} units`, t.title),
           );
           return {
-            content: [{
-              type: "text",
-              text: `${marquee(countOf(topics.length, "topic"))}\n` +
-                `${row("topic", "bytes", "units", "title")}\n${rows.join("\n")}\n\n` +
-                `Read one with mdnav_skills({ topic }), a section with { topic, section }, ` +
-                `or find a passage with { search }. 'index' is the discipline itself.`,
-            }],
+            content: [
+              {
+                type: "text",
+                text:
+                  `${marquee(countOf(topics.length, "topic"))}\n` +
+                  `${row("topic", "bytes", "units", "title")}\n${rows.join("\n")}\n\n` +
+                  `Read one with mdnav_skills({ topic }), a section with { topic, section }, ` +
+                  `or find a passage with { search }. 'index' is the discipline itself.`,
+              },
+            ],
           };
         }
 
@@ -513,17 +605,21 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
           // what you hand back to `section`, so it should be scannable in a
           // column rather than staircased across one.
           const sections = outlineTopic(args.topic, args.depth ?? 6);
-          const rows = sections.map(({ heading, bytes }) =>
-            `${heading.hid.padEnd(8)}${fmtBytes(bytes).padStart(10)}  ` +
-            `${"  ".repeat(Math.max(0, heading.level - 1))}${heading.title}`
+          const rows = sections.map(
+            ({ heading, bytes }) =>
+              `${heading.hid.padEnd(8)}${fmtBytes(bytes).padStart(10)}  ` +
+              `${"  ".repeat(Math.max(0, heading.level - 1))}${heading.title}`,
           );
           // A depth-limited outline says what it is NOT showing. "7 sections"
           // over a document with 22 reads as the whole of it.
           const t = resolveTopic(args.topic);
-          const shown = sections.length < t.headings
-            ? `${sections.length} of ${countOf(t.headings, "section")}`
-            : countOf(sections.length, "section");
-          return { content: [{ type: "text", text: `${marquee(t.topic, shown)}\n${rows.join("\n")}` }] };
+          const shown =
+            sections.length < t.headings
+              ? `${sections.length} of ${countOf(t.headings, "section")}`
+              : countOf(sections.length, "section");
+          return {
+            content: [{ type: "text", text: `${marquee(t.topic, shown)}\n${rows.join("\n")}` }],
+          };
         }
 
         // The body is returned as it sits in the file — its own markdown heading
@@ -532,20 +628,27 @@ export function registerMdnavTools(server: any, engine: MdnavEngine) {
         // register note in skills.ts.
         if (args.section) {
           const s = readSection(args.topic, args.section);
-          return { content: [{ type: "text", text: `${marquee(s.topic, s.heading.hid)}\n${s.text}` }] };
+          return {
+            content: [{ type: "text", text: `${marquee(s.topic, s.heading.hid)}\n${s.text}` }],
+          };
         }
 
         const { topic, text } = readTopic(args.topic);
         return {
-          content: [{
-            type: "text",
-            text: `${marquee(topic.topic, countOf(topic.headings, "section"))}\n${text}`,
-          }],
+          content: [
+            {
+              type: "text",
+              text: `${marquee(topic.topic, countOf(topic.headings, "section"))}\n${text}`,
+            },
+          ],
         };
       } catch (err: any) {
-        return { isError: true, content: [{ type: "text", text: `mdnav_skills error: ${err.message}` }] };
+        return {
+          isError: true,
+          content: [{ type: "text", text: `mdnav_skills error: ${err.message}` }],
+        };
       }
-    }
+    },
   );
 }
 
@@ -576,7 +679,7 @@ function renderInventory(docs: InventoryDoc[]): string {
     lines.push(
       "",
       `mdnav: in ${unaligned.length} document(s) the H1 count and thematic-break count do not correspond.`,
-      `       Neither basis is privileged — inspect both and choose: outline({ depth: 1 }) or outline({ byBreaks: true }).`
+      `       Neither basis is privileged — inspect both and choose: outline({ depth: 1 }) or outline({ byBreaks: true }).`,
     );
   }
 
@@ -587,7 +690,7 @@ function renderInventory(docs: InventoryDoc[]): string {
       "",
       `mdnav: ${noisy.length} document(s) are >=10% embedded data or HTML markup (worst: ${worst.id} at ${((worst.noiseRatio ?? 0) * 100).toFixed(1)}%).`,
       `       Read those with strip: "all" — or name the species, e.g. strip: ["data-uri"] — before spending context on the raw bytes.`,
-      `       For a species mdnav does not know about, aim stripMatch: "<regex>" at it.`
+      `       For a species mdnav does not know about, aim stripMatch: "<regex>" at it.`,
     );
   }
 
@@ -619,8 +722,12 @@ function elisionNote(elidedBytes: number, elisions: Elision[]): string[] {
   if (elidedBytes <= 0) return [];
   const byKind = new Map<string, number>();
   for (const e of elisions) byKind.set(e.kind, (byKind.get(e.kind) ?? 0) + 1);
-  const detail = Array.from(byKind.entries()).map(([k, n]) => `${k} x${n}`).join(", ");
-  return [`elided ${fmtBytes(elidedBytes)}${detail ? ` (${detail})` : ""} — re-read this anchor without strip to get it`];
+  const detail = Array.from(byKind.entries())
+    .map(([k, n]) => `${k} x${n}`)
+    .join(", ");
+  return [
+    `elided ${fmtBytes(elidedBytes)}${detail ? ` (${detail})` : ""} — re-read this anchor without strip to get it`,
+  ];
 }
 
 function fmtBytes(n: number): string {

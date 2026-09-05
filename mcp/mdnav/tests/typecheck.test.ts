@@ -1,39 +1,34 @@
-import { test } from 'node:test'
-import assert from 'node:assert/strict'
-import { spawnSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
-import { dirname, join } from 'node:path'
+import { spawnSync } from "node:child_process";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-// Node strips types; it does not check them. This suite is the only thing that makes the
-// annotations in this package load-bearing rather than decorative. It runs before there is
-// any engine code to check, on purpose -- so no module is ever written unchecked.
+import { describe, expect, it } from "vitest";
 
-const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)))
-const tscBin = join(packageRoot, 'deps', 'node_modules', 'typescript', 'bin', 'tsc')
+// Node strips types; it does not check them. `pnpm typecheck` is the gate, and this suite
+// keeps that gate inside `pnpm test` so a green test run always implies a clean tree.
 
-test('the pinned typescript is reachable under deps', () => {
-  assert.ok(
-    existsSync(tscBin),
-    `${tscBin} is absent.\n` +
-      'The dependency payload lives in deps/node_modules. Run brewery/node/restore-node.ps1 to restore it.',
-  )
-})
+const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
+const tsc = join(packageRoot, "node_modules", "typescript", "bin", "tsc");
 
-test('src and tests typecheck clean under the pinned tsconfig', () => {
-  const result = spawnSync(process.execPath, [tscBin, '--noEmit', '--pretty', 'false'], {
+function runTsc(project: string): { status: number | null; diagnostics: string } {
+  const result = spawnSync(process.execPath, [tsc, "-p", project, "--pretty", "false"], {
     cwd: packageRoot,
-    encoding: 'utf8',
-  })
+    encoding: "utf8",
+  });
+  if (result.error) throw result.error;
+  return { status: result.status, diagnostics: `${result.stdout}${result.stderr}`.trim() };
+}
 
-  assert.equal(result.error, undefined, `could not run tsc: ${String(result.error)}`)
+describe("typecheck gate", () => {
+  it("src typechecks clean under tsconfig.json", () => {
+    const { status, diagnostics } = runTsc("tsconfig.json");
+    expect(diagnostics, "tsc reported diagnostics").toBe("");
+    expect(status).toBe(0);
+  });
 
-  const diagnostics = `${result.stdout}${result.stderr}`.trim()
-  assert.equal(
-    result.status,
-    0,
-    diagnostics.length > 0
-      ? `tsc --noEmit reported errors:\n${diagnostics}`
-      : `tsc --noEmit exited ${String(result.status)} with no diagnostics`,
-  )
-})
+  it("tests and config typecheck clean under tsconfig.tests.json", () => {
+    const { status, diagnostics } = runTsc("tsconfig.tests.json");
+    expect(diagnostics, "tsc reported diagnostics").toBe("");
+    expect(status).toBe(0);
+  });
+});

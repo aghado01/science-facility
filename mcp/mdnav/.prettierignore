@@ -1,0 +1,7 @@
+# the legacy oracle is never edited
+mdnav.mjs
+# skill text is served to agents byte-for-byte; formatting it changes what they read
+skills/
+coverage/
+node_modules/
+pnpm-lock.yaml

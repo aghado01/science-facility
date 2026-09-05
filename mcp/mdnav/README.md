@@ -21,37 +21,36 @@ node mdnav.mjs discover ./docs --recursive
 
 ## Package layout
 
+A single-package Node + TypeScript project (pnpm, exact pins, no build step):
+
 ```
-brewery/   recipes: dependency pins, lockfile, restore script (tracked)
-build/     disposable intermediates, e.g. the npm cache (ignored)
-deps/      the dependency payload, deps/node_modules (ignored)
-src/       the MCP server (TypeScript)
-tests/     suites; tests/test-manifest.json lists them, tests/run-all.mjs runs them
-skills/    the doc-dive discipline served by the server
+src/                 the MCP server (TypeScript, run directly by Node)
+tests/*.test.ts      vitest suites; typecheck.test.ts is gate 0
+tests/*.mjs          legacy self-reporting suites (pnpm test:legacy)
+skills/              the doc-dive discipline served by the server
+mdnav.mjs            the legacy CLI — the capability oracle, never edited
+tsconfig.base.json   compiler flags; tsconfig.json (src), tsconfig.tests.json (tests + config)
 ```
 
-After a clean clone, materialize the dependency payload, then typecheck and test:
-
-```bash
-npm run restore
-```
+After a clean clone:
 
 ```bash
-npm run typecheck
+pnpm install --frozen-lockfile
 ```
 
 ```bash
-npm test
+pnpm check
 ```
 
-`brewery/README.md` explains the layout and what is pinned and why.
+`pnpm check` runs `typecheck`, `lint`, `format:check`, `test` (vitest), and `test:legacy` in
+that order; each is also available on its own.
 
 ## Design rule
 
 > **Presume about the reading process. Presume nothing about the content.**
 
 Sizes, byte spans, unit counts, spine ratio, structural anomalies and coverage
-arithmetic are properties of the material *as an object* and are all fair game.
+arithmetic are properties of the material _as an object_ and are all fair game.
 Relevance, topic, importance and reading order are the reader's job and are never
 computed here. That line is what keeps the tool useful without it quietly making
 the decisions the reader is there to make.
@@ -60,7 +59,7 @@ the decisions the reader is there to make.
 
 Every anchor is `Dnnn:Hnnnn[@digest]` resolving to a half-open byte span
 `[start, end)`. Planning, reading, coverage, provenance and batch re-reading all
-speak those same coordinates, so a set of anchors *is* a set of spans *is* a
+speak those same coordinates, so a set of anchors _is_ a set of spans _is_ a
 re-readable batch — no translation layer anywhere.
 
 Three orthogonal knobs:
@@ -73,7 +72,7 @@ Three orthogonal knobs:
   the reader's call. All three bases share one address space and one coverage
   ledger.
 - **`--depth 1..6` chooses the partition** within the heading basis. Headings at
-  or above the depth are *active* and their units tile the document exactly.
+  or above the depth are _active_ and their units tile the document exactly.
   Headings below it remain literal content inside the enclosing unit.
 - **`--extent unit|subtree` chooses what you take.** `unit` is one cell of that
   partition. `subtree` is the whole branch under a heading, independent of depth.
@@ -90,17 +89,17 @@ resolution into a warning on stderr.
 
 ## Verbs
 
-| | |
-|---|---|
-| `discover <path>... [--glob '*.md'] [--recursive]` | Walk, dedupe, assign ids, index, print inventory |
-| `index <file\|Dnnn>... [--refresh]` | Index or re-index specific documents |
-| `outline <ref> [--depth N \| --by breaks] [--within <a>] [--preview N] [--truncate N]` | List units with unit/subtree sizes |
-| `outline <ref> --windows <bytes> [--within <a>]` | Fallback partition for documents with no usable delimiter |
-| `read <ref> --heading <a> \| --from <a> --to <b> \| --headings <a,b,c> [--strip all] [--strip-match <re>]` | Materialize literal source bytes |
-| `coverage [<ref>...] [--depth N] [--by breaks]` | Bytes read vs. total, unread and partial anchors |
-| `locate <pattern> [<ref>...] [-i] [--depth N] [--max N]` | Anchors and line hits, never content blocks |
-| `profile [<ref>...]` | Construct composition and cadence for an unknown document |
-| `marks <ref> --kind <construct> [--preview N] [--min bytes]` | Enumerate occurrences of any construct, as runs with spans |
+|                                                                                                            |                                                            |
+| ---------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `discover <path>... [--glob '*.md'] [--recursive]`                                                         | Walk, dedupe, assign ids, index, print inventory           |
+| `index <file\|Dnnn>... [--refresh]`                                                                        | Index or re-index specific documents                       |
+| `outline <ref> [--depth N \| --by breaks] [--within <a>] [--preview N] [--truncate N]`                     | List units with unit/subtree sizes                         |
+| `outline <ref> --windows <bytes> [--within <a>]`                                                           | Fallback partition for documents with no usable delimiter  |
+| `read <ref> --heading <a> \| --from <a> --to <b> \| --headings <a,b,c> [--strip all] [--strip-match <re>]` | Materialize literal source bytes                           |
+| `coverage [<ref>...] [--depth N] [--by breaks]`                                                            | Bytes read vs. total, unread and partial anchors           |
+| `locate <pattern> [<ref>...] [-i] [--depth N] [--max N]`                                                   | Anchors and line hits, never content blocks                |
+| `profile [<ref>...]`                                                                                       | Construct composition and cadence for an unknown document  |
+| `marks <ref> --kind <construct> [--preview N] [--min bytes]`                                               | Enumerate occurrences of any construct, as runs with spans |
 
 Common flags: `--work-dir <path>` (or `$MDNAV_WORK_DIR`), `--run <stamp>`.
 See [Runtime artifacts](#runtime-artifacts).
@@ -135,7 +134,7 @@ Runs are **local to the corpus and invisible to it**:
 
 Locality is the point — artifacts belong beside the documents they describe,
 because that is where you will look for them. Scattering loose files into the
-source directory is the failure; *adjacency* is not. The dot prefix is what
+source directory is the failure; _adjacency_ is not. The dot prefix is what
 separates the two: `discover` skips dot entries, so a later scan can never index
 the reader's own exhaust as source material. mdnav **refuses** a work dir placed
 inside the corpus where `discover` could see it.
@@ -149,8 +148,8 @@ Resolution order, most specific first:
 
 Anchor explicitly when the corpus is curated and should not be touched at all — a
 reference library, a bibliography, an issues folder. Pointing the run at a
-project's own `.claude/` directory keeps the runtime artifacts with the *work*
-rather than with the *sources*:
+project's own `.claude/` directory keeps the runtime artifacts with the _work_
+rather than with the _sources_:
 
 ```bash
 node mdnav.mjs discover ./bibliotheca --work-dir ../thermomapper/.claude/doc-dive
@@ -198,7 +197,7 @@ recognition to the reader:
 
 **`cv` is the discriminator** — the coefficient of variation of the gaps between
 occurrences. A construct recurring at even intervals across the whole document is
-*dividing* it; one appearing in bursts is decoration inside something else. Both
+_dividing_ it; one appearing in bursts is decoration inside something else. Both
 are byte-level facts, so this stays a measurement rather than a classification.
 Constructs with `cv < 0.6` spanning most of the document are named on stderr as
 delimiter candidates; paragraphs are excluded, being filler by nature.
@@ -206,21 +205,21 @@ delimiter candidates; paragraphs are excluded, being filler by nature.
 Measured on real material, it picks the delimiter every time — including the
 cases where it is not what you would guess:
 
-| document | flagged | reality |
-|---|---|---|
-| 62 H1s, `cv=0.59` | `heading h1`, `break` | H1 delimits turns, `---` separates them |
-| 14 H1s, `cv=0.35` | `heading h1` | flat H1 records |
-| 0 H1, 0 H2, 37 H3 | `heading h3` | structure demoted upstream; H3 is the unit |
-| no headings at all | *(nothing)* | correct — use `--by breaks` or `--windows` |
+| document           | flagged               | reality                                    |
+| ------------------ | --------------------- | ------------------------------------------ |
+| 62 H1s, `cv=0.59`  | `heading h1`, `break` | H1 delimits turns, `---` separates them    |
+| 14 H1s, `cv=0.35`  | `heading h1`          | flat H1 records                            |
+| 0 H1, 0 H2, 37 H3  | `heading h3`          | structure demoted upstream; H3 is the unit |
+| no headings at all | _(nothing)_           | correct — use `--by breaks` or `--windows` |
 
 And it is honest about ambiguity. In one design transcript, blockquotes are 14.9 %
 of bytes but score `cv=1.08` and are **not** flagged — correctly, because that
-document uses blockquotes for two different things (user turns *and* the model's
+document uses blockquotes for two different things (user turns _and_ the model's
 own pull-quotes). A tool that had labelled them "turns" would have been
 confidently wrong; one that reports `1.08` is simply right.
 
 The `detail` column histograms fence info strings, which is often the fastest
-read on what a transcript was *about* — `powershell×43` says more about a working
+read on what a transcript was _about_ — `powershell×43` says more about a working
 session than any heading will.
 
 ### Telescoping: what each unit is made of
@@ -251,7 +250,7 @@ node mdnav.mjs read D001 --headings H0042,H0053  # open only those
 ```
 
 When `profile` flags a candidate that is not a heading, `marks` is the bridge —
-`outline` enumerates headings, `marks` enumerates *any* construct, as runs rather
+`outline` enumerates headings, `marks` enumerates _any_ construct, as runs rather
 than lines, each with a byte span so it can be read directly:
 
 ```
@@ -290,13 +289,13 @@ counts alone.
 These are measurements, not classifications — mdnav never labels a document. But
 the shapes recur, and recognising them is most of triage:
 
-| signature | what you are looking at |
-|---|---|
+| signature          | what you are looking at                                                                                          |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------- |
 | `62/219/221~3.29K` | Many depth-1 units of a few KB each. Level-1 headings delimit records — turns in a transcript. Start at depth 1. |
-| `1/83/141~918B` | One unit at depth 1: the H1 is a **title**, not a delimiter. The document's own structure begins at H2. |
-| `1/1/38~746B` | Structure lives deeper still. Something upstream flattened or demoted the headings. |
-| `1/1/1~6.57K` | No usable headings at any depth. Try `--by breaks`, else `--windows`. |
-| `15/15/15~1.14K` | Flat records with no nesting. Depth is irrelevant; read them as they are. |
+| `1/83/141~918B`    | One unit at depth 1: the H1 is a **title**, not a delimiter. The document's own structure begins at H2.          |
+| `1/1/38~746B`      | Structure lives deeper still. Something upstream flattened or demoted the headings.                              |
+| `1/1/1~6.57K`      | No usable headings at any depth. Try `--by breaks`, else `--windows`.                                            |
+| `15/15/15~1.14K`   | Flat records with no nesting. Depth is irrelevant; read them as they are.                                        |
 
 Two derived readings worth knowing:
 
@@ -312,7 +311,7 @@ contains 100 % of its H2s is a hierarchy the author built. You do not have to be
 told which is which; the distribution says it.
 
 That distinction does not change the partition — headings are headings — but it
-changes what descent *gives* you. A paper's H2s are the author's peers and can be
+changes what descent _gives_ you. A paper's H2s are the author's peers and can be
 read independently. The H2s inside one transcript turn are one continuous
 argument, so descending there favours `--extent subtree` or a `--from/--to` merge
 over reading the sub-headings as separate units.
@@ -324,7 +323,7 @@ units hold 92 % of the bytes need completely different plans.
 ## What it reports rather than guesses
 
 - **Heading/break correspondence.** Two independent structural facts: the level-1
-  heading count and the thematic-break count. Whether they *should* correspond is
+  heading count and the thematic-break count. Whether they _should_ correspond is
   a hypothesis about the document's provenance, so the counts and their relation
   (`aligned`, `more-h1`, `more-breaks`) are reported and neither basis is
   privileged. In a sample of 33 real exports, 25 disagree — and for several of
@@ -349,12 +348,12 @@ four embedded images.
 
 Detection is by shape alone, so it presumes nothing about content:
 
-| kind | what it matches | in `--strip all` |
-|---|---|---|
-| `data-uri` | An **embedded file** — `data:<type>;base64,<payload>`. The whole `![](…)` wrapper goes when the target is a data URI, so no `![]()` debris is left. | yes |
-| `html` | Tags and comments. **Inner text is preserved** — `<div align="center">⁂</div>` leaves `⁂`. Prose is never deleted. | yes |
-| `signed-url` | A **presigned object-store link** — `X-Amz-Signature`, `X-Amz-Credential`, `X-Goog-Signature`, an Azure `sig=`. Dead by construction once expired. | yes |
-| `image-ref` | A **reference to an external image**, `![alt](https://…)`. Costs a URL, and records that a figure was there. | no — opt-in |
+| kind         | what it matches                                                                                                                                     | in `--strip all` |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| `data-uri`   | An **embedded file** — `data:<type>;base64,<payload>`. The whole `![](…)` wrapper goes when the target is a data URI, so no `![]()` debris is left. | yes              |
+| `html`       | Tags and comments. **Inner text is preserved** — `<div align="center">⁂</div>` leaves `⁂`. Prose is never deleted.                                  | yes              |
+| `signed-url` | A **presigned object-store link** — `X-Amz-Signature`, `X-Amz-Credential`, `X-Goog-Signature`, an Azure `sig=`. Dead by construction once expired.  | yes              |
+| `image-ref`  | A **reference to an external image**, `![alt](https://…)`. Costs a URL, and records that a figure was there.                                        | no — opt-in      |
 
 Embedding and referencing render identically but differ by four orders of
 magnitude: in this corpus, 4 embedded files total 1,197,588 B against 1 external
@@ -382,7 +381,7 @@ This surfaces at three points, so triage happens before the cost is paid:
   the worst offender with a recommendation to strip or preprocess.
 - **`outline`** flags each unit: `noise=404.81 KiB(100%)` next to its size, so a
   unit that is entirely a screenshot is visible without being read.
-- **`read`** warns on stderr *before* writing when a span carries >64 KiB of it —
+- **`read`** warns on stderr _before_ writing when a span carries >64 KiB of it —
   once bytes reach stdout they are in context and the cost is already paid.
 
 ### `--strip` elides at read time; the source is never touched
@@ -394,11 +393,11 @@ node mdnav.mjs read D032 --heading H0006 --depth 1 --strip all   # 416,483 B →
 Elisions are **addressed, not hidden**: anything over 1 KiB leaves
 `<!-- mdnav: elided image 404.79 KiB @14187..430301 -->`, so the reader can see
 what was skipped and re-read the same anchor without `--strip` to get it. The
-ledger records the elided *spans*, and `coverage` subtracts them — so a unit that
+ledger records the elided _spans_, and `coverage` subtracts them — so a unit that
 is 99.5 % screenshot reports the ~2 KB you actually read, not the 406 KiB you
 materialised:
 
-```
+````
 D032   1,954 / 876,280 B   0.2%  reads=1  grain={d1:1}  elided=404.81 KiB
 ``` `--strip` is the one place byte fidelity is
 deliberately traded away, and it is always opt-in.
@@ -422,12 +421,14 @@ corpus reports 38 H1s where there are 22.
 
 ## Sidecar layout
 
-```
+````
+
 .doc-dive/current/
-├── inventory.json              id ↔ path
-├── documents/D001.index.json   metadata + headings + windows, no source body
-└── reads.jsonl                 append-only materialization ledger
-```
+├── inventory.json id ↔ path
+├── documents/D001.index.json metadata + headings + windows, no source body
+└── reads.jsonl append-only materialization ledger
+
+````
 
 Everything under the work dir is reproducible and disposable; sources are never
 modified. Delete the directory to start over.
@@ -436,7 +437,7 @@ modified. Delete the directory to start over.
 
 ```bash
 node tests/acceptance.mjs
-```
+````
 
 This is the CLI oracle suite; `npm test` runs it together with the typecheck
 gate and the MCP-side suites (engine, journal, frame-matrix, render, skills).

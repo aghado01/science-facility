@@ -26,15 +26,26 @@ import {
   skillRoot,
 } from "../src/skills.ts";
 
-let pass = 0, fail = 0;
+let pass = 0,
+  fail = 0;
 const ok = (name, cond, detail) => {
-  if (cond) { pass++; process.stdout.write(`  ok   ${name}\n`); }
-  else { fail++; process.stdout.write(`  FAIL ${name}${detail ? `\n       ${detail}` : ""}\n`); }
+  if (cond) {
+    pass++;
+    process.stdout.write(`  ok   ${name}\n`);
+  } else {
+    fail++;
+    process.stdout.write(`  FAIL ${name}${detail ? `\n       ${detail}` : ""}\n`);
+  }
 };
-const eq = (name, a, b) => ok(name, a === b, `expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`);
+const eq = (name, a, b) =>
+  ok(name, a === b, `expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`);
 function throws(name, fn, match) {
-  try { fn(); ok(name, false, "expected a throw, got a value"); }
-  catch (err) { ok(name, !match || match.test(err.message), `message was: ${err.message}`); }
+  try {
+    fn();
+    ok(name, false, "expected a throw, got a value");
+  } catch (err) {
+    ok(name, !match || match.test(err.message), `message was: ${err.message}`);
+  }
 }
 
 const corpus = join(tmpdir(), "mdnav-skills-corpus-" + process.pid);
@@ -50,15 +61,21 @@ try {
   const topics = listTopics();
   ok("the corpus is found beside the engine", topics.length > 0);
   eq("the discipline itself is the index topic", topics[0].topic, INDEX_TOPIC);
-  ok("every topic reports its size and unit count",
-    topics.every((t) => t.bytes > 0 && Number.isInteger(t.headings)));
-  ok("the references are listed alongside it",
-    topics.some((t) => t.topic === "state-and-audit"));
+  ok(
+    "every topic reports its size and unit count",
+    topics.every((t) => t.bytes > 0 && Number.isInteger(t.headings)),
+  );
+  ok(
+    "the references are listed alongside it",
+    topics.some((t) => t.topic === "state-and-audit"),
+  );
 
   // A skill file opens with frontmatter, so a naive first-line title makes every
   // topic `---` and the listing useless for choosing between them.
-  ok("titles come from the document, not from its frontmatter fence",
-    topics.every((t) => t.title.length > 0 && !t.title.startsWith("---")));
+  ok(
+    "titles come from the document, not from its frontmatter fence",
+    topics.every((t) => t.title.length > 0 && !t.title.startsWith("---")),
+  );
 
   // ─────────────────────────────────────────────────────────────── addressing
 
@@ -69,8 +86,10 @@ try {
 
   const shallow = outlineTopic("state-and-audit", 2);
   const deep = outlineTopic("state-and-audit", 6);
-  ok("an outline lists headings with their extents",
-    shallow.length > 0 && shallow.every((r) => r.bytes > 0));
+  ok(
+    "an outline lists headings with their extents",
+    shallow.length > 0 && shallow.every((r) => r.bytes > 0),
+  );
   ok("and depth actually narrows it", deep.length > shallow.length);
 
   const byTitle = readSection("state-and-audit", "Journal Ledger");
@@ -80,15 +99,22 @@ try {
 
   // Advice separated from its qualifications is worse than no advice, so a
   // section carries its subsections rather than stopping at the next heading.
-  ok("a section carries its whole subtree",
-    byTitle.text.includes("Ops and what they settle") && byTitle.text.length > 1000);
-  ok("the section is bytes from the file, not a summary",
-    full.text.includes(byTitle.text));
+  ok(
+    "a section carries its whole subtree",
+    byTitle.text.includes("Ops and what they settle") && byTitle.text.length > 1000,
+  );
+  ok("the section is bytes from the file, not a summary", full.text.includes(byTitle.text));
 
-  throws("an unknown topic names what is available",
-    () => readTopic("nope"), /no skill topic nope — available: /);
-  throws("an unknown section names the headings it does have",
-    () => readSection("state-and-audit", "H9999"), /no section H9999 in state-and-audit — headings: /);
+  throws(
+    "an unknown topic names what is available",
+    () => readTopic("nope"),
+    /no skill topic nope — available: /,
+  );
+  throws(
+    "an unknown section names the headings it does have",
+    () => readSection("state-and-audit", "H9999"),
+    /no section H9999 in state-and-audit — headings: /,
+  );
 
   // ────────────────────────────────────────────────────────────────── search
 
@@ -96,8 +122,10 @@ try {
 
   const hits = searchSkills("reverse walk");
   ok("a pattern finds passages across the corpus", hits.length > 0);
-  ok("each hit names the section holding it, not just a line number",
-    hits.every((h) => /^[HSW]\d+$/.test(h.hid) && h.line > 0 && h.topic.length > 0));
+  ok(
+    "each hit names the section holding it, not just a line number",
+    hits.every((h) => /^[HSW]\d+$/.test(h.hid) && h.line > 0 && h.topic.length > 0),
+  );
   ok("matching is case-insensitive", searchSkills("REVERSE WALK").length === hits.length);
   eq("a pattern that matches nothing returns nothing", searchSkills("zzzunlikelyzzz").length, 0);
   ok("the hit limit is honoured", searchSkills("the", 5).length === 5);
@@ -106,7 +134,11 @@ try {
 
   process.stdout.write("\nserving skills leaves the investigation alone\n");
 
-  writeFileSync(join(corpus, "paper.md"), "# Paper\n\n## Abstract\nA claim about medians.\n", "utf8");
+  writeFileSync(
+    join(corpus, "paper.md"),
+    "# Paper\n\n## Abstract\nA claim about medians.\n",
+    "utf8",
+  );
   const engine = new MdnavEngine();
   const before = await engine.discover([corpus], { workDir: wd });
   const coverageBefore = await engine.coverage();
@@ -118,15 +150,22 @@ try {
 
   const after = await engine.index();
   eq("no skill file has entered the inventory", after.length, before.docs.length);
-  ok("the inventory still holds only the corpus",
-    after.every((d) => d.path.includes("paper.md")));
-  eq("no skill document has been minted an id",
-    after.filter((d) => /state-and-audit|doc-dive|SKILL/.test(d.path)).length, 0);
+  ok(
+    "the inventory still holds only the corpus",
+    after.every((d) => d.path.includes("paper.md")),
+  );
+  eq(
+    "no skill document has been minted an id",
+    after.filter((d) => /state-and-audit|doc-dive|SKILL/.test(d.path)).length,
+    0,
+  );
 
   const coverageAfter = await engine.coverage();
-  eq("coverage still measures the corpus and nothing else",
+  eq(
+    "coverage still measures the corpus and nothing else",
     JSON.stringify(coverageAfter.map((c) => [c.docId, c.totalBytes])),
-    JSON.stringify(coverageBefore.map((c) => [c.docId, c.totalBytes])));
+    JSON.stringify(coverageBefore.map((c) => [c.docId, c.totalBytes])),
+  );
 
   // ───────────────────────────────────────────────── priming, not evidence
 
@@ -142,19 +181,29 @@ try {
   const marqueeOf = (out) => out.split("\n")[0];
   const isMarquee = (line, skill) =>
     line.startsWith(`${skill} | `) &&
-    !line.includes(" : ") && !line.includes(" @ ") && !line.includes(" .. ") && !line.endsWith(" |");
+    !line.includes(" : ") &&
+    !line.includes(" @ ") &&
+    !line.includes(" .. ") &&
+    !line.endsWith(" |");
 
   const sectionOut = await skills({ topic: "state-and-audit", section: "Reverse Walk" });
-  eq("a section is announced by skill, topic and id",
-    marqueeOf(sectionOut), "doc-dive | state-and-audit | H17");
+  eq(
+    "a section is announced by skill, topic and id",
+    marqueeOf(sectionOut),
+    "doc-dive | state-and-audit | H17",
+  );
   ok("the marquee is not an address", isMarquee(marqueeOf(sectionOut), "doc-dive"));
-  ok("and the body below it is the literal markdown",
-    sectionOut.split("\n").slice(1).join("\n").startsWith("## 5. The Reverse Walk"));
+  ok(
+    "and the body below it is the literal markdown",
+    sectionOut.split("\n").slice(1).join("\n").startsWith("## 5. The Reverse Walk"),
+  );
   ok("no closing bracket is appended", !/\n\| \S+ : /.test(sectionOut));
 
   const topicOut = await skills({ topic: INDEX_TOPIC });
-  ok("a whole topic is the marquee and then the file, byte for byte",
-    topicOut === `doc-dive | index | 20 sections\n${readTopic(INDEX_TOPIC).text}`);
+  ok(
+    "a whole topic is the marquee and then the file, byte for byte",
+    topicOut === `doc-dive | index | 20 sections\n${readTopic(INDEX_TOPIC).text}`,
+  );
 
   // A digest is drift detection for a claim staked on bytes. Nothing is claimed
   // about skill text, so offering one invites it into the evidence chain.
@@ -164,23 +213,40 @@ try {
 
   // "7 sections" over a document with 22 of them reads as the whole outline.
   const shallowOut = await skills({ topic: "state-and-audit", outline: true, depth: 2 });
-  ok("a depth-limited outline says what it is not showing",
-    /\| \d+ of \d+ sections$/.test(marqueeOf(shallowOut)));
+  ok(
+    "a depth-limited outline says what it is not showing",
+    /\| \d+ of \d+ sections$/.test(marqueeOf(shallowOut)),
+  );
   ok("an unlimited one just counts", /\| \d+ sections$/.test(marqueeOf(outlineOut)));
 
   // Only the columns the tool renders are asserted on: a matched LINE may well
   // contain ` : ` or ` | `, because the skill documents the corpus grammar.
   const searchOut = await skills({ search: "reverse walk" });
-  ok("search is announced with its pattern and hit count",
-    /^doc-dive \| search reverse walk \| \d+ hits$/.test(marqueeOf(searchOut)));
-  ok("and its rows locate a hit without dressing it as an anchor",
-    searchOut.split("\n").slice(1).every((r) => /^\S+ +[HSW]\d+ +L\d+ +\S/.test(r)));
+  ok(
+    "search is announced with its pattern and hit count",
+    /^doc-dive \| search reverse walk \| \d+ hits$/.test(marqueeOf(searchOut)),
+  );
+  ok(
+    "and its rows locate a hit without dressing it as an anchor",
+    searchOut
+      .split("\n")
+      .slice(1)
+      .every((r) => /^\S+ +[HSW]\d+ +L\d+ +\S/.test(r)),
+  );
 
   const listOut = await skills({});
   ok("the listing is announced too", isMarquee(marqueeOf(listOut), "doc-dive"));
-  ok("its rows read as a directory, not a ledger",
-    listOut.split("\n").slice(1).every((r) => !r.includes(" | ")));
-  ok("and it still names every topic", listOut.includes("state-and-audit") && listOut.includes(INDEX_TOPIC));
+  ok(
+    "its rows read as a directory, not a ledger",
+    listOut
+      .split("\n")
+      .slice(1)
+      .every((r) => !r.includes(" | ")),
+  );
+  ok(
+    "and it still names every topic",
+    listOut.includes("state-and-audit") && listOut.includes(INDEX_TOPIC),
+  );
 
   eq("the marquee names what the skill calls itself", skillName(), "doc-dive");
 
@@ -189,7 +255,11 @@ try {
   process.stdout.write("\nthe corpus can be pointed elsewhere\n");
 
   mkdirSync(join(fakeSkills, "references"), { recursive: true });
-  writeFileSync(join(fakeSkills, "SKILL.md"), "---\nname: alt\n---\n\n# Alternate Discipline\n\nbody\n", "utf8");
+  writeFileSync(
+    join(fakeSkills, "SKILL.md"),
+    "---\nname: alt\n---\n\n# Alternate Discipline\n\nbody\n",
+    "utf8",
+  );
   writeFileSync(join(fakeSkills, "references", "one.md"), "# One\n\ntext\n", "utf8");
 
   const realRoot = skillRoot();
@@ -197,7 +267,11 @@ try {
   try {
     const alt = listTopics();
     eq("MDNAV_SKILL_DIR relocates the corpus", alt.map((t) => t.topic).join(","), "index,one");
-    eq("and the relocated index is read from there", readTopic("index").text.includes("Alternate Discipline"), true);
+    eq(
+      "and the relocated index is read from there",
+      readTopic("index").text.includes("Alternate Discipline"),
+      true,
+    );
     ok("the override actually changed roots", skillRoot() !== realRoot);
     // From frontmatter, not the directory — the fixture dir is named for a pid.
     eq("a relocated corpus announces what IT calls itself", skillName(), "alt");

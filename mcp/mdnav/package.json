@@ -3,28 +3,43 @@
   "version": "0.3.0",
   "description": "Structure-aware navigation, byte-span addressability, and MCP server for Markdown corpora; evolving into a Markdown-documents REPL for an agent: typed claims over span algebra, addressed by path, delivered under a byte budget",
   "private": true,
+  "license": "MIT",
   "type": "module",
+  "packageManager": "pnpm@11.25.0",
+  "engines": {
+    "node": ">=24"
+  },
   "main": "src/index.ts",
   "bin": {
     "mdnav": "mdnav.mjs"
   },
   "scripts": {
     "start": "node src/index.ts",
-    "restore": "pwsh -NoProfile -ExecutionPolicy Bypass -File ./brewery/node/restore-node.ps1",
-    "typecheck": "node deps/node_modules/typescript/bin/tsc --noEmit",
-    "test": "node tests/run-all.mjs",
-    "test:typecheck": "node --test tests/typecheck.test.ts",
-    "test:cli": "node tests/acceptance.mjs",
-    "test:engine": "node tests/engine-test.mjs",
-    "test:journal": "node tests/journal-test.mjs",
-    "test:render": "node tests/render-test.mjs",
-    "test:frames": "node tests/frame-matrix-test.mjs",
-    "test:skills": "node tests/skills-test.mjs"
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.tests.json",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:legacy": "node tests/run-all.mjs",
+    "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm test && pnpm test:legacy"
   },
-  "engines": {
-    "node": ">=24",
-    "npm": ">=11"
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "zod": "3.25.76"
   },
-  "license": "MIT",
-  "comment": "Manifest only. Node reads `type` by walking up from each source file, so this must sit at the package root and cannot live in brewery. Dependency pins and the lockfile live in brewery/node/; deps/node_modules is where they deploy and are consumed directly (src/deps.ts, tsconfig typeRoots, the typecheck script) without root junctions. `main` is the MCP server entry (TypeScript, run by Node directly -- unflagged type stripping is load-bearing, hence engines.node >=24). `bin` is the legacy single-file CLI, kept as the capability oracle (D22/D47) and never edited."
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "24.13.3",
+    "@vitest/coverage-v8": "4.1.11",
+    "eslint": "10.9.1",
+    "eslint-config-prettier": "10.1.8",
+    "globals": "17.12.0",
+    "jiti": "2.7.0",
+    "prettier": "3.9.6",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.69.0",
+    "vitest": "4.1.11"
+  }
 }
