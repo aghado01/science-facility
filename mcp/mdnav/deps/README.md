@@ -14,10 +14,10 @@ defeats the purpose.
 
 | Path | Contents | Recipe |
 |---|---|---|
-| `deps/node_modules/` | the locked dependency graph — `typescript`, `@types/node`, and the one matching `@typescript/typescript-{platform}` | `brewery/node/` — complete |
+| `deps/node_modules/` | the locked dependency graph — runtime `@modelcontextprotocol/sdk` + `zod` (and the SDK's transitive graph), dev `typescript`, `@types/node`, and the one matching `@typescript/typescript-{platform}` | `brewery/node/` — complete |
 
 ## Direct consumption
  
-Node tools and test gates resolve from `deps/node_modules` directly (e.g. `node deps/node_modules/typescript/bin/tsc --noEmit` and `"typeRoots": ["./deps/node_modules/@types"]` in `tsconfig.json`). No root junction is required or created.
+The server loads its runtime dependencies from here through `src/deps.ts` (a `createRequire` rooted at `deps/node_modules`). Node tools and test gates resolve from `deps/node_modules` directly (e.g. `node deps/node_modules/typescript/bin/tsc --noEmit` and `"typeRoots": ["./deps/node_modules/@types"]` in `tsconfig.json`). No root junction is required or created.
  
 `brewery/node/restore-node.ps1` materializes this shelf from the pinned recipe. Run it after a clean clone if `deps/node_modules` is absent.

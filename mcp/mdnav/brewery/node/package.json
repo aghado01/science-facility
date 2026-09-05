@@ -8,6 +8,10 @@
     "node": ">=24",
     "npm": ">=11"
   },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "zod": "3.25.76"
+  },
   "devDependencies": {
     "@types/node": "26.2.0",
     "typescript": "7.0.2"

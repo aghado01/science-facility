@@ -1,14 +1,17 @@
 /**
- * Centralized dependency loader for mdnav MCP server.
+ * Centralized dependency loader for the mdnav MCP server.
+ *
+ * Runtime dependencies are pinned once in brewery/node/package.json and
+ * materialized into deps/node_modules by brewery/node/restore-node.ps1.
+ * Nothing here reaches outside the package.
  */
 
 import { createRequire } from "node:module";
-import { pathToFileURL } from "node:url";
+import { pathToFileURL, fileURLToPath } from "node:url";
 import { resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const depsRoot = resolve(__dirname, "../../para-agent/deps/node_modules");
+const depsRoot = resolve(__dirname, "../deps/node_modules");
 
 const req = createRequire(resolve(depsRoot, "index.js"));
 

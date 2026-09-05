@@ -47,12 +47,16 @@ committed on Windows restores correctly on Linux — do not prune the entries th
 
 ## What is pinned, and why so little
 
-| Package | Version | Why |
-|---|---|---|
-| `typescript` | 7.0.2 | `tsc --noEmit` is the [typecheck gate](../tests/typecheck.test.ts). Node strips types; it does not check them, so without this the annotations are documentation that can lie |
-| `@types/node` | 26.2.0 | the standard-library surface mdnav actually calls (`node:fs`, `node:path`, `node:test`) |
+| Package | Version | Role | Why |
+|---|---|---|---|
+| `@modelcontextprotocol/sdk` | 1.30.0 | runtime | the MCP server (`src/index.ts`) — `McpServer` + `StdioServerTransport`, loaded through `src/deps.ts` |
+| `zod` | 3.25.76 | runtime | tool input schemas; the SDK's own schema library, pinned at the version the SDK resolves against |
+| `typescript` | 7.0.2 | dev | `tsc --noEmit` is the [typecheck gate](../tests/typecheck.test.ts). Node strips types; it does not check them, so without this the annotations are documentation that can lie |
+| `@types/node` | 26.2.0 | dev | the standard-library surface mdnav actually calls (`node:fs`, `node:path`, `node:test`) |
 
-Both are dev-time only. **mdnav has no runtime dependencies and should acquire none casually** — the
-engine is span arithmetic over bytes, and the doctrine (canon D5) is that doccer is a reference to
-port from, never a dependency to call. A runtime dependency appearing here is a design change, not
-a convenience, and belongs in the decisions register.
+The two runtime pins are the **server boundary**, not the engine: the SDK and zod match para-agent's
+pins exactly so the two servers speak the same protocol version. **The engine itself has no runtime
+dependencies and should acquire none casually** — it is span arithmetic over bytes, and the doctrine
+(canon D5) is that doccer is a reference to port from, never a dependency to call. A runtime
+dependency appearing here beyond the server boundary is a design change, not a convenience, and
+belongs in the decisions register (D48 records the two above).

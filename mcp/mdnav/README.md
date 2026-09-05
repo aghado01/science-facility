@@ -1,12 +1,50 @@
 # mdnav
 
-Structure-aware navigation over Markdown corpora. Zero dependencies, one file,
-Node ≥ 18. Exposes structure and literal source spans; decides nothing about
-meaning.
+Structure-aware navigation over Markdown corpora. Exposes structure and literal
+source spans; decides nothing about meaning.
+
+Two surfaces share one engine idea:
+
+- **MCP server** — `src/index.ts`, TypeScript run directly by Node ≥ 24 (no
+  build step). Registered in the repo's `.mcp.json` as `mdnav`. This is where
+  development happens; the v2 design (typed claims over span algebra, path
+  addresses, lenses, budgeted delivery) lands here — see
+  [issues/mdnav](../../issues/mdnav/planning/roadmap.md).
+- **Legacy CLI** — `mdnav.mjs`, zero dependencies, one file. It is the
+  capability **oracle** the v2 work is checked against (decisions D22/D47) and
+  is never edited. The rest of this README documents it; the MCP tools expose
+  the same verbs.
 
 ```bash
 node mdnav.mjs discover ./docs --recursive
 ```
+
+## Package layout
+
+```
+brewery/   recipes: dependency pins, lockfile, restore script (tracked)
+build/     disposable intermediates, e.g. the npm cache (ignored)
+deps/      the dependency payload, deps/node_modules (ignored)
+src/       the MCP server (TypeScript)
+tests/     suites; tests/test-manifest.json lists them, tests/run-all.mjs runs them
+skills/    the doc-dive discipline served by the server
+```
+
+After a clean clone, materialize the dependency payload, then typecheck and test:
+
+```bash
+npm run restore
+```
+
+```bash
+npm run typecheck
+```
+
+```bash
+npm test
+```
+
+`brewery/README.md` explains the layout and what is pinned and why.
 
 ## Design rule
 
@@ -397,8 +435,11 @@ modified. Delete the directory to start over.
 ## Tests
 
 ```bash
-node test/acceptance.mjs
+node tests/acceptance.mjs
 ```
+
+This is the CLI oracle suite; `npm test` runs it together with the typecheck
+gate and the MCP-side suites (engine, journal, frame-matrix, render, skills).
 
 Self-contained — fixtures are generated into a temp directory covering CRLF,
 multibyte, fenced heading-like text, LaTeX and image residue, long lines,
