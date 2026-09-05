@@ -226,6 +226,18 @@ dogfoods v2 on the
 README/HELP against behavior (F3 closed for real). Findings appended as a
 dated review under `discussion/`.
 
+## After — modes and the adjutant session (design-stage, D50)
+
+One engine, several modes as profiles: doc-dive (`.doc-dive`, pointed corpus, investigation
+sessions) and adjutant (`.adjutant`, a standing session over a project's planning registers,
+row anchors, tracked session record). Sessions replace `workDir` as the unit of identity;
+`attach`/`extend` are the missing verbs; every tool goes through one resolver. Canon:
+[design/mdnav_v2_modes-brief.md](../design/mdnav_v2_modes-brief.md) and
+[design/adjutant-brief.md](../design/adjutant-brief.md). M2's store layout is the same work
+seen from the engine side; amend M2 when these are promoted to briefs. Precondition: the
+invariant fixes in [bug-inventory.md §G](bug-inventory.md#g-disposition), so M0's goldens do
+not freeze them.
+
 ## After — `server.ts` brief (separate)
 
 Tool names over the export surface; session/result store (`$rN` handles);

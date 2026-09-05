@@ -7,7 +7,7 @@ folded into `mcp/mdnav/`.
 
 | Folder | Holds | Start with |
 |---|---|---|
-| `design/` | canon — the "why" and the shape; amended, never forked | `mdnav_v2_design-brief.md`, then `mdnav_v2_structure-brief.md` |
+| `design/` | canon — the "why" and the shape; amended, never forked | `mdnav_v2_design-brief.md`, then `mdnav_v2_structure-brief.md`; design-stage: `mdnav_v2_modes-brief.md`, `adjutant-brief.md` (D50) |
 | `briefs/` | execution-ready phase specs, one per milestone group | `01` → `05` in order |
 | `planning/` | the execution queue, the decisions register, the bug inventory | `roadmap.md`, `decisions.md`, `bug-inventory.md` |
 | `reports/` | dated reviews and captures — records, not live specs | `m0-legacy-capture-20260817.md` |
