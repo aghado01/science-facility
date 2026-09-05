@@ -117,37 +117,53 @@ Added 2026-09-05 with D50. Three buckets: rows that are wrong in every mode and 
 tested in isolation now; rows the session infrastructure removes by construction (patching them
 first would be work thrown away); rows that are design decisions, not defects.
 
-**G1 — Invariant, squash now** (each fix ships with a `.test.ts` that fails before it; these
-precede M0's goldens so the goldens do not freeze the wrong behavior):
+*Revised 2026-09-05 (D52) after reading the v2 phase briefs against this inventory: a
+"closed by" column names the planned engine work that removes each row by construction, and
+G1 splits into what the live MCP needs patched now and what should wait for the brief.*
 
-| # | Fix in one line | Test |
+**G1a — Invariant, patch the live MCP now** (each fix ships with a `.test.ts` that fails before
+it; these precede M0's goldens so the goldens do not freeze the wrong behavior; each patch is
+written so the brief that later rebuilds the area inherits the test, not the code):
+
+| # | Fix in one line | Test | Later closed by |
+|---|---|---|---|
+| B19 | scan the body from `frontmatter.end`; expose frontmatter as its own region | a YAML `# comment` is not a heading; `---` delimiters are not breaks | brief 02 (frontmatter is a region claim; headings collected outside it) — patched now because every docops document has frontmatter |
+| B13 | basename match refuses when more than one document matches, listing candidates | two `decisions.md` → error naming both | brief 01/03 `resolve()` ("an ambiguous suffix dies listing the candidates") — the same rule, extended from paths to document refs |
+| B14 | drop the `existsSync(docRef)` cwd fallback; relative refs resolve against the session's roots only | `outline("package.json")` refuses | brief 01 D39 "resolution is explicit or bust" |
+| B15 | `D` ids width-tolerant everywhere `H` already is (`sameCoord` on the doc axis) | `read("D1")`, journal anchor `D1:H1` both resolve | brief 01 `resolve()` suffix matching, once `D` is part of the path grammar |
+| B16 | `coverage` resolves refs through the same function as `read` | `coverage(["a.md"])` works | brief 03 (every verb is a query over one `Selection`) |
+| B17 | `discover` reports missing paths as an error (all missing) or a notice (some) | 3 paths, 2 missing → notice naming both | not covered by any brief — stays a patch and a golden |
+| B27 | ledger records elided **spans** (as the CLI does); coverage = `union(reads) \ union(elided)` | stripped screenshot read → ~2 KB covered, not 100% | brief 03 gate 12 — but the CLI already has these semantics, so M0's goldens will encode them and the MCP must match before M4, not after |
+| B10 | lock carries pid + timestamp; a lock older than N seconds or with a dead pid is broken with a notice | stale lock → record succeeds with notice | substrate S-01 (per-author journals remove the common case); the lock survives for `session.json` |
+| B08 | journal with no session refuses instead of writing to `tmpdir()` | `journal_record` before any mount → error naming the fix | brief 01 D39 (the global temp pointer is dropped; "a `Dnnn` with no work dir dies") |
+
+**G1b — Invariant, but wait for the brief that removes the code** (a patch here would be
+replaced wholesale; write the failing test now, close it when the brief lands):
+
+| # | Closed by | Note |
 |---|---|---|
-| B19 | scan the body from `frontmatter.end`; expose frontmatter as its own region | a YAML `# comment` is not a heading; `---` delimiters are not breaks |
-| B13 | basename match refuses when more than one document matches, listing candidates | two `decisions.md` → error naming both |
-| B14 | drop the `existsSync(docRef)` cwd fallback; relative refs resolve against the session's roots only | `outline("package.json")` refuses |
-| B15 | `D` ids width-tolerant everywhere `H` already is (`sameCoord` on the doc axis) | `read("D1")`, journal anchor `D1:H1` both resolve |
-| B16 | `coverage` resolves refs through the same function as `read` | `coverage(["a.md"])` works |
-| B17 | `discover` reports missing paths as an error (all missing) or a notice (some) | 3 paths, 2 missing → notice naming both |
-| B27 | coverage subtracts elided spans, per README and CLI (`mdnav.mjs:966`) | stripped screenshot read → ~2 KB covered, not 100% |
-| B10 | lock carries pid + timestamp; a lock older than N seconds or with a dead pid is broken with a notice | stale lock → record succeeds with notice |
-| B08 | journal with no session refuses instead of writing to `tmpdir()` | `journal_record` before any mount → error naming the fix |
-| B20, B21 | `profile`/`marks` take fences from the scanner's fence map | h1 counts agree; three fence variants found |
-| B22 | `marks` kinds are an enum; `paragraph` implemented from the scanner's line classes; unknown kind refuses | `paragraph` returns paragraphs, `foo` errors |
-| B23 | `strip: html` removes tags generally, keeping inner text (CLI parity) | `<details>`…`</details>` gone, text kept |
-| B30 | `outline(within)` defaults depth to the parent's level + 1 and says when nothing is active | within an H1 lists its H2s |
-| B18 | `glob` becomes a real matcher or is replaced by `extensions: string[]` | `*.{md,txt}` behaves or is rejected |
+| B20, B21 | brief 02 — one fence state machine, rule collectors region-scoped; `profile` becomes a census over claims | gates 5, 7, 9 |
+| B22 | brief 02/03 — `paragraph` is a structural kind; `marks --kind` takes any kind; unknown kind fails at load | gate 4 |
+| B23 | brief 02/03 — `html-tag` claims inside an `html-block` are collected and ignored under `default`, inner text kept; `html-block` itself deliberately not ignored | gates 5, 11 — matches the README's promise exactly |
+| B30 | brief 03 — `--within` compiles to `path under <p>`; a node's children are its outline regardless of depth | gate 8c |
+| B18 | brief 01 — `discover` ported with a real matcher when `parseArgs` is rewritten (F4) | keep `--glob` whitelisted, make it true |
+| B25 | brief 01 — windows keyed `"<size>:<start>..<end>"` in the IR, never overwritten; node-scoped `S`/`W` under brief 03 | digest composition for `S`/`W` still open (Q-07) |
+| B26, B28 | brief 02 — measurement noise disappears with the regex profile | — |
 
 **G2 — Closed by construction in the session infrastructure** (modes brief §2–§4; do not patch
 separately): B01, B02, B03, B04 (ids never re-rendered), B05 (`workDir` → `session`), B06
 (`attach`), B07 (`extend`), B09 (refusal moves into the session profile), B11 (capture policy
-per mode), B12 (one producer once the CLI stops writing session trees; until then, the MCP
-refuses to attach to a CLI-shaped run).
+per mode), B12 (one IR schema shared by the v2 CLI and server per brief 01; the legacy CLI is
+frozen and must stop writing into session trees). **Caution:** briefs 01 (§Stores: "a server
+holds one `Corpus` for its lifetime") and 04 (`createMdnavTools({ corpus, session })`, singular)
+still assume the singleton; D52 amends both to one `Corpus` per session and a session
+registry, or G2 reopens under v2.
 
-**G3 — Design decisions, not defects:** B24 (what a heading digest is made of — the structure
-brief's claims model decides), B25 (window and segment identity — same), B29 (defaults across
-`read`/`batch_read` — brief 04), B31 (the two implementations — D22/D47 already decide: the CLI
-is the oracle and receives nothing). B26 and B28 are measurement noise; fix when the scanner is
-rewritten under brief 02.
+**G3 — Design decisions, not defects:** B24 (brief 01 fixes `digest[]` as "4 hex of title
+text", so same-title siblings still share a digest under v2 — owner call Q-07), B29 (defaults
+across `read`/`batch_read` — brief 04's session defaults), B31 (the two implementations —
+D22/D47 already decide: the legacy CLI is the oracle and receives nothing; the v2 CLI and
+server share one engine).
 
 ## Report
 

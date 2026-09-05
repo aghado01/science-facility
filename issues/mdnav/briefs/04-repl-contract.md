@@ -127,7 +127,10 @@ session store; the engine must make these natural):
 mdnav 2.0 is expected to become an internally vendored MCP subsystem of
 para-agent, as `nushell-mcp` will. Constraints that follow: the engine stays
 single-file zero-dep; the server is an embeddable `createMdnavTools({
-corpus, session, framing })` plus a thin standalone stdio runner, so
+corpus, session, framing })` plus a thin standalone stdio runner *(amended
+2026-09-05, D52: `sessions` — a registry, one `Corpus` per session, every
+tool taking `session`; substrate S-15; `node:crypto` signing keeps zero-dep,
+S-19)*, so
 para-agent can mount it in-process and supply its own session/result store
 (D39 makes the seam concrete: the IR cache is the engine's in both
 deployments; the work dir — inventory, runs, ledger — is the session

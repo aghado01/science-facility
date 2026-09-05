@@ -137,7 +137,9 @@ resolution + refusal guard, inventory/ledger IO, all verb formatters, HELP.
   dies naming the override", per D39).
 - **Depends on:** M0, M1. **Brief:**
   [01-spanset-claims.md](../briefs/01-spanset-claims.md) §2 (table, stores,
-  hygiene), F4.
+  hygiene), F4. **Amended 2026-09-05 (D52):** one `Corpus` per session in a
+  session registry, and the investigation record carries widths, cohorts and
+  authors so `attach` seeds ids instead of re-minting — substrate S-15, S-16.
 
 ## M3 — Collectors → parity · `planned`
 

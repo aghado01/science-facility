@@ -171,7 +171,13 @@ whether a lens applies by default).
   `--by fence` cut's region pieces keep their own claim path
   (`H0007/f1`, `H0007/f2`), only the space between them is synthetic
   (`H0007/R1`). Never a bare global `Snnnn`/`Rnnnn` — two different bases
-  over two different nodes cannot collide on one address. One ledger
+  over two different nodes cannot collide on one address. *(Amendment
+  proposed 2026-09-05, D52 / substrate S-17: a `pattern:` boundary may carry
+  a capture group naming the piece, so a register row is addressed by its
+  own id — `H0002/r:D48` — rather than by ordinal, with the piece digest
+  taken over the piece text. This is the entry lens the adjutant brief
+  needs, and it serves transcript turns and dated entries the same way; the
+  path code for captured ids is fixed with D41.)* One ledger
   throughout. Segmenting is recursive: `--within <node> --by <other>`
   re-cuts that node with a different delimiter — the XOR walk in CLI form.
 - **`read`**: any number of address/predicate arguments in one call —

@@ -39,7 +39,8 @@ identity columns (design canon
 `ord[]` (this build's reading-order index — Geometry sort, start asc, end
 desc, discovery order), `path[]` (the structural address — see the code
 table below), `digest[]` (4 hex of title text, kind-appropriate claims
-only). `containers[]` (ordinal of the immediate containing region claim, or
+only — *composition under review, substrate register Q-07: title-only
+leaves same-title siblings indistinguishable, bug inventory B24*). `containers[]` (ordinal of the immediate containing region claim, or
 −1) is **derived from `path`**, not stored authoritatively — a claim's
 container is whatever `path` minus its last segment resolves to. Byte
 coordinates throughout, sorted `ClaimOrder.Geometry`. **Overlap and nesting
@@ -89,7 +90,12 @@ Only shape decides membership (README §Triage principle stands): the
 
 **Stores.** The engine is a persistent-process design: a server holds one
 `Corpus` (buffers, claims, memoized views keyed by `(digest, policy)`) for
-its lifetime and answers queries from memory. Disk holds two things with two
+its lifetime and answers queries from memory. *(Amended 2026-09-05, D52:
+one `Corpus` **per session**, held in a session registry — the singleton is
+the root of bug inventory B01–B04; see the modes brief §2–§3 and substrate
+register S-15. The investigation record below carries the session's ids,
+widths, cohorts and authors, and `attach` seeds from it rather than
+re-minting — S-16.)* Disk holds two things with two
 different owners (D39): the **IR** — the claims table for a given byte
 content, engine-owned, content-addressed, disposable — and the
 **investigation** — inventory (`Dnnn` → path; ids appear in agents' notes
