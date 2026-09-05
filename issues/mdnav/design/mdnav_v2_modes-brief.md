@@ -30,6 +30,14 @@ several ways at once without any of them leaking into another.*
 - **Run mode is orthogonal to mode.** stdio MCP, CLI one-shot, embedded library (para-agent),
   and the framing-ablation configuration are ways of *running* the engine. Any mode runs under
   any of them.
+- **A mode is a document model plus a workflow over a shared substrate.** *(added 2026-09-05,
+  D51.)* The substrate — spans, frames, budgets, anchors, the resolver, sessions, per-author
+  signed journals — is common. A mode contributes how its material is modelled (doc-dive: a
+  corpus of spans; adjutant: registers of entries with mutation policies) and the workflow an
+  agent runs over it (doc-dive: the telescope — profile, outline, read, cite; adjutant: orient,
+  act, reconcile, hand off). What surfaces during mode design and turns out to be substrate is
+  harvested into [../planning/substrate-register.md](../planning/substrate-register.md) and
+  built **before** the mode.
 
 ## Problem
 
@@ -64,12 +72,15 @@ A mode is data the server holds, not a class hierarchy:
 |---|---|---|
 | `anchorDir` | `.doc-dive` | `.adjutant` |
 | `sessionKind` | investigation: named or stamped, many per corpus, ephemeral by default | standing: one per project, named by the project, rehydrated on every start |
-| `corpusRule` | pointed: `discover(root \| paths)` seeds it; `extend` adds cohorts | manifest: roles → paths, seeded from the root and its routing document, extended by cohort; references outward allowed |
-| `anchorLens` | span anchors `Dnnn:Hnnnn@digest` (canon) | row anchors `register:ROWID@digest` for ledgers; span anchors for prose |
-| `verbs` | the corpus verbs + journal | corpus verbs + journal + `status`, `ledger`, `cite`, `validate`, `record` |
+| `documentModel` | a corpus of spans; documents are what was pointed at | registers of entries, each with a question it answers, a mutation policy (`log` · `register` · `declaration`) and an entry lens |
+| `corpusRule` | pointed: `discover(root \| paths)` seeds it; `extend` adds cohorts | declared: registers → paths, seeded from the root and its routing document, extended by cohort; references outward allowed |
+| `anchorLens` | span anchors `Dnnn:Hnnnn@digest` (canon) | entry anchors `register:ID@digest` for registers; span anchors for prose |
+| `workflow` | the telescope: profile → outline → read → cite; coverage as the audit | the turn: orient (`sync` briefing) → act (editor + `reserve`) → reconcile (`sync`, `validate`) → hand off (one signed entry) |
+| `delivery` | material under a byte budget | state plane first (bounded projection, anchor per line); history per entry, backward, by verb |
+| `verbs` | the corpus verbs + journal | corpus verbs + journal + `sync`, `entries`, `cite`, `history`, `reserve`, `validate` — no write verb |
 | `skillRoot` | `skills/doc-dive` | `skills/adjutant` |
-| `tracked` | nothing (`.doc-dive/**` ignored) | `session.json`, `journal.jsonl` tracked; `runs/**` ignored |
-| `refuses` | a work dir `discover` could see (B09) | a `.doc-dive` run offered as a session; free-form writes |
+| `tracked` | nothing (`.doc-dive/**` ignored) | `session.json`, `journals/*.jsonl` tracked; `runs/**` ignored |
+| `refuses` | a work dir `discover` could see (B09) | a `.doc-dive` run offered as a session; any write beyond `reserve` |
 
 A third profile is a row in this table, not a branch in the engine. Candidates already visible:
 a *comparative* profile (several sessions open read-only, every frame session-marked, no
@@ -80,11 +91,16 @@ store).
 
 ```
 <anchorDir>/<session>/
-  session.json        mode, name, created, widths, cohorts[], docs[{ id, origin, sha256, role?, cohort }]
-  journal.jsonl       the notebook (unchanged format; entries gain `author` and `session`)
+  session.json        mode, name, created, widths, authors[{ name, pubkey }], cohorts[],
+                      docs[{ id, origin, sha256, role?, policy?, cohort }]
+  journals/<author>.jsonl        one per author, signed and chained (S-01, S-02)
+  journals/<author>.NNNN.jsonl   archived segments behind a checkpoint (S-04)
   LATEST              the run in progress
   runs/<stamp>/       re-scan episodes: documents/*.index.json, reads.jsonl
 ```
+
+*(Amended 2026-09-05, D51: the single `journal.jsonl` becomes per-author signed chains; see
+§7 and the substrate register S-01–S-06.)*
 
 - `session.json` is the inverse of `discover`: `attach` seeds `docCoord`/widths from the
   *recorded* ids, verifies each `sha256` against disk, loads `reads.jsonl` and the journal, and
@@ -138,6 +154,27 @@ unchanged. The trigger skill stays cross-client glue.
 | embedded | `createMdnavTools(engine, profile)` from a `server.ts` split out of `index.ts` | what para-agent vendors; the "server.ts brief" in the roadmap |
 | ablation | `MDNAV_FRAME*` env | unchanged; sessions and modes must not leak into tool descriptions |
 
+### 7. Collaboration mechanics (shared; added 2026-09-05, D51)
+
+Raised by adjutant, general to every mode with a notebook. Detail and state in
+[../planning/substrate-register.md](../planning/substrate-register.md) S-01–S-06; summarized:
+
+- **One journal per author**, ids carrying the author (`codex:N012`); an agent appends only to
+  its own file, so the write lock is needed only for `session.json`.
+- **Entries are signed and chained.** `author`, an Ed25519 signature over the canonical entry,
+  and the previous entry's hash. Keys in the user profile per author identity; public keys in
+  `session.json`. `journal_read` reports verified / unsigned / bad per entry and per chain.
+- **Maintenance never rewrites.** Editing another author's entry breaks its signature, which
+  is the intended outcome; `retarget` and `synthesize` are ops in the maintainer's own journal
+  that target entries elsewhere, and readers resolve anchors through the retarget chain.
+- **Cursors and handoff.** Each author keeps a cursor per other journal; `sync` returns what
+  moved since; one signed handoff entry per session is the only accretion that carries
+  synthesis. Status is derived over the union of journals, never stored.
+- **Checkpoints.** A signed `checkpoint` folds derived state; earlier entries segment out, still
+  chained; readers load from the last checkpoint and page.
+- **Ratification by signature.** The owner is an author; an owner-signed verdict is a ruling,
+  an agent-signed one a proposal, and derived status says which.
+
 ## Non-goals
 
 Everything in canon's non-goals. Added: no mode may change what a byte span *means*; row anchors
@@ -175,6 +212,11 @@ is an anchor with a session scope, not a shared file.
   the index; with none open, doc-dive.
 - **Descriptions are constant.** The tool list's descriptions are byte-identical across modes
   and sessions (the ablation invariant).
+- **Chains verify.** An entry edited in place reports bad; a deleted entry breaks the chain
+  behind it; a checkpointed journal verifies across its segments; an unsigned entry is marked,
+  not hidden.
+- **Maintenance is traceable.** After a `retarget`, the old anchor resolves through the chain
+  and `history(entry)` shows who moved it and why.
 
 ## Open questions (decide before promotion)
 
@@ -186,6 +228,7 @@ is an anchor with a session scope, not a shared file.
 3. **Session scope in journal anchors:** entry field only, or a scope prefix in the anchor when
    citing across sessions (`doccer-renovation:D003:H00@30e7`)? The frame work argues for the
    atom; the width discipline argues for the field.
+4. **Author identity granularity and the unsigned policy** — substrate register Q-01, Q-02.
 
 ## Report
 

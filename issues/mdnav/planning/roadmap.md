@@ -234,9 +234,10 @@ row anchors, tracked session record). Sessions replace `workDir` as the unit of 
 `attach`/`extend` are the missing verbs; every tool goes through one resolver. Canon:
 [design/mdnav_v2_modes-brief.md](../design/mdnav_v2_modes-brief.md) and
 [design/adjutant-brief.md](../design/adjutant-brief.md). M2's store layout is the same work
-seen from the engine side; amend M2 when these are promoted to briefs. Precondition: the
+seen from the engine side; amend M2 when these are promoted to briefs. Preconditions: the
 invariant fixes in [bug-inventory.md §G](bug-inventory.md#g-disposition), so M0's goldens do
-not freeze them.
+not freeze them, and the sweep of [substrate-register.md](substrate-register.md) — the
+collaboration mechanics and delivery rules that adjutant surfaced but every mode uses (D51).
 
 ## After — `server.ts` brief (separate)
 
