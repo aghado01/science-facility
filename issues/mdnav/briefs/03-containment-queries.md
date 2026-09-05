@@ -136,7 +136,7 @@ whether a lens applies by default).
   self-annihilated `select` list is an error, never "select nothing."
 - **Lenses** (D44 — renames "profile" for this concept; the census verb
   `profile` and D29's token profiles are unrelated and keep their names)
-  are named, saved predicate lists as **data**, `mcp/mdnav_v2/lenses/*.json`:
+  are named, saved predicate lists as **data**, `mcp/mdnav/lenses/*.json`:
   ```json
   { "name": "chat-export", "rules": ["core"],
     "ignore": ["kind:html-tag", "kind:html-block", "kind:data-uri", "kind:signed-url",

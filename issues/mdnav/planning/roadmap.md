@@ -7,8 +7,10 @@ inside-out agreement, telescope surface —
 [design/mdnav_v2_structure-brief.md](../design/mdnav_v2_structure-brief.md)
 (D41, 2026-08-17; supersedes brief 03 §4 and the addressing in D11/D13). **Homework:**
 [../archaeology/figure-model-survey.md](../archaeology/figure-model-survey.md).
-**Locations:** v2 is built in `mcp/mdnav_v2/`; the legacy oracle is
-`skills/doc-dive/mdnav/` and is never edited. **Decisions:**
+**Locations:** one package, `mcp/mdnav/` (D48, 2026-09-05 — the former
+`mcp/mdnav_v2/` scaffold is folded in; the v2 engine lands inside the live
+MCP server); the legacy oracle is `mcp/mdnav/mdnav.mjs` and is never edited.
+**Decisions:**
 [decisions.md](decisions.md). **Phase briefs** (execution-ready specs, one
 per milestone group; the canon above stays doctrine/shape/non-goals only,
 per D36): [01-spanset-claims.md](../briefs/01-spanset-claims.md) (M1+M2) ·
@@ -114,7 +116,9 @@ oracle property tests (≥ 200 random sets). No engine wiring yet.
 
 ## M2 — Claims table, stores, hygiene layout · `planned`
 
-New `mcp/mdnav_v2/mdnav.ts` skeleton (the legacy file stays where it is):
+New `mcp/mdnav/mdnav.ts` skeleton (the legacy file stays where it is; its
+placement relative to the existing `src/` server is settled when this
+milestone starts, D48):
 columnar claims table + `Doc`/`Corpus` shape; `MemoryStore` +
 `SidecarStore` sharing schema 3; the D39 layout — content-addressed IR
 under `$MDNAV_CACHE/ir/v3/<sha>.json`, investigation work-dir

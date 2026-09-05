@@ -17,7 +17,7 @@
 discussion of the same day, stepping back from the "nested heading
 ordinal" question ([../reports/fable-planning-briefs-review-20260817.md](../reports/fable-planning-briefs-review-20260817.md)
 §3.1) to the model that makes it a non-question · **Home:**
-`mcp/mdnav_v2/` · **One-line:** *the backend's first job is to discover
+`mcp/mdnav/` (D48) · **One-line:** *the backend's first job is to discover
 every valid Markdown object and resolve the hierarchy to the extent it
 exists — spine and object graph alike — by one recursive procedure, store
 the result as flat rows with structure in a path field, and let a reader

@@ -19,9 +19,10 @@ into canon plus five phase briefs per D36, nothing discarded; rev 4 moved
 canon out of `briefs/` into `design/mdnav_v2_design-brief.md` per D38 — it
 is a design document, not something executed directly, and `briefs/` now
 holds only execution-ready phase specs) · **Home:**
-[mcp/mdnav_v2/](../../../mcp/mdnav_v2/) — new, empty at filing; the
-**figure model / oracle** is the legacy
-[skills/doc-dive/mdnav/mdnav.mjs](../../../skills/doc-dive/mdnav/mdnav.mjs),
+[mcp/mdnav/](../../../mcp/mdnav/) — one package since 2026-09-05 (D48; the
+`mcp/mdnav_v2/` scaffold was folded in and the v2 engine lands inside the
+live MCP server); the **figure model / oracle** is the legacy
+[mcp/mdnav/mdnav.mjs](../../../mcp/mdnav/mdnav.mjs),
 which stays in place, untouched, serving the doc-dive skill (single-file, zero-dep
 Node ≥ 18; sibling modules permitted where a primitive is genuinely
 standalone — `span-set.ts`, `claims.ts` — a six-module split is not; see
@@ -198,7 +199,7 @@ control flow (verbs become queries over a claims table built once), so
 every verb body changes and the three divergent scanners are the thing
 being replaced. Retrofitting a table under functions designed not to have
 one would carry the old seams forward. But it is a rewrite *from a figure
-model*: the legacy [skills/doc-dive/mdnav/mdnav.mjs](../../../skills/doc-dive/mdnav/mdnav.mjs)
+model*: the legacy [mcp/mdnav/mdnav.mjs](../../../mcp/mdnav/mdnav.mjs)
 encodes behavior the brief does not restate — PREAMBLE/BODY, setext suspects, the
 partition invariant on odd documents, CRLF/BOM, unclosed-fence warning,
 `UNBROKEN` windows, `--within` semantics, stamp `-2` suffixes, `LATEST`,
@@ -206,7 +207,7 @@ the work-dir refusal guard, `keepOf`, the blockquote regression the tests
 encode — and that behavior is read and ported, never edited in place.
 
 1. **Tests first, adapted.** Port the legacy `test/acceptance.mjs` to
-   `mcp/mdnav_v2/tests/acceptance.test.ts` — same assertions, same fixtures,
+   `mcp/mdnav/tests/acceptance.test.ts` — same assertions, same fixtures,
    typed, black-box through `--json` (D40), binary path configurable — and
    write the golden-capture script *before* any engine code. Not a verbatim
    copy: a `.js` suite would be the mixed tree D46 forbids, on day one. The
@@ -214,7 +215,7 @@ encode — and that behavior is read and ported, never edited in place.
    reproduces 130/0 before any engine code exists, which is what separates an
    adaptation from a rewrite that quietly dropped assertions (D47). The new
    binary then runs that suite from day one (gate 1) and matches goldens under
-   `default` (gate 16). The legacy file at `skills/doc-dive/mdnav/` is the oracle and
+   `default` (gate 16). The legacy file `mcp/mdnav/mdnav.mjs` is the oracle and
    is **never edited**; it keeps serving the doc-dive skill throughout.
 2. **New engine, clean:** `SpanSet`, claims, collectors, containment,
    `Selection`, `materialize` — doccer-shaped, no lineage from the old
@@ -225,7 +226,7 @@ encode — and that behavior is read and ported, never edited in place.
    changed only where a phase brief says.
 4. **README as the second figure model.** Design rule, address model,
    triage philosophy, artifact locality all stay true; amend, don't rewrite.
-5. At parity, **repointing the doc-dive skill** at `mcp/mdnav_v2` (or
+5. At parity, **repointing the doc-dive skill** at the v2 engine (or
    keeping it pinned to legacy) is a separate, one-line decision recorded
    in `planning/decisions.md` — not part of the build. Nothing is deleted;
    v2 carries its own `mdnav.ps1`.
@@ -238,11 +239,11 @@ misattributed between this brief and the roadmap). One execution queue.
 
 ## Exit gate — master list (single source of truth; phase briefs cite by number)
 
-All in `mcp/mdnav_v2/tests/`, bounded by `tests/test-manifest.json` and run
+All in `mcp/mdnav/tests/`, bounded by `tests/test-manifest.json` and run
 through `node --test`; the suite must report assert counts, not just PASS.
 The acceptance suite is `tests/acceptance.test.ts` — a TypeScript
 **adaptation** of the legacy
-[skills/doc-dive/mdnav/test/acceptance.mjs](../../../skills/doc-dive/mdnav/test/acceptance.mjs),
+[mcp/mdnav/tests/acceptance.mjs](../../../mcp/mdnav/tests/acceptance.mjs),
 made at M0 and proved against the legacy binary (D47), then extended. Every
 gate below is closed by exactly one phase brief — **except gate 0, which is
 standing**, and which every phase re-closes; see
@@ -253,9 +254,11 @@ kept in sync with this list.
    checked-in `tsconfig.json` (`strict` plus `noUncheckedIndexedAccess`,
    `exactOptionalPropertyTypes`, `noPropertyAccessFromIndexSignature`,
    `noUnusedLocals`/`noUnusedParameters`, `erasableSyntaxOnly`), asserted by
-   `tests/typecheck.test.ts` as a bounded suite, and **no `.js`/`.mjs` file
-   exists anywhere under `mcp/mdnav_v2/`**. Closed before any engine code and
-   re-closed by every phase thereafter (D46). — *standing*
+   `tests/typecheck.test.ts` as a bounded suite, and **no new `.js`/`.mjs`
+   file is added under `mcp/mdnav/`** — the legacy oracle `mdnav.mjs` and the
+   pre-merge `.mjs` suites are grandfathered until M0 adapts them (D48).
+   Closed before any engine code and re-closed by every phase thereafter
+   (D46). — *standing*
 1. Every assertion the legacy suite made still passes, except those that
    encode F1/F2 behavior, which are inverted and named as such. The adapted
    suite's fidelity to the original is established at M0 by running it against

@@ -65,7 +65,7 @@ of the recursive discovery (design canon
   `Total \ coverage(fence ∪ html-comment ∪ frontmatter)` by default, and
   *what is excluded is itself a named policy* the caller can change (a
   `code-review` lens wants `data-uri` found *inside* fences).
-  Built-in rules live in `mcp/mdnav_v2/rules/core.jsonl` (everything in the
+  Built-in rules live in `mcp/mdnav/rules/core.jsonl` (everything in the
   kind table in [01-spanset-claims.md](01-spanset-claims.md) that is
   regex-shaped); further inventories are for constructs Markdown does *not*
   define — a corpus-specific tracking pixel, a house citation style, an

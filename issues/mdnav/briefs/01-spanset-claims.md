@@ -183,7 +183,8 @@ Full text is the master list in [mdnav_v2_design-brief.md](../design/mdnav_v2_de
 §Exit gate. This phase closes:
 
 - **0 (standing).** `tsc --noEmit` clean under the checked-in `tsconfig.json`,
-  and no `.js`/`.mjs` anywhere under `mcp/mdnav_v2/`. Already green before this
+  and no *new* `.js`/`.mjs` under `mcp/mdnav/` (the legacy oracle and the
+  pre-merge suites are grandfathered, D48). Already green before this
   phase begins — every module written here keeps it that way.
 - **1.** Every assertion the legacy suite made still passes (F1/F2-encoding
   tests excepted — those invert in phase 02). The adapted suite's fidelity to
