@@ -1,6 +1,6 @@
 <#
 .LINK
-    docs/rs.pm.strip.md
+    docs/rs.tex.strip.md
 #>
 param(
     [Parameter(Position = 0)]
@@ -13,10 +13,11 @@ param(
 #region Config
 if ($Config.Count -eq 0 -or -not $Config.ContainsKey('Operations'))
 {
-    $Config = Resolve-ProcessorConfig -ProcessorName 'rs.pm.strip' -CallerConfig $Config
+    $Config = Resolve-ProcessorConfig -ProcessorName 'rs.tex.strip' -CallerConfig $Config
 }
 $ops = @($Config['Operations'])
 $includeMeta = if ($null -ne $Config['IncludeMeta']) { [bool]$Config['IncludeMeta'] } else { $true }
+$keepWhitespaceSuppression = if ($null -ne $Config['PreserveWhitespaceSuppression']) { [bool]$Config['PreserveWhitespaceSuppression'] } else { $true }
 #endregion
 
 #region ContentKey
@@ -30,6 +31,23 @@ $text = $bc.Text
 $text = $text -replace "`r`n", "`n" -replace "`r", "`n"
 #endregion
 
+#region QuickExit
+# Global fast-path: if there is no '%' in the text, no TeX comments can exist.
+if ($text.IndexOf('%') -eq -1)
+{
+    $record = if ($includeMeta)
+    {
+        [pscustomobject]@{
+            Processor      = (Resolve-ProcessorLabel -Implementation 'rs.tex.strip' -Config $Config)
+            Implementation = 'rs.tex.strip'
+            Operations     = @($ops)
+        }
+    }
+    else { $null }
+    return Copy-Bag -Item $Item -Resolved $bc -Content $text -Record $record
+}
+#endregion
+
 #region BuildSpans
 $spansToStrip = [System.Collections.Generic.List[pscustomobject]]::new()
 
@@ -41,10 +59,10 @@ $stripInline = 'inline-comments' -in $ops
 #endregion
 
 #region MaskLiterals
-# Length-preserving, newline-preserving lens: non-newline characters of strings,
-# quote-like operators, regexes, heredoc bodies, and $# array-length sigils become
-# U+0001 so comment regexes cannot see them. Spans computed on $view are offsets
-# into $text. Unclosed quotes mask to EOL — safe under-strip.
+# Length-preserving, newline-preserving lens: non-newline characters of protected
+# constructs (escaped \%, verbatim environments, inline \verb, \lstinline, \url)
+# become U+0001 so comment regexes cannot see them. Spans computed on $view are
+# offsets into $text.
 $chars = $text.ToCharArray()
 $fill = [char]0x01
 
@@ -68,90 +86,67 @@ function _MaskSpan ([char[]]$Arr, [int]$Start, [int]$Len, [char]$FillChar)
     }
 }
 
-# 1. Heredoc bodies: text starts on the next line and terminates at marker line
-$rxHereDocDecl = [regex]::new('(?<![\w\$@%<>-])<<~?\s*(?:''([^''\r\n]+)''|"([^"\r\n]+)"|`([^`\r\n]+)`|\\?([a-zA-Z_]\w*)\b(?![''\w]))')
-foreach ($m in $rxHereDocDecl.Matches($text))
+# 1. Escaped percent (\%): odd number of preceding backslashes means literal '%'
+# Matches \% and \\\% but not \\% (where \\ is newline and % is comment start).
+$rxEscPercent = [regex]::new('(?<!\\)(?:\\\\)*\\%', 'None')
+foreach ($m in $rxEscPercent.Matches($text))
 {
-    $marker = if ($m.Groups[1].Success) { $m.Groups[1].Value }
-              elseif ($m.Groups[2].Success) { $m.Groups[2].Value }
-              elseif ($m.Groups[3].Success) { $m.Groups[3].Value }
-              else { $m.Groups[4].Value }
-    if ([string]::IsNullOrEmpty($marker)) { continue }
-
-    $nextNL = $text.IndexOf("`n", $m.Index)
-    if ($nextNL -ge 0)
-    {
-        $bodyStart = $nextNL + 1
-        if ($text.IndexOf($marker, $bodyStart, [System.StringComparison]::Ordinal) -ge 0)
-        {
-            $rxEnd = [regex]::new("(?m)^[ \t]*" + [regex]::Escape($marker) + "[ \t]*(?:\n|$)")
-            $endMatch = $rxEnd.Match($text, $bodyStart)
-            if ($endMatch.Success)
-            {
-                $bodyEnd = $endMatch.Index + $endMatch.Length
-                _MaskSpan $chars $bodyStart ($bodyEnd - $bodyStart) $fill
-            }
-        }
-    }
+    $chars[$m.Index + $m.Length - 1] = $fill
 }
 
-# 2. __DATA__ section: literal data, not comments
-$rxData = [regex]::new('(?m)^__DATA__\s*$[\s\S]*')
-$dataMatch = $rxData.Match($text)
-if ($dataMatch.Success)
+# 2. Verbatim environments (\begin{verbatim}, lstlisting, minted, filecontents)
+if ($text.IndexOf('\begin{', [System.StringComparison]::Ordinal) -ge 0)
 {
-    _MaskSpan $chars $dataMatch.Index $dataMatch.Length $fill
-}
-
-# 3. Literals regex: $# sigils, quote-like operators, regexes, strings
-$rxLit = [regex]::new(
-    '(?s)\$\#(?:\w+|\{[^\n\}]+\}|\$\w+|[^\s\n])?' +
-    '|\b(?:qw|qq|qx|qr|q)\s*\((?:\\.|[^)\\])*\)' +
-    '|\b(?:qw|qq|qx|qr|q)\s*\{(?:\\.|[^}\\])*\}' +
-    '|\b(?:qw|qq|qx|qr|q)\s*\[(?:\\.|[^\]\\])*\]' +
-    '|\b(?:qw|qq|qx|qr|q)\s*<(?:\\.|[^>\\])*>' +
-    '|\b(?:qw|qq|qx|qr|q)\s*/(?:\\.|[^/\\\n])*/' +
-    '|\b(?:qw|qq|qx|qr|q)\s*!(?:\\.|[^!\\\n])*!' +
-    '|\b(?:qw|qq|qx|qr|q)\s*''(?:\\.|[^''\\\n])*''' +
-    '|\b(?:qw|qq|qx|qr|q)\s*"(?:\\.|[^"\\\n])*"' +
-    '|\bs/(?:\\.|[^/\\\n])*/(?:\\.|[^/\\\n])*/[msixpodualgcer]*' +
-    '|\bs\{[^\n\}]*\}\s*\{[^\n\}]*\}[msixpodualgcer]*' +
-    '|\bs\[[^\n\]]*\]\s*\[[^\n\]]*\][msixpodualgcer]*' +
-    '|\bm/(?:\\.|[^/\\\n])*/[msixpodualgcer]*' +
-    '|\bm\{[^\n\}]*\}[msixpodualgcer]*' +
-    '|\b(?:tr|y)/(?:\\.|[^/\\\n])*/(?:\\.|[^/\\\n])*/[cds]*' +
-    '|\b(?:tr|y)\{[^\n\}]*\}\s*\{[^\n\}]*\}[cds]*' +
-    '|"(?:\\.|[^"\\\n])*"' +
-    '|''(?:\\.|[^''\\\n])*''' +
-    '|`(?:\\.|[^`\\\n])*`' +
-    '|(?<=[=(,:[!&|?+*%~^<>;{}\s-]|^)/(?!/|\*)(?:\\.|[^/\r\n\\])+/[msixpodualgcer]*' +
-    '|"(?:\\.|[^"\\\n])*' +
-    '|''(?:\\.|[^''\\\n])*' +
-    '|`(?:\\.|[^`\\\n])*',
-    'None'
-)
-
-foreach ($m in $rxLit.Matches($text))
-{
-    if ($m.Value.IndexOf("`n") -eq -1)
-    {
-        [System.Array]::Fill($chars, $fill, $m.Index, $m.Length)
-    }
-    else
+    $rxVerbatimEnv = [regex]::new(
+        '(?sm)^[ \t]*\\begin\{(?:verbatim\*?|lstlisting\*?|minted\*?|filecontents\*?)\}(?:\[[^\n]*\])?(?:\{[^\n]*\})?[\s\S]*?^[ \t]*\\end\{(?:verbatim\*?|lstlisting\*?|minted\*?|filecontents\*?)\}[^\S\n]*(?:\n|$)',
+        'None'
+    )
+    foreach ($m in $rxVerbatimEnv.Matches($text))
     {
         _MaskSpan $chars $m.Index $m.Length $fill
     }
 }
+
+# 3. Inline verbatim commands (\verb, \lstinline)
+if ($text.IndexOf('\verb', [System.StringComparison]::Ordinal) -ge 0)
+{
+    $rxVerb = [regex]::new('\\verb\*?([^\s\w\\])[^\n]*?\1', 'None')
+    foreach ($m in $rxVerb.Matches($text))
+    {
+        [System.Array]::Fill($chars, $fill, $m.Index, $m.Length)
+    }
+}
+
+if ($text.IndexOf('\lstinline', [System.StringComparison]::Ordinal) -ge 0)
+{
+    $rxLstInline = [regex]::new('\\lstinline(?:\s*\[[^\n]*\])?\s*([^\s\w\\])[^\n]*?\1', 'None')
+    foreach ($m in $rxLstInline.Matches($text))
+    {
+        [System.Array]::Fill($chars, $fill, $m.Index, $m.Length)
+    }
+}
+
+# 4. URL and path commands (\url{...}, \path{...}, \nolinkurl{...})
+if ($text.IndexOf('\url', [System.StringComparison]::Ordinal) -ge 0 -or
+    $text.IndexOf('\path', [System.StringComparison]::Ordinal) -ge 0 -or
+    $text.IndexOf('\nolinkurl', [System.StringComparison]::Ordinal) -ge 0)
+{
+    $rxUrl = [regex]::new('\\(?:url|path|nolinkurl)\s*\{[^\n\}]*\}', 'None')
+    foreach ($m in $rxUrl.Matches($text))
+    {
+        [System.Array]::Fill($chars, $fill, $m.Index, $m.Length)
+    }
+}
+
 $view = [string]::new($chars)
 #endregion
 
-#region POD Documentation
-# In Perl, POD (=head1 ... =cut) represents both documentation blocks and
-# multi-line docstrings. 'doc-strings' and 'block-comments' both strip POD blocks.
-if ($stripDoc -or $stripBlock)
+#region BlockComments
+# Explicit comment environment (\begin{comment} ... \end{comment})
+if (($stripBlock -or $stripDoc) -and $view.IndexOf('\begin{comment}', [System.StringComparison]::Ordinal) -ge 0)
 {
-    $rxPod = [regex]::new('(?sm)^=[a-zA-Z]\w*.*?(?:^=cut[^\n]*(?:\n|$)|(?!\n)\Z)')
-    foreach ($m in $rxPod.Matches($view))
+    $rxCommentEnv = [regex]::new('(?sm)^[ \t]*\\begin\{comment\}[\s\S]*?^[ \t]*\\end\{comment\}[^\S\n]*(?:\n|$)', 'None')
+    foreach ($m in $rxCommentEnv.Matches($view))
     {
         $spansToStrip.Add([pscustomobject]@{ Start = $m.Index; End = $m.Index + $m.Length })
     }
@@ -161,7 +156,7 @@ if ($stripDoc -or $stripBlock)
 #region StandaloneLines
 if ($stripCB -or $stripLine)
 {
-    $rxLine = [regex]::new('(?m)^([^\S\n]*)#[^\n]*(\n)?', 'None')
+    $rxLine = [regex]::new('(?m)^([^\S\n]*)%[^\n]*(\n)?', 'None')
     $standaloneMatches = [System.Collections.Generic.List[pscustomobject]]::new()
     $currentLine = 1
     $lastOffset = 0
@@ -182,6 +177,13 @@ if ($stripCB -or $stripLine)
 
         # Shebang on line 1 is FrontMatter — never stripped
         if ($s -eq 0 -and $lineText.StartsWith('#!')) { continue }
+
+        # Magic TeX / editor directives on header lines (lines 1..5) are FrontMatter — never stripped
+        # e.g. % !TeX program = pdflatex, %!TEX root = main.tex, % -*- mode: LaTeX -*-
+        if ($lineNum -le 5 -and ($lineText -match '^%\s*(!TEX|!TeX|!BIB|!Bib|-\*-|&)' -or $lineText -match '^%\s*!'))
+        {
+            continue
+        }
 
         $hashIdx = $m.Index + $m.Groups[1].Length
         $before = $view.Substring($m.Index, $hashIdx - $m.Index)
@@ -233,13 +235,38 @@ if ($stripCB -or $stripLine)
 #region InlineComments
 if ($stripInline)
 {
-    $rxInline = [regex]::new('[ \t]*#[^\n]*', 'None')
+    $rxInline = [regex]::new('([ \t]*)%([^\n]*)', 'None')
     foreach ($m in $rxInline.Matches($view))
     {
         $lineStart = $view.LastIndexOf("`n", $m.Index)
         $lineStart = if ($lineStart -eq -1) { 0 } else { $lineStart + 1 }
         $before = $view.Substring($lineStart, $m.Index - $lineStart)
         if ($before -notmatch '\S') { continue }
+
+        $leadingWs = $m.Groups[1].Value
+        $commentBody = $m.Groups[2].Value
+        $hasText = ($commentBody -match '\S')
+
+        if ($keepWhitespaceSuppression)
+        {
+            # If pure trailing '%' without text (e.g. \foo{% or \bar%), keep it untouched
+            if (-not $hasText) { continue }
+
+            # If attached directly to code (e.g. \foo{% comment), strip only the comment body,
+            # leaving the '%' token to suppress whitespace.
+            if ($leadingWs.Length -eq 0)
+            {
+                $bodyStart = $m.Index + 1
+                $bodyEnd = $m.Index + $m.Length
+                if ($bodyEnd -gt $bodyStart)
+                {
+                    $spansToStrip.Add([pscustomobject]@{ Start = $bodyStart; End = $bodyEnd })
+                }
+                continue
+            }
+        }
+
+        # Standard inline comment with whitespace before '%' (e.g. \setlength{...}  % comment)
         $spansToStrip.Add([pscustomobject]@{ Start = $m.Index; End = $m.Index + $m.Length })
     }
 }
@@ -295,8 +322,8 @@ $stripped = $sb.ToString()
 $record = if ($includeMeta)
 {
     [pscustomobject]@{
-        Processor      = (Resolve-ProcessorLabel -Implementation 'rs.pm.strip' -Config $Config)
-        Implementation = 'rs.pm.strip'
+        Processor      = (Resolve-ProcessorLabel -Implementation 'rs.tex.strip' -Config $Config)
+        Implementation = 'rs.tex.strip'
         Operations     = @($ops)
     }
 }

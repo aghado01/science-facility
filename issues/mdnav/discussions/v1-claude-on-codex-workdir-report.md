@@ -161,9 +161,6 @@ Three things I don't want to decide for you:
 
 # yea but you are conflating 'corpus' with the locality. when i initalized those mdnav sessions i pointed to a few papers. in any given session the corpus is not well localized, so each session needs to preserve the provenacne of its source materials internally. the location of a .doc-dive folder does not mean the folder it's sitting in is necessarily its entire corpus. portability and self-containment are important her
 
----
-
-# [Request interrupted by user]
 
 ---
 

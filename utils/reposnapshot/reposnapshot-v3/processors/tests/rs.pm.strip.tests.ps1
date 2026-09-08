@@ -223,6 +223,13 @@ try
     $rFake = Invoke-Processor -Item $fakePod
     Assert-True ($rFake.Content -match '=head1 NOT POD') 'fake POD inside string preserved'
     Assert-True ($rFake.Content -notmatch 'real comment') 'real comment outside string stripped'
+
+    # Heredoc edge cases: << inside q{} and bitshift << must not be parsed as heredocs
+    $fakeHeredoc = "Parse::RecDescent::_trace(q{<<Didn't match rule>>});`n# real comment`nmy `$shift = `$a << 2;`n"
+    $rFakeHd = Invoke-Processor -Item $fakeHeredoc
+    Assert-True ($rFakeHd.Content -match '<<Didn''t match rule>>') 'q{<<...>>} in trace literal preserved'
+    Assert-True ($rFakeHd.Content -match 'my \$shift = \$a << 2;') 'bitshift << preserved'
+    Assert-True ($rFakeHd.Content -notmatch 'real comment') 'comment following non-heredocs stripped'
     #endregion
 
     #region Test5_RealSpecimen

@@ -28,7 +28,8 @@
             "pm",
             "pl",
             "t",
-            "pod"
+            "pod",
+            "ltxml"
           ]
         },
         {
@@ -63,6 +64,20 @@
             "py",
             "pyw",
             "pyi"
+          ]
+        },
+        {
+          "File": "rs.tex.strip.ps1",
+          "Extensions": [
+            "tex",
+            "sty",
+            "cls",
+            "dtx",
+            "ins",
+            "ltx",
+            "bbx",
+            "cbx",
+            "def"
           ]
         }
       ]
