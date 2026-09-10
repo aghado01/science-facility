@@ -1,4 +1,5 @@
 import asyncio
+import json
 import os
 import unittest
 from pathlib import Path
@@ -62,26 +63,10 @@ class PowerShellProfileTests(unittest.TestCase):
 
         self.assertEqual(profile, profile_path)
 
-    def test_configured_profile_is_included_in_spawned_command(self):
-        process = mock.Mock()
-        process.returncode = 0
-        process.communicate.return_value = ("profile-loaded\n", "")
-        environment = {
-            "MCP_POWERSHELL_EXECUTABLE": "C:/runtime/pwsh.exe",
-            "MCP_POWERSHELL_PROFILE": "C:/profiles/client-a.ps1",
-        }
-
-        with mock.patch.dict(os.environ, environment, clear=True):
-            with mock.patch("server.subprocess.Popen", return_value=process) as popen:
-                output = server._run_powershell("Get-ProfileValue")
-
-        command = popen.call_args.args[0]
-        popen_env = popen.call_args.kwargs["env"]
-        self.assertEqual(command[:3], ["C:/runtime/pwsh.exe", "-NoProfile", "-Command"])
-        self.assertIn("$env:MCP_POWERSHELL_PROFILE", command[3])
-        self.assertEqual(popen_env["MCP_POWERSHELL_PROFILE"], "C:/profiles/client-a.ps1")
-        self.assertEqual(output, "profile-loaded\n")
-
+    def test_profile_is_embedded_in_command_text(self):
+        text = server._build_powershell_code("Get-ProfileValue")
+        self.assertIn("$env:MCP_POWERSHELL_PROFILE", text)
+        self.assertIn("Get-ProfileValue", text)
 
     @unittest.skipUnless(
         server.DEFAULT_POWERSHELL_EXECUTABLE.is_file(),
@@ -93,9 +78,10 @@ class PowerShellProfileTests(unittest.TestCase):
         }
 
         with mock.patch.dict(os.environ, environment, clear=True):
-            output = server._run_powershell("$env:MCP_POWERSHELL_PROFILE")
+            result = server._run_powershell("$env:MCP_POWERSHELL_PROFILE", timeout_seconds=30)
 
-        self.assertIn("profile-pwsh.ps1", output)
+        self.assertTrue(result["success"])
+        self.assertIn("profile-pwsh.ps1", result["stdout"])
 
     @unittest.skipUnless(
         server.DEFAULT_POWERSHELL_EXECUTABLE.is_file(),
@@ -109,9 +95,10 @@ class PowerShellProfileTests(unittest.TestCase):
         }
 
         with mock.patch.dict(os.environ, environment, clear=True):
-            output = server._run_powershell("Get-McpPowerShellProfileTestValue")
+            result = server._run_powershell("Get-McpPowerShellProfileTestValue", timeout_seconds=30)
 
-        self.assertEqual(output.strip(), "profile-loaded")
+        self.assertTrue(result["success"])
+        self.assertEqual(result["stdout"].strip(), "profile-loaded")
 
     @unittest.skipUnless(
         server.DEFAULT_POWERSHELL_EXECUTABLE.is_file(),
@@ -119,13 +106,73 @@ class PowerShellProfileTests(unittest.TestCase):
     )
     def test_bundled_powershell_version(self):
         with mock.patch.dict(
-            os.environ, {"MCP_POWERSHELL_EXECUTABLE": ""}, clear=True
+            os.environ,
+            {"MCP_POWERSHELL_EXECUTABLE": "", "MCP_POWERSHELL_PROFILE": " "},
+            clear=True,
         ):
-            output = server._run_powershell(
-                "$PSVersionTable.PSVersion.ToString()"
+            result = server._run_powershell(
+                "$PSVersionTable.PSVersion.ToString()", timeout_seconds=30
             )
 
-        self.assertEqual(output.strip(), "7.6.4")
+        self.assertTrue(result["success"])
+        self.assertEqual(result["stdout"].strip(), "7.6.4")
+        self.assertGreaterEqual(
+            tuple(int(p) for p in result["powershell"]["version"].split(".")[:2]),
+            (7, 5),
+        )
+
+
+class PowerShellResultContractTests(unittest.TestCase):
+    @unittest.skipUnless(
+        server.DEFAULT_POWERSHELL_EXECUTABLE.is_file(),
+        "the bundled PowerShell runtime is not installed",
+    )
+    def test_successful_stderr_is_retained(self):
+        result = server._run_powershell(
+            "[Console]::Error.WriteLine('warn'); 'ok'", timeout_seconds=30
+        )
+        self.assertTrue(result["success"])
+        self.assertEqual(result["native_exit_code"], 0)
+        self.assertIn("ok", result["stdout"])
+        self.assertIn("warn", result["stderr"])
+
+    @unittest.skipUnless(
+        server.DEFAULT_POWERSHELL_EXECUTABLE.is_file(),
+        "the bundled PowerShell runtime is not installed",
+    )
+    def test_failure_preserves_stdout_and_nonzero_exit(self):
+        result = server._run_powershell(
+            "Write-Output 'report'; exit 7", timeout_seconds=30
+        )
+        self.assertFalse(result["success"])
+        self.assertEqual(result["native_exit_code"], 7)
+        self.assertEqual(result["outcome"], "exited")
+        self.assertIn("report", result["stdout"])
+
+    @unittest.skipUnless(
+        server.DEFAULT_POWERSHELL_EXECUTABLE.is_file(),
+        "the bundled PowerShell runtime is not installed",
+    )
+    def test_timeout_kills_descendant_and_keeps_partial_stdout(self):
+        result = server._run_powershell(
+            "Write-Output 'before'; Start-Sleep -Seconds 30; Write-Output 'after'",
+            timeout_seconds=2,
+        )
+        self.assertEqual(result["outcome"], "timed-out")
+        self.assertFalse(result["success"])
+        self.assertIn("before", result["stdout"])
+        self.assertNotIn("after", result["stdout"])
+        self.assertEqual(result["cleanup"], "complete")
+
+    def test_missing_cwd_does_not_run_code(self):
+        result = server._run_powershell("Write-Output 'sentinel'", cwd="D:/no-such-cwd-latexai")
+        self.assertEqual(result["outcome"], "failed-to-launch")
+        self.assertIn("cwd is not a directory", result["stderr"])
+        self.assertNotIn("sentinel", result["stdout"])
+
+    def test_zero_timeout_without_unbounded_is_rejected(self):
+        with self.assertRaises(ValueError):
+            server._run_powershell("Write-Output 1", timeout_seconds=0)
 
 
 class PowerShellMcpIntegrationTests(unittest.TestCase):
@@ -142,14 +189,14 @@ class PowerShellMcpIntegrationTests(unittest.TestCase):
         self.assertEqual(initialization.serverInfo.name, "pwsh_exec")
         self.assertEqual([tool.name for tool in tools.tools], ["run_powershell"])
         self.assertFalse(result.isError)
-        self.assertEqual(result.content[0].text.strip(), "7.6.4")
+        payload = json.loads(result.content[0].text)
+        self.assertEqual(payload["stdout"].strip(), "7.6.4")
+        self.assertTrue(payload["success"])
 
     async def _call_bundled_powershell_over_stdio(self):
         environment = os.environ.copy()
         environment.pop(server.POWERSHELL_EXECUTABLE_ENV_VAR, None)
         environment.pop(server.POWERSHELL_PROFILE_ENV_VAR, None)
-        # MCP clients inherit their workspace directory, so the registration
-        # must select this project explicitly instead of relying on cwd.
         parameters = StdioServerParameters(
             command=str(RUNTIME_UV_EXECUTABLE),
             args=[
@@ -170,7 +217,10 @@ class PowerShellMcpIntegrationTests(unittest.TestCase):
                 tools = await session.list_tools()
                 result = await session.call_tool(
                     "run_powershell",
-                    {"code": "$PSVersionTable.PSVersion.ToString()"},
+                    {
+                        "code": "$PSVersionTable.PSVersion.ToString()",
+                        "timeout_seconds": 30,
+                    },
                 )
 
         return initialization, tools, result

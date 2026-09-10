@@ -9,7 +9,9 @@ their own optional profiles.
 
 The server exposes one tool:
 
-- `run_powershell(code: str) -> str`
+- `run_powershell(code, cwd=None, timeout_seconds=None, output_directory=None, unbounded=False) -> object`
+
+The result schema is `pwsh_exec/invocation/0.1`. It always includes `outcome`, `success`, `native_exit_code`, separate `stdout`/`stderr`, requested/effective timeout, cleanup, and PowerShell identity. `success` is true only for a normal zero exit with complete cleanup. The default timeout is 7800 seconds (test-batch wait plus cleanup). `unbounded` is an explicit diagnostic opt-in. `timeout_seconds` must be positive unless `unbounded` is true.
 
 Each tool call starts a new PowerShell process with `-NoProfile`; automatic
 user and host profiles are never loaded.
