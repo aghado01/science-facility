@@ -224,8 +224,10 @@ try {
                     '-B'
                     $serverPath.Replace('\', '/')
                 )
-                tool_timeout_sec = 8400
-                env = [ordered]@{}
+                env = [ordered]@{
+                    MCP_POWERSHELL_EXECUTABLE = (Join-Path $depsRoot 'bin\pwsh\pwsh.exe').Replace('\', '/')
+                    MCP_POWERSHELL_PROFILE = (Join-Path $projectRoot 'scripts\pwsh\profile-pwsh.ps1').Replace('\', '/')
+                }
             }
         }
     } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $registrationPath -Encoding utf8

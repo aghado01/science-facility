@@ -18,7 +18,6 @@
         "-B",
         "./mcp/pwsh_exec/server.py"
       ],
-      "tool_timeout_sec": 8400,
       "env": {
         "MCP_POWERSHELL_EXECUTABLE": "./mcp/pwsh_exec/deps/bin/pwsh/pwsh.exe",
         "MCP_POWERSHELL_PROFILE": "./mcp/pwsh_exec/scripts/pwsh/profile-pwsh.ps1"

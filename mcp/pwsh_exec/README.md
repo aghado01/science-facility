@@ -149,54 +149,33 @@ The recipe:
 
 ## Client configuration
 
-All clients launch the owned interpreter under `deps/python/`. The generated
-`deps/registrations/pwsh_exec.json` contains resolved paths for this
-checkout and can be copied into a client's MCP configuration. Its shape is:
+Spawn is the owned interpreter. **Env is per consumer**; do not copy one block
+everywhere. Restore writes the generic registration (bundled pwsh + default
+profile). LaTeXAI names `scripts/profile.ps1` and its `PERL_ROOT` /
+`CDXSCI_ROOT` / `LATEXAI_ROOT` and does **not** set a client `tool_timeout_sec`
+(child scripts own `WaitTimeoutSeconds`).
+
+Generic:
 
 ```json
 {
   "mcpServers": {
     "pwsh_exec": {
       "command": "<pwsh_exec-root>/deps/python/cpython-<version>-*/python.exe",
-      "args": [
-        "-B",
-        "<pwsh_exec-root>/server.py"
-      ],
-      "tool_timeout_sec": 8400,
+      "args": ["-B", "<pwsh_exec-root>/server.py"],
       "env": {
-        "MCP_POWERSHELL_PROFILE": "C:/path/to/this-client/mcp-profile.ps1"
+        "MCP_POWERSHELL_EXECUTABLE": "<pwsh_exec-root>/deps/bin/pwsh/pwsh.exe",
+        "MCP_POWERSHELL_PROFILE": "<pwsh_exec-root>/scripts/pwsh/profile-pwsh.ps1"
       }
     }
   }
 }
 ```
 
-Grok and Codex honor `tool_timeout_sec` on their TOML registrations (Grok:
-`.grok/config.toml` `[mcp_servers.pwsh_exec]`; Codex: `.codex/config.toml`).
-Grok's default is 6000 s; Codex's default is 60 s. Neither `.mcp.json` extra
-field nor the server default can extend a shorter client deadline.
+LaTeXAI adds the project profile and runtime roots, and omits `tool_timeout_sec`.
 
-```toml
-[mcp_servers.pwsh_exec]
-command = "<pwsh_exec-root>/deps/python/cpython-<version>-*/python.exe"
-args = ["-B", "<pwsh_exec-root>/server.py"]
-startup_timeout_sec = 30
-tool_timeout_sec = 8400
-
-[mcp_servers.pwsh_exec.env]
-MCP_POWERSHELL_PROFILE = "C:/path/to/this-client/mcp-profile.ps1"
-```
-
-Omit `MCP_POWERSHELL_PROFILE` to use the default `scripts/pwsh/profile-pwsh.ps1` profile (if present). Set
-`MCP_POWERSHELL_EXECUTABLE` only when deliberately overriding the bundled
-runtime.
-
-Client windows:
-
-| Workload | `tool_timeout_sec` | Why |
-| -------- | ------------------ | --- |
-| Generic / TAP test batch | 8400 | Server default 7800 plus 600 s drainage |
-| LaTeXAI gauntlet | 29400 | Policy `WaitTimeoutSeconds` 28800 plus 600 s drainage |
+Grok/Codex client deadlines, when used, live on that consumer's TOML
+(`[mcp_servers.pwsh_exec] tool_timeout_sec`), not on the LaTeXAI registration.
 
 ## Tests
 
@@ -208,7 +187,7 @@ Run from this directory:
 ```
 
 The suite includes dependency-pin contract tests, native supervision tests, and
-an MCP stdio round trip through `deps/bin/uv/uv.exe`. Runtime integrations are
-skipped only when the corresponding restored artifacts are absent. Optional
-coverage: `LATEXAI_ROOT` + `PERL_ROOT` + `CDXSCI_ROOT` for a profile-loaded TAP
-failure; `MCP_POWERSHELL_7_5` for a 7.5 identity probe.
+an MCP stdio round trip through the owned `deps/python` interpreter. Runtime
+integrations are skipped only when the corresponding restored artifacts are
+absent. Optional coverage: `LATEXAI_ROOT` + `PERL_ROOT` + `CDXSCI_ROOT` for a
+profile-loaded TAP failure; `MCP_POWERSHELL_7_5` for a 7.5 identity probe.

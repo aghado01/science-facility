@@ -106,6 +106,16 @@ class DependencyContractTests(unittest.TestCase):
                 (PROJECT_ROOT / "server.py").as_posix(),
             ],
         )
+        self.assertNotIn("tool_timeout_sec", server)
+        env = server["env"]
+        self.assertEqual(
+            Path(env["MCP_POWERSHELL_EXECUTABLE"]),
+            PROJECT_ROOT / "deps" / "bin" / "pwsh" / "pwsh.exe",
+        )
+        self.assertEqual(
+            Path(env["MCP_POWERSHELL_PROFILE"]),
+            PROJECT_ROOT / "scripts" / "pwsh" / "profile-pwsh.ps1",
+        )
 
     @unittest.skipUnless(owned_python() is not None, "owned Python interpreter is not restored")
     def test_owned_interpreter_carries_runtime_packages(self):
