@@ -160,6 +160,7 @@ checkout and can be copied into a client's MCP configuration. Its shape is:
         "--locked",
         "<pwsh_exec-root>/server.py"
       ],
+      "tool_timeout_sec": 8400,
       "env": {
         "MCP_POWERSHELL_PROFILE": "C:/path/to/this-client/mcp-profile.ps1"
       }
@@ -168,14 +169,32 @@ checkout and can be copied into a client's MCP configuration. Its shape is:
 }
 ```
 
+Grok and Codex honor `tool_timeout_sec` on their TOML registrations (Grok:
+`.grok/config.toml` `[mcp_servers.pwsh_exec]`; Codex: `.codex/config.toml`).
+Grok's default is 6000 s; Codex's default is 60 s. Neither `.mcp.json` extra
+field nor the server default can extend a shorter client deadline.
+
+```toml
+[mcp_servers.pwsh_exec]
+command = "<pwsh_exec-root>/deps/bin/uv/uv.exe"
+args = ["run", "--project", "<pwsh_exec-root>", "--no-cache", "--locked", "<pwsh_exec-root>/server.py"]
+startup_timeout_sec = 30
+tool_timeout_sec = 8400
+
+[mcp_servers.pwsh_exec.env]
+MCP_POWERSHELL_PROFILE = "C:/path/to/this-client/mcp-profile.ps1"
+```
+
 Omit `MCP_POWERSHELL_PROFILE` to use the default `scripts/pwsh/profile-pwsh.ps1` profile (if present). Set
 `MCP_POWERSHELL_EXECUTABLE` only when deliberately overriding the bundled
 runtime.
 
-The server default `timeout_seconds` is 7800. That cannot extend a shorter client
-tool deadline. Grok Build's default `tool_timeout_sec` is 6000; a client that
-needs the test-batch envelope must set its request window to at least 7800 plus
-cleanup (30 s). A gauntlet needs the Gauntlet `WaitTimeoutSeconds` plus cleanup.
+Client windows:
+
+| Workload | `tool_timeout_sec` | Why |
+| -------- | ------------------ | --- |
+| Generic / TAP test batch | 8400 | Server default 7800 plus 600 s drainage |
+| LaTeXAI gauntlet | 29400 | Policy `WaitTimeoutSeconds` 28800 plus 600 s drainage |
 
 ## Tests
 

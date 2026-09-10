@@ -178,6 +178,7 @@ try {
                     '--locked'
                     (Join-Path $projectRoot 'server.py').Replace('\', '/')
                 )
+                tool_timeout_sec = 8400
                 env = [ordered]@{}
             }
         }
