@@ -1,24 +1,61 @@
 # pwsh_exec
 
-A lightweight stdio MCP server that runs PowerShell code in a fresh child process and
-returns its UTF-8 output. The implementation is client-neutral: multiple MCP
-clients can share the server and bundled PowerShell runtime while selecting
-their own optional profiles.
+A lightweight stdio MCP server that runs PowerShell code in a fresh child process
+and returns a structured invocation result. The implementation is client-neutral:
+multiple MCP clients can share the server and bundled PowerShell runtime while
+selecting their own optional profiles. The server supervises one PowerShell
+process per call; workload scheduling and domain results stay in the called
+scripts.
 
 ## Runtime contract
 
-The server exposes one tool:
+The server exposes one tool, `run_powershell`. Required argument: `code`.
+Optional arguments: `cwd`, `timeout_seconds`, `output_directory`, `unbounded`.
 
-- `run_powershell(code: str) -> str`
+Each call starts a new PowerShell process with `-NoProfile`; automatic user and
+host profiles are never loaded. A configured or default profile is then dotted
+into that process. The selected executable must be PowerShell **7.5 or newer**
+(probe cached per resolved path, before profile or user code).
 
-Each tool call starts a new PowerShell process with `-NoProfile`; automatic
-user and host profiles are never loaded.
-
-The executable resolver uses this order:
+The executable resolver uses this order only:
 
 1. A nonblank `MCP_POWERSHELL_EXECUTABLE` override.
 2. `deps/bin/pwsh/pwsh.exe` beside the MCP server.
-3. `pwsh` and then `powershell` from `PATH`.
+
+There is no PATH search and no user-home, drive-letter, or sibling-checkout
+fallback.
+
+| Argument            | Default | Meaning |
+| ------------------- | ------- | ------- |
+| `code`              | required | PowerShell to run after optional profile load |
+| `cwd`               | server-start cwd | Must exist; the server never `chdir`s |
+| `timeout_seconds`   | 7800 | Covers profile + user code. Must be `> 0` unless `unbounded` |
+| `output_directory`  | none | Caller-owned unique directory; rejected if it exists or lies under `mcp/pwsh_exec/` |
+| `unbounded`         | false | Visible diagnostic opt-in; effective timeout is then JSON `null` |
+
+7800 s is the test-batch envelope (LaTeXAI Test `WaitTimeoutSeconds` 7200 plus 600 s
+drainage). A gauntlet must pass a longer `timeout_seconds`. Cleanup after timeout
+or cancel has a separate 30 s budget. A script's own batch timer does not replace
+this outer deadline. A server timeout cannot extend a shorter **client** request
+deadline (Grok Build default `tool_timeout_sec` is 6000).
+
+The result schema is `pwsh_exec/invocation/0.1`. Fields include `outcome`
+(`exited` \| `timed-out` \| `cancelled` \| `failed-to-launch`), `success` (true
+only for a normal zero native exit **and** complete cleanup), `native_exit_code`
+(JSON `null` when unknown; never substituted with 0), separate `stdout`/`stderr`,
+`capture` accounting, requested vs effective timeout, `cleanup`, `timing_ms`,
+`powershell` identity, `cwd`, and `started_utc`. Unsuccessful MCP calls still
+return this payload (`structuredContent` plus compact text; `isError` when
+`success` is false). Large captures use a short pointer at `output_directory`.
+
+Native exit is the process exit code. The server does not parse stderr, look for
+`Error:`, or read `$LASTEXITCODE`. Zero exit with stderr is still success.
+
+On Windows the child is born into an owned Job Object (`KILL_ON_JOB_CLOSE`)
+after `CREATE_SUSPENDED`. Timeout, MCP request cancellation, and server shutdown
+stop that process tree. `Popen.kill()` of the immediate `pwsh` is not the
+containment mechanism. In-memory stream retention is bounded (2 MiB combined
+head/tail); durable files under `output_directory` keep the raw bytes.
 
 The server recognizes these client-neutral configuration variables:
 
@@ -28,14 +65,15 @@ The server recognizes these client-neutral configuration variables:
 | `MCP_POWERSHELL_PROFILE`    | No       | Absolute path to a custom profile file. Defaults to `scripts/pwsh/profile-pwsh.ps1` beside the MCP server.       |
 
 When a profile is configured or discovered at `scripts/pwsh/profile-pwsh.ps1`, it is resolved with PowerShell's `-LiteralPath`
-semantics and loaded once per tool call. Profile output is suppressed, while
+semantics and loaded once per tool call. Profile success-stream output is suppressed, while
 functions, aliases, modules, variables, and environment changes remain
 available to the requested code in that process. An explicitly configured missing or invalid profile
-causes that invocation to fail instead of silently continuing.
+causes that invocation to fail instead of silently continuing. Profile diagnostics go to the
+child capture, not MCP protocol stdout.
 
-Profiles should be noninteractive: avoid prompts, PSReadLine configuration,
-and console history setup. MCP invocations are not interactive console
-sessions and do not persist state between calls.
+The default profile is noninteractive and project-neutral. Interactive console
+furniture (history, prompt, completions) is opt-in via `MCP_POWERSHELL_INTERACTIVE=1`.
+MCP invocations do not persist state between calls.
 
 ## Local runtime
 
@@ -134,6 +172,11 @@ Omit `MCP_POWERSHELL_PROFILE` to use the default `scripts/pwsh/profile-pwsh.ps1`
 `MCP_POWERSHELL_EXECUTABLE` only when deliberately overriding the bundled
 runtime.
 
+The server default `timeout_seconds` is 7800. That cannot extend a shorter client
+tool deadline. Grok Build's default `tool_timeout_sec` is 6000; a client that
+needs the test-batch envelope must set its request window to at least 7800 plus
+cleanup (30 s). A gauntlet needs the Gauntlet `WaitTimeoutSeconds` plus cleanup.
+
 ## Tests
 
 Run from this directory:
@@ -144,6 +187,8 @@ Run from this directory:
   -m unittest discover -s tests -v
 ```
 
-The suite includes dependency-pin contract tests and an MCP stdio round trip
-through `deps/bin/uv/uv.exe`. Runtime integrations are skipped only when the
-corresponding restored artifacts are absent.
+The suite includes dependency-pin contract tests, native supervision tests, and
+an MCP stdio round trip through `deps/bin/uv/uv.exe`. Runtime integrations are
+skipped only when the corresponding restored artifacts are absent. Optional
+coverage: `LATEXAI_ROOT` + `PERL_ROOT` + `CDXSCI_ROOT` for a profile-loaded TAP
+failure; `MCP_POWERSHELL_7_5` for a 7.5 identity probe.
