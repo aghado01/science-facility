@@ -1,4 +1,5 @@
 /.venv/
+/.cache/
 /bin/
 /deps/
 __pycache__/

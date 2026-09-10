@@ -22,12 +22,21 @@ import server
 from windows_job import pid_is_running
 
 
-RUNTIME_UV_EXECUTABLE = server.MCP_ROOT / "deps" / "bin" / "uv" / "uv.exe"
 FIXTURES = Path(__file__).parent / "fixtures"
+
+
+def owned_python():
+    matches = sorted((server.MCP_ROOT / "deps" / "python").glob("cpython-*/python.exe"))
+    return matches[-1] if matches else None
 
 
 def _have_runtime() -> bool:
     return server.DEFAULT_POWERSHELL_EXECUTABLE.is_file()
+
+
+def _have_owned_python() -> bool:
+    python = owned_python()
+    return python is not None and python.is_file()
 
 
 def _latexai_roots():
@@ -362,8 +371,8 @@ class PowerShellResultContractTests(unittest.TestCase):
 
 class PowerShellMcpIntegrationTests(unittest.TestCase):
     @unittest.skipUnless(
-        _have_runtime() and RUNTIME_UV_EXECUTABLE.is_file(),
-        "the bundled PowerShell and project uv runtimes are not installed",
+        _have_runtime() and _have_owned_python(),
+        "the bundled PowerShell and owned Python interpreter are not installed",
     )
     def test_stdio_server_runs_from_outside_project_directory(self):
         initialization, tools, result = asyncio.run(self._call_over_stdio())
@@ -378,8 +387,8 @@ class PowerShellMcpIntegrationTests(unittest.TestCase):
         self.assertEqual(payload["schema"], invocation.RESULT_SCHEMA)
 
     @unittest.skipUnless(
-        _have_runtime() and RUNTIME_UV_EXECUTABLE.is_file(),
-        "the bundled PowerShell and project uv runtimes are not installed",
+        _have_runtime() and _have_owned_python(),
+        "the bundled PowerShell and owned Python interpreter are not installed",
     )
     def test_stdio_nonzero_exit_keeps_structured_payload(self):
         result = asyncio.run(
@@ -399,16 +408,8 @@ class PowerShellMcpIntegrationTests(unittest.TestCase):
         environment.pop(server.POWERSHELL_EXECUTABLE_ENV_VAR, None)
         environment.pop(server.POWERSHELL_PROFILE_ENV_VAR, None)
         return StdioServerParameters(
-            command=str(RUNTIME_UV_EXECUTABLE),
-            args=[
-                "run",
-                "--project",
-                str(server.MCP_ROOT),
-                "--locked",
-                "--no-sync",
-                "--offline",
-                str(server.MCP_ROOT / "server.py"),
-            ],
+            command=str(owned_python()),
+            args=["-B", str(server.MCP_ROOT / "server.py")],
             cwd=server.MCP_ROOT.parent,
             env=environment,
         )
@@ -644,8 +645,8 @@ Start-Sleep -Seconds 60
         self.assertNotEqual(first["id"], second["id"])
 
     @unittest.skipUnless(
-        _have_runtime() and RUNTIME_UV_EXECUTABLE.is_file(),
-        "the bundled PowerShell and project uv runtimes are not installed",
+        _have_runtime() and _have_owned_python(),
+        "the bundled PowerShell and owned Python interpreter are not installed",
     )
     def test_mcp_cancel_stops_owned_process(self):
         asyncio.run(self._mcp_cancel())
@@ -656,16 +657,8 @@ Start-Sleep -Seconds 60
         environment.pop(server.POWERSHELL_EXECUTABLE_ENV_VAR, None)
         environment["MCP_POWERSHELL_PROFILE"] = " "
         parameters = StdioServerParameters(
-            command=str(RUNTIME_UV_EXECUTABLE),
-            args=[
-                "run",
-                "--project",
-                str(server.MCP_ROOT),
-                "--locked",
-                "--no-sync",
-                "--offline",
-                str(server.MCP_ROOT / "server.py"),
-            ],
+            command=str(owned_python()),
+            args=["-B", str(server.MCP_ROOT / "server.py")],
             cwd=server.MCP_ROOT.parent,
             env=environment,
         )
@@ -710,8 +703,8 @@ Start-Sleep -Seconds 60
         ready.unlink(missing_ok=True)
 
     @unittest.skipUnless(
-        _have_runtime() and RUNTIME_UV_EXECUTABLE.is_file(),
-        "the bundled PowerShell and project uv runtimes are not installed",
+        _have_runtime() and _have_owned_python(),
+        "the bundled PowerShell and owned Python interpreter are not installed",
     )
     def test_stdio_disconnect_stops_owned_process(self):
         asyncio.run(self._stdio_disconnect())
@@ -722,16 +715,8 @@ Start-Sleep -Seconds 60
         environment.pop(server.POWERSHELL_EXECUTABLE_ENV_VAR, None)
         environment["MCP_POWERSHELL_PROFILE"] = " "
         parameters = StdioServerParameters(
-            command=str(RUNTIME_UV_EXECUTABLE),
-            args=[
-                "run",
-                "--project",
-                str(server.MCP_ROOT),
-                "--locked",
-                "--no-sync",
-                "--offline",
-                str(server.MCP_ROOT / "server.py"),
-            ],
+            command=str(owned_python()),
+            args=["-B", str(server.MCP_ROOT / "server.py")],
             cwd=server.MCP_ROOT.parent,
             env=environment,
         )
@@ -771,8 +756,8 @@ Start-Sleep -Seconds 60
         ready.unlink(missing_ok=True)
 
     @unittest.skipUnless(
-        _have_runtime() and RUNTIME_UV_EXECUTABLE.is_file(),
-        "the bundled PowerShell and project uv runtimes are not installed",
+        _have_runtime() and _have_owned_python(),
+        "the bundled PowerShell and owned Python interpreter are not installed",
     )
     def test_abrupt_parent_death_kills_job_child(self):
         pid_file = Path(tempfile.gettempdir()) / f"pwsh-exec-abrupt-{uuid.uuid4().hex}.txt"
@@ -780,14 +765,7 @@ Start-Sleep -Seconds 60
         import subprocess as sp
 
         command = [
-            str(RUNTIME_UV_EXECUTABLE),
-            "run",
-            "--project",
-            str(server.MCP_ROOT),
-            "--locked",
-            "--no-sync",
-            "--offline",
-            "python",
+            str(owned_python()),
             str(helper),
             "--pid-file",
             str(pid_file),

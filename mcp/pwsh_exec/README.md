@@ -106,22 +106,26 @@ loading under a sandbox even when `pwsh.exe` itself starts successfully.
 brewery/uv/
   pin.json
   restore-uv.ps1
-deps/bin/uv/           # ignored verified uv executable
+deps/bin/uv/           # ignored verified uv executable (restore only)
+deps/bin/pwsh/         # ignored bundled PowerShell
+deps/python/           # ignored owned CPython; site-packages live here
+.cache/uv/             # ignored download cache
 .python-version        # committed interpreter pin
 pyproject.toml         # committed dependency and uv-version contract
 uv.lock                # committed complete dependency resolution
 ```
 
+Restore rehydrates that tree on a cold machine. `uv` is the restore tool, not a
+Python package and not the MCP parent. The MCP process is the owned
+`python.exe`; packages are already on that interpreter's `sys.path`. There is
+no project `.venv` overlay and no spawn-time `uv sync`.
+
 The same uv version is enforced independently by `brewery/uv/pin.json` and
-`[tool.uv].required-version` in `pyproject.toml`. `uv` is not a Python
-dependency and must not appear in `uv.lock` or `.venv`. Contract tests reject
-drift between those layers. Restore runs `uv sync --locked`; MCP spawn is
-`uv run --locked --no-sync --offline` so start does not write the environment.
+`[tool.uv].required-version` in `pyproject.toml`. Contract tests reject drift
+between those layers.
 
 This structure is wholly local to `pwsh_exec`. The bootstrap script does not
 discover or call another project, `PDenv`, or an ambient uv/Python executable.
-It uses uv's normal shared cache and managed-Python storage only as disposable
-upstream storage; neither is treated as project-owned source or configuration.
 
 ## Restore
 
@@ -137,15 +141,15 @@ The recipe:
 2. Downloads it from the official uv release and verifies both the archive and
    extracted bootstrap executable SHA-256 values.
 3. Restores the executable under ignored `deps/bin/uv/`.
-4. Installs the exact interpreter from `.python-version` through that uv binary.
-5. Synchronizes `.venv` from `uv.lock` (`uv sync --locked --no-dev`).
+4. Installs the pinned CPython under ignored `deps/python/` (cache under `.cache/uv/`).
+5. Installs `uv.lock` into that interpreter's site-packages.
 6. Writes an ignored, machine-local registration to
-   `deps/registrations/pwsh_exec.json`.
-7. Runs the tests with `--locked --no-sync --offline`.
+   `deps/registrations/pwsh_exec.json` that launches the owned `python.exe`.
+7. Runs the tests with that interpreter.
 
 ## Client configuration
 
-All clients launch through the uv executable located in `deps/bin/uv/uv.exe`. The generated
+All clients launch the owned interpreter under `deps/python/`. The generated
 `deps/registrations/pwsh_exec.json` contains resolved paths for this
 checkout and can be copied into a client's MCP configuration. Its shape is:
 
@@ -153,14 +157,9 @@ checkout and can be copied into a client's MCP configuration. Its shape is:
 {
   "mcpServers": {
     "pwsh_exec": {
-      "command": "<pwsh_exec-root>/deps/bin/uv/uv.exe",
+      "command": "<pwsh_exec-root>/deps/python/cpython-<version>-*/python.exe",
       "args": [
-        "run",
-        "--project",
-        "<pwsh_exec-root>",
-        "--locked",
-        "--no-sync",
-        "--offline",
+        "-B",
         "<pwsh_exec-root>/server.py"
       ],
       "tool_timeout_sec": 8400,
@@ -179,8 +178,8 @@ field nor the server default can extend a shorter client deadline.
 
 ```toml
 [mcp_servers.pwsh_exec]
-command = "<pwsh_exec-root>/deps/bin/uv/uv.exe"
-args = ["run", "--project", "<pwsh_exec-root>", "--locked", "--no-sync", "--offline", "<pwsh_exec-root>/server.py"]
+command = "<pwsh_exec-root>/deps/python/cpython-<version>-*/python.exe"
+args = ["-B", "<pwsh_exec-root>/server.py"]
 startup_timeout_sec = 30
 tool_timeout_sec = 8400
 
@@ -204,9 +203,8 @@ Client windows:
 Run from this directory:
 
 ```powershell
-& '.\deps\bin\uv\uv.exe' `
-  run --project . --locked --no-sync --offline python -B -W error `
-  -m unittest discover -s tests -v
+& '.\deps\python\cpython-<version>-*\python.exe' `
+  -B -W error -m unittest discover -s tests -v
 ```
 
 The suite includes dependency-pin contract tests, native supervision tests, and

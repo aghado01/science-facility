@@ -14,7 +14,13 @@ PYTHON_PIN_PATH = PROJECT_ROOT / ".python-version"
 PYPROJECT_PATH = PROJECT_ROOT / "pyproject.toml"
 LOCK_PATH = PROJECT_ROOT / "uv.lock"
 BOOTSTRAP_UV = PROJECT_ROOT / "deps" / "bin" / "uv" / "uv.exe"
+OWNED_PYTHON_ROOT = PROJECT_ROOT / "deps" / "python"
 REGISTRATION_PATH = PROJECT_ROOT / "deps" / "registrations" / "pwsh_exec.json"
+
+
+def owned_python():
+    matches = sorted(OWNED_PYTHON_ROOT.glob("cpython-*/python.exe"))
+    return matches[-1] if matches else None
 
 
 def read_toml(path: Path):
@@ -88,27 +94,32 @@ class DependencyContractTests(unittest.TestCase):
     def test_generated_registration_uses_only_project_local_executables(self):
         registration = json.loads(REGISTRATION_PATH.read_text(encoding="utf-8"))
         server = registration["mcpServers"]["pwsh_exec"]
+        command = Path(server["command"])
 
-        self.assertEqual(Path(server["command"]), BOOTSTRAP_UV)
+        self.assertEqual(command.name, "python.exe")
+        self.assertEqual(command.parent.parent, OWNED_PYTHON_ROOT.resolve())
+        self.assertTrue(command.parent.name.startswith("cpython-"))
         self.assertEqual(
             server["args"],
             [
-                "run",
-                "--project",
-                PROJECT_ROOT.as_posix(),
-                "--locked",
-                "--no-sync",
-                "--offline",
+                "-B",
                 (PROJECT_ROOT / "server.py").as_posix(),
             ],
         )
 
-    @unittest.skipUnless(
-        (PROJECT_ROOT / ".venv" / "Scripts" / "python.exe").is_file(),
-        "project environment is not restored",
-    )
-    def test_project_environment_does_not_contain_a_uv_launcher(self):
-        self.assertFalse((PROJECT_ROOT / ".venv" / "Scripts" / "uv.exe").is_file())
+    @unittest.skipUnless(owned_python() is not None, "owned Python interpreter is not restored")
+    def test_owned_interpreter_carries_runtime_packages(self):
+        python = owned_python()
+        output = subprocess.run(
+            [python, "-c", "import mcp, win32job; print(mcp.__file__)"],
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        ).stdout.replace("\\", "/")
+        self.assertIn("/site-packages/", output)
+        self.assertNotIn("/.venv/", output)
+        self.assertIn("/deps/python/", output)
 
 
 if __name__ == "__main__":

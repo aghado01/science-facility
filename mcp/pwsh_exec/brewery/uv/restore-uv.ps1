@@ -157,13 +157,60 @@ if ($activeUvVersion -ne $expectedVersion) {
     throw "Restored uv version mismatch: expected $expectedVersion, got $activeUvVersion"
 }
 
+$cacheRoot = Join-Path $projectRoot '.cache\uv'
+$pythonRoot = Join-Path $depsRoot 'python'
+$serverPath = Join-Path $projectRoot 'server.py'
+New-Item -ItemType Directory -Path $cacheRoot, $pythonRoot -Force | Out-Null
+
+$previousUvCacheDir = $env:UV_CACHE_DIR
+$previousUvPythonInstallDir = $env:UV_PYTHON_INSTALL_DIR
+$previousUvProjectEnvironment = $env:UV_PROJECT_ENVIRONMENT
+$previousVirtualEnv = $env:VIRTUAL_ENV
+$env:UV_CACHE_DIR = $cacheRoot
+$env:UV_PYTHON_INSTALL_DIR = $pythonRoot
+Remove-Item Env:UV_PROJECT_ENVIRONMENT -ErrorAction SilentlyContinue
+Remove-Item Env:VIRTUAL_ENV -ErrorAction SilentlyContinue
+
 Push-Location -LiteralPath $projectRoot
 try {
     Invoke-Checked -Executable $uvExecutable -Arguments @(
-        'python', 'install', $pythonVersion, '--no-bin'
+        'python', 'install', $pythonVersion, '--managed-python', '--no-bin', '--no-registry'
+    )
+
+    $pythonCandidates = @(
+        Get-ChildItem -LiteralPath $pythonRoot -Recurse -File -Filter 'python.exe' |
+            Where-Object { $_.Directory.Name -like 'cpython-*' }
+    )
+    if ($pythonCandidates.Count -lt 1) {
+        throw "Owned Python interpreter was not installed under $pythonRoot"
+    }
+    $pythonExecutable = $pythonCandidates[0].FullName
+    $expectedPythonRoot = [IO.Path]::GetFullPath($pythonRoot)
+    if (-not ([IO.Path]::GetFullPath($pythonExecutable).StartsWith(
+        ($expectedPythonRoot.TrimEnd('\') + '\'),
+        [StringComparison]::OrdinalIgnoreCase
+    ))) {
+        throw "Refusing to use Python outside $pythonRoot`: $pythonExecutable"
+    }
+
+    $requirementsPath = Join-Path $cacheRoot 'requirements.runtime.txt'
+    Invoke-Checked -Executable $uvExecutable -Arguments @(
+        'export',
+        '--quiet',
+        '--project', $projectRoot,
+        '--frozen',
+        '--no-dev',
+        '--no-emit-project',
+        '-o', $requirementsPath
     )
     Invoke-Checked -Executable $uvExecutable -Arguments @(
-        'sync', '--project', $projectRoot, '--locked', '--no-dev'
+        'pip', 'install',
+        '--python', $pythonExecutable,
+        '--break-system-packages',
+        '--exact',
+        '--strict',
+        '--link-mode', 'copy',
+        '-r', $requirementsPath
     )
 
     $registrationRoot = Join-Path $depsRoot 'registrations'
@@ -172,15 +219,10 @@ try {
     [ordered]@{
         mcpServers = [ordered]@{
             pwsh_exec = [ordered]@{
-                command = $uvExecutable.Replace('\', '/')
+                command = $pythonExecutable.Replace('\', '/')
                 args = @(
-                    'run'
-                    '--project'
-                    $projectRoot.Replace('\', '/')
-                    '--locked'
-                    '--no-sync'
-                    '--offline'
-                    (Join-Path $projectRoot 'server.py').Replace('\', '/')
+                    '-B'
+                    $serverPath.Replace('\', '/')
                 )
                 tool_timeout_sec = 8400
                 env = [ordered]@{}
@@ -189,20 +231,24 @@ try {
     } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $registrationPath -Encoding utf8
 
     if (-not $SkipTests) {
-        Invoke-Checked -Executable $uvExecutable -Arguments @(
-            'run', '--project', $projectRoot, '--locked', '--no-sync', '--offline',
-            'python', '-B', '-W', 'error',
+        Invoke-Checked -Executable $pythonExecutable -Arguments @(
+            '-B', '-W', 'error',
             '-m', 'unittest', 'discover', '-s', 'tests', '-v'
         )
     }
 }
 finally {
     Pop-Location
+    if ($null -eq $previousUvCacheDir) { Remove-Item Env:UV_CACHE_DIR -ErrorAction SilentlyContinue } else { $env:UV_CACHE_DIR = $previousUvCacheDir }
+    if ($null -eq $previousUvPythonInstallDir) { Remove-Item Env:UV_PYTHON_INSTALL_DIR -ErrorAction SilentlyContinue } else { $env:UV_PYTHON_INSTALL_DIR = $previousUvPythonInstallDir }
+    if ($null -eq $previousUvProjectEnvironment) { Remove-Item Env:UV_PROJECT_ENVIRONMENT -ErrorAction SilentlyContinue } else { $env:UV_PROJECT_ENVIRONMENT = $previousUvProjectEnvironment }
+    if ($null -eq $previousVirtualEnv) { Remove-Item Env:VIRTUAL_ENV -ErrorAction SilentlyContinue } else { $env:VIRTUAL_ENV = $previousVirtualEnv }
 }
 
 [pscustomobject]@{
     ProjectRoot = $projectRoot
     UvExecutable = $uvExecutable
+    PythonExecutable = $pythonExecutable
     Registration = (Join-Path $projectRoot 'deps\registrations\pwsh_exec.json')
     UvVersion = $expectedVersion
     PythonVersion = $pythonVersion

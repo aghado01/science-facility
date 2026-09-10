@@ -13,14 +13,9 @@
       }
     },
     "pwsh_exec": {
-      "command": "./mcp/pwsh_exec/deps/bin/uv/uv.exe",
+      "command": "./mcp/pwsh_exec/deps/python/cpython-3.13.6-windows-x86_64-none/python.exe",
       "args": [
-        "run",
-        "--project",
-        "./mcp/pwsh_exec",
-        "--locked",
-        "--no-sync",
-        "--offline",
+        "-B",
         "./mcp/pwsh_exec/server.py"
       ],
       "tool_timeout_sec": 8400,
