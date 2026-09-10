@@ -167,4 +167,16 @@ Keep dependency-pin tests green. Add a dependency only for a demonstrated need, 
 
 Deliver P1–P3 as reviewable `mcp/pwsh_exec` changes plus README/tests; complete P4 for this Grok registration before calling LaTeXAI batches fully MCP-supported. Coordinate server restart with idle LaTeXAI consumers. Append the implementation report here: revisions, schema, effective defaults, tests/skips, process-tree observations, client window, remaining limits.
 
-Placeholder for the implementation report:
+## Implementation report (2026-09-10)
+
+Status: P1–P3 landed on current `main` (`ffdd932` baseline, not `f0e095b`). P4 incomplete for Grok. Live `pwsh_exec` was **not** restarted.
+
+- **Revisions:** `mcp/pwsh_exec/{server,invocation,windows_job}.py`; default profile noninteractive; README PATH-fallback claim removed; unittest suite extended. Canonical gate: 47 tests, 0 skips in this run (optional TAP and 7.5 env were set).
+- **Schema:** `pwsh_exec/invocation/0.1`. Tool remains `run_powershell`. Additive args: `cwd`, `timeout_seconds`, `output_directory`, `unbounded`. MCP `CallToolResult` with `structuredContent` + compact text; `isError` iff `success` is false. No string/`Error:` alias.
+- **Defaults:** `timeout_seconds` 7800; cleanup 30 s; in-memory capture 2 MiB combined head/tail; PS floor 7.5 (major.minor). Executable/profile only from `MCP_POWERSHELL_*` and bundled paths.
+- **Identity:** bundled child 7.6.4 / .NET 10.0.10; `MCP_POWERSHELL_7_5` 7.5.5 qualified. Below-floor rejected before user code (probe mock of 7.4.6). Windows PowerShell 5.1 was not used as a native probe (host failed to load).
+- **Process tree:** Windows Job Object, `CREATE_SUSPENDED` then assign then resume, `KILL_ON_JOB_CLOSE`. Timeout and cancel reap grandchildren; unrelated sentinel survives. Abrupt parent `os._exit` (helper, no Python `finally`) kills the job child. MCP `notifications/cancelled` kills the owned `pwsh`; mcp 1.29 still replies `Request cancelled` (JSON-RPC error) rather than the structured payload — evidence is in `output_directory` when requested.
+- **Profile inventory:** LaTeXAI already uses `scripts/profile.ps1`. `latexAI-aliases.ps1` removed from the default profile (file kept, unused). Console furniture / dotnet aliases / completions only if `MCP_POWERSHELL_INTERACTIVE=1`.
+- **LaTeXAI TAP:** `scripts/test-run.ps1 -Path scripts/tests/tap/fail.t` from the LaTeXAI checkout with `scripts/profile.ps1`; failure report retained; native exit nonzero.
+- **Client window (P4):** This Grok registration does not set `tool_timeout_sec`. Grok default is **6000 s**. Server default is **7800 s**. A server timeout cannot extend that client window. LaTeXAI `.mcp.json` likewise omits a client deadline. Qualification used server-side 1–2 s sleeps, stdio cancel/disconnect, and a short TAP failure — not a hang longer than 6000 s. **P4 incomplete for Grok:** do not treat full LaTeXAI TAP/gauntlet batches as MCP-supported on this client until the request deadline is ≥ envelope + cleanup, or a small start/read/cancel handle exists. Follow-up is that handle over isolated owned processes, not fire-and-forget and not a persistent shared `pwsh`.
+- **Remaining:** coordinate idle-consumer restart so LaTeXAI `.mcp.json` still names `scripts/profile.ps1`. Nested MCP-job vs executor-job still needs a joined fixture (CDXSCI note). Do not import the executor. `unbounded` is diagnostic only.
