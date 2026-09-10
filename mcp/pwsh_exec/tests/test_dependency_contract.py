@@ -41,15 +41,16 @@ class DependencyContractTests(unittest.TestCase):
         expected = pin["version"]
         artifact = pin["artifacts"]["windows-x64"]
         dependencies = pyproject["project"]["dependencies"]
-        locked_uv = next(
-            package for package in lock["package"] if package["name"] == "uv"
-        )
+        locked_names = [package["name"] for package in lock["package"]]
 
-        self.assertIn(f"uv=={expected}", dependencies)
+        self.assertTrue(
+            all(not item.startswith("uv==") for item in dependencies),
+            "uv is the bootstrap launcher, not a Python dependency",
+        )
+        self.assertNotIn("uv", locked_names)
         self.assertEqual(
             pyproject["tool"]["uv"]["required-version"], f"=={expected}"
         )
-        self.assertEqual(locked_uv["version"], expected)
         self.assertRegex(artifact["sha256"], r"^[0-9a-f]{64}$")
         self.assertRegex(artifact["executable_sha256"], r"^[0-9a-f]{64}$")
 
@@ -95,11 +96,19 @@ class DependencyContractTests(unittest.TestCase):
                 "run",
                 "--project",
                 PROJECT_ROOT.as_posix(),
-                "--no-cache",
                 "--locked",
+                "--no-sync",
+                "--offline",
                 (PROJECT_ROOT / "server.py").as_posix(),
             ],
         )
+
+    @unittest.skipUnless(
+        (PROJECT_ROOT / ".venv" / "Scripts" / "python.exe").is_file(),
+        "project environment is not restored",
+    )
+    def test_project_environment_does_not_contain_a_uv_launcher(self):
+        self.assertFalse((PROJECT_ROOT / ".venv" / "Scripts" / "uv.exe").is_file())
 
 
 if __name__ == "__main__":

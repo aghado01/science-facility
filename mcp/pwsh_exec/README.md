@@ -112,10 +112,11 @@ pyproject.toml         # committed dependency and uv-version contract
 uv.lock                # committed complete dependency resolution
 ```
 
-The same uv version is enforced independently by `brewery/uv/pin.json`, the
-exact `uv` dependency and `[tool.uv].required-version` in `pyproject.toml`, and
-the resolved `uv` package in `uv.lock`. Contract tests reject drift between
-those layers.
+The same uv version is enforced independently by `brewery/uv/pin.json` and
+`[tool.uv].required-version` in `pyproject.toml`. `uv` is not a Python
+dependency and must not appear in `uv.lock` or `.venv`. Contract tests reject
+drift between those layers. Restore runs `uv sync --locked`; MCP spawn is
+`uv run --locked --no-sync --offline` so start does not write the environment.
 
 This structure is wholly local to `pwsh_exec`. The bootstrap script does not
 discover or call another project, `PDenv`, or an ambient uv/Python executable.
@@ -137,9 +138,10 @@ The recipe:
    extracted bootstrap executable SHA-256 values.
 3. Restores the executable under ignored `deps/bin/uv/`.
 4. Installs the exact interpreter from `.python-version` through that uv binary.
-5. Runs the tests.
+5. Synchronizes `.venv` from `uv.lock` (`uv sync --locked --no-dev`).
 6. Writes an ignored, machine-local registration to
    `deps/registrations/pwsh_exec.json`.
+7. Runs the tests with `--locked --no-sync --offline`.
 
 ## Client configuration
 
@@ -156,8 +158,9 @@ checkout and can be copied into a client's MCP configuration. Its shape is:
         "run",
         "--project",
         "<pwsh_exec-root>",
-        "--no-cache",
         "--locked",
+        "--no-sync",
+        "--offline",
         "<pwsh_exec-root>/server.py"
       ],
       "tool_timeout_sec": 8400,
@@ -177,7 +180,7 @@ field nor the server default can extend a shorter client deadline.
 ```toml
 [mcp_servers.pwsh_exec]
 command = "<pwsh_exec-root>/deps/bin/uv/uv.exe"
-args = ["run", "--project", "<pwsh_exec-root>", "--no-cache", "--locked", "<pwsh_exec-root>/server.py"]
+args = ["run", "--project", "<pwsh_exec-root>", "--locked", "--no-sync", "--offline", "<pwsh_exec-root>/server.py"]
 startup_timeout_sec = 30
 tool_timeout_sec = 8400
 
@@ -202,7 +205,7 @@ Run from this directory:
 
 ```powershell
 & '.\deps\bin\uv\uv.exe' `
-  run --project . --no-cache --locked python -B -W error `
+  run --project . --locked --no-sync --offline python -B -W error `
   -m unittest discover -s tests -v
 ```
 

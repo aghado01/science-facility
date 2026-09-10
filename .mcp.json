@@ -18,8 +18,9 @@
         "run",
         "--project",
         "./mcp/pwsh_exec",
-        "--no-cache",
         "--locked",
+        "--no-sync",
+        "--offline",
         "./mcp/pwsh_exec/server.py"
       ],
       "tool_timeout_sec": 8400,

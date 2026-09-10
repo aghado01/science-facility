@@ -162,6 +162,9 @@ try {
     Invoke-Checked -Executable $uvExecutable -Arguments @(
         'python', 'install', $pythonVersion, '--no-bin'
     )
+    Invoke-Checked -Executable $uvExecutable -Arguments @(
+        'sync', '--project', $projectRoot, '--locked', '--no-dev'
+    )
 
     $registrationRoot = Join-Path $depsRoot 'registrations'
     $registrationPath = Join-Path $registrationRoot 'pwsh_exec.json'
@@ -174,8 +177,9 @@ try {
                     'run'
                     '--project'
                     $projectRoot.Replace('\', '/')
-                    '--no-cache'
                     '--locked'
+                    '--no-sync'
+                    '--offline'
                     (Join-Path $projectRoot 'server.py').Replace('\', '/')
                 )
                 tool_timeout_sec = 8400
@@ -186,7 +190,7 @@ try {
 
     if (-not $SkipTests) {
         Invoke-Checked -Executable $uvExecutable -Arguments @(
-            'run', '--project', $projectRoot, '--no-cache', '--locked',
+            'run', '--project', $projectRoot, '--locked', '--no-sync', '--offline',
             'python', '-B', '-W', 'error',
             '-m', 'unittest', 'discover', '-s', 'tests', '-v'
         )
