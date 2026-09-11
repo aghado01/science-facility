@@ -93,7 +93,7 @@ class DependencyContractTests(unittest.TestCase):
         toml_server = read_toml(EXAMPLE_TOML_PATH)["mcp_servers"]["pwsh_exec"]
 
         self.assertNotIn("tool_timeout_sec", server)
-        self.assertNotIn("tool_timeout_sec", toml_server)
+        self.assertEqual(toml_server["tool_timeout_sec"], 90)
         self.assertIn("<PWSH_EXEC_ROOT>", server["command"])
         self.assertEqual(server["args"], ["-B", "<PWSH_EXEC_ROOT>/server.py"])
         self.assertEqual(

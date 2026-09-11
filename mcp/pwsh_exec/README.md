@@ -9,8 +9,8 @@ scripts.
 
 ## Runtime contract
 
-The server exposes one tool, `run_powershell`. Required argument: `code`.
-Optional arguments: `cwd`, `timeout_seconds`, `output_directory`, `unbounded`.
+`run_powershell` runs short commands synchronously. Long work uses
+`start_powershell`, `wait_powershell`, and `cancel_powershell`.
 
 Each call starts a new PowerShell process with `-NoProfile`; automatic user and
 host profiles are never loaded. A configured or default profile is then dotted
@@ -29,15 +29,31 @@ fallback.
 | ------------------- | ------- | ------- |
 | `code`              | required | PowerShell to run after optional profile load |
 | `cwd`               | server-start cwd | Must exist; the server never `chdir`s |
-| `timeout_seconds`   | 7800 | Covers profile + user code. Must be `> 0` unless `unbounded` |
+| `timeout_seconds`   | 30 | Synchronous default; covers admission, profile and user code. Must be finite and `> 0` unless `unbounded` |
 | `output_directory`  | none | Caller-owned unique directory; rejected if it exists or lies under `mcp/pwsh_exec/` |
 | `unbounded`         | false | Visible diagnostic opt-in; effective timeout is then JSON `null` |
 
-7800 s is the test-batch envelope (LaTeXAI Test `WaitTimeoutSeconds` 7200 plus 600 s
-drainage). A gauntlet must pass a longer `timeout_seconds`. Cleanup after timeout
-or cancel has a separate 30 s budget. A script's own batch timer does not replace
-this outer deadline. A server timeout cannot extend a shorter **client** request
-deadline (Grok Build default `tool_timeout_sec` is 6000).
+`start_powershell` requires a caller-selected `timeout_seconds` (or explicit
+`unbounded: true`) and an absolute, new `output_directory`. It returns a job ID
+immediately. `wait_powershell(id, wait_seconds)` waits from 0 to 20 seconds without
+changing the execution deadline; a completed response contains the existing
+invocation result under `result`. `cancel_powershell(id)` requests cancellation;
+poll until the terminal result confirms cleanup. These jobs belong to the server
+and are cancelled on shutdown. At most eight jobs are active; the most recent
+128 handles remain queryable, and completed evidence stays on disk.
+
+For example, start `ltbatch -Selection full -ExecutionTimeoutSeconds 7200` with
+`timeout_seconds: 7350`, then poll with `wait_seconds: 20`. Choose the outer budget
+to cover script preflight, executor work, executor cleanup and result writing.
+The MCP adds one separate 30-second cleanup budget after execution ends. No
+universal gauntlet or test duration is imposed by the server. The synchronous
+default changed from 7800 to 30 seconds; callers of longer work should use the
+start/wait flow or explicitly configure both their synchronous and client budgets.
+
+A server timeout cannot extend a shorter **client** request deadline. Short polls
+allow long executions even under such a deadline. Poll cancellation leaves the
+work running; cancelling `run_powershell` or calling `cancel_powershell` stops it.
+Failed terminal responses set `isError`, while retaining their structured result.
 
 The result schema is `pwsh_exec/invocation/0.1`. Fields include `outcome`
 (`exited` \| `timed-out` \| `cancelled` \| `failed-to-launch`), `success` (true
@@ -157,7 +173,8 @@ everywhere.
 
 Tracked generic templates live at `mcp.example.json` and `mcp.example.toml`.
 They use placeholders and the default `scripts/pwsh/profile-pwsh.ps1` profile.
-They do not set a client `tool_timeout_sec`.
+The TOML template allows 90 seconds per transport request, leaving room for the
+30-second synchronous default and cleanup. This does not cap a started job.
 
 Gitignored `mcp.local.json` is this machine's source of truth for generic
 endpoints: resolved `registration` plus `targets[]`. Restore refreshes
@@ -169,9 +186,9 @@ may set `relativeTo` so paths stay repo-relative; other targets get absolute
 paths. Missing target files are skipped.
 
 LaTeXAI is not a generic target. It names `scripts/profile.ps1` and
-`PERL_ROOT` / `CDXSCI_ROOT` / `LATEXAI_ROOT`, and does **not** set a client
-`tool_timeout_sec` (child scripts own `WaitTimeoutSeconds`). Sync refuses a
-target whose profile is that LaTeXAI file.
+`PERL_ROOT` / `CDXSCI_ROOT` / `LATEXAI_ROOT`. Its scripts own workload budgets;
+its MCP caller supplies the outer execution budget. Sync refuses a target whose
+profile is that LaTeXAI file.
 
 Generic:
 
@@ -190,9 +207,10 @@ Generic:
 }
 ```
 
-Grok/Codex client deadlines, when used, live on that consumer's TOML
-(`[mcp_servers.pwsh_exec] tool_timeout_sec`), not on the generic example and
-not on the LaTeXAI registration.
+Grok/Codex client deadlines live on each consumer's TOML
+(`[mcp_servers.pwsh_exec] tool_timeout_sec`). They apply to individual requests,
+including polls. Reconnect the MCP server after changing its source so clients
+discover the added tools; restarting is not needed between jobs.
 
 ## Tests
 
@@ -208,3 +226,10 @@ an MCP stdio round trip through the owned `deps/python` interpreter. Runtime
 integrations are skipped only when the corresponding restored artifacts are
 absent. Optional coverage: `LATEXAI_ROOT` + `PERL_ROOT` + `CDXSCI_ROOT` for a
 profile-loaded TAP failure; `MCP_POWERSHELL_7_5` for a 7.5 identity probe.
+
+Set `PWSH_EXEC_LONG_PROBE=1` to exercise a 65-second job through short MCP
+requests. Set `PWSH_EXEC_FULL_LATEXAI=1` and `LATEXAI_ROOT` for the full TAP
+consumer qualification through start/wait. These longer checks are opt-in;
+LaTeXAI resolves its runtimes through its profile and ignored local configuration.
+`tests/run_stdio_job.py` provides the same fresh-server start/wait path for a
+bounded qualification command, with explicit cwd, output directory and timeout.

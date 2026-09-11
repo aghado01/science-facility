@@ -25,6 +25,16 @@ from windows_job import pid_is_running
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
+def patch_environment(mapping, values=(), clear=False, **kwargs):
+    # Clearing SystemRoot/TEMP changes Windows PowerShell policy admission, rather
+    # than merely isolating MCP configuration. Keep the host's OS prerequisites.
+    if mapping is os.environ and clear:
+        names = {"SYSTEMROOT", "WINDIR", "TEMP", "TMP", "USERPROFILE", "APPDATA", "LOCALAPPDATA"}
+        system = {key: value for key, value in os.environ.items() if key.upper() in names}
+        values = {**system, **dict(values)}
+    return mock.patch.dict(mapping, values, clear=clear, **kwargs)
+
+
 def owned_python():
     matches = sorted((server.MCP_ROOT / "deps" / "python").glob("cpython-*/python.exe"))
     return matches[-1] if matches else None
@@ -62,19 +72,19 @@ class PowerShellExecutableTests(unittest.TestCase):
     def test_configured_executable_overrides_default(self):
         environment = {"MCP_POWERSHELL_EXECUTABLE": "C:/custom/pwsh.exe"}
 
-        with mock.patch.dict(os.environ, environment, clear=True):
+        with patch_environment(os.environ, environment, clear=True):
             executable = server._resolve_powershell_executable()
 
         self.assertEqual(executable, "C:/custom/pwsh.exe")
 
     def test_default_executable_is_bundled_pwsh(self):
-        with mock.patch.dict(os.environ, {}, clear=True):
+        with patch_environment(os.environ, {}, clear=True):
             executable = server._resolve_powershell_executable()
 
         self.assertEqual(executable, str(server.DEFAULT_POWERSHELL_EXECUTABLE))
 
     def test_blank_configured_executable_uses_default(self):
-        with mock.patch.dict(
+        with patch_environment(
             os.environ, {"MCP_POWERSHELL_EXECUTABLE": "   "}, clear=True
         ):
             executable = server._resolve_powershell_executable()
@@ -84,7 +94,7 @@ class PowerShellExecutableTests(unittest.TestCase):
 
 class PowerShellProfileTests(unittest.TestCase):
     def test_default_profile_resolves_to_bundled_profile_when_variable_is_absent(self):
-        with mock.patch.dict(os.environ, {}, clear=True):
+        with patch_environment(os.environ, {}, clear=True):
             profile = server._resolve_powershell_profile()
 
         expected = (
@@ -95,7 +105,7 @@ class PowerShellProfileTests(unittest.TestCase):
         self.assertEqual(profile, expected)
 
     def test_blank_profile_resolves_to_none(self):
-        with mock.patch.dict(
+        with patch_environment(
             os.environ, {"MCP_POWERSHELL_PROFILE": "   "}, clear=True
         ):
             profile = server._resolve_powershell_profile()
@@ -104,7 +114,7 @@ class PowerShellProfileTests(unittest.TestCase):
 
     def test_configured_profile_is_resolved(self):
         profile_path = "C:/profiles/client's profile.ps1"
-        with mock.patch.dict(
+        with patch_environment(
             os.environ, {"MCP_POWERSHELL_PROFILE": profile_path}, clear=True
         ):
             profile = server._resolve_powershell_profile()
@@ -120,7 +130,7 @@ class PowerShellProfileTests(unittest.TestCase):
     def test_default_profile_is_loaded_by_bundled_powershell(self):
         environment = {"MCP_POWERSHELL_EXECUTABLE": ""}
 
-        with mock.patch.dict(os.environ, environment, clear=True):
+        with patch_environment(os.environ, environment, clear=True):
             result = server._run_powershell(
                 "$env:MCP_POWERSHELL_PROFILE", timeout_seconds=30
             )
@@ -131,7 +141,7 @@ class PowerShellProfileTests(unittest.TestCase):
     @unittest.skipUnless(_have_runtime(), "the bundled PowerShell runtime is not installed")
     def test_default_profile_does_not_load_latexai_aliases_or_console_furniture(self):
         environment = {"MCP_POWERSHELL_EXECUTABLE": ""}
-        with mock.patch.dict(os.environ, environment, clear=True):
+        with patch_environment(os.environ, environment, clear=True):
             result = server._run_powershell(
                 "@(Get-Command lxml, Set-ConsolePrompt -ErrorAction SilentlyContinue).Name -join ','",
                 timeout_seconds=30,
@@ -147,7 +157,7 @@ class PowerShellProfileTests(unittest.TestCase):
             "MCP_POWERSHELL_PROFILE": str(profile_path),
         }
 
-        with mock.patch.dict(os.environ, environment, clear=True):
+        with patch_environment(os.environ, environment, clear=True):
             result = server._run_powershell(
                 "Get-McpPowerShellProfileTestValue", timeout_seconds=30
             )
@@ -161,7 +171,7 @@ class PowerShellProfileTests(unittest.TestCase):
             "MCP_POWERSHELL_EXECUTABLE": "",
             "MCP_POWERSHELL_PROFILE": " ",
         }
-        with mock.patch.dict(os.environ, environment, clear=True):
+        with patch_environment(os.environ, environment, clear=True):
             result = server._run_powershell(
                 "Write-Output 'no-profile'", timeout_seconds=30
             )
@@ -171,7 +181,7 @@ class PowerShellProfileTests(unittest.TestCase):
 
     @unittest.skipUnless(_have_runtime(), "the bundled PowerShell runtime is not installed")
     def test_bundled_powershell_version(self):
-        with mock.patch.dict(
+        with patch_environment(
             os.environ,
             {"MCP_POWERSHELL_EXECUTABLE": "", "MCP_POWERSHELL_PROFILE": " "},
             clear=True,
@@ -236,7 +246,7 @@ class PowerShellResultContractTests(unittest.TestCase):
         self.assertEqual(result["cleanup"]["status"], "not-needed")
 
     def test_missing_executable_does_not_run_code(self):
-        with mock.patch.dict(
+        with patch_environment(
             os.environ,
             {"MCP_POWERSHELL_EXECUTABLE": "D:/no-such-pwsh.exe", "MCP_POWERSHELL_PROFILE": " "},
             clear=True,
@@ -248,7 +258,7 @@ class PowerShellResultContractTests(unittest.TestCase):
 
     @unittest.skipUnless(_have_runtime(), "the bundled PowerShell runtime is not installed")
     def test_missing_profile_blocks_user_code(self):
-        with mock.patch.dict(
+        with patch_environment(
             os.environ,
             {
                 "MCP_POWERSHELL_EXECUTABLE": "",
@@ -263,7 +273,7 @@ class PowerShellResultContractTests(unittest.TestCase):
 
     @unittest.skipUnless(_have_runtime(), "the bundled PowerShell runtime is not installed")
     def test_bad_profile_blocks_user_code(self):
-        with mock.patch.dict(
+        with patch_environment(
             os.environ,
             {
                 "MCP_POWERSHELL_EXECUTABLE": "",
@@ -280,7 +290,7 @@ class PowerShellResultContractTests(unittest.TestCase):
         result = server._run_powershell("Write-Output 'sentinel'", timeout_seconds=0)
         self.assertEqual(result["outcome"], "failed-to-launch")
         self.assertNotIn("sentinel", result["stdout"])
-        self.assertIn("timeout_seconds must be > 0", result["stderr"])
+        self.assertIn("timeout_seconds must be finite and > 0", result["stderr"])
 
     def test_output_directory_must_not_exist(self):
         with tempfile.TemporaryDirectory() as existing:
@@ -329,7 +339,7 @@ class PowerShellResultContractTests(unittest.TestCase):
         with mock.patch(
             "invocation.probe_powershell", return_value=("7.4.6", ".NET 8.0")
         ):
-            with mock.patch.dict(
+            with patch_environment(
                 os.environ,
                 {
                     "MCP_POWERSHELL_EXECUTABLE": "",
@@ -353,7 +363,7 @@ class PowerShellResultContractTests(unittest.TestCase):
     )
     def test_powershell_7_5_reports_identity(self):
         executable = os.environ["MCP_POWERSHELL_7_5"]
-        with mock.patch.dict(
+        with patch_environment(
             os.environ,
             {
                 "MCP_POWERSHELL_EXECUTABLE": executable,
@@ -378,7 +388,8 @@ class PowerShellMcpIntegrationTests(unittest.TestCase):
         initialization, tools, result = asyncio.run(self._call_over_stdio())
 
         self.assertEqual(initialization.serverInfo.name, "pwsh_exec")
-        self.assertEqual([tool.name for tool in tools.tools], ["run_powershell"])
+        self.assertEqual([tool.name for tool in tools.tools],
+                         ["run_powershell", "start_powershell", "wait_powershell", "cancel_powershell"])
         self.assertFalse(result.isError)
         payload = result.structuredContent
         self.assertIsNotNone(payload)
@@ -456,7 +467,7 @@ class PowerShellSupervisionTests(unittest.TestCase):
 
     @unittest.skipUnless(_have_runtime(), "the bundled PowerShell runtime is not installed")
     def test_timeout_during_profile_keeps_partial_output(self):
-        with mock.patch.dict(
+        with patch_environment(
             os.environ,
             {
                 "MCP_POWERSHELL_EXECUTABLE": "",
@@ -551,7 +562,7 @@ Start-Sleep -Seconds 60
                 "function Get-McpPowerShellProfileTestValue { $env:MCP_POWERSHELL_PROFILE_TEST_VALUE }\n",
                 encoding="utf-8",
             )
-            with mock.patch.dict(
+            with patch_environment(
                 os.environ,
                 {
                     "MCP_POWERSHELL_EXECUTABLE": "",
@@ -700,6 +711,9 @@ Start-Sleep -Seconds 60
                         break
                     await asyncio.sleep(0.1)
                 self.assertFalse(pid_is_running(child_pid))
+                follow = await session.call_tool("run_powershell", {"code": "'after-cancel'", "timeout_seconds": 10})
+                self.assertTrue(follow.structuredContent["success"])
+                self.assertIn("after-cancel", follow.structuredContent["stdout"])
         ready.unlink(missing_ok=True)
 
     @unittest.skipUnless(
@@ -789,7 +803,7 @@ Start-Sleep -Seconds 60
     def test_latexai_tap_failure_preserves_report(self):
         checkout = _latexai_roots()
         out = Path(tempfile.gettempdir()) / f"pwsh-exec-tap-{uuid.uuid4().hex}"
-        with mock.patch.dict(
+        with patch_environment(
             os.environ,
             {
                 **os.environ,

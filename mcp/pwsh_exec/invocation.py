@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import base64
+import codecs
 import json
+import math
 import os
 import subprocess
 import sys
@@ -25,7 +27,7 @@ from windows_job import (
 
 RESULT_SCHEMA = "pwsh_exec/invocation/0.1"
 MINIMUM_PS_VERSION = (7, 5)
-DEFAULT_TIMEOUT_SECONDS = 7800.0
+DEFAULT_TIMEOUT_SECONDS = 30.0
 DEFAULT_CLEANUP_SECONDS = 30.0
 COMBINED_MEMORY_LIMIT = 2 * 1024 * 1024
 PROFILE_ENV_VAR = "MCP_POWERSHELL_PROFILE"
@@ -108,17 +110,14 @@ def _decode(data: bytes) -> tuple[str, bool]:
 
 
 def _utf8_cut(data: bytes, limit: int, from_end: bool = False) -> bytes:
-    if len(data) <= limit:
-        return data
+    if limit <= 0:
+        return b""
     cut = data[-limit:] if from_end else data[:limit]
     if not from_end:
-        while cut and (cut[-1] & 0xC0) == 0x80:
-            cut = cut[:-1]
-        if cut and (cut[-1] & 0x80):
-            lead = cut[-1]
-            if (lead & 0xC0) != 0x80:
-                cut = cut[:-1]
-        return cut
+        decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+        decoder.decode(cut, final=False)
+        pending, _ = decoder.getstate()
+        return cut[:-len(pending)] if pending else cut
     while cut and (cut[0] & 0xC0) == 0x80:
         cut = cut[1:]
     return cut
@@ -133,6 +132,7 @@ class StreamCapture:
         self.tail = bytearray()
         self.observed = 0
         self.truncated = False
+        self.failure: str | None = None
         self.path = path
         self._file = path.open("wb") if path is not None else None
         self._lock = threading.Lock()
@@ -142,22 +142,21 @@ class StreamCapture:
             return
         with self._lock:
             self.observed += len(chunk)
-            if self._file is not None:
-                self._file.write(chunk)
-                self._file.flush()
+            self.truncated = self.observed > self.limit
+            durable_chunk = chunk
             if self.head_limit > 0 and len(self.head) < self.head_limit:
                 take = min(len(chunk), self.head_limit - len(self.head))
                 self.head.extend(chunk[:take])
                 chunk = chunk[take:]
-            if not chunk:
-                return
-            self.truncated = True
-            if self.tail_limit <= 0:
-                return
-            self.tail.extend(chunk)
-            if len(self.tail) > self.tail_limit:
-                overflow = len(self.tail) - self.tail_limit
-                del self.tail[:overflow]
+            if self.tail_limit > 0:
+                self.tail.extend(chunk)
+                if len(self.tail) > self.tail_limit:
+                    overflow = len(self.tail) - self.tail_limit
+                    del self.tail[:overflow]
+        # Disk I/O must not hold the snapshot lock when the caller's cleanup expires.
+        if self._file is not None:
+            self._file.write(durable_chunk)
+            self._file.flush()
 
     def close(self) -> None:
         with self._lock:
@@ -168,7 +167,7 @@ class StreamCapture:
     def retained(self) -> bytes:
         with self._lock:
             if not self.truncated:
-                return bytes(self.head)
+                return bytes(self.head + self.tail)
             head = _utf8_cut(bytes(self.head), len(self.head))
             tail = _utf8_cut(bytes(self.tail), len(self.tail), from_end=True)
             return head + tail
@@ -176,7 +175,7 @@ class StreamCapture:
     def display(self) -> tuple[bytes, bool]:
         with self._lock:
             if not self.truncated:
-                return bytes(self.head), False
+                return bytes(self.head + self.tail), False
             head = _utf8_cut(bytes(self.head), len(self.head))
             tail = _utf8_cut(bytes(self.tail), len(self.tail), from_end=True)
             return head + b"\n...<truncated>...\n" + tail, True
@@ -189,12 +188,17 @@ def _reader(pipe, capture: StreamCapture) -> None:
             if not chunk:
                 break
             capture.write(chunk)
+    except Exception as exc:
+        capture.failure = str(exc)
     finally:
         try:
             pipe.close()
         except Exception:
             pass
-        capture.close()
+        try:
+            capture.close()
+        except Exception as exc:
+            capture.failure = str(exc)
 
 
 @dataclass
@@ -207,6 +211,18 @@ class _OwnedInvocation:
 
     def request_stop(self) -> None:
         self.cancel_event.set()
+
+
+def _release_when_finished(owned: _OwnedInvocation, readers: tuple) -> None:
+    """Retain and reap an invocation whose bounded foreground cleanup was incomplete."""
+    if owned.process is not None:
+        owned.process.wait()
+    for reader in readers:
+        if reader is not None:
+            reader.join()
+    with _IN_FLIGHT_LOCK:
+        _IN_FLIGHT.pop(owned.invocation_id, None)
+    owned.finished.set()
 
 
 def shutdown_in_flight(timeout_seconds: float = DEFAULT_CLEANUP_SECONDS) -> None:
@@ -406,24 +422,26 @@ def run(
     output_root: Path | None = None
     owned = _OwnedInvocation(invocation_id=invocation_id, cancel_event=cancel_event)
     timing: dict[str, float] = {}
+    effective_timeout: float | None = None
 
     def elapsed() -> float:
         return round((time.monotonic() - started) * 1000, 2)
 
-    def fail_launch(message: str, *, extra_stderr: str = "") -> dict:
+    def fail_launch(message: str, *, extra_stderr: str = "", outcome: str = "failed-to-launch") -> dict:
         stderr = message if not extra_stderr else f"{message}\n{extra_stderr}"
+        capture = _empty_capture()
+        if output_root is not None:
+            capture["result_path"] = str(output_root / "result.json")
         result = _result(
             invocation_id=invocation_id,
-            outcome="failed-to-launch",
+            outcome=outcome,
             success=False,
             native_exit_code=None,
             stdout="",
             stderr=stderr,
-            capture=_empty_capture(),
+            capture=capture,
             timeout_requested=requested_timeout,
-            timeout_effective=None if unbounded else (
-                DEFAULT_TIMEOUT_SECONDS if timeout_seconds is None else float(timeout_seconds)
-            ),
+            timeout_effective=effective_timeout,
             cleanup=_cleanup_record("not-needed"),
             timing_ms={"elapsed": elapsed(), **timing},
             powershell=powershell_info,
@@ -445,10 +463,10 @@ def run(
             except (TypeError, ValueError):
                 timing["validation"] = round((time.monotonic() - validation_start) * 1000, 2)
                 return fail_launch("timeout_seconds must be a number")
-            if effective_timeout <= 0:
+            if not math.isfinite(effective_timeout) or effective_timeout <= 0:
                 timing["validation"] = round((time.monotonic() - validation_start) * 1000, 2)
                 return fail_launch(
-                    "timeout_seconds must be > 0 unless unbounded is true"
+                    "timeout_seconds must be finite and > 0 unless unbounded is true"
                 )
 
     if not cwd.is_dir():
@@ -456,23 +474,25 @@ def run(
         return fail_launch(f"cwd is not a directory: {cwd}")
 
     if output_directory:
-        output_root = Path(output_directory)
-        if output_root.exists():
+        candidate_root = Path(output_directory).resolve()
+        if candidate_root.exists():
             timing["validation"] = round((time.monotonic() - validation_start) * 1000, 2)
-            return fail_launch(f"output_directory already exists: {output_root}")
-        if _is_under(output_root, mcp_root):
+            return fail_launch(f"output_directory already exists: {candidate_root}")
+        if _is_under(candidate_root, mcp_root):
             timing["validation"] = round((time.monotonic() - validation_start) * 1000, 2)
             return fail_launch(
-                f"output_directory must not be under {mcp_root}: {output_root}"
+                f"output_directory must not be under {mcp_root}: {candidate_root}"
             )
         try:
-            output_root.mkdir(parents=True, exist_ok=False)
+            candidate_root.mkdir(parents=True, exist_ok=False)
         except FileExistsError:
             timing["validation"] = round((time.monotonic() - validation_start) * 1000, 2)
-            return fail_launch(f"output_directory already exists: {output_root}")
+            return fail_launch(f"output_directory already exists: {candidate_root}")
         except OSError as exc:
             timing["validation"] = round((time.monotonic() - validation_start) * 1000, 2)
             return fail_launch(f"output_directory could not be created: {exc}")
+        # Only a successful exclusive create grants ownership of result.json.
+        output_root = candidate_root
 
     executable_path = Path(executable)
     if not executable_path.is_file():
@@ -504,11 +524,19 @@ def run(
 
     timing["validation"] = round((time.monotonic() - validation_start) * 1000, 2)
 
+    if cancel_event.is_set():
+        return fail_launch("invocation cancelled before launch", outcome="cancelled")
+
     per_stream = max(memory_limit // 2, 1)
     stdout_path = output_root / "stdout.bin" if output_root is not None else None
     stderr_path = output_root / "stderr.bin" if output_root is not None else None
-    stdout_cap = StreamCapture(per_stream, stdout_path)
-    stderr_cap = StreamCapture(per_stream, stderr_path)
+    try:
+        stdout_cap = StreamCapture(per_stream, stdout_path)
+        stderr_cap = StreamCapture(per_stream, stderr_path)
+    except OSError as exc:
+        if stdout_cap is not None:
+            stdout_cap.close()
+        return fail_launch(f"could not open invocation streams: {exc}")
 
     child_env = os.environ.copy()
     if profile:
@@ -545,10 +573,13 @@ def run(
     diagnostics: list[str] = []
     outcome = "exited"
     process: subprocess.Popen[bytes] | None = None
+    stdout_thread = stderr_thread = None
 
     try:
         process = subprocess.Popen(argv, **popen_kwargs)
     except OSError as exc:
+        stdout_cap.close()
+        stderr_cap.close()
         timing["launch"] = round((time.monotonic() - launch_start) * 1000, 2)
         return fail_launch(f"failed to spawn PowerShell: {exc}")
 
@@ -562,15 +593,20 @@ def run(
                 job_status = "assigned"
                 kill_on_close = job.kill_on_close
             except Exception as exc:
-                job = None
                 job_status = "assign-failed"
                 diagnostics.append(f"Job Object not assigned: {exc}")
             try:
+                if job_status != "assigned":
+                    raise RuntimeError("PowerShell containment could not be established")
                 resume_process(process)
                 resumed = True
             except Exception as exc:
                 diagnostics.append(f"resume failed: {exc}")
                 _stop_tree(process, job)
+                try:
+                    process.wait(timeout=cleanup_seconds)
+                except subprocess.TimeoutExpired:
+                    pass
                 timing["launch"] = round((time.monotonic() - launch_start) * 1000, 2)
                 stdout_text, stderr_text, capture = _finalize_streams(
                     stdout_cap, stderr_cap, output_root
@@ -586,7 +622,7 @@ def run(
                     timeout_requested=requested_timeout,
                     timeout_effective=effective_timeout,
                     cleanup=_cleanup_record(
-                        "incomplete",
+                        "complete" if process.poll() is not None else "incomplete",
                         job_object=job_status,
                         kill_on_job_close=kill_on_close,
                         diagnostics=diagnostics,
@@ -618,11 +654,7 @@ def run(
         stderr_thread.start()
         timing["launch"] = round((time.monotonic() - launch_start) * 1000, 2)
 
-        deadline = (
-            None
-            if effective_timeout is None
-            else time.monotonic() + effective_timeout
-        )
+        deadline = None if effective_timeout is None else started + effective_timeout
         wait_slice = 0.05
         while True:
             if cancel_event.is_set():
@@ -644,44 +676,40 @@ def run(
                 continue
 
         cleanup_start = time.monotonic()
+        cleanup_deadline = cleanup_start + max(cleanup_seconds, 0)
+        remaining = lambda: max(cleanup_deadline - time.monotonic(), 0)
         cleanup_status = "complete"
         stop_fn = kill_tree or _stop_tree
         if outcome in {"timed-out", "cancelled"}:
             diagnostics.extend(stop_fn(process, job))
+        # Root exit is not tree completion. Stop descendants before waiting for EOF.
+        elif job is not None and job.process_ids() != []:
+            diagnostics.extend(stop_fn(process, job))
         try:
-            process.wait(timeout=cleanup_seconds)
+            process.wait(timeout=remaining())
         except subprocess.TimeoutExpired:
             cleanup_status = "incomplete"
             diagnostics.append("process still running after cleanup wait")
             diagnostics.extend(stop_fn(process, job))
-            try:
-                process.wait(timeout=max(cleanup_seconds / 3, 1))
-            except subprocess.TimeoutExpired:
-                diagnostics.append("process still running after second cleanup wait")
-
-        drain_budget = max(cleanup_seconds, 1)
-        stdout_thread.join(timeout=drain_budget)
-        stderr_thread.join(timeout=drain_budget)
+        stdout_thread.join(timeout=remaining())
+        stderr_thread.join(timeout=remaining())
         if stdout_thread.is_alive() or stderr_thread.is_alive():
             cleanup_status = "incomplete"
             diagnostics.append("stream reader did not finish within cleanup budget")
+        for cap in (stdout_cap, stderr_cap):
+            if cap.failure:
+                cleanup_status = "incomplete"
+                diagnostics.append(f"stream capture failed: {cap.failure}")
 
         leftover: list[int] | None = None
         if job is not None:
             leftover = job.process_ids()
-            if leftover:
-                live = [pid for pid in leftover if pid_is_running(pid)]
-                if live:
-                    diagnostics.extend(stop_fn(process, job))
-                    time.sleep(min(0.2, cleanup_seconds))
-                    leftover = job.process_ids() or leftover
-                    live = [pid for pid in leftover if pid_is_running(pid)]
-                    if live:
-                        cleanup_status = "incomplete"
-                        diagnostics.append(
-                            "job still has live processes: "
-                            + ",".join(str(pid) for pid in live)
-                        )
+            while leftover and remaining() > 0:
+                time.sleep(min(0.02, remaining()))
+                leftover = job.process_ids()
+            if leftover != []:
+                cleanup_status = "incomplete"
+                diagnostics.append(f"job release not confirmed: {leftover}")
 
         if process.poll() is None:
             cleanup_status = "incomplete"
@@ -721,25 +749,27 @@ def run(
         return result
     finally:
         if not resumed and process is not None and process.poll() is None:
-            try:
-                resume_process(process)
-            except Exception:
-                pass
             _stop_tree(process, job)
         if job is not None:
             try:
                 job.close()
             except Exception:
                 pass
-        if process is not None:
-            try:
-                process.wait(timeout=1)
-            except Exception:
-                pass
-        with _IN_FLIGHT_LOCK:
-            _IN_FLIGHT.pop(invocation_id, None)
-        owned.finished.set()
-        if stdout_cap is not None:
-            stdout_cap.close()
-        if stderr_cap is not None:
-            stderr_cap.close()
+        readers = (stdout_thread, stderr_thread)
+        if process.poll() is None or any(reader is not None and reader.is_alive() for reader in readers):
+            with _IN_FLIGHT_LOCK:
+                _IN_FLIGHT[invocation_id] = owned
+            threading.Thread(target=_release_when_finished, args=(owned, readers), daemon=True).start()
+        else:
+            with _IN_FLIGHT_LOCK:
+                _IN_FLIGHT.pop(invocation_id, None)
+            owned.finished.set()
+        # Reader threads own their stream handles, even after incomplete cleanup.
+        # Before thread startup the launch owner must close them itself.
+        for thread, pipe, cap in ((stdout_thread, process.stdout, stdout_cap),
+                                  (stderr_thread, process.stderr, stderr_cap)):
+            if thread is None:
+                if pipe is not None:
+                    pipe.close()
+                if cap is not None:
+                    cap.close()

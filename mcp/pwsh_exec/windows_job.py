@@ -82,6 +82,10 @@ def _kernel32() -> Any:
     ]
     k32.AssignProcessToJobObject.argtypes = [wintypes.HANDLE, wintypes.HANDLE]
     k32.TerminateJobObject.argtypes = [wintypes.HANDLE, wintypes.UINT]
+    k32.QueryInformationJobObject.argtypes = [
+        wintypes.HANDLE, ctypes.c_int, wintypes.LPVOID, wintypes.DWORD,
+        ctypes.POINTER(wintypes.DWORD),
+    ]
     k32.OpenProcess.restype = wintypes.HANDLE
     k32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
     k32.CloseHandle.argtypes = [wintypes.HANDLE]
@@ -200,6 +204,20 @@ class WindowsJob:
                 return [int(pid) for pid in pids]
             if isinstance(info, (list, tuple)):
                 return [int(pid) for pid in info]
+        if self._handle:
+            capacity = 64
+            while capacity <= 1048576:
+                # Two DWORD counts followed by an aligned ULONG_PTR array.
+                buffer = ctypes.create_string_buffer(8 + capacity * ctypes.sizeof(ctypes.c_size_t))
+                if self._k32.QueryInformationJobObject(
+                    self._handle, JobObjectBasicProcessIdList,
+                    buffer, len(buffer), None,
+                ):
+                    count = ctypes.c_uint32.from_buffer(buffer, 4).value
+                    return list((ctypes.c_size_t * count).from_buffer(buffer, 8))
+                if ctypes.get_last_error() != 234:  # ERROR_MORE_DATA
+                    return None
+                capacity *= 2
         return None
 
     def close(self) -> None:

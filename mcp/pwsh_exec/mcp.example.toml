@@ -3,6 +3,7 @@
 # Do not use this table for LaTeXAI.
 
 [mcp_servers.pwsh_exec]
+tool_timeout_sec = 90 # Transport allowance for short calls; long work uses start/wait.
 command = "<PWSH_EXEC_ROOT>/deps/python/cpython-<version>-windows-x86_64-none/python.exe"
 args = [
   "-B",
