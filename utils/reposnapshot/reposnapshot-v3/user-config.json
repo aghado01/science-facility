@@ -3,14 +3,7 @@
     "Root": null,
     "OutRoot": null,
     "SelectionPatterns": [
-        "*.pm",
-        "*.pl",
-        "*.t",
-        "*.pod",
-        "*.ltxml",
-        "*.in",
-        "!**/resources/**",
-        "!**/MathGrammar.pm"
+        "*.cs"
     ],
     "IncludeProcessors": [
         "StripComments",
