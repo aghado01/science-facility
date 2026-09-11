@@ -2,6 +2,7 @@
 /.cache/
 /bin/
 /deps/
+/mcp.local.json
 __pycache__/
 *.py[cod]
 .pytest_cache/

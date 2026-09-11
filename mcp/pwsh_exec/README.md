@@ -146,14 +146,32 @@ The recipe:
 6. Writes an ignored, machine-local registration to
    `deps/registrations/pwsh_exec.json` that launches the owned `python.exe`.
 7. Runs the tests with that interpreter.
+8. Refreshes gitignored `mcp.local.json` registration (seeds empty `targets` if
+   the file is missing) and applies that generic block onto listed local
+   endpoints.
 
 ## Client configuration
 
 Spawn is the owned interpreter. **Env is per consumer**; do not copy one block
-everywhere. Restore writes the generic registration (bundled pwsh + default
-profile). LaTeXAI names `scripts/profile.ps1` and its `PERL_ROOT` /
-`CDXSCI_ROOT` / `LATEXAI_ROOT` and does **not** set a client `tool_timeout_sec`
-(child scripts own `WaitTimeoutSeconds`).
+everywhere.
+
+Tracked generic templates live at `mcp.example.json` and `mcp.example.toml`.
+They use placeholders and the default `scripts/pwsh/profile-pwsh.ps1` profile.
+They do not set a client `tool_timeout_sec`.
+
+Gitignored `mcp.local.json` is this machine's source of truth for generic
+endpoints: resolved `registration` plus `targets[]`. Restore refreshes
+`registration` from `deps/registrations` and runs
+`brewery/uv/sync-mcp-local.py`. Sync overwrites `command` / `args` / generic
+env on each existing target and keeps extra consumer keys (`type`,
+`startup_timeout_sec`, `tool_timeout_sec`). A checkout that contains this tree
+may set `relativeTo` so paths stay repo-relative; other targets get absolute
+paths. Missing target files are skipped.
+
+LaTeXAI is not a generic target. It names `scripts/profile.ps1` and
+`PERL_ROOT` / `CDXSCI_ROOT` / `LATEXAI_ROOT`, and does **not** set a client
+`tool_timeout_sec` (child scripts own `WaitTimeoutSeconds`). Sync refuses a
+target whose profile is that LaTeXAI file.
 
 Generic:
 
@@ -172,10 +190,9 @@ Generic:
 }
 ```
 
-LaTeXAI adds the project profile and runtime roots, and omits `tool_timeout_sec`.
-
 Grok/Codex client deadlines, when used, live on that consumer's TOML
-(`[mcp_servers.pwsh_exec] tool_timeout_sec`), not on the LaTeXAI registration.
+(`[mcp_servers.pwsh_exec] tool_timeout_sec`), not on the generic example and
+not on the LaTeXAI registration.
 
 ## Tests
 

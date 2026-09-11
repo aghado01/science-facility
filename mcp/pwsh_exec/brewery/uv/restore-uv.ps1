@@ -238,6 +238,10 @@ try {
             '-m', 'unittest', 'discover', '-s', 'tests', '-v'
         )
     }
+
+    Invoke-Checked -Executable $pythonExecutable -Arguments @(
+        '-B', (Join-Path $breweryRoot 'sync-mcp-local.py'), '--refresh-registration'
+    )
 }
 finally {
     Pop-Location

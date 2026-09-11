@@ -10,12 +10,16 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PIN_PATH = PROJECT_ROOT / "brewery" / "uv" / "pin.json"
 RESTORE_PATH = PROJECT_ROOT / "brewery" / "uv" / "restore-uv.ps1"
+SYNC_PATH = PROJECT_ROOT / "brewery" / "uv" / "sync-mcp-local.py"
 PYTHON_PIN_PATH = PROJECT_ROOT / ".python-version"
 PYPROJECT_PATH = PROJECT_ROOT / "pyproject.toml"
 LOCK_PATH = PROJECT_ROOT / "uv.lock"
 BOOTSTRAP_UV = PROJECT_ROOT / "deps" / "bin" / "uv" / "uv.exe"
 OWNED_PYTHON_ROOT = PROJECT_ROOT / "deps" / "python"
 REGISTRATION_PATH = PROJECT_ROOT / "deps" / "registrations" / "pwsh_exec.json"
+EXAMPLE_JSON_PATH = PROJECT_ROOT / "mcp.example.json"
+EXAMPLE_TOML_PATH = PROJECT_ROOT / "mcp.example.toml"
+GITIGNORE_PATH = PROJECT_ROOT / ".gitignore"
 
 
 def owned_python():
@@ -69,6 +73,9 @@ class DependencyContractTests(unittest.TestCase):
 
         self.assertIn("$PSScriptRoot", recipe)
         self.assertIn("deps\\bin\\uv", recipe)
+        self.assertIn("sync-mcp-local.py", recipe)
+        self.assertIn("--refresh-registration", recipe)
+        sync = SYNC_PATH.read_text(encoding="utf-8")
         for forbidden in (
             "D:\\aghado01",
             "science-facility",
@@ -76,6 +83,39 @@ class DependencyContractTests(unittest.TestCase):
             "PDenv",
         ):
             self.assertNotIn(forbidden, recipe)
+            self.assertNotIn(forbidden, sync)
+        self.assertNotIn("LaTeXAI", recipe)
+
+    def test_generic_example_is_placeholder_default_profile(self):
+        example = json.loads(EXAMPLE_JSON_PATH.read_text(encoding="utf-8"))
+        server = example["mcpServers"]["pwsh_exec"]
+        toml = EXAMPLE_TOML_PATH.read_text(encoding="utf-8")
+        toml_server = read_toml(EXAMPLE_TOML_PATH)["mcp_servers"]["pwsh_exec"]
+
+        self.assertNotIn("tool_timeout_sec", server)
+        self.assertNotIn("tool_timeout_sec", toml_server)
+        self.assertIn("<PWSH_EXEC_ROOT>", server["command"])
+        self.assertEqual(server["args"], ["-B", "<PWSH_EXEC_ROOT>/server.py"])
+        self.assertEqual(
+            server["env"]["MCP_POWERSHELL_PROFILE"],
+            "<PWSH_EXEC_ROOT>/scripts/pwsh/profile-pwsh.ps1",
+        )
+        self.assertEqual(
+            server["env"]["MCP_POWERSHELL_EXECUTABLE"],
+            "<PWSH_EXEC_ROOT>/deps/bin/pwsh/pwsh.exe",
+        )
+        for absent in ("PERL_ROOT", "CDXSCI_ROOT", "LATEXAI_ROOT"):
+            self.assertNotIn(absent, server["env"])
+            self.assertNotIn(absent, toml)
+        self.assertIn("profile-pwsh.ps1", toml)
+        self.assertIn("<PWSH_EXEC_ROOT>", toml)
+        for forbidden in ("D:\\aghado01", "science-facility"):
+            self.assertNotIn(forbidden, EXAMPLE_JSON_PATH.read_text(encoding="utf-8"))
+            self.assertNotIn(forbidden, toml)
+
+    def test_gitignore_excludes_machine_local_mcp_map(self):
+        text = GITIGNORE_PATH.read_text(encoding="utf-8")
+        self.assertRegex(text, r"(?m)^/mcp\.local\.json$")
 
     @unittest.skipUnless(BOOTSTRAP_UV.is_file(), "uv is not restored")
     def test_restored_uv_matches_pin(self):

@@ -1,0 +1,14 @@
+# Generic Grok/Codex pwsh_exec table. Copy command/args/env from mcp.example.json.
+# Consumer-only keys (startup_timeout_sec, tool_timeout_sec) stay on that client.
+# Do not use this table for LaTeXAI.
+
+[mcp_servers.pwsh_exec]
+command = "<PWSH_EXEC_ROOT>/deps/python/cpython-<version>-windows-x86_64-none/python.exe"
+args = [
+  "-B",
+  "<PWSH_EXEC_ROOT>/server.py",
+]
+
+[mcp_servers.pwsh_exec.env]
+MCP_POWERSHELL_EXECUTABLE = "<PWSH_EXEC_ROOT>/deps/bin/pwsh/pwsh.exe"
+MCP_POWERSHELL_PROFILE = "<PWSH_EXEC_ROOT>/scripts/pwsh/profile-pwsh.ps1"
