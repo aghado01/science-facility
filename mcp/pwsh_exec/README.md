@@ -185,10 +185,10 @@ env on each existing target and keeps extra consumer keys (`type`,
 may set `relativeTo` so paths stay repo-relative; other targets get absolute
 paths. Missing target files are skipped.
 
-LaTeXAI is not a generic target. It names `scripts/profile.ps1` and
-`PERL_ROOT` / `CDXSCI_ROOT` / `LATEXAI_ROOT`. Its scripts own workload budgets;
-its MCP caller supplies the outer execution budget. Sync refuses a target whose
-profile is that LaTeXAI file.
+LaTeXAI owns separate templates using `scripts/profile.ps1`. Its resolver takes
+`PERL_ROOT` / `CDXSCI_ROOT` from arguments, environment or ignored local config;
+the profile derives `LATEXAI_ROOT`. Its scripts own workload budgets and its MCP
+caller supplies the outer execution budget. Sync refuses that consumer profile.
 
 Generic:
 

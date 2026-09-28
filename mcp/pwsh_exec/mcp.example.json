@@ -1,5 +1,5 @@
 {
-  "_comment": "Generic pwsh_exec registration. Restore writes resolved paths into gitignored mcp.local.json and syncs that file's targets. Do not copy this onto LaTeXAI: that consumer uses scripts/profile.ps1 plus PERL/CDXSCI/LATEXAI env, and does not take a client tool_timeout_sec.",
+  "_comment": "Generic pwsh_exec registration; restore resolves paths into ignored mcp.local.json. LaTeXAI owns separate templates and scripts/profile.ps1. TOML tool_timeout_sec applies per request; start/wait jobs use caller-selected execution budgets.",
   "mcpServers": {
     "pwsh_exec": {
       "command": "<PWSH_EXEC_ROOT>/deps/python/cpython-<version>-windows-x86_64-none/python.exe",
